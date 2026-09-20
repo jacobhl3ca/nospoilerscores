@@ -29,6 +29,14 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // (ESPN). Sep 30: Pittsburgh at Philadelphia and the Islanders at Toronto both
 // 7:30 pm, Los Angeles at Colorado 10:00 pm, with TNT and truTV on the two
 // national games. Oct 1 confirmed at eight games, 7:00 pm to 10:00 pm ET.
+//
+// ⚠️ WHAT THE APP ACTUALLY DOES — there is no tap-to-reveal score. Nothing
+// outside GolfLeaderboard reads Team.score: the score is parsed only to compute
+// the rating and is never rendered, so there is no covered score and nothing to
+// uncover. Ratings are OPT-IN too (showRatings: false in preferences.ts, and
+// the default "auto" mode forces them off before noon ET). The "hidden until
+// you tap" wording was removed from this page on 2026-09-20; do not put it
+// back.
 const TITLE = "NHL Highlights Without Spoilers: Find the Best Games | HideScore";
 const DESC =
   "Watch NHL highlights without seeing who won. Scores stay hidden and every game is rated for excitement, so you know which ones to watch. Free, no account.";
@@ -45,7 +53,7 @@ const FAQ = [
   },
   {
     q: "How do I find the good hockey games without learning who won?",
-    a: "A spoiler-free rating on each finished game tells you it was tight, high-scoring, or went to overtime — without naming the winner or the score. Hockey needs this more than most sports: on a covered board a 2-1 overtime classic and a 6-1 blowout look exactly the same until the rating separates them.",
+    a: "Switch Ratings on in Settings and each finished game is marked tight, high-scoring, or gone to overtime — without naming the winner or the score. Hockey needs this more than most sports: on a covered board a 2-1 overtime classic and a 6-1 blowout look exactly the same until the rating separates them.",
   },
   {
     q: "Why do YouTube highlights spoil the game before I press play?",
@@ -80,7 +88,7 @@ const FAQ = [
   },
   {
     q: "Where can I view upcoming NHL matchups without seeing scores from earlier games?",
-    a: "On HideScore. The schedule and finished games sit on one board with every score hidden until you tap.",
+    a: "On HideScore. The schedule and the finished games sit on one board, and no score is printed on either.",
   },
 ];
 
@@ -119,7 +127,7 @@ export default function NhlHighlightsWithoutSpoilersPage() {
     <SeoLandingPage
       h1="NHL highlights without spoilers"
       intro={[
-        "Yes, you can see upcoming and finished NHL games without seeing earlier scores: HideScore hides every result until you tap and rates each game for excitement.",
+        "Yes, you can see upcoming and finished NHL games without seeing earlier scores: HideScore never prints a result at all, and can rate each game for excitement.",
         "Hockey highlights are almost impossible to search for safely. Type the matchup into YouTube and the top result tells you the final score in its title, the thumbnail shows whoever scored the winner celebrating, and the preview text underneath finishes the job. You wanted to watch the game; you have already been told how it went.",
         "HideScore fixes the starting point. You open highlights from a covered game card instead of from a search box — the matchup is visible, the result is not, and clips whose titles give the score away are filtered out before they reach you. The ones that remain have their titles masked.",
         "The 2026-27 season opens on Tuesday, September 29, 2026 with five games running from 5:00 pm to 10:30 pm ET, three of them on ESPN, and widens to eight on Thursday, October 1.",
@@ -131,11 +139,11 @@ export default function NhlHighlightsWithoutSpoilersPage() {
         },
         {
           h: "Ratings tell you which night was worth replaying",
-          p: "A spoiler-free rating marks the games that were tight, high-scoring, or went to overtime — without naming the winner. Hockey rewards this more than most sports, because so many games turn in the last two minutes or after them. On a covered board an overtime classic and a blowout look identical until the rating separates them.",
+          p: "Turn Ratings on in Settings and the games that were tight, high-scoring, or went to overtime are marked as such — never with the winner. No game is marked until you turn that on, and the default setting withholds it until noon Eastern. Hockey rewards this more than most sports, because so many games turn in the last two minutes or after them. On a covered board an overtime classic and a blowout look identical until the rating separates them.",
         },
         {
           h: "Condensed games and recaps, same protection",
-          p: "The condensed game is how most people actually catch up on a night they missed, and it carries exactly the same spoiler risk in its title and thumbnail. Recaps and condensed replays open from the same covered card, with the result still hidden until you choose to see it.",
+          p: "The condensed game is how most people actually catch up on a night they missed, and it carries exactly the same spoiler risk in its title and thumbnail. Recaps and condensed replays open from the same covered card, and that card carries no scoreline either.",
         },
         {
           h: "Late games are the ones you will watch tomorrow",
@@ -153,7 +161,7 @@ export default function NhlHighlightsWithoutSpoilersPage() {
       bullets={[
         "NHL highlights opened from a covered card, not a search box.",
         "Clips filtered when the title gives the score away; titles masked on the rest.",
-        "Spoiler-free ratings — tight, high-scoring, went to overtime.",
+        "Optional spoiler-free ratings — tight, high-scoring, went to overtime.",
         "Condensed games and recaps protected the same way.",
         "Built for late West Coast games watched the next morning.",
         "Works the same through the Stanley Cup playoffs.",

@@ -13,15 +13,23 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // 10:30 pm; and Sat Nov 7 is the final day — 15 matches, every one of the 30
 // clubs, 8 at 4:00 pm ET and 7 at 7:00 pm. ESPN publishes nothing past Nov 7
 // yet because the bracket is unseeded, so this page does NOT name playoff dates.
+//
+// ⚠️ WHAT THE APP ACTUALLY DOES — never write "the score appears when you tap
+// it". It does not. Nothing outside GolfLeaderboard reads Team.score; the score
+// is parsed to compute the rating and is never rendered, so there is no covered
+// score to reveal. There is no standings table, and the "#N" chip a card can
+// carry comes off once the match is final (GameCard.tsx). Ratings are OPT-IN:
+// `showRatings: false` in preferences.ts, and the default "auto" mode forces
+// them off before noon ET (HomeContent.tsx).
 const TITLE = "MLS Highlights Without Spoilers | HideScore";
 const DESC =
-  "Watch MLS highlights without seeing the result. A 14-match Saturday stays covered, with a rating for which one to replay. Free, no account.";
+  "Watch MLS highlights without seeing the result. A 14-match Saturday with no scoreline printed anywhere, and an optional rating for which one to replay. Free.";
 const CANONICAL = "/mls-highlights-without-spoilers";
 
 const FAQ = [
   {
     q: "Can I watch MLS highlights without spoilers?",
-    a: "Yes. Open a match's highlights from its covered card rather than from a search. The league posts its own cut of every match, so the video is easy to reach — the hard part is reaching it without reading the scoreline printed beside it, and starting from the card removes that step.",
+    a: "Yes. Open a match's highlights from its card on the board rather than from a search. The league posts its own cut of every match, so the video is easy to reach — the hard part is reaching it without reading the scoreline printed beside it, and starting from the card removes that step.",
   },
   {
     q: "How many MLS matches are on a Saturday?",
@@ -37,11 +45,11 @@ const FAQ = [
   },
   {
     q: "Which match should I go back and watch?",
-    a: "Use the rating on the finished cards. It marks how close a match stayed and how much happened in it, without naming the side that won. Across fourteen matches that is the difference between spending your Sunday on a goalless draw and spending it on the one that turned in stoppage time.",
+    a: "Turn Ratings on in Settings and each finished card carries a mark for how close the match stayed and how much happened in it, without naming the side that won. Across fourteen matches that is the difference between spending your Sunday on a goalless draw and spending it on the one that turned in stoppage time. The marks only appear once you enable them, and on the default setting not before noon Eastern.",
   },
   {
     q: "Is the MLS table a spoiler?",
-    a: "Yes. Position in a conference is a restatement of the weekend, and in the run-in it is a sharper one than usual, because a single result can move a club across the playoff line. Standings stay covered alongside the scores.",
+    a: "Yes. Position in a conference is a restatement of the weekend, and in the run-in it is a sharper one than usual, because a single result can move a club across the playoff line. HideScore shows no conference table for that reason, and the position marker a fixture can carry before kickoff is removed from the card once it finishes.",
   },
   {
     q: "Does it work through the playoffs and MLS Cup?",
@@ -94,15 +102,15 @@ export default function MlsHighlightsWithoutSpoilersPage() {
     <SeoLandingPage
       h1="MLS highlights without spoilers"
       intro={[
-        "Yes, you can watch MLS highlights without spoilers: every match sits on HideScore as a covered card, and its highlights open from that card with the video title masked.",
+        "Yes, you can watch MLS highlights without spoilers: no match on HideScore carries a scoreline, and its highlights open straight from the card with the video title masked.",
         "An MLS Saturday is a rolling wall of football. Fourteen matches start in four staggered waves as the league moves west across the country, so the first results are public while the last kickoffs are still to come. There is never a clean point at which the night is over and it is safe to look at your phone again.",
-        "The board is built for that shape. You can see which matches are live, which are done and who is playing, without any of the scorelines — and a rating on each finished match tells you whether it was tight or eventful, never who took the points.",
+        "The board is built for that shape. You can see which matches are live, which are done and who is playing, and no scoreline appears on any of them — not covered up, simply never printed. Switch Ratings on and each finished match also tells you whether it was tight or eventful, never who took the points.",
         "The regular season closes on Saturday, November 7, 2026, when all thirty clubs play across two windows and the whole table settles in a single evening.",
       ]}
       sections={[
         {
           h: "Four kickoff waves, one long night",
-          p: "September 26, 2026 is the standard pattern: 7:30 pm ET on the east coast, 8:30 in the central zone, 9:30 in the mountains, 10:30 on the Pacific. By the time the last match kicks off, ten others have already finished. Keeping the whole slate covered is what lets you follow the night without it resolving itself around you.",
+          p: "September 26, 2026 is the standard pattern: 7:30 pm ET on the east coast, 8:30 in the central zone, 9:30 in the mountains, 10:30 on the Pacific. By the time the last match kicks off, the whole eastern block is over and the central one is in its closing minutes. Keeping the whole slate covered is what lets you follow the night without it resolving itself around you.",
         },
         {
           h: "Decision day settles everything at once",
@@ -110,7 +118,7 @@ export default function MlsHighlightsWithoutSpoilersPage() {
         },
         {
           h: "Ratings that sort fourteen matches",
-          p: "Nobody watches a full MLS Saturday. The rating on a finished match says how competitive it stayed and how much happened, which turns an unreadable list of fourteen fixtures into a shortlist of two or three, with the results of all fourteen still ahead of you.",
+          p: "Nobody watches a full MLS Saturday. With Ratings switched on, a finished match says how competitive it stayed and how much happened, which turns an unreadable list of fourteen fixtures into a shortlist of two or three, with the results of all fourteen still ahead of you. They are off by default, and in the standard setting they stay off through the morning, which is when a careless glance does the most damage.",
         },
         {
           h: "One league channel, every match",
@@ -126,12 +134,12 @@ export default function MlsHighlightsWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "MLS scores hidden until you tap.",
+        "No MLS scoreline printed anywhere on the board.",
         "A full 14-match Saturday on one board with no results showing.",
-        "Ratings for finished matches — tight, eventful, or settled early.",
+        "Optional ratings for finished matches — tight, eventful, or settled early.",
         "Highlights from the league's own per-match cut, not from an open search.",
         "Built for 10:30 pm ET western kickoffs watched the next morning.",
-        "Conference tables treated as spoilers, not as neutral information.",
+        "No conference table, because a table is a result in another form.",
       ]}
       ctaLabel="Open MLS without spoilers"
       ctaHref="/yesterday"
