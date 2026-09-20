@@ -170,6 +170,36 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/cricket-highlights-without-spoilers" className="underline underline-offset-2">
             Cricket
           </Link>
+          {/* The 2026-09-20 batch: seven new per-league routes plus the
+              comparison page. Same reason as the Cricket and Premier League
+              notes above — this hub is the strongest internal link source on
+              the site, and a per-league page that ships with only a sitemap
+              entry is an orphan. Every one of them is listed here on its first
+              day rather than waiting for a later pass. */}
+          <Link href="/nba-highlights-without-spoilers" className="underline underline-offset-2">
+            NBA highlights
+          </Link>
+          <Link href="/champions-league-without-spoilers" className="underline underline-offset-2">
+            Champions League
+          </Link>
+          <Link href="/la-liga-without-spoilers" className="underline underline-offset-2">
+            La Liga
+          </Link>
+          <Link href="/mls-highlights-without-spoilers" className="underline underline-offset-2">
+            MLS
+          </Link>
+          <Link href="/college-football-highlights-without-spoilers" className="underline underline-offset-2">
+            College football
+          </Link>
+          <Link href="/f1-without-spoilers" className="underline underline-offset-2">
+            F1
+          </Link>
+          <Link href="/ufc-results-without-spoilers" className="underline underline-offset-2">
+            UFC
+          </Link>
+          <Link href="/best-spoiler-free-sports-sites" className="underline underline-offset-2">
+            Compare the apps
+          </Link>
           <Link href="/today" className="underline underline-offset-2">
             Today
           </Link>

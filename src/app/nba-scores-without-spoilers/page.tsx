@@ -14,10 +14,19 @@ const CANONICAL = "/nba-scores-without-spoilers";
 // 2026-09-03: the 2026-27 regular season opens Tuesday Oct 20 2026 with a
 // tripleheader, and the national rights are split across NBC, ESPN/ABC, Prime
 // Video and NBA TV.
+//
+// Refreshed 2026-09-20 alongside the new /nba-highlights-without-spoilers
+// route. Two changes: the opening-night carriers are now stated (re-verified
+// against basketball/nba/scoreboard dates=20261020/21/22 — all three October 20
+// games carry NBC in the broadcasts array, and ESPN has Minnesota at Miami and
+// Golden State at the Lakers on the 21st plus both October 22 games), and this
+// page now links to its highlights sibling. Keep the two pages on separate
+// ground: THIS one is the covered board and the standings, the highlights page
+// is the recap pipeline. No paragraph may be shared between them.
 const FAQ = [
   {
     q: "When does the 2026-27 NBA season start?",
-    a: "Opening night is Tuesday, October 20, 2026. It is a tripleheader: Boston at Detroit and Philadelphia at New York earlier in the evening, then Oklahoma City at San Antonio at 9:30 pm ET. The full league is in action by Wednesday, October 21, with twelve games including Golden State at the Lakers.",
+    a: "Opening night is Tuesday, October 20, 2026, and NBC carries all three games: Boston at Detroit and Philadelphia at New York at 7:00 pm ET earlier in the evening, then Oklahoma City at San Antonio at 9:30 pm ET. The full league is in action by Wednesday, October 21, with twelve games including Golden State at the Lakers at 10:00 pm ET on ESPN.",
   },
   {
     q: "Can I check NBA scores without seeing who won?",
@@ -133,6 +142,11 @@ export default function NbaScoresWithoutSpoilersPage() {
       ctaLabel="Open the NBA without spoilers"
       ctaHref="/yesterday"
       links={[
+        // Added 2026-09-20. The highlights sibling is the most important link
+        // on this page: the two routes split one league's demand between
+        // checking a result and picking something to watch, and each needs the
+        // other's inbound link to be crawled early.
+        { href: "/nba-highlights-without-spoilers", label: "NBA highlights" },
         { href: "/nhl-scores-without-spoilers", label: "NHL scores" },
         { href: "/nfl-highlights-without-spoilers", label: "NFL highlights" },
         { href: "/mlb-highlights-without-spoilers", label: "MLB highlights" },

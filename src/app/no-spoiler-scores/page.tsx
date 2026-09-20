@@ -141,6 +141,13 @@ export default function NoSpoilerScoresPage() {
         { href: "/mlb-highlights-without-spoilers", label: "MLB" },
         { href: "/premier-league-without-spoilers", label: "Premier League" },
         { href: "/soccer-highlights-without-spoilers", label: "Soccer" },
+        // Added 2026-09-20. F1 and UFC are the two routes in the new batch with
+        // no other natural hub — neither is a highlights page and neither is
+        // soccer — so this is their strongest inbound link.
+        { href: "/f1-without-spoilers", label: "F1" },
+        { href: "/ufc-results-without-spoilers", label: "UFC" },
+        { href: "/college-football-highlights-without-spoilers", label: "College football" },
+        { href: "/best-spoiler-free-sports-sites", label: "Compare the apps" },
         { href: "/faq", label: "FAQ" },
       ]}
       faq={FAQ}

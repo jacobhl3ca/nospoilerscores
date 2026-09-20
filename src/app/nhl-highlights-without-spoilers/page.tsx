@@ -17,6 +17,18 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // Fixed by Request Indexing plus a homepage link, and the page brought up to the
 // depth that makes /premier-league-without-spoilers convert at 24.2%. Season
 // dates and networks verified against ESPN's hockey/nhl scoreboard 2026-09-03.
+//
+// Refreshed 2026-09-20, nine days before the season opens, because the page was
+// still at 210 impressions and ZERO clicks. What it was missing was not depth
+// but precision: it named the five opening-night games and no puck-drop times,
+// which is exactly the specificity gap that separated the NFL page from the
+// Premier League page. Times and carriers re-verified against ESPN's
+// hockey/nhl/scoreboard on 2026-09-20, one date at a time — Sep 29: Florida at
+// Carolina 5:00 pm ET (ESPN), Montreal at Toronto 7:00, the Rangers at Boston
+// 8:00 pm (ESPN), Vancouver at Edmonton 10:00, Chicago at Vegas 10:30 pm
+// (ESPN). Sep 30: Pittsburgh at Philadelphia and the Islanders at Toronto both
+// 7:30 pm, Los Angeles at Colorado 10:00 pm, with TNT and truTV on the two
+// national games. Oct 1 confirmed at eight games, 7:00 pm to 10:00 pm ET.
 const TITLE = "NHL Highlights Without Spoilers: Find the Best Games | HideScore";
 const DESC =
   "Watch NHL highlights without seeing who won. Scores stay hidden and every game is rated for excitement, so you know which ones to watch. Free, no account.";
@@ -29,7 +41,7 @@ const FAQ = [
   },
   {
     q: "When does the 2026-27 NHL season start?",
-    a: "Opening night is Tuesday, September 29, 2026, with five games — Florida at Carolina, Montreal at Toronto, the Rangers at Boston, Vancouver at Edmonton, and Chicago at Vegas. The schedule widens to eight games on Thursday, October 1.",
+    a: "Opening night is Tuesday, September 29, 2026, and it runs from late afternoon to nearly midnight: Florida at Carolina at 5:00 pm ET on ESPN, Montreal at Toronto at 7:00, the Rangers at Boston at 8:00 pm on ESPN, Vancouver at Edmonton at 10:00, and Chicago at Vegas at 10:30 pm on ESPN. The schedule widens to eight games on Thursday, October 1.",
   },
   {
     q: "How do I find the good hockey games without learning who won?",
@@ -50,6 +62,17 @@ const FAQ = [
   {
     q: "Does it work through the Stanley Cup playoffs?",
     a: "Yes, and the postseason is the hardest case on the calendar. Games run late, overtime can add an hour without warning, and in a seven-game series every result reframes the next one. The board stays covered all the way through the Final.",
+  },
+  // Added 2026-09-20 with the opening-night refresh. Both answer a dated
+  // question a reader has in the week before the season starts, which is the
+  // kind of entry that earns a click rather than an impression.
+  {
+    q: "Which 2026-27 opening-night games are on national TV?",
+    a: "ESPN has three of the five on Tuesday, September 29: Florida at Carolina at 5:00 pm ET, the Rangers at Boston at 8:00, and Chicago at Vegas at 10:30. TNT and truTV pick it up the following night with Pittsburgh at Philadelphia at 7:30 pm ET and Los Angeles at Colorado at 10:00.",
+  },
+  {
+    q: "Opening night ends at 1:00 am. When can I watch the highlights?",
+    a: "As soon as they are posted, which is the point of starting from a covered card. A 10:30 pm ET puck drop in Vegas is a next-morning job for almost everyone in the east, and a board that shows the game as finished without showing how tells you there is something to watch before anything tells you what happened in it.",
   },
   {
     q: "Is HideScore free?",
@@ -99,7 +122,7 @@ export default function NhlHighlightsWithoutSpoilersPage() {
         "Yes, you can see upcoming and finished NHL games without seeing earlier scores: HideScore hides every result until you tap and rates each game for excitement.",
         "Hockey highlights are almost impossible to search for safely. Type the matchup into YouTube and the top result tells you the final score in its title, the thumbnail shows whoever scored the winner celebrating, and the preview text underneath finishes the job. You wanted to watch the game; you have already been told how it went.",
         "HideScore fixes the starting point. You open highlights from a covered game card instead of from a search box — the matchup is visible, the result is not, and clips whose titles give the score away are filtered out before they reach you. The ones that remain have their titles masked.",
-        "The 2026-27 season opens on Tuesday, September 29, 2026, with five games, widening to eight on Thursday, October 1.",
+        "The 2026-27 season opens on Tuesday, September 29, 2026 with five games running from 5:00 pm to 10:30 pm ET, three of them on ESPN, and widens to eight on Thursday, October 1.",
       ]}
       sections={[
         {
@@ -139,7 +162,11 @@ export default function NhlHighlightsWithoutSpoilersPage() {
       ctaHref="/yesterday"
       links={[
         { href: "/nhl-scores-without-spoilers", label: "NHL scores" },
-        { href: "/nba-scores-without-spoilers", label: "NBA" },
+        // Added 2026-09-20: the NBA now has a highlights route of its own, and
+        // this is its closest sibling — same split between a scores page and a
+        // highlights page for the same league.
+        { href: "/nba-highlights-without-spoilers", label: "NBA highlights" },
+        { href: "/nba-scores-without-spoilers", label: "NBA scores" },
         { href: "/nfl-highlights-without-spoilers", label: "NFL highlights" },
         { href: "/mlb-highlights-without-spoilers", label: "MLB highlights" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },

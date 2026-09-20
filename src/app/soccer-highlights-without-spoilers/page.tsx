@@ -108,6 +108,10 @@ export default function SoccerHighlightsWithoutSpoilersPage() {
         { href: "/worldcup/tomorrow", label: "Tomorrow" },
         { href: "/worldcup/highlights", label: "World Cup highlights" },
         { href: "/premier-league-without-spoilers", label: "Premier League" },
+        // Added 2026-09-20 — the three new soccer competition routes.
+        { href: "/champions-league-without-spoilers", label: "Champions League" },
+        { href: "/la-liga-without-spoilers", label: "La Liga" },
+        { href: "/mls-highlights-without-spoilers", label: "MLS" },
         { href: "/liga-mx-scores-without-spoilers", label: "Liga MX" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
       ]}
