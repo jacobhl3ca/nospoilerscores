@@ -289,6 +289,35 @@ try {
     await gbToggle.uncheck();
     ok("magic-number key sits in the dialog header", (await dialog.locator("text=/Magic N/").count()) === 1);
 
+    // ── Sorting ─────────────────────────────────────────────────────────────
+    // The panel opens on the odds, best chance first. Seed is one click away.
+    const alTable = dialog.locator("table").first();
+    const openOrder = (await columnValues(page, 2)).map(pct);
+    ok("the panel opens on the odds, best chance first", isSorted(openOrder, "desc"), openOrder.join(" "));
+    ok("the opening header says so", (await dialog.locator('th[aria-sort="descending"]').count()) >= 1);
+
+    // An odds sort drops the seed dividers — they mark seed boundaries, which
+    // mean nothing in a probability order. The opening view is an odds sort.
+    ok("an odds sort is one flat list", !/still alive|wild-card round below/i.test(await dialog.locator("[data-picture-body]").innerText()));
+
+    await alTable.getByRole("button", { name: /Playoffs/ }).click();
+    await page.waitForTimeout(250);
+    const asc = (await columnValues(page, 2)).map(pct);
+    ok("clicking Playoffs flips it", isSorted(asc, "asc"), asc.join(" "));
+    ok("the flipped header says so", (await dialog.locator('th[aria-sort="ascending"]').count()) >= 1);
+
+    await alTable.getByRole("button", { name: /Playoffs/ }).click();
+    await page.waitForTimeout(250);
+    const desc = (await columnValues(page, 2)).map(pct);
+    ok("clicking Playoffs again puts the best chance back on top", isSorted(desc, "desc"), desc.join(" "));
+
+    // Seed is the view that carries the dividers and the chase section, so the
+    // "Still alive" checks below run in it.
+    await alTable.getByRole("button", { name: /Seed/ }).click();
+    await page.waitForTimeout(250);
+    const seedOrder = await columnValues(page, 0);
+    ok("clicking Seed returns the seeded picture", seedOrder.slice(0, 6).join(",") === "1,2,3,4,5,6", seedOrder.join(","));
+
     // ── Still alive ─────────────────────────────────────────────────────────
     // A club out of its division can still be chasing a wild card. MLB
     // publishes two elimination numbers and only both of them saying "E" means
@@ -310,27 +339,6 @@ try {
         `${pctRows} rows for ${aliveByLeague[key]} alive`);
     }
 
-    // ── Sorting ─────────────────────────────────────────────────────────────
-    const alTable = dialog.locator("table").first();
-    const seedOrder = await columnValues(page, 0);
-    ok("the default view is seed order", seedOrder.slice(0, 6).join(",") === "1,2,3,4,5,6", seedOrder.join(","));
-
-    await alTable.getByRole("button", { name: /Playoffs/ }).click();
-    await page.waitForTimeout(250);
-    const desc = (await columnValues(page, 2)).map(pct);
-    ok("clicking Playoffs sorts by the odds, highest first", isSorted(desc, "desc"), desc.join(" "));
-    ok("the sorted header says so", (await dialog.locator('th[aria-sort="descending"]').count()) >= 1);
-
-    await alTable.getByRole("button", { name: /Playoffs/ }).click();
-    await page.waitForTimeout(250);
-    const asc = (await columnValues(page, 2)).map(pct);
-    ok("clicking Playoffs again flips it", isSorted(asc, "asc"), asc.join(" "));
-    ok("the flipped header says so", (await dialog.locator('th[aria-sort="ascending"]').count()) >= 1);
-
-    // An odds sort drops the seed dividers — they mark seed boundaries, which
-    // mean nothing in a probability order.
-    ok("an odds sort is one flat list", !/still alive|wild-card round below/i.test(await dialog.locator("[data-picture-body]").innerText()));
-
     // ── The sort survives a reload ──────────────────────────────────────────
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForTimeout(6000);
@@ -338,7 +346,10 @@ try {
     await page.getByRole("button", { name: "Playoff picture", exact: true }).first().click();
     await dialog.waitFor({ timeout: 15000 });
     await page.waitForTimeout(5000);
-    ok("the sort is remembered across a reload", (await dialog.locator('th[aria-sort="ascending"]').count()) >= 1);
+    // The panel's own default is the odds, so finding seed order after a reload
+    // is unambiguous proof the stored preference won.
+    const keptSort = await dialog.locator("table").first().locator("th").first().getAttribute("aria-sort");
+    ok("the sort is remembered across a reload", keptSort === "ascending", `seed header: ${keptSort}`);
 
     // ── Bracket tab ─────────────────────────────────────────────────────────
     await dialog.locator('[role="tab"]').nth(1).click();
