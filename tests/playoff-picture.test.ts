@@ -321,3 +321,76 @@ test("the bracket carries the right best-of per round and never invents a result
   const later = b.matchups.filter((m) => m.round !== "wildCard").flatMap((m) => m.sides);
   assert.equal(later.filter((s) => s.from !== null).every((s) => s.team === null), true);
 });
+
+// ── Who is chasing which seat ────────────────────────────────────────────────
+
+import { contendersBySeed } from "../src/lib/playoffPicture.ts";
+
+// One published probability, shaped the way oddFrom builds them.
+const pct = (n: number): PlayoffOdds[string][keyof PlayoffOdds[string]] => ({ value: n, label: `${n}%` });
+const oddsFor = (rows: Record<string, [number, number, number]>): PlayoffOdds =>
+  Object.fromEntries(Object.entries(rows).map(([ab, [p, d, w]]) => [ab, { playoff: pct(p), division: pct(d), wildCard: pct(w) }]));
+
+// In the shared fixture the AL hunt is exactly Foxtrot (70-74, AL Central),
+// whose division leader is Delta at the 3 seat and whose wild-card road ends at
+// Hotel's 6 seat. That is both roads in one club, which is what this needs.
+const chaseAl = (odds: PlayoffOdds | null, league = al()) => contendersBySeed(league, odds);
+
+test("a chaser sits with the division leader when the division is its better road", () => {
+  const seats = chaseAl(oddsFor({ FOX: [25, 20, 5] }));
+  assert.deepEqual([...seats.keys()], [3]);                       // Delta's seat
+  assert.deepEqual(seats.get(3)!.map((t) => t.name), ["Foxtrot"]);
+});
+
+test("a chaser with no division road left sits with the last wild card still open", () => {
+  const seats = chaseAl(oddsFor({ FOX: [5, 0, 5] }));
+  assert.deepEqual([...seats.keys()], [6]);                       // Hotel's seat
+  assert.deepEqual(seats.get(6)!.map((t) => t.name), ["Foxtrot"]);
+});
+
+test("a clinched seat takes no chasers — that spot is settled", () => {
+  // Clinch the 6 seat and the chase moves up to the next seat still open.
+  const league = al();
+  league.seeded.find((t) => t.seed === 6)!.clinched = true;
+  const seats = contendersBySeed(league, oddsFor({ FOX: [5, 0, 5] }));
+  assert.deepEqual([...seats.keys()], [5]);                       // Echo's seat
+});
+
+test("a chaser out of both races is left off the bracket entirely", () => {
+  assert.equal(chaseAl(oddsFor({ FOX: [0, 0, 0] })).size, 0);
+});
+
+test("with no odds published the elimination numbers still place the chase", () => {
+  const league = al();
+  const fox = league.hunt.find((t) => t.name === "Foxtrot")!;
+  assert.equal(chaseAl(null, league).get(3)?.[0]?.name, "Foxtrot"); // division road open
+  fox.divisionEliminated = true;
+  assert.equal(chaseAl(null, league).get(6)?.[0]?.name, "Foxtrot"); // only the wild card left
+});
+
+test("two clubs after the same seat are listed best chance first", () => {
+  const records: StatsApiRecord[] = [
+    { division: { id: 201 }, teamRecords: [tr(1, "Alpha", 94, 60, { divisionLeader: true })] },
+    { division: { id: 202 }, teamRecords: [tr(2, "Echo", 90, 64, { divisionLeader: true })] },
+    { division: { id: 200 }, teamRecords: [
+      tr(3, "Golf", 88, 66, { divisionLeader: true }),
+      tr(4, "Seed4", 87, 67, {}),
+      tr(5, "Seed5", 86, 68, {}),
+      tr(6, "Seed6", 85, 69, {}),
+      // Nearer on the field, worse on the odds — the sort follows the odds.
+      tr(7, "Near", 84, 70, { wildCardEliminationNumber: "9" }),
+      tr(8, "Far", 80, 74, { wildCardEliminationNumber: "9" }),
+    ] },
+  ];
+  const league = buildPicture(records, 2026).leagues.find((l) => l.key === "AL")!;
+  const seats = contendersBySeed(league, oddsFor({ NEA: [10, 0, 10], FAR: [30, 0, 30] }));
+  assert.deepEqual(seats.get(6)!.map((t) => t.name), ["Far", "Near"]);
+});
+
+test("a division elimination closes only the division road, not the wild card", () => {
+  const league = al();
+  league.hunt.find((t) => t.name === "Foxtrot")!.divisionEliminated = true;
+  const seats = contendersBySeed(league, oddsFor({ FOX: [5, 20, 5] }));
+  // 20% division beats 5% wild card on the number, but that road is shut.
+  assert.deepEqual([...seats.keys()], [6]);
+});
