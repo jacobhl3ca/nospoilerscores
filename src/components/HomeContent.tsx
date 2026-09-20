@@ -3982,13 +3982,21 @@ export default function HomeContent({
               <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
               <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
               <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>,{" "}
-              <a href="/nhl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NHL highlights</a>, or{" "}
+              <a href="/nhl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NHL highlights</a>,{" "}
+              <a href="/nba-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NBA highlights</a>,{" "}
+              <a href="/college-football-highlights-without-spoilers" style={{ textDecoration: "underline" }}>college football highlights</a>, or{" "}
               <a href="/soccer-highlights-without-spoilers" style={{ textDecoration: "underline" }}>soccer highlights</a> — including the{" "}
               <a href="/premier-league-without-spoilers" style={{ textDecoration: "underline" }}>Premier League</a>,{" "}
+              <a href="/champions-league-without-spoilers" style={{ textDecoration: "underline" }}>Champions League</a>,{" "}
+              <a href="/la-liga-without-spoilers" style={{ textDecoration: "underline" }}>La Liga</a>,{" "}
+              <a href="/mls-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLS</a>,{" "}
               <a href="/liga-mx-scores-without-spoilers" style={{ textDecoration: "underline" }}>Liga MX</a> and{" "}
               <a href="/cricket-highlights-without-spoilers" style={{ textDecoration: "underline" }}>cricket</a> — plus spoiler-free{" "}
-              <a href="/nba-scores-without-spoilers" style={{ textDecoration: "underline" }}>NBA scores</a> and{" "}
-              <a href="/nhl-scores-without-spoilers" style={{ textDecoration: "underline" }}>NHL scores</a>. Also see the{" "}
+              <a href="/nba-scores-without-spoilers" style={{ textDecoration: "underline" }}>NBA scores</a>,{" "}
+              <a href="/nhl-scores-without-spoilers" style={{ textDecoration: "underline" }}>NHL scores</a>,{" "}
+              <a href="/f1-without-spoilers" style={{ textDecoration: "underline" }}>F1</a> and{" "}
+              <a href="/ufc-results-without-spoilers" style={{ textDecoration: "underline" }}>UFC</a>. Compare us with the other{" "}
+              <a href="/best-spoiler-free-sports-sites" style={{ textDecoration: "underline" }}>spoiler-free sports apps</a>, or see the{" "}
               <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Or read our{" "}
               <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
