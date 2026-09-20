@@ -1,10 +1,10 @@
 # HideScore
 
-> HideScore is a free sports scoreboard that hides every score, result and
-> league table until you choose to reveal it, so you can watch a game you
-> missed without learning how it ended first. Each finished game also carries
-> an excitement rating that says how close or dramatic it was without naming
-> the winner.
+> HideScore is a free sports board that never prints a score, a result or a
+> league table at all, so you can look up what happened today and still watch
+> the game later without knowing how it ended. Turn on the optional excitement
+> rating and each finished game also tells you how close or dramatic it was,
+> without naming the winner.
 
 Site: https://hidescore.com
 Author: Jacob Heifetz-Licht, an independent developer in New York (https://jacobhl.com)
@@ -12,12 +12,19 @@ Last updated: 2026-09-20
 
 ## What it is
 
-- A board of game cards. Each card shows the matchup, the start time and
-  whether the game has finished. The score is covered until you tap it.
-- Excitement ratings on finished games: close, high-scoring, decided late.
-  The rating never names the winner or the score.
-- Standings and league tables are treated as spoilers, because a table states
-  last night's result in another form. They reveal on the same tap.
+- A board of game cards. Each card shows the matchup, the start time, the
+  broadcaster and whether the game has finished. No score is written on it, and
+  there is no control anywhere that produces one — the result is not hidden
+  behind a tap, it is never rendered.
+- Optional excitement ratings on finished games: close, high-scoring, decided
+  late. The rating never names the winner or the score. Ratings are OFF by
+  default and, in the default setting, stay off before noon Eastern; turn them
+  on in Settings.
+- No standings or league table view, because a table states last night's result
+  in another form. A team's league position can appear on a fixture that has
+  not been played yet, and it comes off the card once that game is final. The
+  one exception is the MLB playoff picture, which sits behind a blur and an
+  explicit button.
 - Highlights open from a game card rather than from a search box. Clips whose
   titles carry the result are filtered out; the titles of the rest are masked.
 - Watch links point at the broadcaster, never at a gamecast, a box score or a

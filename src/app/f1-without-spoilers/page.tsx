@@ -18,8 +18,12 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // any of those four things.
 //
 // Every race time below is the RACE session, read from the per-event
-// competitions array on ESPN's racing/f1/scoreboard feed on 2026-09-20
-// (dates=20261001-20261231): Bahrain-in-Malaysia Sun Oct 4 3:00 am ET;
+// competitions array on ESPN's racing/f1/scoreboard feed on 2026-09-20.
+// ⚠️ Query the range from TODAY, not from the 1st of next month: the first pull
+// used dates=20261001-20261231 and silently dropped the very next race, the
+// Azerbaijan GP, whose weekend had already begun. The list is now built from
+// dates=20260920-20261231: Azerbaijan Sat Sep 26 7:00 am ET (a Saturday race);
+// Bahrain-in-Malaysia Sun Oct 4 3:00 am ET;
 // Singapore Sun Oct 11 8:00 am ET; United States Sun Oct 25 4:00 pm ET; Mexico
 // City Sun Nov 1 3:00 pm ET; Sao Paulo Sun Nov 8 12:00 pm ET; Las Vegas Sat
 // Nov 21 11:00 pm ET; Qatar Sun Nov 29 11:00 am ET; Abu Dhabi Sun Dec 6
@@ -36,11 +40,11 @@ const CANONICAL = "/f1-without-spoilers";
 const FAQ = [
   {
     q: "Can I follow F1 results without spoilers?",
-    a: "Yes, and the F1 column works a little differently from the score columns. A Grand Prix card names the race, the circuit, the broadcaster and whether it has run — and it carries no classification at all. There is no finishing order on the card to look away from, because it was never printed there.",
+    a: "Yes. A Grand Prix card names the race, the circuit, the broadcaster and whether it has run, and it carries no classification at all. Nothing on the board is a covered-up result waiting for a tap; there is no finishing order to look away from because it was never printed there in the first place.",
   },
   {
     q: "What time do the remaining 2026 races start in the US?",
-    a: "They are all over the clock. The Bahrain Grand Prix held in Malaysia takes its start at 3:00 am ET on Sunday, October 4; Singapore is 8:00 am ET on October 11; Austin is a civilized 4:00 pm ET on October 25; Mexico City 3:00 pm ET on November 1; Sao Paulo noon ET on November 8; Las Vegas 11:00 pm ET on Saturday, November 21; Qatar 11:00 am ET on November 29; and the Abu Dhabi finale 8:00 am ET on Sunday, December 6.",
+    a: "They are all over the clock. Azerbaijan comes first, and unusually it races on a Saturday: 7:00 am ET on September 26. The Bahrain Grand Prix held in Malaysia then takes its start at 3:00 am ET on Sunday, October 4; Singapore is 8:00 am ET on October 11; Austin is a civilized 4:00 pm ET on October 25; Mexico City 3:00 pm ET on November 1; Sao Paulo noon ET on November 8; Las Vegas 11:00 pm ET on Saturday, November 21; Qatar 11:00 am ET on November 29; and the Abu Dhabi finale 8:00 am ET on Sunday, December 6.",
   },
   {
     q: "Why is Formula 1 the easiest sport to get spoiled on?",
@@ -111,9 +115,9 @@ export default function F1WithoutSpoilersPage() {
       h1="F1 without spoilers"
       intro={[
         "Yes, you can watch a Grand Prix without spoilers: on HideScore an F1 card tells you the race, the circuit, the broadcaster and whether it has run — and it prints no finishing order anywhere.",
-        "Formula 1 is designed around a global audience, and that design is exactly what ruins it for anyone watching on delay. The calendar sweeps through every time zone, so a large part of the season finishes while North America is asleep. The Bahrain round staged in Malaysia takes its flag at 3:00 am Eastern on Sunday, October 4. Abu Dhabi closes the year at 8:00 am Eastern on December 6.",
+        "Formula 1 is designed around a global audience, and that design is exactly what ruins it for anyone watching on delay. The calendar crosses every time zone, so a large part of the season finishes while North America is asleep. Azerbaijan races at 7:00 am Eastern on Saturday, September 26. The Bahrain round staged in Malaysia takes its flag at 3:00 am Eastern on Sunday, October 4. Abu Dhabi closes the year at 8:00 am Eastern on December 6.",
         "By the time an American fan is awake, the race is a finished story with a photograph attached. What is missing is somewhere to check which rounds have run, where they were, and who is showing them, that does not answer the one question you were avoiding. That is what this column is.",
-        "Add F1 in Settings and it sits alongside the rest of your board through the remaining rounds: Singapore, Austin, Mexico City, Sao Paulo, Las Vegas, Qatar and Abu Dhabi.",
+        "Add F1 in Settings and it sits alongside the rest of your board through the remaining rounds: Azerbaijan, Malaysia, Singapore, Austin, Mexico City, Sao Paulo, Las Vegas, Qatar and Abu Dhabi.",
       ]}
       sections={[
         {
@@ -129,8 +133,8 @@ export default function F1WithoutSpoilersPage() {
           p: "Other apps hide the result behind a tap. Here it is simply not rendered: the card has a race name, a circuit, a broadcaster and one of three states — upcoming, running, finished. There is no drivers' table either, because a championship gap updates within minutes of the flag and describes the afternoon as plainly as a podium photo does.",
         },
         {
-          h: "A link to the schedule, never to a results page",
-          p: "The details link on a race card goes to the season schedule. This is deliberate and it is enforced in code: a finished-race page on any motorsport site opens with the classification at the top, so pointing there would undo the entire card in one click.",
+          h: "The link out disappears when the race ends",
+          p: "Before and during a race, the card links out to the event page, which is useful while there is nothing to spoil. The moment the race goes final that link is removed, because a finished-race page opens with the classification at the top and one click would undo the whole card. When there is no event link to use, the fallback is the season schedule rather than a results page.",
         },
         {
           h: "Highlights pinned to the round you actually want",
@@ -143,10 +147,10 @@ export default function F1WithoutSpoilersPage() {
       ]}
       bullets={[
         "F1 cards that never print a classification.",
-        "Every remaining 2026 round, from Singapore to the Abu Dhabi finale.",
+        "Every remaining 2026 round, from Azerbaijan on September 26 to the Abu Dhabi finale.",
         "No championship table, because a table is a result in another form.",
         "Highlights pinned to the correct round, with the video title masked.",
-        "Details links that go to the schedule, not to a finished-race page.",
+        "The link out is removed once a race is final, so it cannot reach a classification.",
         "Add the F1 column from Settings and it stays on your board.",
       ]}
       ctaLabel="Open F1 without spoilers"
