@@ -22,6 +22,24 @@
 
 export type LeagueKey = "AL" | "NL";
 
+/**
+ * What a club has already locked up. MLB's standings legend, confirmed against
+ * mlb.com/standings: x = a postseason berth, y = the division, z = a division
+ * title that also carries the first-round bye, w = a wild card.
+ *
+ * ESPN publishes its own `clincher` letter and the two feeds disagree (on 9/20
+ * ESPN had TB as `z` and MIL as `x` while StatsAPI said `x` and `y`), so only
+ * StatsAPI's indicator is read here.
+ */
+export type ClinchKind = "berth" | "wildcard" | "division" | "bye";
+
+const CLINCH_BY_INDICATOR: Record<string, ClinchKind> = {
+  x: "berth",
+  y: "division",
+  z: "bye",
+  w: "wildcard",
+};
+
 export interface PlayoffTeam {
   id: number;
   name: string;
@@ -35,6 +53,8 @@ export interface PlayoffTeam {
   seed: number | null;
   divisionLeader: boolean;
   clinched: boolean;
+  /** Which thing is clinched, when MLB says. null when nothing is. */
+  clinch: ClinchKind | null;
   /** Games back in the division ("-" when leading, "+N" when ahead on the WC). */
   gamesBack: string;
   /** Games back of the third wild card. */
@@ -44,11 +64,25 @@ export interface PlayoffTeam {
   eliminated: boolean;
 }
 
+/** One published probability: the number to sort on, and the label to print. */
+export interface Odd {
+  value: number;
+  label: string;
+}
+
 /**
- * Chance of reaching the postseason, keyed by MLB abbreviation, as a short
- * label ready to render ("85%", ">99%", "<1%"). Missing = no number published.
+ * The three chances ESPN publishes per club. ESPN's own tracker shows a fourth
+ * (the first-round bye) but its standings feed carries no `byePercent`, so this
+ * app has three odds columns rather than four.
  */
-export type PlayoffOdds = Record<string, string>;
+export interface TeamOdds {
+  playoff: Odd | null;
+  division: Odd | null;
+  wildCard: Odd | null;
+}
+
+/** Keyed by MLB abbreviation. A club with nothing published is absent. */
+export type PlayoffOdds = Record<string, TeamOdds>;
 
 export interface PlayoffLeague {
   key: LeagueKey;
@@ -77,10 +111,6 @@ const DIVISIONS: Record<number, { league: LeagueKey; name: string; short: string
 };
 const LEAGUE_NAME: Record<LeagueKey, string> = { AL: "American League", NL: "National League" };
 
-// How many chasing teams to list per league. Four is enough to cover a real
-// race without turning the panel into the full standings.
-const HUNT_LIMIT = 4;
-
 export interface StatsApiTeamRecord {
   team?: { id?: number; name?: string; abbreviation?: string };
   wins?: number;
@@ -90,6 +120,8 @@ export interface StatsApiTeamRecord {
   wildCardGamesBack?: string;
   magicNumber?: string | null;
   eliminationNumber?: string;
+  wildCardEliminationNumber?: string;
+  clinchIndicator?: string;
   divisionLeader?: boolean;
   clinched?: boolean;
 }
@@ -98,6 +130,11 @@ export interface StatsApiRecord {
   lastUpdated?: string;
   teamRecords?: StatsApiTeamRecord[];
 }
+
+// MLB writes the literal "E" into an elimination number once that particular
+// road is closed; a number is how many more wins/losses it would take, and "-"
+// means the team is in control.
+const isOut = (v: string | null | undefined): boolean => (v ?? "").trim().toUpperCase() === "E";
 
 // Descending by winning percentage. MLB's real seeding tiebreakers are head-to-
 // head and then intradivision record, neither of which is in this payload — but
@@ -122,6 +159,16 @@ export function buildPicture(records: StatsApiRecord[], season: number): Playoff
     if (rec.lastUpdated && (!updated || rec.lastUpdated > updated)) updated = rec.lastUpdated;
     for (const t of rec.teamRecords ?? []) {
       if (t.team?.id == null) continue;
+      // A club is out only when BOTH roads are closed. `eliminationNumber` is
+      // the DIVISION race; `wildCardEliminationNumber` is the wild-card one.
+      // Reading only the first is why Toronto (4.7%), Baltimore (1.0%) and
+      // Arizona (7.1%) used to vanish from "Still alive", and why the NL showed
+      // no "Still alive" section at all. When the wild-card field is missing
+      // altogether the division number is all there is, so fall back to it
+      // rather than calling every out-of-it club alive.
+      const wcElim = t.wildCardEliminationNumber;
+      const eliminated = isOut(t.eliminationNumber) && (wcElim == null || isOut(wcElim));
+      const clinch = CLINCH_BY_INDICATOR[(t.clinchIndicator ?? "").trim().toLowerCase()] ?? null;
       teams.push({
         id: t.team.id,
         name: t.team.name ?? "",
@@ -133,14 +180,12 @@ export function buildPicture(records: StatsApiRecord[], season: number): Playoff
         pct: t.winningPercentage ?? "",
         seed: null,
         divisionLeader: t.divisionLeader === true,
-        clinched: t.clinched === true,
+        clinched: t.clinched === true || clinch != null,
+        clinch,
         gamesBack: t.gamesBack ?? "-",
         wildCardGamesBack: t.wildCardGamesBack ?? "-",
         magicNumber: t.magicNumber ?? null,
-        // MLB writes the literal "E" into eliminationNumber once a team can no
-        // longer reach the postseason; a number is how many more wins/losses it
-        // would take. Anything else ("-" for a team in control) is not out.
-        eliminated: (t.eliminationNumber ?? "").toUpperCase() === "E",
+        eliminated,
       });
     }
   }
@@ -155,7 +200,9 @@ export function buildPicture(records: StatsApiRecord[], season: number): Playoff
     const wildCards = rest.slice(0, 3);
     const seeded = [...leaders.slice(0, 3), ...wildCards];
     seeded.forEach((t, i) => { t.seed = i + 1; });
-    const hunt = rest.slice(3).filter((t) => !t.eliminated).slice(0, HUNT_LIMIT);
+    // Every live chaser, uncapped. How many of them fit on screen is the
+    // panel's call, not this layer's — an odds sort needs the whole field.
+    const hunt = rest.slice(3).filter((t) => !t.eliminated);
     return { key, name: LEAGUE_NAME[key], seeded, hunt };
   });
 
@@ -183,10 +230,10 @@ export async function fetchPlayoffPicture(signal?: AbortSignal, now: Date = new 
 // ── Playoff odds ─────────────────────────────────────────────────────────────
 //
 // MLB's StatsAPI publishes no probability. ESPN's standings feed carries
-// FanGraphs' "make the playoffs" number as `playoffPercent`, is CORS-open, and
-// is already on this app's preconnect list — so the odds ride alongside the
-// StatsAPI picture rather than replacing it. The two feeds spell exactly two
-// clubs differently; everything else keys straight across.
+// FanGraphs' numbers as `playoffPercent` / `divisionPercent` / `wildCardPercent`,
+// is CORS-open, and is already on this app's preconnect list — so the odds ride
+// alongside the StatsAPI picture rather than replacing it. The two feeds spell
+// exactly two clubs differently; everything else keys straight across.
 const ESPN_TO_MLB: Record<string, string> = { ARI: "AZ", CHW: "CWS" };
 
 export interface EspnStandingsNode {
@@ -213,6 +260,20 @@ export function formatOdds(value: number | undefined, display: string | undefine
   return `${Math.round(v)}%`;
 }
 
+// The label is what a reader sees; `value` is the raw percentage the sort and
+// the cell shading run on, so two clubs that both print ">99%" still order
+// against each other rather than landing in an arbitrary tie.
+function oddFrom(stats: EspnStandingsEntry["stats"], name: string): Odd | null {
+  const st = (stats ?? []).find((s) => s.name === name);
+  if (!st) return null;
+  const label = formatOdds(st.value, st.displayValue);
+  if (label == null) return null;
+  const raw = typeof st.value === "number" && Number.isFinite(st.value)
+    ? st.value
+    : parseFloat((st.displayValue ?? "").replace(/[<>]/g, ""));
+  return { value: Number.isFinite(raw) ? raw : 0, label };
+}
+
 export function oddsFromEspn(root: EspnStandingsNode): PlayoffOdds {
   const out: PlayoffOdds = {};
   const walk = (n: EspnStandingsNode) => {
@@ -220,10 +281,15 @@ export function oddsFromEspn(root: EspnStandingsNode): PlayoffOdds {
     for (const e of n.standings?.entries ?? []) {
       const ab = e.team?.abbreviation;
       if (!ab) continue;
-      const stat = (e.stats ?? []).find((st) => st.name === "playoffPercent");
-      if (!stat) continue;
-      const label = formatOdds(stat.value, stat.displayValue);
-      if (label) out[ESPN_TO_MLB[ab] ?? ab] = label;
+      const odds: TeamOdds = {
+        playoff: oddFrom(e.stats, "playoffPercent"),
+        division: oddFrom(e.stats, "divisionPercent"),
+        wildCard: oddFrom(e.stats, "wildCardPercent"),
+      };
+      // A club ESPN publishes nothing for stays absent, so its cells read "—"
+      // rather than a fabricated 0%.
+      if (!odds.playoff && !odds.division && !odds.wildCard) continue;
+      out[ESPN_TO_MLB[ab] ?? ab] = odds;
     }
   };
   walk(root);
@@ -236,6 +302,148 @@ export async function fetchPlayoffOdds(signal?: AbortSignal): Promise<PlayoffOdd
   const r = await fetch(ESPN_STANDINGS, { signal });
   if (!r.ok) throw new Error(`espn standings → ${r.status}`);
   return oddsFromEspn((await r.json()) as EspnStandingsNode);
+}
+
+// ── Sorting ──────────────────────────────────────────────────────────────────
+
+export type SortKey = "seed" | "playoff" | "division" | "wildCard";
+export type SortDir = "asc" | "desc";
+
+const ODD_FIELD: Record<Exclude<SortKey, "seed">, keyof TeamOdds> = {
+  playoff: "playoff",
+  division: "division",
+  wildCard: "wildCard",
+};
+
+/**
+ * Order a league's rows by one column. Pure, so the sort is unit-testable
+ * without a DOM.
+ *
+ * Two rows that tie on the sorted column fall back to seed order and then to
+ * the club name, which keeps the list from reshuffling between polls — the same
+ * determinism rule `byRecord` follows. A club with no seed, or with no number
+ * published for the sorted column, sorts last in BOTH directions: an ascending
+ * sort is asking for the smallest real number, not for the blanks.
+ */
+export function sortTeams(
+  teams: PlayoffTeam[],
+  odds: PlayoffOdds | null,
+  key: SortKey,
+  dir: SortDir,
+): PlayoffTeam[] {
+  const mul = dir === "desc" ? -1 : 1;
+  const seedOf = (t: PlayoffTeam) => t.seed ?? Number.POSITIVE_INFINITY;
+  const tiebreak = (a: PlayoffTeam, b: PlayoffTeam) =>
+    seedOf(a) - seedOf(b) || a.name.localeCompare(b.name);
+
+  const out = [...teams];
+  out.sort((a, b) => {
+    if (key === "seed") {
+      if (a.seed == null && b.seed == null) return a.name.localeCompare(b.name);
+      if (a.seed == null) return 1;
+      if (b.seed == null) return -1;
+      if (a.seed !== b.seed) return (a.seed - b.seed) * mul;
+      return a.name.localeCompare(b.name);
+    }
+    const field = ODD_FIELD[key];
+    const va = odds?.[a.abbrev]?.[field]?.value;
+    const vb = odds?.[b.abbrev]?.[field]?.value;
+    if (va == null && vb == null) return tiebreak(a, b);
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (va !== vb) return (va - vb) * mul;
+    return tiebreak(a, b);
+  });
+  return out;
+}
+
+// ── Bracket ──────────────────────────────────────────────────────────────────
+
+export type BracketRound = "wildCard" | "divisionSeries" | "championship" | "worldSeries";
+export type BracketMatchupKey = "wc-a" | "wc-b" | "ds-a" | "ds-b" | "cs";
+
+export interface BracketSlot {
+  /** The club holding this seat today, when the seat belongs to a seed. */
+  team: PlayoffTeam | null;
+  /** 1–6 when the seat belongs to a seed, null when a winner fills it. */
+  seed: number | null;
+  /** The matchup whose winner fills this seat, when it is a winner seat. */
+  from: BracketMatchupKey | null;
+}
+
+export interface BracketMatchup {
+  key: BracketMatchupKey;
+  round: BracketRound;
+  bestOf: number;
+  sides: [BracketSlot, BracketSlot];
+}
+
+export interface LeagueBracket {
+  league: LeagueKey;
+  matchups: BracketMatchup[];
+}
+
+export const BEST_OF: Record<BracketRound, number> = {
+  wildCard: 3,
+  divisionSeries: 5,
+  championship: 7,
+  worldSeries: 7,
+};
+
+/**
+ * The 12-team format as plain data, so the pairings are unit-testable.
+ *
+ * Seeds 1 and 2 sit out the wild-card round. The 3 seed hosts the 6 and that
+ * winner meets the 2; the 4 hosts the 5 and that winner meets the 1. This is
+ * "if the season ended today" — the seeds move until the last day, and no
+ * series result is ever read in, so the later seats stay empty on purpose.
+ */
+export function buildBracket(league: PlayoffLeague): LeagueBracket {
+  const bySeed = (n: number) => league.seeded.find((t) => t.seed === n) ?? null;
+  const seat = (n: number): BracketSlot => ({ team: bySeed(n), seed: n, from: null });
+  const winner = (from: BracketMatchupKey): BracketSlot => ({ team: null, seed: null, from });
+  return {
+    league: league.key,
+    matchups: [
+      { key: "wc-a", round: "wildCard", bestOf: BEST_OF.wildCard, sides: [seat(3), seat(6)] },
+      { key: "wc-b", round: "wildCard", bestOf: BEST_OF.wildCard, sides: [seat(4), seat(5)] },
+      { key: "ds-a", round: "divisionSeries", bestOf: BEST_OF.divisionSeries, sides: [seat(2), winner("wc-a")] },
+      { key: "ds-b", round: "divisionSeries", bestOf: BEST_OF.divisionSeries, sides: [seat(1), winner("wc-b")] },
+      { key: "cs", round: "championship", bestOf: BEST_OF.championship, sides: [winner("ds-a"), winner("ds-b")] },
+    ],
+  };
+}
+
+export function roundLabel(round: BracketRound, league: LeagueKey): string {
+  if (round === "worldSeries") return "World Series";
+  if (round === "wildCard") return `${league} Wild Card`;
+  return `${league}${round === "divisionSeries" ? "DS" : "CS"}`;
+}
+
+/**
+ * Who carries each round, per season, taken from MLB's own postseason graphic.
+ * Rights move between contracts, so this is keyed by season and a season with
+ * no entry shows no channel line at all rather than last year's network.
+ */
+export const BROADCAST: Record<number, {
+  wildCard: Record<LeagueKey, string>;
+  divisionSeries: Record<LeagueKey, string>;
+  championship: Record<LeagueKey, string>;
+  worldSeries: string;
+}> = {
+  2026: {
+    wildCard: { AL: "NBC / Peacock", NL: "NBC / Peacock" },
+    divisionSeries: { AL: "TBS / HBO Max", NL: "FOX / FS1" },
+    championship: { AL: "TBS / HBO Max", NL: "FOX / FS1" },
+    worldSeries: "FOX",
+  },
+};
+
+export function broadcastFor(season: number, round: BracketRound, league: LeagueKey): string | null {
+  const year = BROADCAST[season];
+  if (!year) return null;
+  if (round === "worldSeries") return year.worldSeries;
+  return year[round][league] ?? null;
 }
 
 export function teamLogo(id: number): string {
