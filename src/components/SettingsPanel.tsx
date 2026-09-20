@@ -1249,7 +1249,7 @@ export default function SettingsPanel({
             <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
               Pick <em>⭐ Top events</em> for any column (tap a column header, or a slot above) to get the biggest games across every league in one column.
               Auto ranks your starred teams first, then what espn.com is featuring on its homepage right now, live games, playoffs, ranked matchups and national TV.
-              Scores stay hidden, same as everywhere else.
+              No score is printed, same as everywhere else.
             </p>
             <Field label="Which leagues" hint="Auto follows ESPN's homepage plus your teams; Manual uses only the leagues you tick">
               <RadioGroup
