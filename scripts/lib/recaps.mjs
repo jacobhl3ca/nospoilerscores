@@ -296,15 +296,33 @@ export function weeklyWindowFromPublished(publishedYmd) {
   return { windowStart: shiftYmd(publishedYmd, -6), windowEnd: publishedYmd };
 }
 
-// NFL: first to last ET game day of the week per the ESPN scoreboard, extended
-// to the day before the next week's first game so the card follows the
-// "Last played" slate through the Tue/Wed the cut actually posts on.
+// NFL: first ET game day of the week → the day before the NEXT week's main
+// slate (its busiest game day, i.e. the Sunday). Week 1 stays on top of every
+// board through the Saturday, Thursday night's included, and hands over on
+// the Sunday (Jacob 9/20). Once next week's cut posts, selectRecaps' latest-
+// week rule gives the overlapping Thu–Sat boards to the newer week.
 export function nflWeekWindow(weekEvents, nextWeekEvents) {
   const days = (weekEvents ?? []).map((e) => etYmd(e?.date)).filter(Boolean).sort();
   if (!days.length) return null;
-  const nextDays = (nextWeekEvents ?? []).map((e) => etYmd(e?.date)).filter(Boolean).sort();
-  const windowEnd = nextDays.length ? shiftYmd(nextDays[0], -1) : days[days.length - 1];
-  return { windowStart: days[0], windowEnd: windowEnd < days[days.length - 1] ? days[days.length - 1] : windowEnd };
+  const last = days[days.length - 1];
+  const counts = new Map();
+  for (const d of (nextWeekEvents ?? []).map((e) => etYmd(e?.date)).filter(Boolean).sort()) counts.set(d, (counts.get(d) ?? 0) + 1);
+  // Busiest day, earliest on a tie (Map keeps the sorted insertion order).
+  let main = "";
+  for (const [d, n] of counts) if (!main || n > counts.get(main)) main = d;
+  const windowEnd = main ? shiftYmd(main, -1) : last;
+  return { windowStart: days[0], windowEnd: windowEnd < last ? last : windowEnd };
+}
+
+// Does YouTube's /embed/<id> shell say the video plays embedded? The NFL blocks
+// embeds per VIDEO, not per channel: measured 2026-09-20 with scripts/check-
+// embeddable.mjs, "Top 15 plays" and "Every touchdown" PLAY from hidescore.com
+// while "Sunday's best" returns error 150 — and this field agreed on all three.
+// true / false, or null when the shell carries no verdict (treated as blocked).
+export function parseEmbedPlayable(html) {
+  const m = String(html ?? "").match(/previewPlayabilityStatus\\?":\{\\?"status\\?":\\?"([A-Z_]+)\\?"(?:,\\?"playableInEmbed\\?":(true|false))?/);
+  if (!m) return null;
+  return m[1] === "OK" && m[2] === "true";
 }
 
 // ── Candidate pick ───────────────────────────────────────────────────────────
@@ -377,7 +395,7 @@ export function pickNewest(matches) {
 const RECORD_KEYS = [
   "sport", "key", "heading", "label", "cadence", "coversDate", "coversWeek",
   "windowStart", "windowEnd", "videoId", "playbackUrl", "poster", "pageUrl",
-  "channel", "durationSec", "published", "t", "sourcePolicy",
+  "channel", "durationSec", "published", "t", "sourcePolicy", "embeddable",
 ];
 
 export function stripRecapRecord(rec) {

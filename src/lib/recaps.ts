@@ -27,6 +27,9 @@ export type RecapRecord = {
   published?: string;
   t?: number;
   sourcePolicy?: "official-channel" | "mlb.com";
+  // Bake-time verdict from YouTube's /embed/ shell. The NFL blocks embeds per
+  // video, so `true` lets a cut play in the modal despite its channel.
+  embeddable?: boolean;
 };
 
 // The uploader each series is allowed to come from. A record naming any other
