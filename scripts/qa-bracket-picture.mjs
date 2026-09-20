@@ -26,6 +26,8 @@ const ok = (name, pass, detail = "") => {
   checks.push({ name, pass, detail });
   console.log(`${pass ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
 };
+// Something the board legitimately isn't showing today. Logged, never counted.
+const skip = (name, detail = "") => console.log(`SKIP  ${name}${detail ? ` — ${detail}` : ""}`);
 
 const server = liveUrl
   ? null
@@ -64,6 +66,83 @@ async function clearOverlays() {
   }
 }
 
+const PICTURE = '[role="dialog"][aria-label="MLB playoff picture"]';
+
+// The cover is on the tab panel, so both tabs share it. Reading the computed
+// filter is the only proof that the blur is actually applied.
+async function coverState(page) {
+  return page.evaluate((sel) => {
+    const body = document.querySelector(`${sel} [data-picture-body]`);
+    if (!body) return null;
+    const cs = getComputedStyle(body);
+    return {
+      blur: cs.filter,
+      hidden: body.getAttribute("aria-hidden"),
+      events: cs.pointerEvents,
+      text: body.innerText.slice(0, 60),
+      rows: body.innerText.split("\n").filter(Boolean).length,
+    };
+  }, PICTURE);
+}
+
+// Data rows only: the seed dividers and the "+N more" line are single-cell rows.
+async function columnValues(page, n) {
+  return page.evaluate(({ sel, n }) => {
+    const t = document.querySelector(`${sel} table`);
+    if (!t) return [];
+    return [...t.querySelectorAll("tbody tr")]
+      .filter((r) => r.cells.length === 6)
+      .map((r) => r.cells[n].innerText.trim());
+  }, { sel: PICTURE, n });
+}
+
+const statusColumn = (page) => columnValues(page, 5);
+
+// The sort runs on ESPN's raw value; the cell prints a clamped label, so ">99%"
+// is a club sitting on a raw 100 and "<1%" one sitting on a raw 0.0-something.
+// Reading the label back has to undo that clamp or the monotonicity check calls
+// a correct sort broken.
+const pct = (v) => {
+  const s = String(v).trim();
+  if (s.startsWith(">")) return 100;
+  if (s.startsWith("<")) return 0;
+  const n = parseFloat(s.replace("%", ""));
+  return Number.isFinite(n) ? n : null;
+};
+
+function isSorted(vals, dir) {
+  const nums = vals.filter((v) => v !== null);
+  // A club with no number published belongs at the end in BOTH directions.
+  if (vals.slice(nums.length).some((v) => v !== null)) return false;
+  for (let i = 1; i < nums.length; i++) {
+    if (dir === "desc" ? nums[i] > nums[i - 1] : nums[i] < nums[i - 1]) return false;
+  }
+  return nums.length > 0;
+}
+
+// How many clubs per league are still alive by MLB's own numbers. Exactly six
+// seats exist, so any league with more than six alive must be showing a chase.
+async function liveChasers() {
+  const season = new Date().getUTCFullYear();
+  const out = { AL: 0, NL: 0 };
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${season}&standingsTypes=byDivision&hydrate=team`);
+    const d = await r.json();
+    const LEAGUE = { 200: "AL", 201: "AL", 202: "AL", 203: "NL", 204: "NL", 205: "NL" };
+    const isE = (v) => String(v ?? "").trim().toUpperCase() === "E";
+    for (const rec of d.records ?? []) {
+      const key = LEAGUE[rec.division?.id];
+      if (!key) continue;
+      for (const t of rec.teamRecords ?? []) {
+        if (!(isE(t.eliminationNumber) && isE(t.wildCardEliminationNumber))) out[key]++;
+      }
+    }
+  } catch {
+    /* zeros: the check then asks for nothing rather than failing on a feed blip */
+  }
+  return out;
+}
+
 try {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(6000); // let the ESPN fetches land
@@ -75,8 +154,10 @@ try {
   // ── Grand Slam bracket ────────────────────────────────────────────────────
   const roundSubtitle = page.locator("button", { hasText: /^(Quarterfinal|Semifinal|Final|Round \d|QF|SF|R\d)/ }).first();
   const hasTennis = (await roundSubtitle.count()) > 0;
-  ok("tennis column exposes a tappable round subtitle", hasTennis,
-    hasTennis ? await roundSubtitle.innerText() : "no tennis column on the board");
+  // The Slams run Jan–Sep. Out of season there is no tennis column to open, and
+  // that is the board working, not a regression — so it is skipped, not failed.
+  if (hasTennis) ok("tennis column exposes a tappable round subtitle", true, await roundSubtitle.innerText());
+  else skip("tennis bracket checks", "no tennis column on the board — no Slam in progress");
 
   if (hasTennis) {
     await clearOverlays();
@@ -158,48 +239,132 @@ try {
     await dialog.waitFor({ timeout: 15000 });
     await page.waitForTimeout(5000); // statsapi fetch
 
-    const body = dialog.locator("h2 ~ div > div").first();
-    const state = await dialog.evaluate(() => {
-      const grid = document.querySelector('[role="dialog"][aria-label="MLB playoff picture"] .grid');
-      if (!grid) return null;
-      const cs = getComputedStyle(grid);
-      return { blur: cs.filter, hidden: grid.getAttribute("aria-hidden"), events: cs.pointerEvents, text: grid.innerText.slice(0, 60) };
-    });
-    ok("playoff picture loads", state !== null, state ? `${state.text.replace(/\n/g, " / ")}` : "no grid");
+    const state = await coverState(page);
+    ok("playoff picture loads", state !== null, state ? state.text.replace(/\n/g, " / ") : "no panel");
     if (state) {
       ok("playoff picture starts blurred", state.blur.includes("blur"), state.blur);
       ok("playoff picture is hidden from assistive tech while covered", state.hidden === "true");
       ok("playoff picture is untappable while covered", state.events === "none");
     }
 
+    // Two tabs, and BOTH of them sit behind the one cover — switching views is
+    // not a way around the spoiler gate.
+    const tabs = dialog.locator('[role="tab"]');
+    const tabNames = await tabs.allInnerTexts();
+    ok("the picture has an Odds and a Bracket tab", tabNames.length === 2 && /odds/i.test(tabNames[0]) && /bracket/i.test(tabNames[1]), tabNames.join(" | "));
+    await tabs.nth(1).click();
+    await page.waitForTimeout(300);
+    const coveredBracket = await coverState(page);
+    ok("the bracket tab starts covered too", !!coveredBracket && coveredBracket.blur.includes("blur") && coveredBracket.hidden === "true",
+      JSON.stringify(coveredBracket && { blur: coveredBracket.blur, hidden: coveredBracket.hidden }));
+    await tabs.nth(0).click();
+    await page.waitForTimeout(300);
+
     await dialog.getByRole("button", { name: /Show the playoff picture/i }).click();
     await page.waitForTimeout(400);
-    const revealed = await dialog.evaluate(() => {
-      const grid = document.querySelector('[role="dialog"][aria-label="MLB playoff picture"] .grid');
-      return grid ? { blur: getComputedStyle(grid).filter, hidden: grid.getAttribute("aria-hidden"), rows: grid.innerText.split("\n").filter(Boolean).length } : null;
-    });
-    ok("tapping reveals the playoff picture", revealed?.blur === "none" && revealed?.hidden === null, JSON.stringify(revealed));
+    const revealed = await coverState(page);
+    ok("tapping reveals the playoff picture", revealed?.blur === "none" && revealed?.hidden === null, JSON.stringify(revealed && { blur: revealed.blur, hidden: revealed.hidden }));
     ok("both leagues render their six seeds", (revealed?.rows ?? 0) >= 12, `${revealed?.rows} lines`);
-    void body;
 
-    // The number on a row is the chance of making the playoffs, never the W-L
-    // record; games back is opt-in behind its own toggle, off by default.
-    const gridText = await dialog.locator(".grid").innerText();
+    // The numbers on a row are chances, never the W-L record; games back is
+    // opt-in behind its own toggle, off by default.
+    const gridText = await dialog.locator("[data-picture-body]").innerText();
     ok("no W-L record on any row", !/\b\d{2,3}-\d{2,3}\b/.test(gridText));
     const oddsCount = (gridText.match(/(?:>|<)?\d{1,3}%/g) ?? []).length;
     ok("rows carry a playoff-odds percentage", oddsCount >= 8, `${oddsCount} percentages`);
 
-    const clinchedRows = await dialog.locator(".grid .flex.items-center", { hasText: "Clinched" }).allInnerTexts();
-    ok("clinched rows carry no percentage", clinchedRows.every((r) => !/%/.test(r)), `${clinchedRows.length} clinched`);
+    // "Clinched" on its own reads as "clinched the division" to half the people
+    // who see it, and that is wrong for a club that only has a berth.
+    const statuses = await statusColumn(page);
+    ok("no status reads a bare \"Clinched\"", statuses.every((s) => s !== "Clinched"),
+      statuses.filter((s) => /Clinch/.test(s)).join(" | ") || "none clinched yet");
+
     ok("games back is hidden by default", !/\b(back|up)\b|In the mix/.test(gridText));
     const gbToggle = dialog.getByLabel("Show games back");
     ok("games-back toggle present and off", (await gbToggle.count()) === 1 && !(await gbToggle.isChecked()));
     await gbToggle.check();
     await page.waitForTimeout(300);
-    const withGb = await dialog.locator(".grid").innerText();
+    const withGb = await dialog.locator("[data-picture-body]").innerText();
     ok("games-back toggle shows the chase", /\d+\.\d (back|up)/.test(withGb));
     await gbToggle.uncheck();
     ok("magic-number key sits in the dialog header", (await dialog.locator("text=/Magic N/").count()) === 1);
+
+    // ── Still alive ─────────────────────────────────────────────────────────
+    // A club out of its division can still be chasing a wild card. MLB
+    // publishes two elimination numbers and only both of them saying "E" means
+    // out — so ask the feed how many NL clubs are alive and expect the panel to
+    // show a chase whenever more than six are.
+    const aliveByLeague = await liveChasers();
+    for (const [i, key] of ["AL", "NL"].entries()) {
+      const table = dialog.locator("table").nth(i);
+      const text = (await table.innerText()).toLowerCase();
+      const expect = aliveByLeague[key] > 6;
+      ok(`${key} shows "Still alive" when the feed has a live chaser`,
+        !expect || text.includes("still alive"),
+        `${aliveByLeague[key]} clubs alive${expect ? ", chase expected" : ", none outside the six"}`);
+    }
+
+    // ── Sorting ─────────────────────────────────────────────────────────────
+    const alTable = dialog.locator("table").first();
+    const seedOrder = await columnValues(page, 0);
+    ok("the default view is seed order", seedOrder.slice(0, 6).join(",") === "1,2,3,4,5,6", seedOrder.join(","));
+
+    await alTable.getByRole("button", { name: /Playoffs/ }).click();
+    await page.waitForTimeout(250);
+    const desc = (await columnValues(page, 2)).map(pct);
+    ok("clicking Playoffs sorts by the odds, highest first", isSorted(desc, "desc"), desc.join(" "));
+    ok("the sorted header says so", (await dialog.locator('th[aria-sort="descending"]').count()) >= 1);
+
+    await alTable.getByRole("button", { name: /Playoffs/ }).click();
+    await page.waitForTimeout(250);
+    const asc = (await columnValues(page, 2)).map(pct);
+    ok("clicking Playoffs again flips it", isSorted(asc, "asc"), asc.join(" "));
+    ok("the flipped header says so", (await dialog.locator('th[aria-sort="ascending"]').count()) >= 1);
+
+    // An odds sort drops the seed dividers — they mark seed boundaries, which
+    // mean nothing in a probability order.
+    ok("an odds sort is one flat list", !/still alive|wild-card round below/i.test(await dialog.locator("[data-picture-body]").innerText()));
+
+    // ── The sort survives a reload ──────────────────────────────────────────
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(6000);
+    await clearOverlays();
+    await page.getByRole("button", { name: "Playoff picture", exact: true }).first().click();
+    await dialog.waitFor({ timeout: 15000 });
+    await page.waitForTimeout(5000);
+    ok("the sort is remembered across a reload", (await dialog.locator('th[aria-sort="ascending"]').count()) >= 1);
+
+    // ── Bracket tab ─────────────────────────────────────────────────────────
+    await dialog.locator('[role="tab"]').nth(1).click();
+    await page.waitForTimeout(400);
+    const bracket = await dialog.evaluate(() => {
+      const body = document.querySelector('[role="dialog"][aria-label="MLB playoff picture"] [data-picture-body]');
+      if (!body) return null;
+      return {
+        teams: body.querySelectorAll("[data-bracket-team]").length,
+        slots: body.querySelectorAll("[data-bracket-slot]").length,
+        channels: [...body.querySelectorAll("[data-bracket-channel]")].map((n) => n.textContent.trim()),
+        images: [...body.querySelectorAll("img")].map((n) => n.getAttribute("src") ?? ""),
+        text: body.innerText,
+      };
+    });
+    ok("bracket tab renders", bracket !== null);
+    if (bracket) {
+      ok("the bracket shows all twelve seeded clubs", bracket.teams === 12, `${bracket.teams} team tiles`);
+      ok("every later seat is still empty", bracket.slots >= 6, `${bracket.slots} empty slots`);
+      ok("every round carries a channel line as text", bracket.channels.length >= 6, bracket.channels.join(" | "));
+      // Team logos only: no round marks, no network logos, no sponsor art.
+      ok("the only images in the bracket are team logos",
+        bracket.images.length > 0 && bracket.images.every((s) => s.includes("mlbstatic.com/team-logos/")),
+        bracket.images.find((s) => !s.includes("mlbstatic.com/team-logos/")) ?? `${bracket.images.length} logos`);
+      // Round names are TEXT, never a round logo — so they must be readable in
+      // the panel's own text. innerText returns them CSS-uppercased.
+      const bracketText = bracket.text.toLowerCase();
+      ok("the bracket names every round in text", ["AL Wild Card", "ALDS", "ALCS", "NL Wild Card", "NLDS", "NLCS", "World Series"]
+        .every((r) => bracketText.includes(r.toLowerCase())), bracket.text.split("\n").slice(0, 4).join(" / "));
+      ok("the bracket says it is a snapshot", /If the season ended today/i.test(bracket.text));
+    }
+
     const updated = dialog.locator("p", { hasText: /^Updated / });
     const placed = await updated.evaluate((el) => {
       const dlg = el.closest('[role="dialog"]');
