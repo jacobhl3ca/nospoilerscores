@@ -144,6 +144,27 @@ function compTitleMatches(tokens, titleLower) {
   return tokens.some((tok) => tok && nt.includes(tok));
 }
 
+// YouTube bylines a CO-UPLOAD with both accounts joined by " and ": the search
+// page reported "TUDN USA and ViX" as the ownerText of TUDN's Puebla–Atlante
+// recap on 2026-09-18, while oembed still names the single real owner ("TUDN
+// USA"). The exact-equality channel test then read false, so NO channel tier
+// fired, and a `strict=1` Liga MX lookup returned "No results" for a video that
+// was sitting at rank 1 of the page it had just parsed — the card went dark
+// with the correct clip in hand. (The unscoped lookup found it, which is how
+// the split showed up at all.)
+//
+// This only decides whether a video is ALLOWED INTO the channel tiers. Ground
+// truth stays the oembed author_name check at the end of the handler: a pick
+// whose parsed byline is not an exact match still pays the oembed round-trip
+// and is still dropped unless author_name equals the requested channel. So a
+// collaborator can never smuggle in its own upload.
+function bylineNamesChannel(byline, preferChannelLower) {
+  if (!preferChannelLower) return false;
+  const b = String(byline || "").toLowerCase();
+  if (b === preferChannelLower) return true;
+  return b.split(/\s+and\s+/).some((part) => part.trim() === preferChannelLower);
+}
+
 function raceTitleMatches(tokens, titleLower) {
   if (tokens.length === 0) return true; // no gate requested → unchanged behaviour
   if (NON_RACE_SESSION_RX.test(titleLower)) return false;
@@ -765,7 +786,9 @@ export default {
         for (const video of videos) {
           const { videoId, title, channel } = video;
           const titleLower = title.toLowerCase();
-          const isFromChannel = preferChannelLower && channel.toLowerCase() === preferChannelLower;
+          // Tolerates YouTube's "A and B" co-upload byline — see
+          // bylineNamesChannel. The oembed gate at the end still has the last word.
+          const isFromChannel = bylineNamesChannel(channel, preferChannelLower);
 
           // Check if title contains a highlight-indicator keyword. We
           // accept "recap" in addition to "highlight" because full-day

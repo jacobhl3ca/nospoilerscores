@@ -57,7 +57,18 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // companion) — the worker's extended-vs-standard demote still picks them
   // because nothing else competes at the same tier.
   ucl: "CBS Sports Golazo",
-  uel: "CBS Sports Golazo",
+  // UEL: the uploader MOVED. CBS split its European coverage onto a second
+  // channel, "CBS Sports Golazo - Europe", and the Europa League went with it —
+  // the 2026-09-16 League Phase MD1 slate read 0/18 baked on the old string.
+  // Re-probed against the LIVE worker with strict=1 over the first 8 fixtures
+  // of that matchday: "CBS Sports Golazo - Europe" 6/8, 0 wrong; the old
+  // channel 0/8. Titles are unchanged in shape ("Omonia vs. Celta Vigo:
+  // Extended Highlights | UEL League Phase MD1 | CBS Sports Golazo"), so the
+  // signature that moved is the author_name, not the title. The old channel
+  // stays on as the strict 2nd slot (SECONDARY_CHANNELS) in case an older tie
+  // or a stray upload still lives there. ⚠️ UCL is NOT changed here — probe it
+  // the same way on its own next matchday before touching `ucl`.
+  uel: "CBS Sports Golazo - Europe",
   // Serie A: Paramount+ / CBS holds the US rights, same as UCL/UEL, and the
   // same Golazo channel posts the per-match Extended Highlights.
   seriea: "CBS Sports Golazo",
@@ -163,12 +174,40 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // with it World Rugby is 10/18 correct and 0/18 wrong.
   nationschamp: "World Rugby",
   // euro + cricket deliberately have NO entry — see the block comment below.
-  // laliga + ligue1 deliberately have NO approved channel.
-  // LALIGA's channel ("LALIGA EA SPORTS") posts Spanish-language full matches
-  // rather than clean per-match English highlights, and Ligue 1's author name
-  // is sponsor-suffixed with a curly apostrophe ("Ligue 1 McDonald's") that
-  // re-brands every cycle. A wrong string silently kills the official slot, so
-  // both stay dark instead of falling through to an unscoped search.
+  //
+  // ── La Liga + Ligue 1, LIT 2026-09-19. Both were dark because the LEAGUE's
+  // own channel was unusable: LALIGA's ("LALIGA EA SPORTS") posts
+  // Spanish-language full matches rather than per-match English highlights, and
+  // Ligue 1's author name is sponsor-suffixed with a curly apostrophe ("Ligue 1
+  // McDonald's") that re-brands every cycle. Neither objection applies to the
+  // US BROADCASTER, which is the same answer EPL→NBC Sports and UCL→CBS Sports
+  // Golazo already use.
+  //
+  // Ligue 1: beIN SPORTS USA holds the US rights and posts a per-match
+  // "Lorient vs Toulouse | HIGHLIGHTS Ligue 1 | 09/12/2026 | beIN SPORTS USA".
+  // Probed against the LIVE worker with strict=1 over the first 8 finished
+  // fixtures of the Sep 12-13 2026 slate: 7/8 hits, 0 wrong. Every title
+  // carries both the competition name and an explicit MM/DD/YYYY, so the date
+  // gate is live too. The one miss (Angers–Le Havre) has no recap anywhere.
+  ligue1: "beIN SPORTS USA",
+  // La Liga: ESPN FC (ESPN holds the US rights) posts "Real Sociedad vs.
+  // Atletico Madrid | LALIGA Highlights | ESPN FC". Probed against the LIVE
+  // worker with strict=1 over 8 finished fixtures of the Sep 12-13 2026 slate:
+  // 4/8 hits, 0 wrong — it cuts the big-club games and skips the rest, so
+  // expect about half the slate to stay dark.
+  //
+  // ⚠️ 4/8 does NOT clear the old "≥4/5 strict hits" gate, and shipping it is a
+  // deliberate widening (approved 2026-09-19). The gate that actually protects
+  // a no-spoiler card is ZERO WRONG MATCHES, not hit rate: a miss hides the
+  // button, which is recoverable, while a wrong match puts someone else's
+  // scoreline on the card. So the rule for a broadcaster channel is now: 0
+  // wrong over at least 8 probes, any non-zero hit rate, PLUS a required
+  // competition title token whenever the channel cuts more than one
+  // competition. ESPN FC cuts the FA Cup, the Copa del Rey and the Premier
+  // League alongside LALIGA — and Copa del Rey measured that exact failure on
+  // 2026-09-14 (a LALIGA Elche–Betis served for the cup tie) — so La Liga ships
+  // with the "laliga" token in COMPETITION_TITLE_TOKENS, same as facup.
+  laliga: "ESPN FC",
   // Golf majors — each tournament has its own channel. Keys must match the
   // label-derived lookup key `golf_${label.toLowerCase().replace(/\s+/g,"")}`
   // (see getOfficialChannelName), so the PGA Championship — whose league label
@@ -342,8 +381,9 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "dfbpokal",
   "euro",
   "esports",
-  "laliga",
-  "ligue1",
+  // laliga + ligue1 left this set 2026-09-19 — both now resolve against their
+  // US broadcaster (ESPN FC / beIN SPORTS USA), each behind a required
+  // competition title token. See OFFICIAL_CHANNELS above.
   "ncaah",
   "ncaawh",
   "ncaabase",
@@ -393,6 +433,10 @@ const SECONDARY_CHANNELS: Record<string, string[]> = {
   // The league channel skipped Courage–Summit on 2026-08-05 while W Golazo
   // published an official, embeddable cut, so keep it as the strict 2nd slot.
   nwsl: ["CBS Sports W Golazo"],
+  // UEL's 2nd slot is the channel it just moved OFF — "CBS Sports Golazo" still
+  // holds the older ties, and keeping it strict here costs nothing when it has
+  // no cut for a match. See the uel note in OFFICIAL_CHANNELS.
+  uel: ["CBS Sports Golazo"],
   // Nations Championship: the two hemispheres post separately. World Rugby
   // covers the fixtures hosted in the north, and Super Rugby Pacific — the
   // SANZAAR channel, already this app's primary for `superrugby` — posts the
@@ -560,10 +604,22 @@ export function getCompetitionName(sport: string): string | null {
 // ncaavb: its conference channels (SEC, Big Ten Network, ESPN) post football and
 // basketball between the same schools; strict probes served both. Every match
 // cut says "Volleyball" in the title. See lib/collegeHighlights.ts.
+// laliga: the SAME ESPN FC channel again, and the same hazard facup carries —
+// it cuts LALIGA, the FA Cup, the Copa del Rey and the Premier League, and the
+// Copa del Rey probe served a LaLiga meeting of the same two clubs for a cup
+// tie. Every ESPN FC LaLiga cut is titled "… | LALIGA Highlights | ESPN FC"
+// (4/4 hits carried it). Both spellings are listed because the token match is
+// punctuation-insensitive but NOT space-insensitive — "LA LIGA Highlights"
+// normalizes to "la liga", which the bare "laliga" token would miss.
+// ligue1: beIN SPORTS USA also carries the Coupe de France, Ligue 2 and beIN's
+// other rights, so the league name is required in the title. All 7 hits are
+// titled "… | HIGHLIGHTS Ligue 1 | MM/DD/YYYY | beIN SPORTS USA".
 const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   ncaavb: ["volleyball"],
   nationschamp: ["nations championship"],
   facup: ["fa cup"],
+  laliga: ["laliga", "la liga"],
+  ligue1: ["ligue 1"],
 };
 
 // NFL preseason — the same failure one season-phase over. The NFL channel

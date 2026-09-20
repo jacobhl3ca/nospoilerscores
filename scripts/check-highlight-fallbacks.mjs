@@ -71,6 +71,11 @@ const ESPN_PATHS = {
   uel:   "/soccer/uefa.europa/scoreboard",
   seriea:       "/soccer/ita.1/scoreboard",
   bundesliga:   "/soccer/ger.1/scoreboard",
+  // La Liga + Ligue 1 became monitorable 2026-09-19, when both were lit against
+  // their US broadcaster — see OFFICIAL_CHANNELS below and the block in
+  // src/lib/youtube.ts.
+  laliga:       "/soccer/esp.1/scoreboard",
+  ligue1:       "/soccer/fra.1/scoreboard",
   ligamx:       "/soccer/mex.1/scoreboard",
   nwsl:         "/soccer/usa.nwsl/scoreboard",
   efl:          "/soccer/eng.2/scoreboard",
@@ -96,7 +101,7 @@ const ESPN_PATHS = {
   // after 2023, so fetchScoreboard reads this one from our own worker route
   // (theScore reshaped to the ESPN scoreboard — public/_worker.js).
   cfl:          "/api/cfl",
-  // Deliberately absent: MLB (MLB.com-native); La Liga, Ligue 1, EURO, NCAA
+  // Deliberately absent: MLB (MLB.com-native); EURO, NCAA
   // men's and women's hockey, women's volleyball, UFL, NCAA baseball, NCAA
   // softball, the Conference League, Copa del Rey, DFB-Pokal, and cricket (no
   // approved per-match uploader, so no YouTube button). ncaah / ncaawh /
@@ -117,8 +122,17 @@ const OFFICIAL_CHANNELS = {
   // production never sends, i.e. green here proved nothing for those two.
   mlb: "MLB",
   fifa: "FOX Sports", epl: "NBC Sports", mls: "Major League Soccer",
-  ucl: "CBS Sports Golazo", uel: "CBS Sports Golazo", seriea: "CBS Sports Golazo",
+  ucl: "CBS Sports Golazo", seriea: "CBS Sports Golazo",
+  // UEL moved to CBS's second European channel (2026-09-19). UCL and Serie A
+  // did NOT — they are still on the original Golazo channel until each is
+  // re-probed on its own matchday.
+  uel: "CBS Sports Golazo - Europe",
   bundesliga: "Bundesliga",
+  // La Liga + Ligue 1, lit 2026-09-19 against their US broadcasters. Both carry
+  // a REQUIRED competition title token below — ESPN FC also cuts the FA Cup,
+  // the Copa del Rey and the Premier League, beIN also cuts the Coupe de France.
+  laliga: "ESPN FC",
+  ligue1: "beIN SPORTS USA",
   // "TUDN USA", not "TUDN México" — see the note on ligamx in
   // src/lib/youtube.ts. The México string resolved 0 videos for every fixture.
   ligamx: "TUDN USA",
@@ -152,6 +166,8 @@ const OFFICIAL_CHANNELS = {
 const COMPETITION_TITLE_TOKENS = {
   nationschamp: ["nations championship"],
   facup: ["fa cup"],
+  laliga: ["laliga", "la liga"],
+  ligue1: ["ligue 1"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts (per
 // event: the round from the card's playoff note). Keep in sync.
@@ -169,6 +185,8 @@ function cflPlayoffTokens(ev) {
 // Every entry remains strict to that exact uploader.
 const SECONDARY_CHANNELS = {
   nwsl: "CBS Sports W Golazo",
+  // The channel UEL just moved off — it still holds the older ties.
+  uel: "CBS Sports Golazo",
   // World Rugby posts the northern-hosted fixtures, SANZAAR's channel the
   // southern-hosted ones. See the block in src/lib/youtube.ts.
   nationschamp: "Super Rugby Pacific",
@@ -186,7 +204,7 @@ const TENNIS_CHANNELS = new Set([
 const HIGHLIGHT_BUFFER_HOURS = {
   nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5, ncaawh: 4.5, ncaavb: 3,
   nfl: 5, cfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
-  seriea: 3, bundesliga: 3,
+  seriea: 3, bundesliga: 3, laliga: 3, ligue1: 3,
   ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3, facup: 3,
   // Rugby union: 80 minutes plus stoppages, so the same 3h window soccer uses.
   sixnations: 3, superrugby: 3, rugbywc: 3, nationschamp: 3,
@@ -194,7 +212,7 @@ const HIGHLIGHT_BUFFER_HOURS = {
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5,
   nfl: 4, cfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
-  seriea: 2, bundesliga: 2,
+  seriea: 2, bundesliga: 2, laliga: 2, ligue1: 2,
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2, facup: 2,
   sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,
 };
