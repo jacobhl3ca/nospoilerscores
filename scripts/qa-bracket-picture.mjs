@@ -362,6 +362,28 @@ try {
         slots: body.querySelectorAll("[data-bracket-slot]").length,
         channels: [...body.querySelectorAll("[data-bracket-channel]")].map((n) => n.textContent.trim()),
         images: [...body.querySelectorAll("img")].map((n) => n.getAttribute("src") ?? ""),
+        // A chaser is a club still after a seat somebody else holds today. It
+        // rides INSIDE that seat's card, so its nearest [data-bracket-team]
+        // ancestor's card is the one it belongs to.
+        chasers: [...body.querySelectorAll("[data-bracket-chaser]")].map((n) => n.innerText.replace(/\s+/g, " ").trim()),
+        // A seat's own line: abbreviation then the odds pill. Every one of the
+        // twelve must carry a percentage or a clinch tick, never a bare name.
+        seatLines: [...body.querySelectorAll("[data-bracket-team]")].map((n) => n.innerText.replace(/\s+/g, " ").trim()),
+        // The shading is the point of the "same conditional format" ask: a
+        // painted pill has a real background, an unpainted one does not.
+        shaded: [...body.querySelectorAll("[data-bracket-team] span[class*='tabular-nums']")]
+          .filter((n) => {
+            const bg = getComputedStyle(n).backgroundColor;
+            return bg && bg !== "transparent" && !/rgba\(0, 0, 0, 0\)/.test(bg);
+          }).length,
+        // Wide-and-short, not a grid of squares. The old layout stacked two
+        // near-square tiles per matchup; a seat is now a row, so the narrowest
+        // of the twelve is still several times wider than it is tall.
+        seatRatio: (() => {
+          const boxes = [...body.querySelectorAll("[data-bracket-team]")].map((n) => n.getBoundingClientRect());
+          if (!boxes.length) return null;
+          return Math.min(...boxes.map((b) => b.width / Math.max(b.height, 1)));
+        })(),
         text: body.innerText,
       };
     });
@@ -380,6 +402,20 @@ try {
       ok("the bracket names every round in text", ["AL Wild Card", "ALDS", "ALCS", "NL Wild Card", "NLDS", "NLCS", "World Series"]
         .every((r) => bracketText.includes(r.toLowerCase())), bracket.text.split("\n").slice(0, 4).join(" / "));
       ok("the bracket says it is a snapshot", /If the season ended today/i.test(bracket.text));
+      // Same conditional format as the odds table: a percentage on every seat,
+      // shaded by its own number.
+      ok("every seated club carries an odds or a clinch mark",
+        bracket.seatLines.length === 12 && bracket.seatLines.every((l) => /%|✓/.test(l)),
+        bracket.seatLines.find((l) => !/%|✓/.test(l)) ?? `${bracket.seatLines.length} lines`);
+      ok("the seat percentages are shaded, not flat text", bracket.shaded > 0, `${bracket.shaded} shaded pills`);
+      // Chasers are optional by September's end — once every seat is clinched
+      // there is nobody left to list, and that is the correct empty state.
+      ok("any chaser shown names a club and its odds",
+        bracket.chasers.every((c) => /[A-Z]{2,3}/.test(c) && /%/.test(c)),
+        bracket.chasers.join(" | ") || "no live chasers");
+      ok("a chaser is only ever listed under a seat", !/Chasing this spot/.test(bracket.text) || bracket.chasers.length > 0);
+      ok("a seat is a row, not a square tile",
+        bracket.seatRatio !== null && bracket.seatRatio > 2.5, `narrowest seat ratio ${bracket.seatRatio?.toFixed(2)}`);
     }
 
     const updated = dialog.locator("p", { hasText: /^Updated / });
