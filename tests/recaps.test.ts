@@ -224,14 +224,15 @@ test("EPL / MLS weekly window is the six days before the post plus the day itsel
   assert.equal(weeklyWindowFromPublished("2026-09-13"), null);
 });
 
-test("NFL week window runs first game day → day before the next week's first game", () => {
+test("NFL week window runs first game day → day before the next week's main slate", () => {
   const wk1 = [
     { date: "2026-09-10T00:20Z" }, // Wed 9/9 8:20 pm ET
     { date: "2026-09-13T17:00Z" },
     { date: "2026-09-15T00:15Z" }, // Mon 9/14 8:15 pm ET
   ];
-  const wk2 = [{ date: "2026-09-18T00:15Z" }, { date: "2026-09-20T17:00Z" }]; // Thu 9/17
-  assert.deepEqual(nflWeekWindow(wk1, wk2), { windowStart: "20260909", windowEnd: "20260916" });
+  // Thu 9/17, a full Sun 9/20, Mon 9/21 → the window holds through Sat 9/19.
+  const wk2 = [{ date: "2026-09-18T00:15Z" }, { date: "2026-09-20T17:00Z" }, { date: "2026-09-20T20:25Z" }, { date: "2026-09-22T00:15Z" }];
+  assert.deepEqual(nflWeekWindow(wk1, wk2), { windowStart: "20260909", windowEnd: "20260919" });
   // No next week known → the week's own last game day.
   assert.deepEqual(nflWeekWindow(wk1, []), { windowStart: "20260909", windowEnd: "20260914" });
   assert.equal(nflWeekWindow([], wk2), null);
@@ -365,4 +366,12 @@ test("the shorter club package wins; unknown durations lose; a tie keeps the fir
   ])?.videoId, "home");
   assert.equal(pickShorterClub([{ videoId: "only", channel: "A", durationSec: null }])?.videoId, "only");
   assert.equal(pickShorterClub([]), null);
+});
+
+test("parseEmbedPlayable reads the /embed/ shell's verdict (escaped or plain JSON)", async () => {
+  const { parseEmbedPlayable } = await import("../scripts/lib/recaps.mjs");
+  assert.equal(parseEmbedPlayable('x\\"previewPlayabilityStatus\\":{\\"status\\":\\"OK\\",\\"playableInEmbed\\":true,\\"contextParams\\":\\"Q\\"'), true);
+  assert.equal(parseEmbedPlayable('"previewPlayabilityStatus":{"status":"OK","playableInEmbed":false'), false);
+  assert.equal(parseEmbedPlayable('\\"previewPlayabilityStatus\\":{\\"status\\":\\"UNPLAYABLE\\",\\"reason\\":\\"Video unavailable\\"'), false);
+  assert.equal(parseEmbedPlayable("<html>nothing</html>"), null);
 });

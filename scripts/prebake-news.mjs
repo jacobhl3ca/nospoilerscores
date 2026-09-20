@@ -9,7 +9,7 @@ import { dirname } from "node:path";
 import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
   parseRelativeTime, isoDurationToSec, etYmd, dailyCoversDate, weekdayCoversDate,
-  weeklyWindowFromPublished, nflWeekWindow, matchSeriesTitle, pickNewest, stripRecapRecord,
+  weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
   fillHeading, pickShorterClub, eplSeasonYear,
 } from "./lib/recaps.mjs";
 
@@ -3348,6 +3348,17 @@ async function fetchYtWatchMeta(id) {
   YT_WATCH_META_CACHE.set(id, meta);
   return meta;
 }
+// Per-video embed verdict for a recap (see parseEmbedPlayable). The Referer is
+// the production origin because embed permission is judged against it.
+async function fetchYtEmbeddable(id) {
+  try {
+    const res = await fetch(`https://www.youtube.com/embed/${id}`, { headers: { "User-Agent": UA, Referer: "https://hidescore.com/" } });
+    return res.ok ? parseEmbedPlayable(await res.text()) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchYtDurationSec(id) {
   return (await fetchYtWatchMeta(id)).durationSec;
 }
@@ -3523,8 +3534,12 @@ async function bakeLeagueRecaps() {
         // A carried record keeps its first-seen timestamps and duration; only a
         // different id for the same coverage replaces it.
         const sameVideo = prev && (prev.videoId ?? prev.pageUrl) === (rec.videoId ?? rec.pageUrl);
+        // Re-probed every run while the series is current: a rights holder
+        // can flip embedding either way. A failed probe keeps the last verdict.
+        const embeddable = rec.videoId ? (await fetchYtEmbeddable(rec.videoId)) ?? (sameVideo ? prev.embeddable : undefined) : undefined;
         const merged = stripRecapRecord({
           ...rec,
+          ...(typeof embeddable === "boolean" ? { embeddable } : {}),
           t: sameVideo ? prev.t : now,
           published: sameVideo && prev.published ? prev.published : rec.published,
           durationSec: Number.isFinite(rec.durationSec) ? rec.durationSec : prev?.durationSec,
