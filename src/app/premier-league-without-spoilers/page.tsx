@@ -129,6 +129,7 @@ export default function PremierLeagueWithoutSpoilersPage() {
         { href: "/mls-highlights-without-spoilers", label: "MLS" },
         { href: "/liga-mx-scores-without-spoilers", label: "Liga MX" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
+        { href: "/redzone-for-every-sport", label: "Goal Rush and other whip-around shows" },
         { href: "/spoiler-free-sports", label: "Spoiler-free sports" },
       ]}
       faq={FAQ}

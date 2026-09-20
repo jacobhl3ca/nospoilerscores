@@ -163,6 +163,7 @@ export default function NbaScoresWithoutSpoilersPage() {
         { href: "/mlb-highlights-without-spoilers", label: "MLB highlights" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
+        { href: "/redzone-for-every-sport", label: "Is there a RedZone for the NBA?" },
         { href: "/today", label: "Today" },
       ]}
       faq={FAQ}

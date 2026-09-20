@@ -11,6 +11,7 @@ import { displayShortName, loadBigInningSchedule, getSeasonOpener, sportDisplayL
 import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
+import { getWhiparoundShow, parseEtTime, whiparoundStartsLater, whiparoundSubtitle } from "@/lib/whiparound";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
@@ -106,6 +107,12 @@ interface LeagueColumnProps {
 // regardless of the current ET clock, so the styling shows before tonight's
 // scheduled start time. Set to false before shipping.
 const FORCE_BIG_INNING_LIVE_PREVIEW = false;
+
+// The same DEV preview for the whip-around shows (RedZone, CrunchTime, …).
+// Bypasses the clock and the live-game count only — the day, season and slate
+// gates still have to pass, so flipping this on a Tuesday shows nothing for the
+// NFL column. Set to false before shipping.
+const FORCE_WHIPAROUND_LIVE_PREVIEW = false;
 
 // 2025-26 season playoff start dates (update each season)
 // singularLabel flags a grammatically SINGULAR label so the countdown subtitle
@@ -254,14 +261,10 @@ function fifaRoundTiers(label: string): string[] {
   return short !== label ? [label, short] : [label];
 }
 
-// Parse "9:00 PM" / "11:30 AM" into 24-hour {h, m}. Returns null on bad input.
-function parseEtTime(s: string): { h: number; m: number } | null {
-  const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!m) return null;
-  let h = parseInt(m[1], 10) % 12;
-  if (m[3].toUpperCase() === "PM") h += 12;
-  return { h, m: parseInt(m[2], 10) };
-}
+// parseEtTime ("9:00 PM" -> {h, m}) now lives in @/lib/whiparound and is
+// imported above. Big Inning and the fixed-schedule whip-around shows read the
+// same start-time format, so they share one parser rather than keeping two
+// copies that could drift.
 
 // Current ET wall-clock as {y,mo,d,h,m} via toLocaleString — works in any TZ.
 function nowInEt(): { y: number; mo: number; d: number; h: number; m: number } {
@@ -337,11 +340,42 @@ function getPlayoffSubtitle(
   }
 
   const config = PLAYOFF_START_DATES[sport];
-  if (!config) return null;
   const y = +selectedDate.slice(0, 4);
   const m = +selectedDate.slice(4, 6) - 1;
   const d = +selectedDate.slice(6, 8);
   const viewDate = new Date(y, m, d, 12, 0, 0); // noon to match playoffDate
+  // A league with no PLAYOFF_START_DATES entry (epl, ucl, mls) has no
+  // postseason to defer to, so it can never be "started".
+  const postseasonStarted =
+    !!config && new Date(config.date + "T12:00:00").getTime() <= viewDate.getTime();
+
+  // Whip-around shows — NFL RedZone and its per-league equivalents (see
+  // @/lib/whiparound). This sits ABOVE the `config` gate below because three of
+  // the six leagues that have a show have no playoff entry at all, and BELOW
+  // the postseason test because a real playoff round label always outranks a
+  // regular-season show. Every one of these shows is regular-season only, and
+  // each config's seasonEnd says so independently; gating on postseasonStarted
+  // as well makes it structural instead of a date someone has to re-verify.
+  // MLB is excluded on purpose: Big Inning has a scraped per-night schedule and
+  // keeps its own branch below.
+  if (!postseasonStarted && sport !== "mlb") {
+    const show = getWhiparoundShow(sport);
+    if (show) {
+      const whiparound = whiparoundSubtitle(
+        show,
+        selectedDate,
+        games,
+        nowInEt(),
+        getTimeZone(),
+        FORCE_WHIPAROUND_LIVE_PREVIEW,
+      );
+      // null = not an air day, out of season, too thin a slate, or the show is
+      // over. Fall through so "Playoffs start ..." countdowns still render.
+      if (whiparound) return whiparound;
+    }
+  }
+
+  if (!config) return null;
   const playoffDate = new Date(config.date + "T12:00:00");
   const diff = playoffDate.getTime() - viewDate.getTime();
 
@@ -498,12 +532,21 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
     if (!isToday) return false;
     return now.h < parsed.h || (now.h === parsed.h && now.m < parsed.m);
   })();
+  // The same flip for the fixed-schedule whip-around shows: today is an air day
+  // and the start time is still ahead, so tick until the header can turn itself
+  // green. No schedule fetch is involved, so this needs nothing loaded first.
+  const needsWhiparoundTick = (() => {
+    if (FORCE_WHIPAROUND_LIVE_PREVIEW) return false;
+    const show = getWhiparoundShow(sport);
+    return !!show && whiparoundStartsLater(show, selectedDate, nowInEt());
+  })();
+  const needsShowTick = needsBigInningTick || needsWhiparoundTick;
   const [, bumpTick] = useState(0);
   useEffect(() => {
-    if (!needsBigInningTick) return;
+    if (!needsShowTick) return;
     const id = setInterval(() => bumpTick((t) => t + 1), 60_000);
     return () => clearInterval(id);
-  }, [needsBigInningTick]);
+  }, [needsShowTick]);
 
   const result = getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule);
   // A real subtitle (playoff round, Big Inning) wins; the start cue only fills an
@@ -576,8 +619,9 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
   }, [tiersKey]);
 
   // The "green & clickable" treatment that mirrors the GameCard live-progress
-  // indicator. Only Big Inning sets `live`; the trade board links from the same
-  // slot without borrowing the live styling.
+  // indicator. Only the whip-around subtitles (Big Inning, RedZone, CrunchTime,
+  // ...) set `live`; the trade board links from the same slot without borrowing
+  // the live styling.
   const isLive = !!result?.live && tiers.length > 0;
   // No subtitle of our own → the caller's fallback (if any) takes the slot.
   const usingFallback = !tiers.length && !!fallbackText;

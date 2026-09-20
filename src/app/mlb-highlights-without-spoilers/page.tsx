@@ -87,6 +87,7 @@ export default function MlbHighlightsWithoutSpoilersPage() {
       links={[
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },
+        { href: "/redzone-for-every-sport", label: "Big Inning and other whip-around shows" },
         { href: "/today", label: "Today" },
       ]}
       faq={FAQ}
