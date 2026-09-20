@@ -98,9 +98,11 @@ export default function LeagueRecapCard({
     if (!rec.videoId || !onPlayHighlight) return;
     // A watch?v= fallback has no search_query, so a failed embed goes straight
     // to the "Watch on YouTube" card. Channels that refuse embeds (NFL, the
-    // clubs) carry the strict channel gate so VideoModal skips the player.
+    // clubs) carry the strict channel gate so VideoModal skips the player —
+    // unless the bake measured THIS video as embeddable (the NFL's Top 15 and
+    // Every TD cuts are; Sunday's best is not).
     const base = `https://www.youtube.com/watch?v=${rec.videoId}`;
-    const fallbackUrl = leadChannelBlocksEmbeds([rec.channel])
+    const fallbackUrl = rec.embeddable !== true && leadChannelBlocksEmbeds([rec.channel])
       ? `${base}&nss_strict=1&nss_channels=${encodeURIComponent(rec.channel)}`
       : base;
     onPlayHighlight(rec.videoId, fallbackUrl);
