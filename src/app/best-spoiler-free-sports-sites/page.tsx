@@ -30,6 +30,19 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // competitor claim from memory on this page.
 //
 // ⛔ No press-coverage claim anywhere on this page. HideScore has none.
+//
+// ⛔ AND DO NOT UNDERSELL HIDESCORE EITHER — a comparison page that invents a
+// weakness is as wrong as one that invents a strength, and it hands the point
+// to a competitor for free. Two of these were caught in review: HideScore DOES
+// have condensed games (nhlCondensedUrl / mlbCondensedUrl in types.ts, rendered
+// by GameHighlights.tsx) and it DOES walk more than one video source (UFC tries
+// three channels in EventCard.tsx; college football walks a conference-then-
+// network chain in collegeHighlights.ts). Check the code before conceding
+// anything.
+//
+// ⚠️ HideScore never renders a score at all — nothing outside GolfLeaderboard
+// reads Team.score. The "does it hide the table" test below is about there
+// being no standings view, not about a tap-to-reveal, which does not exist.
 const TITLE = "The Best Spoiler-Free Sports Sites and Apps (2026) | HideScore";
 const DESC =
   "An honest comparison of the spoiler-free sports apps: DTMTS, No Spoiler Sports, Spoiler-Free Sports, joyavo, Should I Watch Sports and HideScore.";
@@ -66,11 +79,11 @@ const FAQ = [
   },
   {
     q: "What does HideScore do that the others do not?",
-    a: "Three things, honestly stated. It covers far more competitions — over 50, from the Champions League and MLS to F1, UFC, college football and the golf and tennis majors. It treats standings and league tables as spoilers rather than as neutral information, which most of these do not. And it is free with no account, no advertising and no paid tier at all, where joyavo is subscription-backed.",
+    a: "Three things, honestly stated. It covers far more competitions — over 50, from the Champions League and MLS to F1, UFC, college football and the golf and tennis majors. It never prints a score anywhere, and it ships no league table at all, which most of these do not bother about. And it is free with no account, no advertising and no paid tier, where joyavo is subscription-backed.",
   },
   {
     q: "Where is HideScore weaker?",
-    a: "Highlights are not universal: a handful of competitions have no trustworthy uploader, so their cards show scores and a rating but no video, and La Liga resolves for roughly half a matchday. DTMTS carries several sources per game and a condensed-length option, which HideScore does not. And joyavo has been on the App Store longer.",
+    a: "Highlights are not universal: a handful of competitions have no trustworthy uploader, so their cards carry a rating and no video at all, and La Liga resolves for roughly half a matchday. Excitement ratings are also off until you switch them on, so a first-time visitor sees a plainer board than this page describes. And joyavo has been on the App Store longer.",
   },
   {
     q: "Is HideScore free?",
@@ -94,7 +107,7 @@ const ITEM_LIST = [
         name: "HideScore",
         url: "https://hidescore.com",
         description:
-          "Over 50 competitions, excitement ratings on finished games, standings treated as spoilers, free with no account.",
+          "Over 50 competitions, optional excitement ratings on finished games, no score or league table rendered anywhere, free with no account.",
       },
       {
         "@type": "ListItem",
@@ -199,11 +212,11 @@ export default function BestSpoilerFreeSportsSitesPage() {
         },
         {
           h: "HideScore — the widest coverage, and what it costs you",
-          p: "More than 50 competitions sit behind one board: the Champions League, the Premier League, La Liga, MLS and Liga MX, F1, UFC, college football and basketball, cricket, rugby, the golf and tennis majors. League tables and standings are covered as carefully as the scores, which most of this list does not do, and there is no account, no advertising and no paid tier. The trade is honest: some competitions have no trustworthy video source and show a score and a rating with no highlight button, La Liga resolves for about half a matchday, and we have no equivalent of the multiple sources DTMTS attaches to a game.",
+          p: "More than 50 competitions sit behind one board: the Champions League, the Premier League, La Liga, MLS and Liga MX, F1, UFC, college football and basketball, cricket, rugby, the golf and tennis majors. No score is printed anywhere and there is no standings table to walk into, which most of this list does not bother about, and there is no account, no advertising and no paid tier. The trade is honest: some competitions have no verified video source and show a card with no highlight button at all, La Liga resolves for about half a matchday, and the excitement ratings are off until you turn them on, so the board looks plainer on a first visit than it will once you have.",
         },
         {
           h: "How to judge any of them yourself",
-          p: "Three tests separate a real spoiler-free service from a site that merely does not print the score. Does it mask or filter the video title, or does it hand you a listing page that states the result? Is the standings table treated as a spoiler, or left sitting in the navigation? And can you tell a good game from a dull one before you commit an evening to it? Run those three questions over anything on this page, including ours.",
+          p: "Three tests separate a real spoiler-free service from a site that merely leaves the score off the front page. Does it mask or filter the video title, or does it hand you a listing page that states the result? Is there a standings table sitting in the navigation, undoing the rest of it? And can you tell a good game from a dull one before you commit an evening to it? Run those three questions over anything on this page, including ours.",
         },
       ]}
       bullets={[
@@ -212,7 +225,7 @@ export default function BestSpoilerFreeSportsSitesPage() {
         "No Spoiler Sports: seven leagues, free, still in active development.",
         "joyavo: iPhone, excitement scores, free download with a paid tier.",
         "Should I Watch Sports: ratings for F1 and the World Cup, not a highlight browser.",
-        "HideScore: 50+ competitions, covered standings, free with no account.",
+        "HideScore: 50+ competitions, no score and no table anywhere, free with no account.",
       ]}
       ctaLabel="Try HideScore"
       ctaHref="/today"
@@ -227,6 +240,7 @@ export default function BestSpoilerFreeSportsSitesPage() {
       extraSchema={ITEM_LIST}
       schemaName={TITLE}
       schemaDescription={DESC}
+      mainEntityId={`https://hidescore.com${CANONICAL}#itemlist`}
       canonical={CANONICAL}
       about={["spoiler-free sports apps", "spoiler-free sports sites", "watching sports without spoilers"]}
     />

@@ -18,20 +18,28 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // carries roughly a week of fixtures and rejects ranges). The September 18-20
 // round ran Elche at Espanyol on the Friday, four matches on the Saturday and
 // five on the Sunday, across four kickoff windows: 8:00 am, 10:15 am, 12:30 pm
-// and 3:00 pm ET.
+// and 3:00 pm ET — ten matches over the three days, not nine.
+//
+// ⚠️ WHAT THE APP ACTUALLY DOES — no page may say "the score appears when you
+// tap it". It does not. Nothing outside GolfLeaderboard reads Team.score; the
+// score is parsed to compute the rating and never rendered, so there is no
+// covered score to reveal. There is no standings table either, and the "#N"
+// chip a card can carry comes off once the match is final (GameCard.tsx).
+// Ratings are OPT-IN: `showRatings: false` in preferences.ts, and the default
+// "auto" mode forces them off before noon ET (HomeContent.tsx).
 const TITLE = "La Liga Without Spoilers | HideScore";
 const DESC =
-  "Follow La Liga without seeing results. Every match stays covered with a rating for how good it was, and the table is treated as a spoiler too. Free.";
+  "Follow La Liga without seeing results. No scoreline is printed anywhere, and an optional rating tells you which match was worth an evening. Free.";
 const CANONICAL = "/la-liga-without-spoilers";
 
 const FAQ = [
   {
     q: "Can I follow La Liga without spoilers?",
-    a: "Yes. Add La Liga in Settings and every fixture lands on the board as a covered card. You see the match, the kickoff time and whether it has finished; the scoreline waits until you tap for it. That is enough to plan a Sunday evening of replays from a round that finished at lunchtime.",
+    a: "Yes. Add La Liga in Settings and every fixture lands on the board as a plain card: the match, the kickoff time, the broadcaster and whether it has finished. No scoreline is written on it and none can be summoned, so there is nothing there to slip. That is enough to plan a Sunday evening of replays from a round that finished at lunchtime.",
   },
   {
     q: "What time do La Liga matches kick off in the US?",
-    a: "Early, and in four waves. The September 18-20, 2026 round is typical: 8:00 am ET, 10:15 am, 12:30 pm and 3:00 pm on both weekend days, with a single Friday night fixture at 3:00 pm ET. A nine-match round is therefore over by mid-afternoon on the American east coast, and before lunch on the west.",
+    a: "Early, and in four waves. The September 18-20, 2026 round is typical: 8:00 am ET, 10:15 am, 12:30 pm and 3:00 pm on both weekend days, with a single Friday night fixture at 3:00 pm ET. A ten-match round is therefore over by mid-afternoon on the American east coast, and before lunch on the west.",
   },
   {
     q: "Why is Spanish football so easy to get spoiled on in America?",
@@ -43,11 +51,11 @@ const FAQ = [
   },
   {
     q: "Is the La Liga table a spoiler?",
-    a: "Yes, and an efficient one. Twenty clubs and a single table means a position tells you how a side's weekend went, and a two-place jump tells you more than that. Standings sit behind the same cover as scorelines, so checking where a club stands costs you nothing you were holding back for later.",
+    a: "Yes, and an efficient one. Twenty clubs and a single table means a position tells you how a side's weekend went, and a two-place jump tells you more than that. HideScore therefore has no standings view, and the small position marker a fixture can carry before kickoff disappears from the card once the match is done.",
   },
   {
     q: "How do I know which match is worth watching?",
-    a: "A finished match carries a rating for how close and how eventful it was, with no mention of the result. On a nine-match round that turns an undifferentiated list into an order of preference — a goalless draw between two mid-table sides and a five-goal afternoon look identical on a covered board until the rating separates them.",
+    a: "Turn Ratings on in Settings and a finished match carries a mark for how close and how eventful it was, with no mention of the result. On a ten-match round that turns an undifferentiated list into an order of preference — a goalless draw between two mid-table sides and a five-goal afternoon look identical on the board until the rating separates them. Nothing carries a mark until you switch the feature on, and the default holds it back through the morning.",
   },
   {
     q: "What about El Clasico and the Madrid derby?",
@@ -102,7 +110,7 @@ export default function LaLigaWithoutSpoilersPage() {
       intro={[
         "Yes, you can follow La Liga without spoilers: every Spanish fixture stays behind its cover on HideScore until you ask for it, with a rating on the completed ones to show where an evening is best spent.",
         "Spanish football's problem is not volume, it is timing. A round runs in four waves from 8:00 am Eastern, and by 5:00 pm on a Sunday the whole thing has been over for two hours. Anyone who wanted to watch after dinner has spent most of a day within reach of the answer, on a phone that has no reason to keep it quiet.",
-        "The board is somewhere to look during those hours that will not tell you. Fixtures arrive as covered cards with the match, the kickoff time and a finished flag; ratings say which matches were tight or eventful; and league position is handled with the same caution as a scoreline, because a table says the same thing in fewer characters.",
+        "The board is somewhere to look during those hours that will not tell you. Fixtures arrive with the match, the kickoff time and a finished flag and no scoreline at all; an optional rating says which matches were tight or eventful; and there is no league table anywhere, because a table says the same thing as a scoreline in fewer characters.",
         "The round of September 18 to 20, 2026 shows the shape of it: one Friday fixture, four on the Saturday, five on the Sunday, with Real Madrid at Atletico Madrid kicking off at 10:15 am ET.",
       ]}
       sections={[
@@ -112,7 +120,7 @@ export default function LaLigaWithoutSpoilersPage() {
         },
         {
           h: "Twenty clubs, one table, no hiding place",
-          p: "Every result moves the standings and every position is a summary of somebody's weekend. Showing a live table beside covered scores would be pointless, so the table sits behind the same cover, and a promoted side's climb stays as private as the match that caused it.",
+          p: "Every result moves the standings and every position is a summary of somebody's weekend. Showing a live table next to cards that carry no scoreline would give the whole thing away, so there is no table, and the position marker a fixture can wear beforehand is taken off the card the moment it finishes. A promoted side's climb stays as private as the match that caused it.",
         },
         {
           h: "Ratings for a round you cannot watch all of",
@@ -132,10 +140,10 @@ export default function LaLigaWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "La Liga scores hidden until you tap.",
+        "No La Liga scoreline printed anywhere on the board.",
         "Every kickoff window, from the 8:00 am ET opener to the 3:00 pm close.",
-        "Ratings for finished matches — tight, eventful, or a quiet afternoon.",
-        "The table treated as a spoiler, not as neutral information.",
+        "Optional ratings for finished matches — tight, eventful, or a quiet afternoon.",
+        "No league table, because a table is a result in another form.",
         "Highlights only from the verified rights-holder, or no button at all.",
         "Add the La Liga column from Settings and it stays on your board.",
       ]}

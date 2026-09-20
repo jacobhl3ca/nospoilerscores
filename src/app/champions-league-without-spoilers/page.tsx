@@ -13,7 +13,18 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // time (the feed rejects ranges). The 2026-27 league phase runs Sep 8-10,
 // Oct 13-14, Oct 20-21, Nov 3-4, Nov 24-25 and Dec 8-9; matchdays split over
 // two days at 12:45 pm and 3:00 pm ET, and the Oct 21 slate carries Paramount+
-// in its broadcasts array.
+// in its broadcasts array. Seven of the nine go at 3:00 pm on all four October
+// matchdays — counted, not rounded.
+//
+// ⚠️ WHAT THE APP ACTUALLY DOES — do not write "the score appears when you tap
+// it" on this or any page. It does not. No component outside GolfLeaderboard
+// reads Team.score: the score is parsed only to compute the rating and is never
+// rendered, so there is no covered score and nothing to reveal. There is no
+// league table view either; the one "#N" chip a card can carry is dropped the
+// moment the match is final (GameCard.tsx, the `!effectivePastDate &&
+// !isFinished` branch). And ratings are OPT-IN — `showRatings: false` in
+// preferences.ts, and the default "auto" mode forces them off before noon ET
+// (HomeContent.tsx), so a morning reader sees none until they turn them on.
 const TITLE = "Champions League Without Spoilers | HideScore";
 const DESC =
   "Follow the Champions League league phase without seeing results. Every match stays covered, with a rating that tells you which one to watch. Free, no account.";
@@ -22,7 +33,7 @@ const CANONICAL = "/champions-league-without-spoilers";
 const FAQ = [
   {
     q: "Can I follow the Champions League without spoilers?",
-    a: "Yes. Every Champions League fixture arrives on HideScore as a covered card. The tie, the kick-off time and whether it has finished are all shown; the scoreline is not, and appears only when you tap for it. That is enough to line up an evening of replays without learning how any of them ended.",
+    a: "Yes. Every Champions League fixture arrives on HideScore as a plain card: the tie, the kick-off time, the broadcaster and whether it has finished. There is no scoreline on it and no control that produces one, so the board cannot leak a result even by accident. That is enough to line up an evening of replays without learning how any of them ended.",
   },
   {
     q: "When are the 2026-27 Champions League matchdays?",
@@ -95,9 +106,9 @@ export default function ChampionsLeagueWithoutSpoilersPage() {
     <SeoLandingPage
       h1="Champions League without spoilers"
       intro={[
-        "Yes, you can follow the Champions League without spoilers: HideScore keeps every tie covered until you tap it, and rates the finished ones so you know which night is worth replaying.",
-        "No competition is harder for an American to save for later. A round arrives on a Tuesday and a Wednesday afternoon, seven or eight matches start at the same minute, and all of them are over before the working day is. What reaches you between the final whistle and your sofa is a push alert, a table that has already moved, and a thumbnail of somebody's celebration.",
-        "HideScore is somewhere to start that will not do that. Ties sit on the board as covered cards with the fixture, the kick-off time and the finished flag visible and nothing else. The excitement mark on a completed tie says it was close or dramatic; it never says who went through.",
+        "Yes, you can follow the Champions League without spoilers: HideScore never prints a scoreline at all, and it can rate the finished ties so you know which night is worth replaying.",
+        "No competition is harder for an American to save for later. A round arrives on a Tuesday and a Wednesday afternoon, seven matches start at the same minute, and all of them are over before the working day is. What reaches you between the final whistle and your sofa is a push alert, a table that has already moved, and a thumbnail of somebody's celebration.",
+        "HideScore is somewhere to start that will not do that. Ties sit on the board with the fixture, the kick-off time and a finished flag, and nothing else — the result is not hidden behind a tap, it is simply never written down. Turn Ratings on in Settings and a completed tie also carries a mark for how close or dramatic it was, which still never says who went through.",
         "The 2026-27 league phase opened on September 8, 2026 and runs through matchdays on October 13-14, October 20-21, November 3-4, November 24-25 and December 8-9.",
       ]}
       sections={[
@@ -107,11 +118,11 @@ export default function ChampionsLeagueWithoutSpoilersPage() {
         },
         {
           h: "The single table moves on every result",
-          p: "Thirty-six clubs in one league phase table means the standings redraw themselves after each round, and a club's position is a plain statement of how its last match went. Treating the table as public information while hiding the scoreline would be pointless, so both are covered and both reveal on the same tap.",
+          p: "Thirty-six clubs in one league phase table means the standings redraw themselves after each round, and a club's position is a plain statement of how its last match went. Publishing that beside a card with no scoreline would be pointless, so there is no table here at all — and the small position marker a fixture can carry beforehand comes off the card the moment the tie goes final.",
         },
         {
           h: "Ratings that rank the round without settling it",
-          p: "With seven ties finishing at once, the useful question is not what happened but which one to give an evening to. A completed tie is marked for how level it stayed and how late it turned — Barcelona at Paris Saint-Germain on October 20, Arsenal at Bayern Munich the following afternoon — while the identity of the winner stays behind the same cover as the score.",
+          p: "With seven ties finishing at once, the useful question is not what happened but which one to give an evening to. Switch Ratings on in Settings and each completed tie carries a mark for how level it stayed and how late it turned — Barcelona at Paris Saint-Germain on October 20, Arsenal at Bayern Munich the following afternoon — and no more than that. You have to switch them on; on the default setting nothing is marked before noon Eastern, which is the most exposed part of a matchday morning.",
         },
         {
           h: "Extended highlights, opened from the card",
@@ -127,10 +138,10 @@ export default function ChampionsLeagueWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "Champions League ties hidden until you tap.",
+        "No Champions League scoreline printed anywhere on the board.",
         "All six autumn matchdays, from September 8 through December 9.",
         "Ratings for finished ties — level late, high-scoring, settled by one moment.",
-        "The 36-club league table treated as a spoiler, not as neutral information.",
+        "No 36-club league table, because a table is a result in another form.",
         "Highlights with the scoreline filtered out of video titles.",
         "Watch links that point at Paramount+, not at a scoreboard.",
       ]}

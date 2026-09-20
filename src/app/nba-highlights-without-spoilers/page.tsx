@@ -8,13 +8,27 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // the split works. This page must NOT restate the scores page: that one is
 // about the covered board and the standings, this one is about the recap
 // pipeline (the league's own uploads, titles, thumbnails) and about choosing
-// among a dozen recaps at once.
+// among eleven recaps at once.
 //
 // Every date, tip time and network below is verified against ESPN's
 // basketball/nba/scoreboard feed on 2026-09-20 (dates=20261020, 20261021,
 // 20261022): opening night is Tuesday Oct 20 2026, three games, all on NBC;
-// Wednesday Oct 21 widens to twelve, with Golden State at the Lakers at
-// 10:00 pm ET on ESPN; Thursday Oct 22 is an ESPN doubleheader.
+// Wednesday Oct 21 widens to ELEVEN (counted from the feed — the older copy on
+// /nba-scores-without-spoilers said twelve and was wrong; eight clubs play only
+// on the 20th and the 22nd, leaving 22 teams and therefore 11 games), with
+// Golden State at the Lakers at 10:00 pm ET on ESPN; Thursday Oct 22 is an ESPN
+// doubleheader.
+//
+// The feed puts Boston at Detroit at 3:00 pm ET on opening night. That reads
+// like an ESPN placeholder rather than a real tip time, so no time is quoted
+// for that game here — only the two the feed gives a plausible one for.
+//
+// ⚠️ WHAT THE APP ACTUALLY DOES — never write "the score appears when you tap
+// it". It does not. Nothing outside GolfLeaderboard reads Team.score; the score
+// is parsed to compute the rating and is never rendered, so there is no covered
+// score to reveal, and no series scoreline either. Ratings are OPT-IN:
+// `showRatings: false` in preferences.ts, and the default "auto" mode forces
+// them off before noon ET (HomeContent.tsx).
 const TITLE = "NBA Highlights Without Spoilers: Recaps With No Score | HideScore";
 const DESC =
   "Open NBA recaps and highlights without reading the final score in the title. Ratings pick the game worth replaying. Free, no account.";
@@ -27,11 +41,11 @@ const FAQ = [
   },
   {
     q: "When is NBA opening night 2026-27?",
-    a: "Tuesday, October 20, 2026. NBC carries all three games: Boston at Detroit, Philadelphia at New York at 7:00 pm ET, and Oklahoma City at San Antonio at 9:30 pm ET. The following night, Wednesday October 21, jumps to twelve games, and Thursday October 22 is an ESPN doubleheader with Cleveland at Philadelphia and Denver at Oklahoma City.",
+    a: "Tuesday, October 20, 2026. NBC carries all three games: Boston at Detroit, Philadelphia at New York at 7:00 pm ET, and Oklahoma City at San Antonio at 9:30 pm ET. The following night, Wednesday October 21, jumps to eleven games, and Thursday October 22 is an ESPN doubleheader with Cleveland at Philadelphia and Denver at Oklahoma City.",
   },
   {
-    q: "Twelve games finished last night. Which recap should I open?",
-    a: "That is the question a rating answers. Each finished game carries a mark for how competitive it was — tight, high-scoring, decided in the closing seconds — with no mention of who won or by how much. On a Wednesday like October 21 that turns twelve unlabeled recaps into a ranked shortlist, and you still learn nothing about any of them until you press play.",
+    q: "Eleven games finished last night. Which recap should I open?",
+    a: "That is what the rating is for. Switch Ratings on in Settings and each finished game carries a mark for how competitive it was — tight, high-scoring, decided in the closing seconds — with no mention of who won or by how much. On a Wednesday like October 21 that turns eleven unlabeled recaps into a ranked shortlist, and you still learn nothing about any of them until you press play. Ratings are off until you ask for them, and by default they stay off through the morning.",
   },
   {
     q: "Why do NBA recap titles and thumbnails give the result away?",
@@ -47,7 +61,7 @@ const FAQ = [
   },
   {
     q: "Does this work for the play-in, the playoffs and the Finals?",
-    a: "Yes. Postseason recaps are the riskiest of all, because a series score is itself a spoiler: the state of a series restates the two nights that produced it. Games and series alike stay covered until you reveal them.",
+    a: "Yes. Postseason recaps are the riskiest of all, because a series score is itself a spoiler: the state of a series restates the two nights that produced it. Neither a game score nor a series score is printed anywhere on the board.",
   },
   {
     q: "Do I need an account to use it?",
@@ -97,15 +111,15 @@ export default function NbaHighlightsWithoutSpoilersPage() {
     <SeoLandingPage
       h1="NBA highlights without spoilers"
       intro={[
-        "Yes, you can watch NBA highlights without spoilers: open the recap from a covered card on HideScore instead of from a search results page, and the final never reaches you on the way in.",
+        "Yes, you can watch NBA highlights without spoilers: open the recap from its card on HideScore instead of from a search results page, and the final never reaches you on the way in.",
         "The league is very good at publishing recaps and very bad at hiding them. An official cut of every game appears within about an hour of the buzzer, labeled with the two teams and the margin, and the still frame is whatever moment settled it. Anyone catching up the next morning has to walk past that label to reach the video underneath it.",
-        "HideScore changes where the walk starts. Each game sits on the board as a covered card carrying the matchup, the tip time and whether it has finished. The highlight button on that card goes straight to the recap with its title masked, and clips whose titles announce the result are dropped before they are ever offered.",
-        "The 2026-27 season begins Tuesday, October 20, 2026 with three games on NBC, and the schedule widens to twelve games the very next night.",
+        "HideScore changes where the walk starts. Each game sits on the board with the matchup, the tip time and whether it has finished, and no score on it anywhere — not covered over, never printed. The highlight button on that card goes straight to the recap with its title masked, and clips whose titles announce the result are dropped before they are ever offered.",
+        "The 2026-27 season begins Tuesday, October 20, 2026 with three games on NBC, and the schedule widens to eleven games the very next night.",
       ]}
       sections={[
         {
-          h: "Choosing between a dozen recaps at once",
-          p: "Wednesday, October 21 puts twelve games on the calendar, which by breakfast is twelve recaps competing for one free evening. Without help you either open them at random or read enough of each listing to choose — and reading is what spoils you. An excitement mark on each finished game does the sorting instead, naming how close the game was and never who came out ahead.",
+          h: "Choosing between eleven recaps at once",
+          p: "Wednesday, October 21 puts eleven games on the calendar, which by breakfast is eleven recaps competing for one free evening. Without help you either open them at random or read enough of each listing to choose — and reading is what spoils you. An excitement mark on each finished game does the sorting instead, naming how close the game was and never who came out ahead. It is a setting you switch on, not something the board does to you.",
         },
         {
           h: "What the upload title actually costs you",
@@ -125,14 +139,14 @@ export default function NbaHighlightsWithoutSpoilersPage() {
         },
         {
           h: "Play-in, playoffs and the Finals",
-          p: "In a series the arithmetic is the spoiler. A scoreline of three games to two summarizes two nights you had not watched yet, so the postseason needs the cover more than the regular season does, not less. Series state is treated exactly like a score: hidden until you ask for it.",
+          p: "In a series the arithmetic is the spoiler. A scoreline of three games to two summarizes two nights you had not watched yet, so the postseason needs this more than the regular season does, not less. Series state is treated exactly like a score: it is not printed.",
         },
       ]}
       bullets={[
         "NBA recaps opened from a covered card, not from a search page.",
         "Clips filtered when the title announces the result; titles masked on the rest.",
-        "Excitement ratings — tight, high-scoring, decided late — with no winner named.",
-        "The whole night's slate visible with no final showing anywhere.",
+        "Optional excitement ratings — tight, high-scoring, decided late — no winner named.",
+        "The whole night's slate visible with no score written on any card.",
         "Built for late West Coast tips watched the next morning.",
         "Works the same through the play-in, the playoffs and the Finals.",
       ]}
