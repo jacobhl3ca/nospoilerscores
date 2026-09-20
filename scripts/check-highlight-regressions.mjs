@@ -128,9 +128,33 @@ check(
     JSON.stringify(youtube.getCompetitionTitleTokens("nationschamp", { preseason: true })) ===
       JSON.stringify(["nations championship"]),
 );
+// Lit 2026-09-19 against their US broadcasters. The guard flipped from "these
+// two stay dark" to "these two resolve ONLY against that exact channel AND only
+// with the competition name in the title" — ESPN FC also cuts the FA Cup, the
+// Copa del Rey and the Premier League, so without the token a LaLiga card can
+// be served a cup tie between the same clubs (measured on Copa del Rey,
+// 2026-09-14). Dropping either half re-opens a wrong-match path.
 check(
-  "La Liga and Ligue 1 fail closed without approved uploaders",
-  youtube.hasNoTrustedHighlightSource("laliga") && youtube.hasNoTrustedHighlightSource("ligue1"),
+  "La Liga and Ligue 1 resolve only against their broadcaster channel",
+  youtube.getOfficialChannelName("laliga") === "ESPN FC" &&
+    youtube.getOfficialChannelName("ligue1") === "beIN SPORTS USA" &&
+    !youtube.hasNoTrustedHighlightSource("laliga") &&
+    !youtube.hasNoTrustedHighlightSource("ligue1"),
+);
+check(
+  "La Liga and Ligue 1 both require their competition name in the title",
+  JSON.stringify(youtube.getCompetitionTitleTokens("laliga")) === JSON.stringify(["laliga", "la liga"]) &&
+    JSON.stringify(youtube.getCompetitionTitleTokens("ligue1")) === JSON.stringify(["ligue 1"]),
+);
+// The Europa League's uploader moved to CBS's second European channel. UCL and
+// Serie A did NOT move — asserting that here keeps a well-meaning "fix them all
+// the same way" edit from going out unprobed.
+check(
+  "UEL resolves against CBS Sports Golazo - Europe while UCL and Serie A do not",
+  youtube.getOfficialChannelName("uel") === "CBS Sports Golazo - Europe" &&
+    youtube.getOfficialChannelName("ucl") === "CBS Sports Golazo" &&
+    youtube.getOfficialChannelName("seriea") === "CBS Sports Golazo" &&
+    youtube.getSecondaryChannels("uel")[0] === "CBS Sports Golazo",
 );
 check(
   "golf and tennis majors retain exact verified uploader names",
@@ -341,10 +365,10 @@ check(
   monitor.includes('createHash("sha256")') && monitor.includes("eventId}:${signature}"),
 );
 check(
-  "monitor excludes non-YouTube MLB and unapproved La Liga/Ligue 1 paths",
+  "monitor excludes non-YouTube MLB and covers the newly lit La Liga/Ligue 1",
   !monitor.includes('mlb:   "/baseball/mlb/scoreboard"') &&
-    !monitor.includes('laliga:       "/soccer/esp.1/scoreboard"') &&
-    !monitor.includes('ligue1:       "/soccer/fra.1/scoreboard"'),
+    monitor.includes('laliga:       "/soccer/esp.1/scoreboard"') &&
+    monitor.includes('ligue1:       "/soccer/fra.1/scoreboard"'),
 );
 check(
   "runtime monitor covers every shipped highlight family",
@@ -402,10 +426,12 @@ check(
     prebake.includes("HIGHLIGHT-DUPLICATE-REJECT"),
 );
 check(
-  "prebaker excludes MLB YouTube and unapproved soccer searches",
+  "prebaker excludes MLB YouTube and bakes La Liga/Ligue 1 behind their tokens",
   !prebake.includes('{ sport: "mlb",') &&
-    !prebake.includes('{ sport: "laliga",') &&
-    !prebake.includes('{ sport: "ligue1",'),
+    prebake.includes('{ sport: "laliga",') &&
+    prebake.includes('{ sport: "ligue1",') &&
+    prebake.includes('laliga: ["laliga", "la liga"]') &&
+    prebake.includes('ligue1: ["ligue 1"]'),
 );
 check(
   "prebaker revalidates persistent World Cup seed uploader and matchup",

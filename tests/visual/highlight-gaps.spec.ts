@@ -239,8 +239,13 @@ test("an embed-blocked league goes straight to the YouTube card, no retry chain"
   expect(requests).toEqual([]);
 });
 
-test("La Liga stays dark instead of running an unscoped highlight search", async ({ page }) => {
-  let youtubeRequests = 0;
+// Lit 2026-09-19 against ESPN FC. The league is no longer dark, but the two
+// properties that kept it dark are now carried by the request itself: every
+// lookup must name the exact channel AND demand the competition in the title.
+// ESPN FC cuts the FA Cup, the Copa del Rey and the Premier League between the
+// same clubs, so a lookup missing either half is the wrong-match path reopened.
+test("La Liga resolves only against ESPN FC and only with a LALIGA title", async ({ page }) => {
+  const youtubeUrls: string[] = [];
   await page.clock.setFixedTime(new Date("2026-08-16T16:00:00-04:00"));
   await setSingleLeague(page, "laliga");
   await page.route("**/soccer/esp.1/scoreboard?**", route => route.fulfill({
@@ -254,12 +259,47 @@ test("La Liga stays dark instead of running an unscoped highlight search", async
     }),
   }));
   await page.route("**/api/youtube?**", route => {
-    youtubeRequests++;
-    return route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":"unapproved"}' });
+    youtubeUrls.push(route.request().url());
+    return route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":"laliga-official"}' });
   });
 
   await page.goto("/yesterday");
   await expect(page.getByRole("heading", { name: "La Liga" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /highlights/i })).toHaveCount(0);
-  expect(youtubeRequests).toBe(0);
+  await expect(page.getByRole("button", { name: /highlights/i }).first()).toBeVisible();
+  expect(youtubeUrls.length).toBeGreaterThan(0);
+  for (const url of youtubeUrls) {
+    expect(decodeURIComponent(url), "a La Liga lookup left the ESPN FC channel").toContain("channel=ESPN FC");
+    expect(url, "a La Liga lookup dropped strict=1").toContain("strict=1");
+    expect(decodeURIComponent(url), "a La Liga lookup dropped the competition gate").toContain("comp=laliga|la liga");
+  }
+});
+
+test("Ligue 1 resolves only against beIN SPORTS USA and only with a Ligue 1 title", async ({ page }) => {
+  const youtubeUrls: string[] = [];
+  await page.clock.setFixedTime(new Date("2026-08-16T16:00:00-04:00"));
+  await setSingleLeague(page, "ligue1");
+  await page.route("**/soccer/fra.1/scoreboard?**", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: finishedScoreboard({
+      id: "401777777",
+      date: "2026-08-16T00:00:00Z",
+      away: { id: "psg", displayName: "Paris Saint-Germain", shortDisplayName: "PSG", abbreviation: "PSG", score: "2" },
+      home: { id: "bre", displayName: "Stade Brest", shortDisplayName: "Brest", abbreviation: "BRE", score: "1" },
+    }),
+  }));
+  await page.route("**/api/youtube?**", route => {
+    youtubeUrls.push(route.request().url());
+    return route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":"ligue1-official"}' });
+  });
+
+  await page.goto("/yesterday");
+  await expect(page.getByRole("heading", { name: "Ligue 1" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /highlights/i }).first()).toBeVisible();
+  expect(youtubeUrls.length).toBeGreaterThan(0);
+  for (const url of youtubeUrls) {
+    expect(decodeURIComponent(url), "a Ligue 1 lookup left the beIN SPORTS USA channel").toContain("channel=beIN SPORTS USA");
+    expect(url, "a Ligue 1 lookup dropped strict=1").toContain("strict=1");
+    expect(decodeURIComponent(url), "a Ligue 1 lookup dropped the competition gate").toContain("comp=ligue 1");
+  }
 });
