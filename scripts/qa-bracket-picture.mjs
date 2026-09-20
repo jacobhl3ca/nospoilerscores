@@ -302,6 +302,12 @@ try {
       ok(`${key} shows "Still alive" when the feed has a live chaser`,
         !expect || text.includes("still alive"),
         `${aliveByLeague[key]} clubs alive${expect ? ", chase expected" : ", none outside the six"}`);
+      // Every live club gets a row. The list was once cut at five with a
+      // "+N more" line that could not be opened.
+      const pctRows = await table.locator("tbody tr").filter({ hasText: "%" }).count();
+      ok(`${key} lists every club still alive`,
+        pctRows === aliveByLeague[key] && !text.includes("more still alive"),
+        `${pctRows} rows for ${aliveByLeague[key]} alive`);
     }
 
     // ── Sorting ─────────────────────────────────────────────────────────────

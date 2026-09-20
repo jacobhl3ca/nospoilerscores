@@ -50,10 +50,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "bracket", label: "Bracket" },
 ];
 
-// How many chasers fit before the list stops being a picture and starts being
-// the standings. The data layer hands over every live chaser; the cut is here.
-const HUNT_SHOWN = 5;
-
 interface Sort { key: SortKey; dir: SortDir }
 const DEFAULT_SORT: Sort = { key: "seed", dir: "asc" };
 
@@ -259,8 +255,6 @@ function LeagueTable({ league, odds, showGamesBack, sort, onSort }: {
     () => (bySeed ? [] : sortTeams([...league.seeded, ...league.hunt], odds, sort.key, sort.dir)),
     [bySeed, league.seeded, league.hunt, odds, sort.key, sort.dir],
   );
-  const shown = hunt.slice(0, HUNT_SHOWN);
-  const cut = hunt.length - shown.length;
 
   return (
     <div className="min-w-0">
@@ -297,17 +291,10 @@ function LeagueTable({ league, odds, showGamesBack, sort, onSort }: {
                   {i === 1 ? <DividerRow label="bye · wild-card round below" /> : null}
                 </Fragment>
               ))}
-              {shown.length ? (
+              {hunt.length ? (
                 <>
                   <DividerRow label="still alive" />
-                  {shown.map((t) => <TeamRow key={t.id} team={t} seed={null} odds={odds} showGamesBack={showGamesBack} />)}
-                  {cut > 0 ? (
-                    <tr>
-                      <td colSpan={6} className="text-[10px] px-1 pt-1" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-                        +{cut} more still alive
-                      </td>
-                    </tr>
-                  ) : null}
+                  {hunt.map((t) => <TeamRow key={t.id} team={t} seed={null} odds={odds} showGamesBack={showGamesBack} />)}
                 </>
               ) : null}
             </>
