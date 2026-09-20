@@ -11,7 +11,7 @@ import { displayShortName, loadBigInningSchedule, getSeasonOpener, sportDisplayL
 import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
-import { getWhiparoundShow, parseEtTime, whiparoundStartsLater, whiparoundSubtitle } from "@/lib/whiparound";
+import { etWallToUtc, formatInZone, getWhiparoundShow, parseEtTime, whiparoundStartsLater, whiparoundSubtitle } from "@/lib/whiparound";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
@@ -362,15 +362,24 @@ function getPlayoffSubtitle(
     // regardless.
     const playoffDateInSeason =
       !!config && config.date >= show.seasonStart && config.date <= show.seasonEnd;
+    // ...and even then, only once the day's own games actually carry a playoff
+    // label. PLAYOFF_START_DATES holds the date the postseason is EXPECTED to
+    // open, which routinely sits a week off: nfl reads 2027-01-09 while Week 18
+    // — still regular season, still a RedZone Sunday — runs on 2027-01-10. On a
+    // date like that the playoff branch below finds no label and returns null,
+    // so suppressing the show bought an empty subtitle instead of a better one.
+    // Asking the games removes the guesswork; the show's own seasonEnd still
+    // keeps it out of a real postseason if the slate hasn't loaded yet.
     const postseasonStarted =
       playoffDateInSeason &&
-      new Date(config!.date + "T12:00:00").getTime() <= viewDate.getTime();
+      new Date(config!.date + "T12:00:00").getTime() <= viewDate.getTime() &&
+      (games ?? []).some((g) => g.playoffLabel);
     if (!postseasonStarted) {
       const whiparound = whiparoundSubtitle(
         show,
         selectedDate,
         games,
-        nowInEt(),
+        Date.now(),
         getTimeZone(),
         FORCE_WHIPAROUND_LIVE_PREVIEW,
       );
@@ -420,10 +429,14 @@ function getPlayoffSubtitle(
     const selectedYmd = +selectedDate;
     // Past day: the show is over, the scheduled time is meaningless. Hide.
     if (selectedYmd < todayYmd) return null;
-    const isToday = selectedYmd === todayYmd;
-    const minsSinceStart =
-      parsed && isToday ? (now.h - parsed.h) * 60 + (now.m - parsed.m) : -1;
-    const withinAirWindow = minsSinceStart >= 0 && minsSinceStart <= 180;
+    // entry.timeET is a NEW YORK wall clock, so pin it to a real instant before
+    // comparing — the reader can be in any zone. Comparing it against the
+    // reader's own wall clock put the LIVE window three hours late on the west
+    // coast. Same fix, same helper, as the whip-around shows in @/lib/whiparound.
+    const startMs = parsed ? etWallToUtc(selectedDate, parsed.h, parsed.m) : null;
+    const endMs = startMs === null ? null : startMs + 180 * 60_000;
+    const nowMs = Date.now();
+    const withinAirWindow = startMs !== null && endMs !== null && nowMs >= startMs && nowMs <= endMs;
     const liveGameCount = (games ?? []).filter((g) => g.state === "in").length;
     const isLive = FORCE_BIG_INNING_LIVE_PREVIEW || (withinAirWindow && liveGameCount >= 2);
 
@@ -441,12 +454,14 @@ function getPlayoffSubtitle(
         live: true,
       };
     }
-    // Past the 3h air window today: show ended, hide the subtitle entirely.
-    // (A stale "Big Inning · 2:00 PM ET" at 6pm reads like an upcoming show.)
-    if (isToday && minsSinceStart > 180) return null;
-    // Show the scheduled time as plain italic (no link until we go live).
+    // Past the 3h air window: show ended, hide the subtitle entirely.
+    // (A stale "Big Inning · 2:00 PM" at 6pm reads like an upcoming show.)
+    if (endMs !== null && nowMs > endMs) return null;
+    // Show the scheduled time as plain italic (no link until we go live), in the
+    // reader's own zone and unlabelled — matching every kickoff time on a card.
+    const local = startMs === null ? entry.timeET : formatInZone(startMs, getTimeZone());
     return {
-      tiers: [`Big Inning · ${entry.timeET} ET`, `Big Inning · ${entry.timeET}`, "Big Inning"],
+      tiers: [`Big Inning · ${local}`, "Big Inning"],
     };
   }
 
@@ -535,7 +550,8 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
       now.mo === +selectedDate.slice(4, 6) &&
       now.d === +selectedDate.slice(6, 8);
     if (!isToday) return false;
-    return now.h < parsed.h || (now.h === parsed.h && now.m < parsed.m);
+    // Instant, not wall clock — see the Big Inning branch in getPlayoffSubtitle.
+    return Date.now() < etWallToUtc(selectedDate, parsed.h, parsed.m);
   })();
   // The same flip for the fixed-schedule whip-around shows: today is an air day
   // and the start time is still ahead, so tick until the header can turn itself
@@ -543,7 +559,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
   const needsWhiparoundTick = (() => {
     if (FORCE_WHIPAROUND_LIVE_PREVIEW) return false;
     const show = getWhiparoundShow(sport);
-    return !!show && whiparoundStartsLater(show, selectedDate, nowInEt());
+    return !!show && whiparoundStartsLater(show, selectedDate, Date.now(), getTimeZone());
   })();
   const needsShowTick = needsBigInningTick || needsWhiparoundTick;
   const [, bumpTick] = useState(0);

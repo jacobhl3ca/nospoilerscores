@@ -65,15 +65,6 @@ export interface WhiparoundResult {
   live?: boolean;
 }
 
-/** ET wall-clock, as LeagueColumn's nowInEt() returns it. */
-export interface EtClock {
-  y: number;
-  mo: number;
-  d: number;
-  h: number;
-  m: number;
-}
-
 // Season bounds below are cross-checked against ALL_LEAGUES in src/lib/espn.ts
 // (the `verifiedFor: 2026` configs) wherever that file carries the same date, so
 // the subtitle can't outlive the column that hosts it.
@@ -207,10 +198,55 @@ function toIso(selectedDate: string): string {
   return `${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}`;
 }
 
+/** YYYYMMDD, one day earlier. Via a Date so month and year ends carry. */
+function prevYmd(selectedDate: string): string {
+  const d = new Date(
+    +selectedDate.slice(0, 4),
+    +selectedDate.slice(4, 6) - 1,
+    +selectedDate.slice(6, 8),
+    12,
+  );
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Which Eastern air date, if any, shows up on the reader's `selectedDate`
+ * column — plus the instants that date's airing runs between.
+ *
+ * These are two different calendars. A show's air day is a NEW YORK weekday,
+ * but a column is a day in the READER's zone, and east of about UTC+9 those
+ * disagree: RedZone's Sunday 1:00 PM ET is 2:00 AM MONDAY in Tokyo, so it
+ * belongs on a Tokyo reader's Monday column, and asking "is the Monday column a
+ * Sunday?" would hide the show from them for the whole season. So instead of
+ * testing the reader's date for an air day, each candidate Eastern air date is
+ * mapped forward to the column it actually lands on, and the one that lands
+ * here wins. Two candidates cover every real zone (UTC-12 to UTC+14): the
+ * reader's own date, and the Eastern day before it. At most one can match,
+ * since an airing maps to exactly one column.
+ */
+function resolveAiring(
+  show: WhiparoundShow,
+  selectedDate: string,
+  timeZone: string,
+): { airDate: string; startMs: number; endMs: number } | null {
+  const parsed = parseEtTime(show.startET);
+  if (!parsed) return null;
+  const selectedYmd = +selectedDate;
+  for (const airDate of [selectedDate, prevYmd(selectedDate)]) {
+    if (!isAirDay(show, airDate)) continue;
+    const startMs = etWallToUtc(airDate, parsed.h, parsed.m);
+    if (slateYmd(startMs, timeZone) !== selectedYmd) continue;
+    return { airDate, startMs, endMs: startMs + show.durationMin * 60_000 };
+  }
+  return null;
+}
+
 /**
  * Is the show scheduled to air on this date at all — right weekday (or listed
  * one-off date) and inside its season? Says nothing about the clock or the
- * slate.
+ * slate. Note this asks about an EASTERN date; see resolveAiring for how a
+ * reader's column maps onto one.
  */
 export function isAirDay(show: WhiparoundShow, selectedDate: string): boolean {
   if (!/^\d{8}$/.test(selectedDate)) return false;
@@ -228,19 +264,85 @@ export function isAirDay(show: WhiparoundShow, selectedDate: string): boolean {
   return show.days.includes(dow);
 }
 
-// A game's ISO kickoff → {ymd, minutes-past-midnight} in the display zone. The
-// column's clock (nowInEt) reads the same zone, so the slate gate and the
-// scheduled-vs-live decision can't land on different days.
-//
-// The day is the app's SLATE day, not the raw calendar day: etSlateYmd in
-// @/lib/etDay rolls anything before 1 AM back onto the previous day, so a game
-// that runs past midnight stays on the night it belongs to. Bucketing this
-// differently would let the slate gate count a late kickoff on a day the board
-// itself files under yesterday. Rolled-back times keep counting up past 1440 so
-// they stay after every same-night window rather than wrapping to the morning.
-function zonedParts(iso: string, timeZone: string): { ymd: number; min: number } | null {
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return null;
+/** The zone every `startET` is written in. Not the reader's zone — see below. */
+const ET_ZONE = "America/New_York";
+
+// How far `tz` is from UTC at a given instant, in ms. Positive east of UTC.
+// Derived by formatting the instant in `tz` and reading the wall clock back,
+// which is the only way to get a zone's offset (including its DST state on that
+// date) out of Intl.
+function zoneOffsetMs(tz: string, atMs: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(atMs));
+  const get = (type: string) => +(parts.find((p) => p.type === type)?.value ?? 0);
+  // Some ICU builds emit "24" for midnight; % 24 folds it back to 0.
+  const asUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour") % 24,
+    get("minute"),
+    get("second"),
+  );
+  return asUtc - atMs;
+}
+
+/**
+ * An Eastern wall-clock time on a given day → the real instant it happens.
+ *
+ * This is the hinge of the whole module. A show's `startET` is a time in NEW
+ * YORK, but the reader can be anywhere, so "1:00 PM" is meaningless until it is
+ * pinned to an instant. Everything downstream — is it on air, has it ended, what
+ * time do we print — compares instants, never wall clocks, so the answer is the
+ * same in every zone.
+ *
+ * Two passes: the naive guess picks an offset, then the offset is re-read at
+ * that corrected instant. The second pass is what makes the DST changeover
+ * weekends right, where the offset at the naive guess differs from the offset
+ * actually in force.
+ */
+export function etWallToUtc(selectedDate: string, h: number, m: number): number {
+  const y = +selectedDate.slice(0, 4);
+  const mo = +selectedDate.slice(4, 6);
+  const d = +selectedDate.slice(6, 8);
+  const naive = Date.UTC(y, mo - 1, d, h, m);
+  let ts = naive - zoneOffsetMs(ET_ZONE, naive);
+  ts = naive - zoneOffsetMs(ET_ZONE, ts);
+  return ts;
+}
+
+// The instant, rendered as a bare clock time in the reader's zone — "1:00 PM"
+// for a reader in New York, "10:00 AM" for one in Los Angeles. No zone suffix,
+// because every other time on the board (GameCard's kickoff times) is already
+// printed this way, unlabelled, in getTimeZone(). Printing "1:00 PM ET" here
+// instead would be the only Eastern-labelled time in the app.
+export function formatInZone(atMs: number, timeZone: string): string {
+  try {
+    return new Date(atMs).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+    });
+  } catch {
+    // Bad zone — getTimeZone() already guards this, but never throw from a
+    // subtitle. Fall back to the runtime's own zone.
+    return new Date(atMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+}
+
+// The app's SLATE day for an instant: etSlateYmd in @/lib/etDay rolls anything
+// before 1 AM back onto the previous day, so a game that runs past midnight
+// stays on the night it belongs to. The board files columns this way, so "is
+// the selected column today" has to ask the same question.
+function slateYmd(atMs: number, timeZone: string): number | null {
   let parts: Intl.DateTimeFormatPart[];
   try {
     parts = new Intl.DateTimeFormat("en-US", {
@@ -249,42 +351,34 @@ function zonedParts(iso: string, timeZone: string): { ymd: number; min: number }
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
-      minute: "2-digit",
       hour12: false,
-    }).formatToParts(t);
+    }).formatToParts(new Date(atMs));
   } catch {
     return null;
   }
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  const y = +get("year");
-  const mo = +get("month");
-  const d = +get("day");
+  const get = (type: string) => +(parts.find((p) => p.type === type)?.value ?? 0);
+  const y = get("year");
+  const mo = get("month");
+  const d = get("day");
   if (!y || !mo || !d) return null;
-  // Some ICU builds emit "24" for midnight; % 24 folds it back to 0.
-  const hour = +get("hour") % 24;
-  let min = hour * 60 + +get("minute");
   const day = new Date(y, mo - 1, d, 12, 0, 0);
-  if (hour < 1) {
-    day.setDate(day.getDate() - 1);
-    min += 24 * 60;
-  }
-  return {
-    ymd: day.getFullYear() * 10000 + (day.getMonth() + 1) * 100 + day.getDate(),
-    min,
-  };
+  if (get("hour") % 24 < 1) day.setDate(day.getDate() - 1);
+  return day.getFullYear() * 10000 + (day.getMonth() + 1) * 100 + day.getDate();
 }
 
 /**
  * The header subtitle for a whip-around show, or null when the show has nothing
  * to say about this date.
  *
- * ⚠️ `nowEt` and `timeZone` are the user's EFFECTIVE zone, not hardcoded
- * Eastern — LeagueColumn passes nowInEt()/getTimeZone(), which honour the
- * Settings time-zone picker. The `startET` values are Eastern and the rendered
- * text says "ET", so a reader on a non-Eastern zone sees the show flip to LIVE
- * on their own wall clock rather than on New York's. That is exactly what the
- * Big Inning branch already does, and this module copies it on purpose so the
- * two can never disagree. Fixing it means fixing both together.
+ * ⚠️ `nowMs` is a real INSTANT (Date.now()), not a wall clock, and `timeZone` is
+ * the reader's effective zone from getTimeZone(). Every `startET` is pinned to
+ * an instant via etWallToUtc before anything is compared, so a reader in Los
+ * Angeles sees RedZone go LIVE at 10:00 AM their time — the same moment a reader
+ * in New York sees it at 1:00 PM — and both see the start time printed in their
+ * own zone. An earlier draft compared the Eastern wall clock against the
+ * reader's wall clock, which put the LIVE window three hours late on the west
+ * coast; the Big Inning branch in LeagueColumn had the same defect and is fixed
+ * alongside this.
  *
  * `forceLive` is the dev preview escape hatch (FORCE_WHIPAROUND_LIVE_PREVIEW in
  * LeagueColumn): it bypasses the clock and live-game checks only, exactly like
@@ -295,8 +389,8 @@ export function whiparoundSubtitle(
   show: WhiparoundShow,
   selectedDate: string,
   games: Game[] | undefined,
-  nowEt: EtClock,
-  timeZone = "America/New_York",
+  nowMs: number,
+  timeZone = ET_ZONE,
   forceLive = false,
 ): WhiparoundResult | null {
   const parsed = parseEtTime(show.startET);
@@ -304,31 +398,33 @@ export function whiparoundSubtitle(
   if (!/^\d{8}$/.test(selectedDate)) return null;
 
   const selectedYmd = +selectedDate;
-  const todayYmd = nowEt.y * 10000 + nowEt.mo * 100 + nowEt.d;
+  const todayYmd = slateYmd(nowMs, timeZone);
+  if (todayYmd === null) return null;
   // Past day: the show is over, the scheduled time is meaningless. Hide.
   if (selectedYmd < todayYmd) return null;
-  if (!isAirDay(show, selectedDate)) return null;
 
-  const startMin = parsed.h * 60 + parsed.m;
-  const endMin = startMin + show.durationMin;
+  const airing = resolveAiring(show, selectedDate, timeZone);
+  if (!airing) return null;
+  const { airDate, startMs, endMs } = airing;
 
-  // Slate gate — see the header comment. Counts only games that both fall on
-  // the selected day and start inside the counting window, so a lone late
-  // kickoff can't conjure a whip-around out of nothing.
+  // Slate gate — see the header comment. Counts only games that kick off inside
+  // the show's own window, so a lone late kickoff can't conjure a whip-around
+  // out of nothing. Instants on both sides, so the count is identical in every
+  // reader's zone and needs no separate same-day check: the window bounds it.
   const list = games ?? [];
-  if (show.minSlateGames) {
+  if (show.minSlateGames !== undefined && show.minSlateGames > 0) {
     const slateStart = show.slateStartET ? parseEtTime(show.slateStartET) : null;
-    const countFrom = slateStart ? slateStart.h * 60 + slateStart.m : startMin;
+    const countFromMs = slateStart
+      ? etWallToUtc(airDate, slateStart.h, slateStart.m)
+      : startMs;
     const inWindow = list.filter((g) => {
-      const p = zonedParts(g.date, timeZone);
-      return !!p && p.ymd === selectedYmd && p.min >= countFrom && p.min < endMin;
+      const t = Date.parse(g.date);
+      return !Number.isNaN(t) && t >= countFromMs && t < endMs;
     }).length;
     if (inWindow < show.minSlateGames) return null;
   }
 
-  const isToday = selectedYmd === todayYmd;
-  const minsSinceStart = isToday ? nowEt.h * 60 + nowEt.m - startMin : -1;
-  const withinAirWindow = minsSinceStart >= 0 && minsSinceStart <= show.durationMin;
+  const withinAirWindow = nowMs >= startMs && nowMs <= endMs;
   const liveGameCount = list.filter((g) => g.state === "in").length;
   const short = show.shortName ?? show.name;
 
@@ -339,15 +435,12 @@ export function whiparoundSubtitle(
       live: true,
     };
   }
-  // Past the air window today: the show ended, hide the subtitle entirely.
-  if (isToday && minsSinceStart > show.durationMin) return null;
+  // Past the air window: the show ended, hide the subtitle entirely.
+  if (nowMs > endMs) return null;
   // Scheduled: plain italic text, no link until we go live.
+  const local = formatInZone(startMs, timeZone);
   return {
-    tiers: [
-      `${show.name} · ${show.startET} ET`,
-      `${short} · ${show.startET}`,
-      short,
-    ],
+    tiers: [`${show.name} · ${local}`, `${short} · ${local}`, short],
   };
 }
 
@@ -358,11 +451,10 @@ export function whiparoundSubtitle(
 export function whiparoundStartsLater(
   show: WhiparoundShow,
   selectedDate: string,
-  nowEt: EtClock,
+  nowMs: number,
+  timeZone = ET_ZONE,
 ): boolean {
-  const parsed = parseEtTime(show.startET);
-  if (!parsed) return false;
-  if (!isAirDay(show, selectedDate)) return false;
-  if (+selectedDate !== nowEt.y * 10000 + nowEt.mo * 100 + nowEt.d) return false;
-  return nowEt.h * 60 + nowEt.m < parsed.h * 60 + parsed.m;
+  if (+selectedDate !== slateYmd(nowMs, timeZone)) return false;
+  const airing = resolveAiring(show, selectedDate, timeZone);
+  return !!airing && nowMs < airing.startMs;
 }

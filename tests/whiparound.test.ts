@@ -7,9 +7,9 @@ import {
   parseEtTime,
   whiparoundStartsLater,
   whiparoundSubtitle,
+  etWallToUtc,
   WHIPAROUND_SHOWS,
 } from "../src/lib/whiparound.ts";
-import type { EtClock } from "../src/lib/whiparound.ts";
 import type { Game } from "../src/lib/types.ts";
 
 const TZ = "America/New_York";
@@ -21,8 +21,12 @@ function game(iso: string, state: Game["state"] = "pre"): Game {
   return { id: `${iso}-${state}`, date: iso, state } as Game;
 }
 
-function clock(y: number, mo: number, d: number, h: number, m: number): EtClock {
-  return { y, mo, d, h, m };
+// An Eastern wall clock, as the real instant it happens. The subtitle compares
+// instants now, so a fixture written as "2:00 PM on Sep 20" has to say which
+// zone it means — and for every one of these shows that zone is New York.
+function clock(y: number, mo: number, d: number, h: number, m: number): number {
+  const ymd = `${y}${String(mo).padStart(2, "0")}${String(d).padStart(2, "0")}`;
+  return etWallToUtc(ymd, h, m);
 }
 
 const redzone = getWhiparoundShow("nfl")!;
@@ -52,7 +56,7 @@ const sundaySlateLive = sundaySlate.map((g) =>
 test("Sunday before kickoff shows the scheduled time and does not link", () => {
   const r = whiparoundSubtitle(redzone, "20260920", sundaySlate, clock(2026, 9, 20, 12, 30), TZ);
   assert.ok(r);
-  assert.deepEqual(r.tiers, ["RedZone · 1:00 PM ET", "RedZone · 1:00 PM", "RedZone"]);
+  assert.deepEqual(r.tiers, ["RedZone · 1:00 PM", "RedZone · 1:00 PM", "RedZone"]);
   assert.equal(r.href, undefined);
   assert.notEqual(r.live, true);
 });
@@ -72,7 +76,7 @@ test("Sunday inside the window with live games goes green and links out", () => 
 test("Sunday inside the window with nothing in progress stays on the scheduled text", () => {
   const r = whiparoundSubtitle(redzone, "20260920", sundaySlate, clock(2026, 9, 20, 14, 0), TZ);
   assert.ok(r);
-  assert.equal(r.tiers[0], "RedZone · 1:00 PM ET");
+  assert.equal(r.tiers[0], "RedZone · 1:00 PM");
   assert.equal(r.live, undefined);
 });
 
@@ -91,7 +95,7 @@ test("a future Sunday shows the scheduled time", () => {
   const future = sundaySlate.map((g) => game(g.date.replace("2026-09-20", "2026-09-27").replace("2026-09-21", "2026-09-28")));
   const r = whiparoundSubtitle(redzone, "20260927", future, clock(2026, 9, 20, 12, 0), TZ);
   assert.ok(r);
-  assert.equal(r.tiers[0], "RedZone · 1:00 PM ET");
+  assert.equal(r.tiers[0], "RedZone · 1:00 PM");
 });
 
 // ── Day, season and slate gates ──────────────────────────────────────────────
@@ -117,7 +121,7 @@ test("Goal Rush shows on a Saturday with a full 10 AM block", () => {
   const slate = Array.from({ length: 5 }, () => game("2026-09-19T14:00:00Z"));
   const r = whiparoundSubtitle(goalRush, "20260919", slate, clock(2026, 9, 19, 9, 0), TZ);
   assert.ok(r);
-  assert.equal(r.tiers[0], "Goal Rush · 10:00 AM ET");
+  assert.equal(r.tiers[0], "Goal Rush · 10:00 AM");
 });
 
 test("a late kickoff outside the window does not count toward the slate gate", () => {
@@ -131,7 +135,7 @@ test("Frozen Frenzy is one listed night and nothing else", () => {
   const slate = Array.from({ length: 16 }, () => game("2026-10-13T22:00:00Z"));
   const on = whiparoundSubtitle(frenzy, "20261013", slate, clock(2026, 10, 13, 12, 0), TZ);
   assert.ok(on);
-  assert.equal(on.tiers[0], "Frozen Frenzy · 6:00 PM ET");
+  assert.equal(on.tiers[0], "Frozen Frenzy · 6:00 PM");
   assert.equal(on.tiers[2], "Frenzy");
 
   const off = whiparoundSubtitle(
@@ -157,7 +161,7 @@ test("Golazo falls back to a short tier for a narrow column", () => {
   const r = whiparoundSubtitle(golazo, "20260922", slate, clock(2026, 9, 22, 12, 0), TZ);
   assert.ok(r);
   assert.deepEqual(r.tiers, [
-    "Golazo Show · 3:00 PM ET",
+    "Golazo Show · 3:00 PM",
     "Golazo · 3:00 PM",
     "Golazo",
   ]);
@@ -231,7 +235,7 @@ test("a kickoff after midnight counts against the night it belongs to", () => {
   ];
   const r = whiparoundSubtitle(redzone, "20260920", lateNight, clock(2026, 9, 20, 12, 30), TZ);
   assert.ok(r, "two 1 PM kickoffs still clear the slate gate");
-  assert.equal(r.tiers[0], "RedZone \u00B7 1:00 PM ET");
+  assert.equal(r.tiers[0], "RedZone \u00B7 1:00 PM");
 
   // Drop to one in-window kickoff and the late game must not make up the gap.
   const thin = [game("2026-09-20T17:00:00Z"), game("2026-09-21T04:20:00Z")];
@@ -259,7 +263,7 @@ test("CrunchTime counts the 7:00 PM tip-offs it cuts back to", () => {
   ];
   const r = whiparoundSubtitle(crunchtime, "20261026", monday, clock(2026, 10, 26, 18, 0), TZ);
   assert.ok(r);
-  assert.equal(r.tiers[0], "CrunchTime · 8:30 PM ET");
+  assert.equal(r.tiers[0], "CrunchTime · 8:30 PM");
 
   // An afternoon-only slate still fails the gate.
   const afternoon = Array.from({ length: 4 }, () => game("2026-10-26T18:00:00Z"));
@@ -275,5 +279,101 @@ test("Frozen Frenzy clears its gate on the real all-32-teams slate", () => {
   ];
   const r = whiparoundSubtitle(frenzy, "20261013", frenzyNight, clock(2026, 10, 13, 12, 0), TZ);
   assert.ok(r);
-  assert.equal(r.tiers[0], "Frozen Frenzy · 6:00 PM ET");
+  assert.equal(r.tiers[0], "Frozen Frenzy · 6:00 PM");
+});
+
+// ---------------------------------------------------------------------------
+// Reader is NOT in Eastern.
+//
+// Every startET is a New York wall clock, but the reader can be anywhere. These
+// pin the behaviour an earlier draft got wrong: it compared the Eastern wall
+// clock against the READER's wall clock, so on the west coast RedZone went LIVE
+// at 1:00 PM Pacific (4:00 PM ET, three hours into the show) and stayed LIVE
+// until 8:00 PM Pacific (11:00 PM ET, three hours after it ended).
+// ---------------------------------------------------------------------------
+
+const LA = "America/Los_Angeles";
+
+test("a Pacific reader sees the start time in their own zone, unlabelled", () => {
+  // 11:00 AM ET = 8:00 AM PT. Before the show either way.
+  const r = whiparoundSubtitle(redzone, "20260920", sundaySlate, clock(2026, 9, 20, 11, 0), LA);
+  assert.ok(r, "the subtitle still renders for a Pacific reader");
+  assert.equal(r.tiers[0], "RedZone · 10:00 AM");
+  assert.equal(r.live, undefined);
+});
+
+test("a Pacific reader goes LIVE on New York's clock, not their own", () => {
+  // The instant RedZone starts: 1:00 PM ET = 10:00 AM PT.
+  const r = whiparoundSubtitle(redzone, "20260920", sundaySlateLive, clock(2026, 9, 20, 13, 0), LA);
+  assert.ok(r, "a Pacific reader is live at 1:00 PM ET");
+  assert.equal(r.live, true);
+  assert.equal(r.tiers[0], "● RedZone · LIVE");
+});
+
+test("a Pacific reader is NOT live three hours before the show starts", () => {
+  // 10:00 AM ET = 7:00 AM PT. The old wall-clock code compared 7:00 against a
+  // 1:00 PM start and correctly said "not yet" — this is the control.
+  const r = whiparoundSubtitle(redzone, "20260920", sundaySlateLive, clock(2026, 9, 20, 10, 0), LA);
+  assert.ok(r);
+  assert.equal(r.live, undefined);
+});
+
+test("a Pacific reader's show ends when New York's does", () => {
+  // 8:30 PM ET = 5:30 PM PT, half an hour past the 420-minute run. The old code
+  // read the reader's 5:30 PM as still inside a 1:00-8:00 PM window and kept
+  // the subtitle up; it has to be gone.
+  const r = whiparoundSubtitle(redzone, "20260920", sundaySlateLive, clock(2026, 9, 20, 20, 30), LA);
+  assert.equal(r, null);
+});
+
+test("the slate gate counts the same games in every zone", () => {
+  // Tokyo's column for this airing is the 21st, not the 20th — 1:00 PM ET
+  // Sunday is 2:00 AM Monday there. Same games, same verdict, different column.
+  const et = whiparoundSubtitle(redzone, "20260920", sundaySlate, clock(2026, 9, 20, 12, 0), TZ);
+  const la = whiparoundSubtitle(redzone, "20260920", sundaySlate, clock(2026, 9, 20, 12, 0), LA);
+  const tokyo = whiparoundSubtitle(redzone, "20260921", sundaySlate, clock(2026, 9, 20, 12, 0), "Asia/Tokyo");
+  assert.ok(et && la && tokyo, "the same slate clears the gate for all three readers");
+  assert.equal(et.live, la.live);
+  assert.equal(et.live, tokyo.live);
+});
+
+test("a Tokyo reader gets the Sunday show on their Monday column", () => {
+  const tz = "Asia/Tokyo";
+  // Sunday's own column is already yesterday for them by the time it airs.
+  assert.equal(
+    whiparoundSubtitle(redzone, "20260920", sundaySlateLive, clock(2026, 9, 20, 13, 0), tz),
+    null,
+  );
+  const r = whiparoundSubtitle(redzone, "20260921", sundaySlateLive, clock(2026, 9, 20, 13, 0), tz);
+  assert.ok(r, "RedZone lands on the Monday column in Tokyo");
+  assert.equal(r.live, true);
+  // 2:00 AM their time, printed in their zone.
+  const scheduled = whiparoundSubtitle(redzone, "20260921", sundaySlate, clock(2026, 9, 20, 11, 0), tz);
+  assert.equal(scheduled?.tiers[0], "RedZone · 2:00 AM");
+});
+
+test("etWallToUtc tracks the Eastern DST boundary", () => {
+  // Nov 1 2026 is the fall-back Sunday: 1:00 PM is EST (UTC-5) = 18:00Z, while
+  // a week earlier the same wall clock is EDT (UTC-4) = 17:00Z. A fixed offset
+  // would put one of the two an hour wrong.
+  assert.equal(new Date(etWallToUtc("20261025", 13, 0)).toISOString(), "2026-10-25T17:00:00.000Z");
+  assert.equal(new Date(etWallToUtc("20261101", 13, 0)).toISOString(), "2026-11-01T18:00:00.000Z");
+});
+
+test("a Pacific reader's air window is exactly as long as Eastern's", () => {
+  const start = clock(2026, 9, 20, 13, 0);
+  const justBeforeEnd = clock(2026, 9, 20, 19, 59);
+  // Each reader's own column for the one Sunday-1:00-PM-ET airing.
+  for (const [tz, column] of [[TZ, "20260920"], [LA, "20260920"], ["Asia/Tokyo", "20260921"]] as const) {
+    assert.equal(
+      whiparoundSubtitle(redzone, column, sundaySlateLive, start, tz)?.live,
+      true,
+      `live at the start in ${tz}`,
+    );
+    assert.equal(
+      whiparoundSubtitle(redzone, column, sundaySlateLive, justBeforeEnd, tz)?.live,
+      true,
+      `still live one minute before the end in ${tz}`,
+    );
+  }
 });
