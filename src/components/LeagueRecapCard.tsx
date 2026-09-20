@@ -5,7 +5,7 @@ import { getRecapsFor, formatRecapDuration, type RecapRecord } from "@/lib/recap
 import { leadChannelBlocksEmbeds } from "@/lib/youtube";
 import type { ShareCardMeta } from "@/lib/shareCard";
 
-// The league-wide recap — "Week 1 top plays", MLB's "Best of the day", NBA's
+// The league-wide recap — the NFL's "Week 1", MLB's "Best of the day", NBA's
 // "Top 10 plays of the night", EPL / MLS "Every goal" — as one compact pill on
 // TOP of a league column on past-date boards. Self-contained like
 // WorldCupMattersCard: fetches its own records (one static /news/recaps.json
