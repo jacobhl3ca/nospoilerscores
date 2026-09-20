@@ -135,5 +135,189 @@ test("odds are walked out of ESPN's nested standings and keyed by MLB's abbrevia
       { standings: { entries: [entry("NYY", 100, ">99.9%"), { team: { abbreviation: "SEA" }, stats: [{ name: "gamesBehind" }] }] } },
     ],
   });
-  assert.deepEqual(odds, { AZ: "39%", CWS: "85%", NYY: ">99%" }); // SEA has no odds stat → absent, never "0%"
+  // SEA publishes no odds stat at all → absent, never a fabricated "0%".
+  assert.deepEqual(Object.keys(odds).sort(), ["AZ", "CWS", "NYY"]);
+  assert.equal(odds.AZ.playoff?.label, "39%");
+  assert.equal(odds.CWS.playoff?.label, "85%");
+  assert.equal(odds.NYY.playoff?.label, ">99%");
+  assert.equal(odds.AZ.division, null); // the column reads "—", not 0%
+});
+
+test("all three odds come back with a sortable value beside the clamped label", () => {
+  const odds = oddsFromEspn({
+    standings: { entries: [
+      { team: { abbreviation: "TOR" }, stats: [
+        { name: "playoffPercent", value: 4.7, displayValue: "4.7%" },
+        { name: "divisionPercent", value: 0, displayValue: "0.0%" },
+        { name: "wildCardPercent", value: 4.7, displayValue: "4.7%" },
+      ] },
+      { team: { abbreviation: "DET" }, stats: [
+        { name: "playoffPercent", value: 0, displayValue: "<0.1%" },
+        { name: "divisionPercent", value: 100, displayValue: ">99.9%" },
+        { name: "wildCardPercent", value: 0, displayValue: "0.0%" },
+      ] },
+    ] },
+  });
+  assert.deepEqual(odds.TOR, {
+    playoff: { value: 4.7, label: "5%" },
+    division: { value: 0, label: "0%" },
+    wildCard: { value: 4.7, label: "5%" },
+  });
+  // The clamped edges survive as labels while the raw value stays sortable.
+  assert.equal(odds.DET.playoff?.label, "<1%");
+  assert.equal(odds.DET.playoff?.value, 0);
+  assert.equal(odds.DET.division?.label, ">99%");
+  assert.equal(odds.DET.division?.value, 100);
+});
+
+// ── Elimination: MLB publishes two numbers, not one ──────────────────────────
+
+import { buildBracket, sortTeams, type PlayoffOdds, type PlayoffTeam } from "../src/lib/playoffPicture.ts";
+
+// Toronto on 2026-09-20: out of the AL East, still 4.7% to take a wild card.
+// Reading only `eliminationNumber` hid them from "Still alive" entirely.
+const TWO_NUMBERS: StatsApiRecord[] = [
+  { division: { id: 201 }, teamRecords: [
+    tr(1, "Alpha", 94, 60, { divisionLeader: true, clinchIndicator: "x" }),
+    tr(2, "Bravo", 89, 65, { eliminationNumber: "4", wildCardEliminationNumber: "-" }),
+    tr(3, "Toronto", 76, 79, { eliminationNumber: "E", wildCardEliminationNumber: "5" }),
+    tr(4, "Kansas", 67, 88, { eliminationNumber: "E", wildCardEliminationNumber: "E" }),
+  ] },
+  // Three more healthy non-leaders, so Toronto and Kansas sit outside the six
+  // and the hunt is the thing under test.
+  { division: { id: 202 }, teamRecords: [
+    tr(5, "Echo", 88, 66, { divisionLeader: true }),
+    tr(7, "EchoTwo", 85, 70, {}),
+    tr(8, "EchoThree", 84, 71, {}),
+  ] },
+  { division: { id: 200 }, teamRecords: [
+    tr(6, "Golf", 87, 68, { divisionLeader: true }),
+    tr(9, "GolfTwo", 83, 72, {}),
+  ] },
+];
+const twoNumbersAl = () => buildPicture(TWO_NUMBERS, 2026).leagues.find((l) => l.key === "AL")!;
+
+test("a team out of its division but alive on the wild card stays in the hunt", () => {
+  const league = twoNumbersAl();
+  const tor = [...league.seeded, ...league.hunt].find((t) => t.name === "Toronto")!;
+  assert.equal(tor.eliminated, false);
+  assert.equal(league.hunt.some((t) => t.name === "Toronto"), true);
+});
+
+test("a team out of both races is eliminated", () => {
+  const league = twoNumbersAl();
+  assert.equal(league.hunt.some((t) => t.name === "Kansas"), false);
+  assert.equal(league.seeded.some((t) => t.name === "Kansas"), false);
+});
+
+test("the hunt is uncapped — the panel decides how many rows fit, not the data", () => {
+  const many: StatsApiRecord[] = [
+    { division: { id: 201 }, teamRecords: [
+      tr(1, "Alpha", 94, 60, { divisionLeader: true }),
+      ...["Chase1", "Chase2", "Chase3", "Chase4", "Chase5", "Chase6", "Chase7", "Chase8"].map((n, i) =>
+        tr(10 + i, n, 80 - i, 75 + i, { wildCardEliminationNumber: "9" })),
+    ] },
+    { division: { id: 202 }, teamRecords: [tr(5, "Echo", 81, 74, { divisionLeader: true })] },
+    { division: { id: 200 }, teamRecords: [tr(6, "Golf", 82, 73, { divisionLeader: true })] },
+  ];
+  const league = buildPicture(many, 2026).leagues.find((l) => l.key === "AL")!;
+  assert.equal(league.hunt.length, 5); // 8 chasers, 3 of them took seeds 4-6
+});
+
+// ── Clinch letters ───────────────────────────────────────────────────────────
+
+test("each clinchIndicator maps to the thing that was actually clinched", () => {
+  const records: StatsApiRecord[] = [
+    { division: { id: 201 }, teamRecords: [
+      tr(1, "Berth", 94, 60, { divisionLeader: true, clinchIndicator: "x" }),
+      tr(2, "Division", 93, 61, { clinchIndicator: "y" }),
+      tr(3, "Bye", 92, 62, { clinchIndicator: "z" }),
+      tr(4, "WildCard", 91, 63, { clinchIndicator: "w" }),
+      tr(5, "Nothing", 90, 64, {}),
+    ] },
+    { division: { id: 202 }, teamRecords: [tr(6, "Echo", 80, 75, { divisionLeader: true })] },
+    { division: { id: 200 }, teamRecords: [tr(7, "Golf", 79, 76, { divisionLeader: true })] },
+  ];
+  const league = buildPicture(records, 2026).leagues.find((l) => l.key === "AL")!;
+  const by = (n: string) => [...league.seeded, ...league.hunt].find((t) => t.name === n)!;
+  assert.equal(by("Berth").clinch, "berth");
+  assert.equal(by("Division").clinch, "division");
+  assert.equal(by("Bye").clinch, "bye");
+  assert.equal(by("WildCard").clinch, "wildcard");
+  assert.equal(by("Nothing").clinch, null);
+  // An indicator is itself proof of a clinch, whatever the `clinched` flag says.
+  assert.equal(by("Bye").clinched, true);
+  assert.equal(by("Nothing").clinched, false);
+});
+
+// ── Sorting ──────────────────────────────────────────────────────────────────
+
+const odd = (value: number) => ({ value, label: `${Math.round(value)}%` });
+// AL seeds: Alpha 1, Golf 2, Delta 3, Bravo 4, Echo 5, Hotel 6. Foxtrot chases.
+const SORT_ODDS: PlayoffOdds = {
+  ALP: { playoff: odd(99), division: odd(90), wildCard: odd(9) },
+  GOL: { playoff: odd(70), division: odd(60), wildCard: odd(10) },
+  DEL: { playoff: odd(30), division: odd(12), wildCard: odd(18) },
+  BRA: { playoff: odd(80), division: odd(5), wildCard: odd(75) },
+  ECH: { playoff: odd(55), division: odd(12), wildCard: odd(43) },
+  HOT: { playoff: odd(40), division: odd(3), wildCard: odd(37) },
+  // FOX is deliberately absent: an unpublished club must sort last either way.
+};
+
+const alTeams = (): PlayoffTeam[] => { const l = al(); return [...l.seeded, ...l.hunt]; };
+const names = (ts: PlayoffTeam[]) => ts.map((t) => t.name);
+
+test("sorting by seed counts up, and unseeded teams land after the six either way", () => {
+  assert.deepEqual(names(sortTeams(alTeams(), SORT_ODDS, "seed", "asc")),
+    ["Alpha", "Golf", "Delta", "Bravo", "Echo", "Hotel", "Foxtrot"]);
+  assert.deepEqual(names(sortTeams(alTeams(), SORT_ODDS, "seed", "desc")),
+    ["Hotel", "Echo", "Bravo", "Delta", "Golf", "Alpha", "Foxtrot"]);
+});
+
+test("sorting by an odds column orders by the number and flips cleanly", () => {
+  assert.deepEqual(names(sortTeams(alTeams(), SORT_ODDS, "playoff", "desc")),
+    ["Alpha", "Bravo", "Golf", "Echo", "Hotel", "Delta", "Foxtrot"]);
+  assert.deepEqual(names(sortTeams(alTeams(), SORT_ODDS, "playoff", "asc")),
+    ["Delta", "Hotel", "Echo", "Golf", "Bravo", "Alpha", "Foxtrot"]);
+  assert.deepEqual(names(sortTeams(alTeams(), SORT_ODDS, "wildCard", "desc")),
+    ["Bravo", "Echo", "Hotel", "Delta", "Golf", "Alpha", "Foxtrot"]);
+});
+
+test("a tie on the sorted column falls back to seed order, not to feed order", () => {
+  // Delta (seed 3) and Echo (seed 5) both sit at 12% to win the division.
+  const desc = names(sortTeams(alTeams(), SORT_ODDS, "division", "desc"));
+  const asc = names(sortTeams(alTeams(), SORT_ODDS, "division", "asc"));
+  assert.equal(desc.indexOf("Delta") < desc.indexOf("Echo"), true);
+  assert.equal(asc.indexOf("Delta") < asc.indexOf("Echo"), true);
+});
+
+test("sorting with no odds at all keeps a stable seed order rather than throwing", () => {
+  assert.deepEqual(names(sortTeams(alTeams(), null, "playoff", "desc")),
+    ["Alpha", "Golf", "Delta", "Bravo", "Echo", "Hotel", "Foxtrot"]);
+});
+
+// ── Bracket ──────────────────────────────────────────────────────────────────
+
+test("the bracket pairs 3 v 6 into the 2 seed and 4 v 5 into the 1 seed", () => {
+  const b = buildBracket(al());
+  const m = (k: string) => b.matchups.find((x) => x.key === k)!;
+  assert.equal(b.league, "AL");
+  assert.deepEqual(m("wc-a").sides.map((s) => s.seed), [3, 6]);
+  assert.deepEqual(m("wc-a").sides.map((s) => s.team?.name), ["Delta", "Hotel"]);
+  assert.deepEqual(m("wc-b").sides.map((s) => s.seed), [4, 5]);
+  assert.deepEqual(m("wc-b").sides.map((s) => s.team?.name), ["Bravo", "Echo"]);
+  // The 2 seed waits on the 3 v 6 winner; the 1 seed waits on 4 v 5.
+  assert.equal(m("ds-a").sides[0].team?.name, "Golf");
+  assert.equal(m("ds-a").sides[1].from, "wc-a");
+  assert.equal(m("ds-b").sides[0].team?.name, "Alpha");
+  assert.equal(m("ds-b").sides[1].from, "wc-b");
+  assert.deepEqual(m("cs").sides.map((s) => s.from), ["ds-a", "ds-b"]);
+});
+
+test("the bracket carries the right best-of per round and never invents a result", () => {
+  const b = buildBracket(al());
+  assert.deepEqual(b.matchups.map((m) => m.bestOf), [3, 3, 5, 5, 7]);
+  // Every seat past the wild-card round is a winner seat, still empty.
+  const later = b.matchups.filter((m) => m.round !== "wildCard").flatMap((m) => m.sides);
+  assert.equal(later.filter((s) => s.from !== null).every((s) => s.team === null), true);
 });
