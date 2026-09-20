@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Screenshot sweep + acceptance read-back for the MLB playoff picture.
 //
-//   npm run build && node scripts/shots-playoff-picture.mjs
+//   npm run build && node scripts/shots-playoff-picture.mjs      # the local build
+//   node scripts/shots-playoff-picture.mjs --url https://hidescore.com
+//   node scripts/shots-playoff-picture.mjs --url <url> --out <dir>
 //
 // Captures both tabs, both themes, desktop and 390px, writes them to
 // ~/hidescore-playoff-picture/ with one index page, and asserts the facts the
@@ -17,18 +19,28 @@ import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 8139;
-const outDir = path.join(os.homedir(), "hidescore-playoff-picture");
+const argv = process.argv.slice(2);
+// Same flag as qa-bracket-picture.mjs, and for the same reason: after a merge
+// the only thing worth photographing is what the CDN is actually serving, and
+// a headless run against a live URL needs no local build.
+const liveUrl = argv.includes("--url") ? argv[argv.indexOf("--url") + 1] : null;
+const outDir = argv.includes("--out")
+  ? path.resolve(argv[argv.indexOf("--out") + 1])
+  : path.join(os.homedir(), "hidescore-playoff-picture");
 fs.mkdirSync(outDir, { recursive: true });
 
-const server = spawn("python3", ["-m", "http.server", String(PORT), "--bind", "127.0.0.1"], {
-  cwd: path.join(repo, "out"),
-  stdio: "ignore",
-});
-const stop = () => { try { server.kill(); } catch {} };
+const server = liveUrl
+  ? null
+  : spawn("python3", ["-m", "http.server", String(PORT), "--bind", "127.0.0.1"], {
+      cwd: path.join(repo, "out"),
+      stdio: "ignore",
+    });
+const stop = () => { try { server?.kill(); } catch {} };
 process.on("exit", stop);
-await new Promise((r) => setTimeout(r, 1200));
+if (!liveUrl) await new Promise((r) => setTimeout(r, 1200));
 
-const base = `http://127.0.0.1:${PORT}/`;
+const base = liveUrl ? (liveUrl.endsWith("/") ? liveUrl : `${liveUrl}/`) : `http://127.0.0.1:${PORT}/`;
+console.log(`target: ${base}`);
 const season = new Date().getUTCFullYear();
 const DIALOG = '[role="dialog"][aria-label="MLB playoff picture"]';
 const failures = [];
