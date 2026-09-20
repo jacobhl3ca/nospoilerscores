@@ -3550,7 +3550,11 @@ async function bakeLeagueRecaps() {
               rec.coversWeek = hit.week;
               let win = null;
               if (sport === "nfl" && nflSeasonYear && hit.week) {
-                win = nflWeekWindow(await fetchNflWeekEvents(nflSeasonYear, hit.week), await fetchNflWeekEvents(nflSeasonYear, hit.week + 1));
+                win = nflWeekWindow(
+                  await fetchNflWeekEvents(nflSeasonYear, hit.week),
+                  await fetchNflWeekEvents(nflSeasonYear, hit.week + 1),
+                  await fetchNflWeekEvents(nflSeasonYear, hit.week + 2),
+                );
               }
               if (!win) win = weeklyWindowFromPublished(etYmd(hit.publishedMs ?? now));
               Object.assign(rec, win);
