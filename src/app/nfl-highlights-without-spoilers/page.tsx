@@ -93,7 +93,7 @@ export default function NflHighlightsWithoutSpoilersPage() {
     <SeoLandingPage
       h1="NFL highlights without spoilers"
       intro={[
-        "Yes, you can watch NFL highlights without spoilers: HideScore shows every game with the score hidden and an excitement rating, so you choose a game first and reveal the result only when you want to.",
+        "Yes, you can watch NFL highlights without spoilers: HideScore shows every game with no score printed on it and an optional excitement rating, so you choose a game first and learn the result from the highlight itself.",
         "The NFL is built to spoil itself. Eight games kick off at once on a Sunday afternoon, RedZone cuts between all of them, fantasy apps buzz on every touchdown, and the moment a game ends its final score is a push alert, a group-chat message, and a thumbnail on every app you own. If you did not watch it live, the ending usually reaches you before the game does.",
         "HideScore is a starting point that will not do that. Every game card opens with the score covered, so you can see what has finished and what is still going without learning how any of it ended. A spoiler-free rating tells you whether a game was close or dramatic; it never tells you who won. When you pick one, the highlights open with the scoreline filtered out of the video title.",
         "The 2026 season kicks off on Wednesday, September 9 with New England at Seattle, and week 1 closes on Monday, September 14 with Denver at Kansas City.",
@@ -125,7 +125,7 @@ export default function NflHighlightsWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "NFL scores hidden until you tap.",
+        "No NFL score printed anywhere on the board.",
         "All 18 weeks, from the September 9 opener through the playoffs.",
         "Spoiler-free ratings for finished games — close, high-scoring, decided late.",
         "Highlights with the scoreline filtered out of video titles.",

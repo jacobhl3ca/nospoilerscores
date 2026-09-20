@@ -6,6 +6,14 @@ const DESC =
   "Follow the Premier League — every matchweek, the title race, and the relegation fight — without seeing scores, results, or the winner before you watch.";
 const CANONICAL = "/premier-league-without-spoilers";
 
+// ⚠️ Corrected 2026-09-20. This page said the scoreline "only appears when you
+// tap it" and that standings are "treated with the same care as scores".
+// Neither is what the app does. Nothing outside GolfLeaderboard reads
+// Team.score — it is parsed only to compute the excitement rating and is never
+// rendered — and there is no standings view at all. Ratings are opt-in as well
+// (showRatings: false in preferences.ts; the default "auto" mode holds them off
+// before noon ET). Do not put a tap-to-reveal score back on this page.
+
 // Answer-engine questions. The first one is the reason this page exists: the
 // 2026-27 season starts a week later than a normal year because of the World
 // Cup, so "when does the Premier League start" is a real question this August
@@ -19,7 +27,7 @@ const FAQ = [
   },
   {
     q: "Can I check Premier League scores without spoilers?",
-    a: "Yes. Every Premier League match card on HideScore starts with the score hidden. Fixtures, kickoff times, and which matches are finished are all visible; the scoreline only appears when you tap it, so you can line up a replay or the highlights first.",
+    a: "Yes. A Premier League card on HideScore carries the fixture, the kickoff time, the broadcaster and whether the match has finished. It carries no scoreline, and nothing on the page will produce one, so you can line up a replay or the highlights with the result still unknown.",
   },
   {
     q: "How do I watch Premier League highlights without knowing the result?",
@@ -27,7 +35,7 @@ const FAQ = [
   },
   {
     q: "Does HideScore cover the title race and relegation?",
-    a: "Yes, and it covers them the same careful way. A spoiler-free rating tells you a finished match was tight or dramatic without naming the winner, and league position is treated as a spoiler in its own right — a table tells you who won last weekend just as plainly as a scoreline does.",
+    a: "Yes, and it covers them the same careful way. Turn Ratings on in Settings and a finished match is marked tight or dramatic, never with the winner. League position is a spoiler in its own right — a table states who won last weekend as plainly as a scoreline — so the app ships no table at all.",
   },
   {
     q: "Where can I watch Premier League matches in the US?",
@@ -82,13 +90,13 @@ export default function PremierLeagueWithoutSpoilersPage() {
       h1="Premier League without spoilers"
       intro={[
         "The Premier League is the hardest league in the world to watch late. Saturday's 12:30 kickoff lands at 7:30 in the morning on the US East Coast, the 3pm block is a wall of simultaneous matches, and by the time most people sit down with the replay the result has already arrived by push alert, group chat, or a scrolling ticker on some other channel.",
-        "HideScore is a place to start that will not do that to you. Match cards stay hidden, ratings tell you whether a match is worth your evening without telling you who won, and the score appears only when you tap it.",
+        "HideScore is a place to start that will not do that to you. A match card gives you the fixture, the kickoff and whether it has finished, and no scoreline is written on it at any point. Switch Ratings on and a finished match also tells you whether it is worth your evening, without telling you who won.",
         "The 2026-27 season kicks off on Friday, August 21, 2026 — later than usual, because the World Cup ran into late July.",
       ]}
       sections={[
         {
-          h: "Every matchweek, hidden by default",
-          p: "All ten matches of a Premier League matchweek show up as cards with the scoreline covered. You still see the fixture, the kickoff time, and whether a match has finished — everything you need to plan what to watch, and nothing that tells you how it ended.",
+          h: "Every matchweek, with no scoreline on it",
+          p: "All ten matches of a Premier League matchweek show up as cards that carry no scoreline. You still see the fixture, the kickoff time, and whether a match has finished — everything you need to plan what to watch, and nothing that tells you how it ended.",
         },
         {
           h: "Highlights you can open without reading the score",
@@ -96,7 +104,7 @@ export default function PremierLeagueWithoutSpoilersPage() {
         },
         {
           h: "The table is a spoiler too",
-          p: "League position gives away last weekend as reliably as a scoreline does, so standings are treated with the same care as scores. A spoiler-free rating still tells you a match was tight, high-scoring, or dramatic — it just never names the winner.",
+          p: "League position gives away last weekend as reliably as a scoreline does, so there is no table here to open. The optional rating still tells you a match was tight, high-scoring, or dramatic — it just never names the winner. Ratings start switched off, and the default setting holds them back until noon Eastern.",
         },
         {
           h: "A route to the match, not to a scoreboard",
@@ -104,9 +112,9 @@ export default function PremierLeagueWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "Premier League scores hidden until you tap.",
+        "No Premier League scoreline printed anywhere on the board.",
         "All 38 matchweeks, from the August 21 opener to the final day.",
-        "Spoiler-free ratings for finished matches.",
+        "Optional spoiler-free ratings for finished matches.",
         "Highlights with the scoreline filtered out of titles.",
         "Watch links that point at a broadcaster, not a scoreboard.",
       ]}

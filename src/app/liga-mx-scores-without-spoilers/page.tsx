@@ -84,7 +84,7 @@ export default function LigaMxScoresWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "Liga MX scores hidden until you tap.",
+        "No Liga MX scoreline printed anywhere on the board.",
         "Apertura, Clausura, Liguilla, and the final.",
         "Spoiler-free ratings for finished matches.",
         "Watch links that point at a stream, not a scoreboard.",

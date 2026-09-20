@@ -1,22 +1,29 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+// ⚠️ Corrected 2026-09-20. This page said the score is "hidden first, then
+// revealed only when you ask". It is not: nothing outside GolfLeaderboard reads
+// Team.score, so a score is never rendered and there is nothing to uncover.
+// News HEADLINES and media DO blur and un-blur on a tap (revealNewsTitles /
+// revealNewsMedia in preferences.ts) — that part is real, and is the only
+// tap-to-reveal in the app. Ratings are opt-in (showRatings: false; the default
+// "auto" mode holds them off before noon ET).
 const TITLE = "Spoiler-Free Sports Scores and Highlights | HideScore";
 const DESC =
-  "HideScore is a spoiler-free sports app for NBA, NFL, NHL, MLB, soccer, golf, and World Cup fans. Scores, results, headlines, and highlights stay hidden until you choose to reveal them.";
+  "HideScore is a spoiler-free sports app for NBA, NFL, NHL, MLB, soccer, golf, and World Cup fans. No score is printed anywhere, and headlines and thumbnails stay blurred until you choose to reveal them.";
 
 const FAQ: { q: string; a: string }[] = [
   {
     q: "What does spoiler-free sports mean?",
-    a: "Spoiler-free sports means you can check schedules, game cards, highlights, and ratings without seeing the final score or who won until you choose to reveal it.",
+    a: "Spoiler-free sports means you can check schedules, game cards, highlights, and ratings without the final score or the winner ever appearing on the page.",
   },
   {
     q: "Which sports does HideScore cover?",
-    a: "HideScore covers NBA, NFL, NHL, MLB, soccer, golf, college basketball, and the 2026 World Cup, with scores hidden by default and highlights available for completed games.",
+    a: "HideScore covers NBA, NFL, NHL, MLB, soccer, golf, college basketball, and the 2026 World Cup. No score is rendered for any of them, and highlights are available for completed games.",
   },
   {
     q: "Can I find good games without seeing the score?",
-    a: "Yes. HideScore's competitiveness rating shows whether a finished game was close, dramatic, or one-sided without revealing the winner or final score.",
+    a: "Yes. Switch Ratings on in Settings and the competitiveness rating shows whether a finished game was close, dramatic, or one-sided, with no mention of the winner or the final score. Ratings start off, and the default setting holds them back until noon Eastern.",
   },
   {
     q: "Is HideScore free?",
@@ -75,8 +82,9 @@ export default function SpoilerFreeSportsPage() {
       <h1 className="text-2xl font-bold mb-4">Spoiler-free sports scores and highlights</h1>
 
       <p className="mb-4" style={{ color: "var(--text-muted)" }}>
-        HideScore is built for fans who want spoiler free sports without the usual scoreboard trap. Scores, results,
-        winner headlines, and highlight thumbnails stay hidden until you decide to reveal them.
+        HideScore is built for fans who want spoiler free sports without the usual scoreboard trap. No score or result
+        is printed on the board at all, and winner headlines and highlight thumbnails stay blurred until you decide to
+        reveal them.
       </p>
 
       <p className="mb-4" style={{ color: "var(--text-muted)" }}>
@@ -89,22 +97,23 @@ export default function SpoilerFreeSportsPage() {
       <p className="mb-4" style={{ color: "var(--text-muted)" }}>
         Most sports sites treat the final score as the headline. That works when you watched live, but it ruins the game
         if you are catching up after work, following a different time zone, or deciding which replay is worth two hours.
-        HideScore flips the default: the score is hidden first, then revealed only when you ask.
+        HideScore flips the default: the score is never written down, and the headlines that would give it away start
+        blurred.
       </p>
 
       <h2 className="text-lg font-semibold mt-8 mb-2">Find the best games without the result</h2>
       <p className="mb-4" style={{ color: "var(--text-muted)" }}>
-        A hidden score alone is not enough. HideScore also gives completed games a competitiveness rating, so you can
-        spot the instant classics and skip the blowouts without learning who won. That makes it useful for full replays,
-        condensed games, and spoiler-free sports highlights.
+        An unscored board alone is not enough. Turn Ratings on in Settings and completed games carry a competitiveness
+        rating, so you can spot the instant classics and skip the blowouts without learning who won. That makes it
+        useful for full replays, condensed games, and spoiler-free sports highlights.
       </p>
 
       <h2 className="text-lg font-semibold mt-8 mb-3">What you can check spoiler-free</h2>
       <ul className="mb-4 space-y-1.5 list-disc pl-5" style={{ color: "var(--text-muted)" }}>
-        <li>Today&apos;s games with scores hidden until you tap.</li>
+        <li>Today&apos;s games, with no score printed on any of them.</li>
         <li>Tomorrow&apos;s schedule, kickoff times, and matchups.</li>
         <li>Yesterday&apos;s completed games and highlight links.</li>
-        <li>Competitiveness ratings that do not reveal the winner.</li>
+        <li>Optional competitiveness ratings that never name the winner.</li>
         <li>News and recaps after you are ready to see more context.</li>
       </ul>
 
@@ -112,7 +121,7 @@ export default function SpoilerFreeSportsPage() {
         className="mt-8 rounded-xl px-5 py-5 text-center"
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       >
-        <p className="font-semibold mb-3">Open HideScore and keep every score hidden.</p>
+        <p className="font-semibold mb-3">Open HideScore and never see a score you did not go looking for.</p>
         <Link
           href="/"
           className="inline-block rounded-lg px-5 py-2.5 font-semibold"

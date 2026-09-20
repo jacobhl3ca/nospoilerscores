@@ -39,7 +39,7 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // back.
 const TITLE = "NHL Highlights Without Spoilers: Find the Best Games | HideScore";
 const DESC =
-  "Watch NHL highlights without seeing who won. Scores stay hidden and every game is rated for excitement, so you know which ones to watch. Free, no account.";
+  "Watch NHL highlights without seeing who won. No score is printed, and games can be rated for excitement so you know which ones to watch. Free, no account.";
 const CANONICAL = "/nhl-highlights-without-spoilers";
 
 const FAQ = [
