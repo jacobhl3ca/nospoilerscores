@@ -40,15 +40,15 @@ export const metadata: Metadata = {
 const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
   {
     q: "What is HideScore?",
-    a: "HideScore is a free way to follow sports without spoilers. It hides NBA, MLB, NHL, NFL, soccer, and golf scores, highlights, and headlines until you choose to reveal them, so you can watch games on your own schedule.",
+    a: "HideScore is a free way to follow sports without spoilers. It prints no NBA, MLB, NHL, NFL, soccer or golf score anywhere, and it keeps highlight titles and news headlines blurred until you choose to reveal them, so you can watch games on your own schedule.",
   },
   {
     q: "How do HideScore's game ratings work?",
-    a: "Game ratings tell you how exciting a finished game was without revealing the score. Turn on ratings to sort by the best games and decide what is worth watching before you press play.",
+    a: "Game ratings tell you how exciting a finished game was without naming the score or the winner. They are off until you turn them on in Settings, and on the default setting they stay off before noon Eastern. Once on, you can sort by the best games and decide what is worth watching before you press play.",
   },
   {
     q: "How can I watch sports highlights without spoilers?",
-    a: "Open HideScore before checking search, YouTube, league apps, or social feeds. Scores and winners stay hidden, ratings help you pick the best finished games, and each game card links to recap or condensed highlights when available.",
+    a: "Open HideScore before checking search, YouTube, league apps, or social feeds. No score or winner is written on the board, the optional ratings help you pick the best finished games, and each game card links to recap or condensed highlights when available.",
   },
   {
     q: "Which sports and leagues does HideScore cover?",

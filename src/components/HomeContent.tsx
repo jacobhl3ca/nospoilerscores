@@ -1487,14 +1487,14 @@ export default function HomeContent({
       return {
         title: "World Cup highlights, spoiler-free",
         body:
-          "Catch up on completed World Cup matches without result thumbnails, scorelines or winner headlines. HideScore surfaces official highlights after games finish and keeps the result hidden until you choose to reveal it.",
+          "Catch up on completed World Cup matches without result thumbnails, scorelines or winner headlines. HideScore surfaces official highlights after games finish, and the board they sit on never prints the result at all.",
         note: "Start with yesterday's slate, then jump to today or tomorrow.",
       };
     }
     return {
       title: "2026 World Cup, spoiler-free",
       body:
-        "104 matches, June 11 - July 19, across the US, Canada and Mexico - most kicking off at 1, 4 and 7 PM ET on weekdays. Watch every match on your own schedule: scores stay hidden until you tap, and the competitiveness rating tells you which games were instant classics without revealing who won.",
+        "104 matches, June 11 - July 19, across the US, Canada and Mexico - most kicking off at 1, 4 and 7 PM ET on weekdays. Watch every match on your own schedule: no score is printed anywhere, and the optional competitiveness rating tells you which games were instant classics without naming who won.",
       note: "Free · no tracking cookies · also on the App Store and Google Play.",
     };
   }, [worldCupHubMode]);
@@ -3962,13 +3962,13 @@ export default function HomeContent({
             <p>
               HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
               MLB, MLS, the Premier League, La Liga, Serie A, the Bundesliga, Ligue 1, the Champions
-              League, the 2026 World Cup and golf without ever seeing who won — every score and
-              result stays hidden until you choose to reveal it.
+              League, the 2026 World Cup and golf without ever seeing who won — no score or result
+              is written on the board at all.
             </p>
             <p>
-              Before you commit to a replay, our competitiveness rating tells you whether a game was a
-              blowout or an instant classic, so you can watch the best sports highlights without
-              spoilers and skip the duds — all without learning the final score.
+              Before you commit to a replay, switch on our competitiveness rating and it tells you
+              whether a game was a blowout or an instant classic, so you can watch the best sports
+              highlights without spoilers and skip the duds — all without learning the final score.
             </p>
             <p>
               It&apos;s free, has no tracking cookies, and works in any browser or as an iPhone or Android app. Jump to{" "}

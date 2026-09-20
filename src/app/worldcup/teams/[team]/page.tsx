@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!team) return {};
 
   const title = `${team.name} World Cup Schedule Without Spoilers | HideScore`;
-  const description = `Follow ${team.name} at the 2026 FIFA World Cup without seeing scores first. HideScore keeps match results, ratings, and highlights spoiler-free until you tap.`;
+  const description = `Follow ${team.name} at the 2026 FIFA World Cup without seeing scores first. HideScore prints no match result, and keeps ratings and highlights spoiler-free.`;
   const canonical = `/worldcup/teams/${team.slug}`;
 
   return {
@@ -144,7 +144,7 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
 
       <h2 className="text-lg font-semibold mt-8 mb-3">What stays hidden</h2>
       <ul className="mb-4 space-y-1.5 list-disc pl-5" style={{ color: "var(--text-muted)" }}>
-        <li>{team.name} scores and winners stay hidden until you tap.</li>
+        <li>No {team.name} score or winner is printed on the board.</li>
         <li>Completed match ratings do not reveal who won.</li>
         <li>Highlight entry points avoid result-first headlines where possible.</li>
         <li>Today, tomorrow, and recent-match views are linked from one spoiler-safe path.</li>

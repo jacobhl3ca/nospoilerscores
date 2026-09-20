@@ -4,11 +4,11 @@ import HomeContent from "@/components/HomeContent";
 export const metadata: Metadata = {
   title: "Today's Games, Scores Hidden: NFL, NBA, MLB, NHL | HideScore",
   description:
-    "Today's games with every score hidden until you tap. See which ones are worth watching tonight without the result spoiled. Free, no account.",
+    "Today's games with no score printed on any of them. See which ones are worth watching tonight without the result spoiled. Free, no account.",
   alternates: { canonical: "/today" },
   openGraph: {
     title: "Today's Games, Scores Hidden: NFL, NBA, MLB, NHL | HideScore",
-    description: "Today's games with every score hidden until you tap. See which ones are worth watching tonight without the result spoiled. Free, no account.",
+    description: "Today's games with no score printed on any of them. See which ones are worth watching tonight without the result spoiled. Free, no account.",
     url: "https://hidescore.com/today",
     siteName: "HideScore",
     // og:locale matches the site-level Open Graph block in layout.tsx. A page's
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Today's Games, Scores Hidden: NFL, NBA, MLB, NHL | HideScore",
-    description: "Today's games with every score hidden until you tap. See which ones are worth watching tonight without the result spoiled. Free, no account.",
+    description: "Today's games with no score printed on any of them. See which ones are worth watching tonight without the result spoiled. Free, no account.",
     images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — today's sports scores, spoiler-free" }],
   },
 };
@@ -52,7 +52,7 @@ export default function TodayPage() {
                 "@type": "WebPage",
                 name: "Today's Games, Scores Hidden: NFL, NBA, MLB, NHL | HideScore",
                 description:
-                  "Today's games with every score hidden until you tap. See which ones are worth watching tonight without the result spoiled. Free, no account.",
+                  "Today's games with no score printed on any of them. See which ones are worth watching tonight without the result spoiled. Free, no account.",
                 url: "https://hidescore.com/today",
                 inLanguage: "en",
                 isPartOf: { "@id": "https://hidescore.com/#website" },
