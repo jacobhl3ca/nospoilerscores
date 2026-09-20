@@ -2317,16 +2317,13 @@ export default function HomeContent({
   // slotEntries — so every LeagueRecapCard can reserve the row. Cheap:
   // getRecapsFor reads the session-cached /news/recaps.json.
   const recapQueryKey = (() => {
-    const recapToday = selectedDate === getDateString(0);
-    if (!(selectedDate < getDateString(0)) && !recapToday) return "";
+    if (selectedDate > getDateString(0)) return "";
     const queue = [...sortedLeagues];
     const pairs: string[] = [];
     for (const slotIdx of SLOT_INDICES.slice(0, slotCount)) {
       if (selectedSlotLeagues[slotIdx] === "empty") continue;
       const league = queue.shift();
       if (!league) continue;
-      // Today: only a league with nothing on today (see recapTopCard).
-      if (recapToday && league.games.length) continue;
       const ymd = (league.games.length ? null : league.previousGameDay?.date) || selectedDate;
       pairs.push(`${league.sport}:${ymd}`);
     }
@@ -3533,10 +3530,12 @@ export default function HomeContent({
             const reserveRecapSlot = anyRecap && !(prefs.singleColumn ?? false)
               && SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length >= 2
               && sortedLeagues.length >= 2;
-            // Today's board shows it too when the league has nothing on today
-            // (an NFL Saturday): the column is the "Last played" slate, so it
-            // is a past board in all but name. A game day never shows it.
-            const recapTopCard = (league: LeagueData) => isPast || (isToday && !league.games.length)
+            // Today's board shows it too, game day or not: Thursday night and
+            // Monday night both want last week's cut sitting above them, and
+            // the one day it must NOT appear — the live football Sunday — is
+            // held out by the record's own skipDays, not by a rule here.
+            // Tomorrow and later stay clear.
+            const recapTopCard = (league: LeagueData) => isPast || isToday
               ? (
                 <LeagueRecapCard
                   sport={league.sport}

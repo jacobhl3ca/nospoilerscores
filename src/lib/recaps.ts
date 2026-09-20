@@ -18,6 +18,10 @@ export type RecapRecord = {
   coversWeek?: number;   // weekly
   windowStart?: string;  // YYYYMMDD (weekly)
   windowEnd?: string;    // YYYYMMDD (weekly)
+  // Days inside the window the record must NOT cover — for the NFL, next
+  // week's Sunday, so a completed week's cut never sits on top of a live
+  // football Sunday. See nflWeekWindow in scripts/lib/recaps.mjs.
+  skipDays?: string[];
   videoId?: string;      // YouTube
   playbackUrl?: string;  // MLB.com HLS
   poster?: string | null;
@@ -55,7 +59,8 @@ export function recapChannelVerified(rec: RecapRecord | null | undefined): boole
 export function recapCoversDay(rec: RecapRecord, ymd: string): boolean {
   if (!/^\d{8}$/.test(ymd)) return false;
   if (rec.cadence === "weekly") {
-    return !!rec.windowStart && !!rec.windowEnd && rec.windowStart <= ymd && ymd <= rec.windowEnd;
+    return !!rec.windowStart && !!rec.windowEnd && rec.windowStart <= ymd && ymd <= rec.windowEnd
+      && !(rec.skipDays ?? []).includes(ymd);
   }
   return rec.coversDate === ymd;
 }

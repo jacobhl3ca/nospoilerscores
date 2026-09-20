@@ -224,18 +224,42 @@ test("EPL / MLS weekly window is the six days before the post plus the day itsel
   assert.equal(weeklyWindowFromPublished("2026-09-13"), null);
 });
 
-test("NFL week window runs first game day → day before the next week's main slate", () => {
+test("NFL week window reaches past next week's Sunday and skips only that day", () => {
   const wk1 = [
     { date: "2026-09-10T00:20Z" }, // Wed 9/9 8:20 pm ET
     { date: "2026-09-13T17:00Z" },
     { date: "2026-09-15T00:15Z" }, // Mon 9/14 8:15 pm ET
   ];
-  // Thu 9/17, a full Sun 9/20, Mon 9/21 → the window holds through Sat 9/19.
+  // Thu 9/17, a two-game Sun 9/20, Mon 9/21.
   const wk2 = [{ date: "2026-09-18T00:15Z" }, { date: "2026-09-20T17:00Z" }, { date: "2026-09-20T20:25Z" }, { date: "2026-09-22T00:15Z" }];
-  assert.deepEqual(nflWeekWindow(wk1, wk2), { windowStart: "20260909", windowEnd: "20260919" });
-  // No next week known → the week's own last game day.
-  assert.deepEqual(nflWeekWindow(wk1, []), { windowStart: "20260909", windowEnd: "20260914" });
-  assert.equal(nflWeekWindow([], wk2), null);
+  // Thu 9/24, a two-game Sun 9/27.
+  const wk3 = [{ date: "2026-09-25T00:15Z" }, { date: "2026-09-27T17:00Z" }, { date: "2026-09-27T20:25Z" }];
+  // Out to the day before week 3's slate, minus week 2's Sunday: Mon 9/21 is
+  // covered (week 2's cut is not posted yet), Sun 9/20 is not.
+  assert.deepEqual(nflWeekWindow(wk1, wk2, wk3), { windowStart: "20260909", windowEnd: "20260926", skipDays: ["20260920"] });
+  // Nothing after next week known → stop the day before next week's slate, and
+  // that boundary already excludes the Sunday, so no skipDays is written.
+  assert.deepEqual(nflWeekWindow(wk1, wk2, []), { windowStart: "20260909", windowEnd: "20260919" });
+  // No next week at all (the regular season's last week) → the week's own end.
+  assert.deepEqual(nflWeekWindow(wk1, [], []), { windowStart: "20260909", windowEnd: "20260914" });
+  assert.equal(nflWeekWindow([], wk2, wk3), null);
+  // The busiest day wins, not the first: a Friday special and a Saturday pair
+  // ahead of the Sunday must not be read as the slate.
+  const flexed = [{ date: "2026-09-19T00:15Z" }, { date: "2026-09-20T17:00Z" }, { date: "2026-09-20T17:00Z" }];
+  assert.equal(nflWeekWindow(wk1, flexed, [])?.windowEnd, "20260919");
+});
+
+test("recapCoversDay holds a weekly record out of its skipDays", () => {
+  const rec = {
+    sport: "nfl", key: "top15", heading: "Week 1", label: "Top 15 plays", cadence: "weekly" as const,
+    coversWeek: 1, windowStart: "20260909", windowEnd: "20260926", skipDays: ["20260920"],
+    videoId: "a", pageUrl: "https://www.youtube.com/watch?v=a", channel: "NFL",
+  };
+  assert.equal(recapCoversDay(rec, "20260919"), true);  // Saturday
+  assert.equal(recapCoversDay(rec, "20260920"), false); // the live football Sunday
+  assert.equal(recapCoversDay(rec, "20260921"), true);  // Monday, before week 2's cut posts
+  assert.equal(recapCoversDay(rec, "20260927"), false); // past the window
+  assert.equal(recapCoversDay({ ...rec, skipDays: undefined }, "20260920"), true);
 });
 
 test("pickNewest ranks by publish day, then week, then title date — never page order", () => {
@@ -274,7 +298,7 @@ test("pickNewest ranks by publish day, then week, then title date — never page
 
 test("stripRecapRecord drops title / thumbnail / headline; fillHeading substitutes the week", () => {
   const rec = stripRecapRecord({
-    sport: "nfl", key: "top15", heading: "Week 1 top plays", label: "Top 15 plays", cadence: "weekly",
+    sport: "nfl", key: "top15", heading: "Week 1", label: "Top 15 plays", cadence: "weekly",
     videoId: "XUpaSUiyy5I", pageUrl: "https://www.youtube.com/watch?v=XUpaSUiyy5I", channel: "NFL",
     headline: "WALK-OFF WEEKEND in Cleveland", title: "spoiler", imageUrl: "https://i.ytimg.com/x.jpg", thumbnail: "x",
     durationSec: 481, t: 1, sourcePolicy: "official-channel", poster: null,
@@ -285,14 +309,14 @@ test("stripRecapRecord drops title / thumbnail / headline; fillHeading substitut
   assert.equal("thumbnail" in rec, false);
   assert.equal("poster" in rec, false);
   assert.equal((rec as Record<string, unknown>).videoId, "XUpaSUiyy5I");
-  assert.equal(fillHeading("Week {n} top plays", 1), "Week 1 top plays");
+  assert.equal(fillHeading("Week {n}", 1), "Week 1");
   assert.equal(fillHeading("Best of the day", null), "Best of the day");
 });
 
 // ── Client selection ─────────────────────────────────────────────────────────
 
 const base = (over: Partial<RecapRecord>): RecapRecord => ({
-  sport: "nfl", key: "top15", heading: "Week 1 top plays", label: "Top 15 plays", cadence: "weekly",
+  sport: "nfl", key: "top15", heading: "Week 1", label: "Top 15 plays", cadence: "weekly",
   coversWeek: 1, windowStart: "20260909", windowEnd: "20260916", videoId: "XUpaSUiyy5I",
   pageUrl: "https://www.youtube.com/watch?v=XUpaSUiyy5I", channel: "NFL", durationSec: 481, t: 1,
   sourcePolicy: "official-channel", ...over,
