@@ -2455,7 +2455,15 @@ const HL_LEAGUES = [
   { sport: "epl",   path: "/soccer/eng.1/scoreboard",                         channel: "NBC Sports" },
   { sport: "mls",   path: "/soccer/usa.1/scoreboard",                         channel: "Major League Soccer" },
   { sport: "ucl",   path: "/soccer/uefa.champions/scoreboard",                channel: "CBS Sports Golazo" },
-  { sport: "uel",   path: "/soccer/uefa.europa/scoreboard",                   channel: "CBS Sports Golazo" },
+  // UEL moved to CBS's second European channel — see the uel note in
+  // src/lib/youtube.ts. The old channel stays as the strict 2nd slot.
+  { sport: "uel",   path: "/soccer/uefa.europa/scoreboard",                   channel: "CBS Sports Golazo - Europe", secondaryChannel: "CBS Sports Golazo" },
+  // La Liga + Ligue 1 (lit 2026-09-19): their US broadcasters, each gated on a
+  // competition title token in HL_COMPETITION_TOKENS below. ESPN FC also cuts
+  // the FA Cup / Copa del Rey / Premier League and beIN also cuts the Coupe de
+  // France, so the token is load-bearing, not decoration.
+  { sport: "laliga",     path: "/soccer/esp.1/scoreboard",                    channel: "ESPN FC" },
+  { sport: "ligue1",     path: "/soccer/fra.1/scoreboard",                    channel: "beIN SPORTS USA" },
   { sport: "seriea",     path: "/soccer/ita.1/scoreboard",                    channel: "CBS Sports Golazo" },
   { sport: "bundesliga", path: "/soccer/ger.1/scoreboard",                    channel: "Bundesliga" },
   // ⚠️ "TUDN USA", NOT "TUDN México" — the third and last copy of this string.
@@ -2523,6 +2531,8 @@ const HL_WORKER_BASE = process.env.HIDESCORE_BASE || "https://hidescore.com";
 const HL_COMPETITION_TOKENS = {
   nationschamp: ["nations championship"],
   facup: ["fa cup"],
+  laliga: ["laliga", "la liga"],
+  ligue1: ["ligue 1"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts. Sent per
 // EVENT: TSN titles the postseason by round with no year, and a playoff card
