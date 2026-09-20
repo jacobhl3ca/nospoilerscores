@@ -51,7 +51,11 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 interface Sort { key: SortKey; dir: SortDir }
-const DEFAULT_SORT: Sort = { key: "seed", dir: "asc" };
+// The panel opens on the odds, best chance first. The question it is opened
+// for is "who is getting in", and a probability order answers that directly,
+// where a seed order answers "who is where right now" and leaves the reader to
+// do the comparing. Seed is one click away and keeps the dividers.
+const DEFAULT_SORT: Sort = { key: "playoff", dir: "desc" };
 
 function loadRevealed(season: number): boolean {
   try {
@@ -239,9 +243,10 @@ function LeagueTable({ league, odds, showGamesBack, sort, onSort }: {
   sort: Sort;
   onSort: (k: SortKey) => void;
 }) {
-  // Seed view keeps the shape a playoff picture is read in — the six, split at
-  // the bye line, then the chase. Any odds sort drops the dividers: they mark
-  // seed boundaries, and in a probability order they would mark nothing.
+  // Seed view keeps the shape a standings picture is read in — the six, split
+  // at the bye line, then the chase. Any odds sort, including the one the panel
+  // opens on, drops the dividers: they mark seed boundaries, and in a
+  // probability order they would mark nothing.
   const bySeed = sort.key === "seed";
   const seeded = useMemo(
     () => (bySeed ? sortTeams(league.seeded, odds, sort.key, sort.dir) : []),
