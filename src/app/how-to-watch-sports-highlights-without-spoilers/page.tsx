@@ -13,8 +13,8 @@ const STEPS = [
     text: "Normal search results, league pages, and video feeds can spoil the winner in titles, thumbnails, tickers, and headlines. Start from HideScore instead.",
   },
   {
-    name: "Pick the game while scores are hidden",
-    text: "Use Yesterday, Today, Tomorrow, or a league page to find the matchup. HideScore keeps scores, winners, and results hidden until you tap to reveal them.",
+    name: "Pick the game from a board with no score on it",
+    text: "Use Yesterday, Today, Tomorrow, or a league page to find the matchup. HideScore prints no score, winner, or result on any of those boards.",
   },
   {
     name: "Use ratings to choose what is worth watching",

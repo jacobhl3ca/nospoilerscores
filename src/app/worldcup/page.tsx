@@ -3,7 +3,7 @@ import HomeContent from "@/components/HomeContent";
 
 const TITLE = "2026 World Cup — No Spoilers | HideScore";
 const DESC =
-  "Follow the 2026 FIFA World Cup without spoilers. Scores stay hidden, and ratings help you find the best matches without seeing who won.";
+  "Follow the 2026 FIFA World Cup without spoilers. No score is printed, and optional ratings help you find the best matches without seeing who won.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/worldcup" },
   openGraph: {
     title: TITLE,
-    description: "The 2026 World Cup, spoiler-free. Watch on your own schedule — scores hidden until you tap.",
+    description: "The 2026 World Cup, spoiler-free. Watch on your own schedule — no score printed anywhere.",
     url: "https://hidescore.com/worldcup",
     siteName: "HideScore",
     // og:locale matches the site-level Open Graph block in layout.tsx and the
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: TITLE,
-    description: "The 2026 World Cup, spoiler-free. Watch on your own schedule — scores hidden until you tap.",
+    description: "The 2026 World Cup, spoiler-free. Watch on your own schedule — no score printed anywhere.",
     images: [{ url: "https://hidescore.com/og-worldcup.png", alt: "HideScore — the 2026 FIFA World Cup, spoiler-free" }],
   },
 };

@@ -6,10 +6,16 @@ const DESC =
   "Watch soccer highlights, Premier League matches, MLS games, and World Cup recaps without seeing scores or winners first.";
 const CANONICAL = "/soccer-highlights-without-spoilers";
 
+// ⚠️ Corrected 2026-09-20. This page said scores "reveal only when you tap".
+// They do not: nothing outside GolfLeaderboard reads Team.score, so a score is
+// never rendered and there is nothing to uncover. Ratings are opt-in too
+// (showRatings: false in preferences.ts; the default "auto" mode holds them off
+// before noon ET).
+
 const FAQ = [
   {
     q: "Can I watch soccer highlights without spoilers?",
-    a: "Yes. HideScore lets you start from a hidden-score match card before opening highlights, recaps, or match news.",
+    a: "Yes. HideScore lets you start from a match card that carries no scoreline before opening highlights, recaps, or match news.",
   },
   {
     q: "Does this help with time zones?",
@@ -21,7 +27,7 @@ const FAQ = [
   },
   {
     q: "Can ratings help with soccer matches?",
-    a: "Yes. Ratings help flag close, dramatic, or high-value matches without revealing the winner or final score.",
+    a: "Yes. Switch Ratings on in Settings and they flag close, dramatic, or high-value matches without naming the winner or the final score. They start off, and the default setting holds them back until noon Eastern.",
   },
   {
     q: "Which soccer leagues does HideScore cover?",
@@ -29,7 +35,7 @@ const FAQ = [
   },
   {
     q: "Is women's soccer covered?",
-    a: "Yes. The NWSL has its own spoiler-free column, hidden the same way as every other league.",
+    a: "Yes. The NWSL has its own spoiler-free column, handled the same way as every other league.",
   },
 ];
 
@@ -78,7 +84,7 @@ export default function SoccerHighlightsWithoutSpoilersPage() {
       h1="Soccer highlights without spoilers"
       intro={[
         "Soccer spoilers travel fast across time zones. A single thumbnail, live table, push alert, or headline can tell you the score before you watch the match.",
-        "HideScore gives you a spoiler-free place to start: match cards stay hidden, ratings help you choose what to watch, and scores reveal only when you tap.",
+        "HideScore gives you a spoiler-free place to start: a match card carries the fixture and the kickoff and no scoreline at all, and an optional rating helps you choose what to watch.",
       ]}
       sections={[
         {
@@ -91,12 +97,12 @@ export default function SoccerHighlightsWithoutSpoilersPage() {
         },
         {
           h: "Beyond the big five",
-          p: "Alongside the Premier League, La Liga, Serie A, Bundesliga and Ligue 1, HideScore covers Liga MX, the NWSL, the EFL Championship, Copa Libertadores and the Saudi Pro League — with the Euros and the Africa Cup of Nations appearing in their tournament years. Every one of them is hidden by default and reveals only on tap.",
+          p: "Alongside the Premier League, La Liga, Serie A, Bundesliga and Ligue 1, HideScore covers Liga MX, the NWSL, the EFL Championship, Copa Libertadores and the Saudi Pro League — with the Euros and the Africa Cup of Nations appearing in their tournament years. No score is rendered for any of them.",
         },
       ]}
       bullets={[
-        "Soccer scores hidden until tap.",
-        "Spoiler-free match ratings for completed games.",
+        "No soccer scoreline printed on any card.",
+        "Optional spoiler-free match ratings for completed games.",
         "A safer route to highlights, recaps, and match news.",
         "Dedicated World Cup pages for tournament catch-up.",
         "Liga MX, NWSL, Championship, Libertadores, and Saudi Pro League columns.",

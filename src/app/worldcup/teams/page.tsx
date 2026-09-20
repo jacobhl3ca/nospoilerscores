@@ -38,7 +38,7 @@ export default function WorldCupTeamsPage() {
       <h1 className="text-2xl font-bold mb-4">2026 World Cup teams without spoilers</h1>
       <p className="mb-4" style={{ color: "var(--text-muted)" }}>
         Pick a country to follow its World Cup schedule, match cards, and highlights without opening a result-first
-        scoreboard. Scores stay hidden until you choose to reveal them.
+        scoreboard. No score is printed on any of them.
       </p>
 
       <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
