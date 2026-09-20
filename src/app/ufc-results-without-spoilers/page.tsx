@@ -23,6 +23,16 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // verified against ESPN's mma/ufc/scoreboard feed on 2026-09-20
 // (dates=20260920-20261115). Segment times are when each block starts; the main
 // event closes its block, so it lands hours after the time quoted for it.
+//
+// ⚠️ The page names the next four cards and says so — the feed ALSO carries
+// Fight Nights on Oct 10, Oct 17, Oct 31 and Nov 7, plus a Dana White's
+// Contender Series every Tuesday. Do not reword this into "the next cards" and
+// leave the list at four.
+//
+// ⚠️ EventDetailModal.tsx drops the external ESPN button only once an event is
+// post. On a LIVE card it is still there, and an ESPN fightcenter page prints
+// the prelim results that have already happened. So the honest claim is that
+// the board records no result, NOT that nothing can reach one.
 const TITLE = "UFC Results Without Spoilers: Watch the Card Before You Know | HideScore";
 const DESC =
   "Follow a UFC fight card without seeing who won. Every bout is listed with no result printed anywhere, and highlights open with the title masked. Free.";
@@ -35,7 +45,7 @@ const FAQ = [
   },
   {
     q: "What are the next UFC cards in 2026?",
-    a: "UFC Fight Night: Rosas Jr. vs. Barcelos is in Las Vegas on Saturday, September 26, eleven bouts with prelims from 5:00 pm ET and the main card at 8:00. UFC 332: Silva vs. Wang follows in Salt Lake City on October 3, thirteen bouts. UFC 333: Volkanovski vs. Evloev is in Abu Dhabi on October 24, and UFC 334: Gane vs. Hokit comes to New York on November 14. Paramount+ carries all of them in the US.",
+    a: "UFC Fight Night: Rosas Jr. vs. Barcelos is in Las Vegas on Saturday, September 26, eleven bouts with prelims from 5:00 pm ET and the main card at 8:00. UFC 332: Silva vs. Wang follows in Salt Lake City on October 3, thirteen bouts. UFC 333: Volkanovski vs. Evloev is in Abu Dhabi on October 24, and UFC 334: Gane vs. Hokit comes to New York on November 14. Between those, Fight Nights land on October 10, October 17, October 31 and November 7, with a Contender Series card most Tuesdays. Paramount+ carries all of them in the US.",
   },
   {
     q: "Why is a fight card so hard to avoid being spoiled on?",
@@ -55,7 +65,7 @@ const FAQ = [
   },
   {
     q: "Does HideScore show fighter records?",
-    a: "Yes. A record is a career figure, not last night's news, so it tells you what kind of fight to expect without telling you how this one went. Both fighters' records sit on the bout card alongside the weight class.",
+    a: "Yes. Both fighters' records sit on the bout card alongside the weight class, and a career figure tells you what kind of fight to expect rather than how this one went. The records come from the live feed, so if the promotion updates one quickly after a result, a very attentive reader could infer something from it — the fight itself is never recorded either way.",
   },
   {
     q: "How do I add UFC to my board?",
@@ -108,7 +118,7 @@ export default function UfcResultsWithoutSpoilersPage() {
         "Yes, you can look up a UFC card without spoilers: HideScore lists every bout with the fighters, their records and whether the fight has happened — and prints no result on any of them.",
         "A fight card is the densest spoiler risk in sport. Thirteen bouts run back to back for the best part of six hours, and each finish is posted within seconds of the referee waving it off. If you plan to watch on Sunday, you are not avoiding one result on Saturday night. You are avoiding thirteen, spread across six hours, on every app you own.",
         "The board takes the opposite approach to a results page. Each bout appears in its own right, main event first, with the weight class and both fighters' records to tell you what the fight is — and with no winner, no method and no round recorded anywhere on it.",
-        "The next cards are Rosas Jr. vs. Barcelos in Las Vegas on September 26, UFC 332 in Salt Lake City on October 3, UFC 333 in Abu Dhabi on October 24 and UFC 334 in New York on November 14.",
+        "The headline cards through the autumn are Rosas Jr. vs. Barcelos in Las Vegas on September 26, UFC 332 in Salt Lake City on October 3, UFC 333 in Abu Dhabi on October 24 and UFC 334 in New York on November 14, with a Fight Night on most of the Saturdays in between.",
       ]}
       sections={[
         {
@@ -117,7 +127,7 @@ export default function UfcResultsWithoutSpoilersPage() {
         },
         {
           h: "Nothing to reveal, because nothing was written down",
-          p: "There is no covered result to tap on a bout. The data the column keeps has no place to record a winner, which means there is no way for one to leak through a layout change, a share link or a preview. What you get is the matchup, the weight class, the records and a status of scheduled, live, or done.",
+          p: "There is no covered result to tap on a bout. The record the column keeps has no field for a winner at all, so a layout change, a share link or a preview has nothing to leak. What you get is the matchup, the weight class, the records and a status of scheduled, live, or done. One caveat worth knowing: while a card is still running, the link out to the event page is live, and that page does list the prelims that have already finished.",
         },
         {
           h: "Morning cards are the quiet trap",
@@ -129,7 +139,7 @@ export default function UfcResultsWithoutSpoilersPage() {
         },
         {
           h: "Records tell you what the fight is, not how it went",
-          p: "A career record is background rather than news: it describes a fighter across years, so it cannot give away Saturday. Keeping records on the card is what makes a covered fight list usable — you can tell a debut from a title eliminator and choose what to watch on that basis, with the outcome still ahead of you.",
+          p: "A career record is background rather than news: it describes a fighter across years, which is what makes a result-free fight list usable. You can tell a debut from a title eliminator and choose what to watch on that basis, with the outcome still ahead of you. The figures come straight from the live feed, so treat a freshly updated record the way you would treat any other number that moves on a Saturday night.",
         },
         {
           h: "Where to watch, and how to add the column",
@@ -137,7 +147,7 @@ export default function UfcResultsWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "Every bout listed with no winner recorded anywhere.",
+        "Every bout listed with no winner, method or round recorded anywhere.",
         "Main event first, prelims below, with weight class and records.",
         "Highlights restricted to the promotion's own channels — no fan re-uploads.",
         "The button hides when there is no official cut, rather than guessing.",

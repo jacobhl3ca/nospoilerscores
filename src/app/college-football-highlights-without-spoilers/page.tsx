@@ -14,18 +14,28 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // a "football" title token so a basketball cut between the same schools cannot
 // win. Coverage went from 23 to 57 of 80 games on the 9/17 board.
 //
-// Game count, kickoff windows, fixtures and AP ranks below are verified against
+// Game count, kickoff windows, fixtures and poll ranks below are verified against
 // ESPN's football/college-football/scoreboard feed on 2026-09-20
 // (dates=20260926&groups=80): 65 FBS games that Saturday, 11 at 12:00 pm ET,
-// 12 at 3:30 pm, and the evening split across 7:00, 7:30 and 7:45 pm.
+// 12 at 3:30 pm, and the evening spread from 7:00 pm to 11:00 pm.
 //
-// ⚠️ The AP rank on a card is NOT hidden, and that is deliberate — see
+// ⚠️ WHAT THE APP ACTUALLY DOES — never write "the score appears when you tap
+// it". It does not. Nothing outside GolfLeaderboard reads Team.score; the score
+// is parsed to compute the rating and is never rendered, so there is no covered
+// score to reveal. There is no conference table view at all. Ratings are
+// OPT-IN: `showRatings: false` in preferences.ts, and the default "auto" mode
+// forces them off before noon ET (HomeContent.tsx).
+//
+// ⚠️ The poll rank on a card is NOT hidden, and that is deliberate — see
 // pollRank.ts. ESPN's curatedRank is frozen at kickoff and survives on finished
 // games, so it says what each team carried IN, never how the game went. Do not
-// write copy here claiming rankings are covered the way league tables are.
+// write copy here claiming rankings are covered. Call it "the poll ranking",
+// not "the AP ranking": pollRank.ts keeps the tooltip poll-neutral on purpose,
+// because the number is the AP Top 25 until December and the CFP committee's
+// ranking after that, so naming AP would be wrong for half the season.
 const TITLE = "College Football Highlights Without Spoilers | HideScore";
 const DESC =
-  "Watch college football highlights without seeing the final. Every game on a 65-game Saturday stays covered, with a rating for which one to replay. Free.";
+  "Watch college football highlights without seeing the final. A 65-game Saturday with no score printed anywhere, and an optional rating for which one to replay. Free.";
 const CANONICAL = "/college-football-highlights-without-spoilers";
 
 const FAQ = [
@@ -35,15 +45,15 @@ const FAQ = [
   },
   {
     q: "How many college football games are on a normal Saturday?",
-    a: "More than anyone can track. ESPN's feed lists 65 FBS games for Saturday, September 26, 2026 alone: 11 kicking off at noon ET, 12 more at 3:30 pm, and the night split across 7:00, 7:30 and 7:45 pm. Even a viewer watching all day sees perhaps four of them live.",
+    a: "More than anyone can track. ESPN's feed lists 65 FBS games for Saturday, September 26, 2026 alone: 11 kicking off at noon ET, 12 more at 3:30 pm, and the night spread from 7:00 pm all the way to 11:00. Even a viewer watching all day sees perhaps four of them live.",
   },
   {
     q: "Which games from Saturday are worth going back for?",
-    a: "The rating on each finished game answers that and nothing else. It marks whether a game stayed level into the fourth quarter, turned into a shootout, or came down to one possession — it never names the side that came out ahead. Across 65 games that is the only practical way to build a shortlist.",
+    a: "Switch Ratings on in Settings and each finished game answers that and nothing else. The mark says whether a game stayed level into the fourth quarter, turned into a shootout, or came down to one possession — it never names the side that came out ahead. Across 65 games that is the only practical way to build a shortlist. Nothing is marked until you enable it, and the default setting holds the marks back until noon Eastern.",
   },
   {
-    q: "Are the AP rankings on the cards a spoiler?",
-    a: "No, and this is worth explaining because it looks like one. The number beside a team is the ranking it carried into kickoff, frozen at the moment the game started, so it describes the matchup rather than the outcome. It is the new poll that gives Saturday away, and that is published on Sunday, away from the board.",
+    q: "Are the poll rankings on the cards a spoiler?",
+    a: "No, and this is worth explaining because it looks like one. The number beside a team is the ranking it carried into kickoff, frozen at the moment the game started, so it describes the matchup rather than the outcome. It is the AP Top 25 until December and the College Football Playoff committee's ranking after that. The new poll is what gives Saturday away, and that is published on Sunday, away from the board.",
   },
   {
     q: "Why do college football highlights disappear for some games?",
@@ -59,7 +69,7 @@ const FAQ = [
   },
   {
     q: "Does HideScore show the conference standings?",
-    a: "Standings are treated as a spoiler in their own right, because a conference table is a readable summary of who won last weekend. They stay covered on the same terms as scores, and reveal on the same tap.",
+    a: "No, and that is the point. A conference table is a readable summary of who won last weekend, so publishing one beside cards that carry no score would undo the whole thing. There is no standings view for college football.",
   },
   {
     q: "Is HideScore free?",
@@ -104,19 +114,19 @@ export default function CollegeFootballHighlightsWithoutSpoilersPage() {
     <SeoLandingPage
       h1="College football highlights without spoilers"
       intro={[
-        "Yes, you can watch college football highlights without spoilers: HideScore covers every score on the Saturday board and opens each game's cut from the card, with the video title masked.",
+        "Yes, you can watch college football highlights without spoilers: no score is printed anywhere on the Saturday board, and each game's cut opens straight from its card with the video title masked.",
         "No other sport hands you this much at once. ESPN lists 65 FBS games for Saturday, September 26, 2026, and they are not spread out — 11 start at noon Eastern, another 12 at 3:30, and the night stacks up again from 7:00. Whichever one is on your screen, a dozen others are ending beside it, and each of those endings is a banner, an alert or a friend's text.",
-        "HideScore is built so the day survives contact with your evening. Games appear as covered cards carrying the matchup, the kickoff time, the ranking each team brought in, and whether the game has finished — and none of them carry the score.",
+        "HideScore is built so the day survives contact with your evening. Games appear as cards carrying the matchup, the kickoff time, the ranking each team brought in, and whether the game has finished. The score is not covered up; it is simply never written on the card, and there is no control anywhere that produces one.",
         "Saturday, September 26 is the shape of the problem: Texas at Tennessee at noon, Oklahoma at Georgia and Iowa at Michigan at 3:30 pm, then Texas A&M at LSU and Oregon at USC together at 7:30.",
       ]}
       sections={[
         {
           h: "Sixty-five games, four windows, one evening",
-          p: "The noon window alone is eleven games. By the time it resolves, the afternoon window is already an hour old, and anyone checking a phone between the two has just learned eleven results they had not asked for. Covering the board keeps the useful information — who is playing, what is live, what is done — and removes the part that costs you the replay.",
+          p: "The noon window alone is eleven games. By the time it resolves, the afternoon window is already an hour old, and anyone checking a phone between the two has just learned eleven results they had not asked for. The board keeps the useful information — who is playing, what is live, what is done — and never prints the part that costs you the replay.",
         },
         {
           h: "A rating instead of a highlight reel",
-          p: "Choosing among 65 games with nothing to go on means opening the ones with famous names and missing the one that went to four overtimes in Lubbock. Each finished game carries a mark for how close and how eventful it was, which sorts the day without settling any of it. Ole Miss at Florida might be the pick over a bigger name; you will not know which side won either way.",
+          p: "Choosing among 65 games with nothing to go on means opening the ones with famous names and missing the one that went to four overtimes in Lubbock. With Ratings switched on, each finished game carries a mark for how close and how eventful it was, which sorts the day without settling any of it. Ole Miss at Florida might be the pick over a bigger name; you will not know which side won either way. Ratings stay off until you turn them on, and by default they stay off through Sunday morning.",
         },
         {
           h: "The ranking on the card is safe. Sunday's poll is not",
@@ -136,11 +146,11 @@ export default function CollegeFootballHighlightsWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "College football scores hidden until you tap.",
+        "No college football score printed anywhere on the board.",
         "A full FBS Saturday on one board with no finals showing.",
-        "Ratings for finished games — level late, high-scoring, one-possession.",
+        "Optional ratings for finished games — level late, high-scoring, one-possession.",
         "Highlights resolved through conference and network channels, not re-uploads.",
-        "AP ranking shown as it stood at kickoff, so it never leaks the result.",
+        "Poll ranking shown as it stood at kickoff, so it never leaks the result.",
         "Works the same through bowl season and the Playoff.",
       ]}
       ctaLabel="Open college football without spoilers"
