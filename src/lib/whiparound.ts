@@ -49,6 +49,13 @@ export interface WhiparoundShow {
   minLiveGames: number;
   /** Games that must START inside the window, or the show isn't airing today. */
   minSlateGames?: number;
+  /**
+   * Earliest kickoff the slate gate counts, when that is not the show's own
+   * start. CrunchTime is the case: it opens at 8:30 PM to cover the closing
+   * minutes of games that tipped off at 7:00, so counting only games that START
+   * after 8:30 would undercount a normal Monday slate. Defaults to `startET`.
+   */
+  slateStartET?: string;
   href: string;
 }
 
@@ -159,6 +166,9 @@ export const WHIPAROUND_SHOWS: WhiparoundShow[] = [
     seasonEnd: "2027-04-11",
     minLiveGames: 2,
     minSlateGames: 3,
+    // CrunchTime cuts to games already in their closing minutes, so count from
+    // the 7:00 PM tip-offs, not from the show's own start.
+    slateStartET: "7:00 PM",
     href: "https://www.nba.com/watch",
   },
   {
@@ -221,6 +231,13 @@ export function isAirDay(show: WhiparoundShow, selectedDate: string): boolean {
 // A game's ISO kickoff → {ymd, minutes-past-midnight} in the display zone. The
 // column's clock (nowInEt) reads the same zone, so the slate gate and the
 // scheduled-vs-live decision can't land on different days.
+//
+// The day is the app's SLATE day, not the raw calendar day: etSlateYmd in
+// @/lib/etDay rolls anything before 1 AM back onto the previous day, so a game
+// that runs past midnight stays on the night it belongs to. Bucketing this
+// differently would let the slate gate count a late kickoff on a day the board
+// itself files under yesterday. Rolled-back times keep counting up past 1440 so
+// they stay after every same-night window rather than wrapping to the morning.
 function zonedParts(iso: string, timeZone: string): { ymd: number; min: number } | null {
   const t = new Date(iso);
   if (Number.isNaN(t.getTime())) return null;
@@ -244,12 +261,30 @@ function zonedParts(iso: string, timeZone: string): { ymd: number; min: number }
   const d = +get("day");
   if (!y || !mo || !d) return null;
   // Some ICU builds emit "24" for midnight; % 24 folds it back to 0.
-  return { ymd: y * 10000 + mo * 100 + d, min: (+get("hour") % 24) * 60 + +get("minute") };
+  const hour = +get("hour") % 24;
+  let min = hour * 60 + +get("minute");
+  const day = new Date(y, mo - 1, d, 12, 0, 0);
+  if (hour < 1) {
+    day.setDate(day.getDate() - 1);
+    min += 24 * 60;
+  }
+  return {
+    ymd: day.getFullYear() * 10000 + (day.getMonth() + 1) * 100 + day.getDate(),
+    min,
+  };
 }
 
 /**
  * The header subtitle for a whip-around show, or null when the show has nothing
  * to say about this date.
+ *
+ * ⚠️ `nowEt` and `timeZone` are the user's EFFECTIVE zone, not hardcoded
+ * Eastern — LeagueColumn passes nowInEt()/getTimeZone(), which honour the
+ * Settings time-zone picker. The `startET` values are Eastern and the rendered
+ * text says "ET", so a reader on a non-Eastern zone sees the show flip to LIVE
+ * on their own wall clock rather than on New York's. That is exactly what the
+ * Big Inning branch already does, and this module copies it on purpose so the
+ * two can never disagree. Fixing it means fixing both together.
  *
  * `forceLive` is the dev preview escape hatch (FORCE_WHIPAROUND_LIVE_PREVIEW in
  * LeagueColumn): it bypasses the clock and live-game checks only, exactly like
@@ -278,13 +313,15 @@ export function whiparoundSubtitle(
   const endMin = startMin + show.durationMin;
 
   // Slate gate — see the header comment. Counts only games that both fall on
-  // the selected day and start inside the window, so a lone late kickoff can't
-  // conjure a whip-around out of nothing.
+  // the selected day and start inside the counting window, so a lone late
+  // kickoff can't conjure a whip-around out of nothing.
   const list = games ?? [];
   if (show.minSlateGames) {
+    const slateStart = show.slateStartET ? parseEtTime(show.slateStartET) : null;
+    const countFrom = slateStart ? slateStart.h * 60 + slateStart.m : startMin;
     const inWindow = list.filter((g) => {
       const p = zonedParts(g.date, timeZone);
-      return !!p && p.ymd === selectedYmd && p.min >= startMin && p.min < endMin;
+      return !!p && p.ymd === selectedYmd && p.min >= countFrom && p.min < endMin;
     }).length;
     if (inWindow < show.minSlateGames) return null;
   }

@@ -344,23 +344,28 @@ function getPlayoffSubtitle(
   const m = +selectedDate.slice(4, 6) - 1;
   const d = +selectedDate.slice(6, 8);
   const viewDate = new Date(y, m, d, 12, 0, 0); // noon to match playoffDate
-  // A league with no PLAYOFF_START_DATES entry (epl, ucl, mls) has no
-  // postseason to defer to, so it can never be "started".
-  const postseasonStarted =
-    !!config && new Date(config.date + "T12:00:00").getTime() <= viewDate.getTime();
-
   // Whip-around shows — NFL RedZone and its per-league equivalents (see
   // @/lib/whiparound). This sits ABOVE the `config` gate below because three of
-  // the six leagues that have a show have no playoff entry at all, and BELOW
-  // the postseason test because a real playoff round label always outranks a
-  // regular-season show. Every one of these shows is regular-season only, and
-  // each config's seasonEnd says so independently; gating on postseasonStarted
-  // as well makes it structural instead of a date someone has to re-verify.
-  // MLB is excluded on purpose: Big Inning has a scraped per-night schedule and
-  // keeps its own branch below.
-  if (!postseasonStarted && sport !== "mlb") {
-    const show = getWhiparoundShow(sport);
-    if (show) {
+  // the six leagues that have a show have no playoff entry at all. MLB is
+  // excluded on purpose: Big Inning has a scraped per-night schedule and keeps
+  // its own branch below.
+  const show = sport === "mlb" ? null : getWhiparoundShow(sport);
+  if (show) {
+    // A playoff round label outranks a regular-season show, so the show yields
+    // once the postseason has started. But PLAYOFF_START_DATES is hand-updated
+    // each season and routinely holds LAST season's date — nba and nhl both sat
+    // on 2026-04-18 through the whole 2026-27 season. Read naively, that says
+    // "the postseason began months ago" and would hide CrunchTime and Frozen
+    // Frenzy for their entire seasons. So the entry only counts when its date
+    // actually falls inside THIS show's season; a stale row falls outside and is
+    // ignored, and each show's own seasonEnd keeps it out of the postseason
+    // regardless.
+    const playoffDateInSeason =
+      !!config && config.date >= show.seasonStart && config.date <= show.seasonEnd;
+    const postseasonStarted =
+      playoffDateInSeason &&
+      new Date(config!.date + "T12:00:00").getTime() <= viewDate.getTime();
+    if (!postseasonStarted) {
       const whiparound = whiparoundSubtitle(
         show,
         selectedDate,

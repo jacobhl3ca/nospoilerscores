@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   getWhiparoundShow,
   isAirDay,
+  parseEtTime,
   whiparoundStartsLater,
   whiparoundSubtitle,
   WHIPAROUND_SHOWS,
@@ -191,8 +192,50 @@ test("every show is configured with an air day, a season and a real link", () =>
     assert.ok(show.seasonStart <= show.seasonEnd, `${show.name} season is inverted`);
     assert.match(show.href, /^https:\/\//, `${show.name} link is not https`);
     assert.ok(show.durationMin > 0 && show.durationMin < 24 * 60, `${show.name} duration`);
-    assert.equal(isAirDay(show, show.seasonStart.replace(/-/g, "")) || !!show.days, true);
+    assert.ok(parseEtTime(show.startET), `${show.name} start time is unparseable`);
+    // The season and the air days have to agree, or the show is configured to
+    // never air at all. Walk the first two weeks of the season and require at
+    // least one real air day in there.
+    const start = new Date(`${show.seasonStart}T12:00:00`);
+    const airDays = Array.from({ length: 14 }, (_, i) => {
+      const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i, 12);
+      const ymd = `${day.getFullYear()}${String(day.getMonth() + 1).padStart(2, "0")}${String(day.getDate()).padStart(2, "0")}`;
+      return isAirDay(show, ymd);
+    }).filter(Boolean).length;
+    assert.ok(airDays > 0, `${show.name} never airs inside its own season`);
   }
+});
+
+test("a one-off show lists only dates that fall inside its season", () => {
+  for (const show of WHIPAROUND_SHOWS) {
+    for (const date of show.dates ?? []) {
+      assert.ok(date >= show.seasonStart && date <= show.seasonEnd, `${show.name} ${date}`);
+      assert.equal(isAirDay(show, date.replace(/-/g, "")), true, `${show.name} ${date}`);
+    }
+  }
+});
+
+test("RedZone's own season start is not itself an air day", () => {
+  // Guards the assertion above from going vacuous again: 2026-09-10 is a
+  // Thursday, so isAirDay must say no even though it opens the season.
+  assert.equal(isAirDay(getWhiparoundShow("nfl")!, "20260910"), false);
+});
+
+test("a kickoff after midnight counts against the night it belongs to", () => {
+  // 8:20 PM ET Sunday and 12:20 AM ET Monday are the same NFL night. The slate
+  // gate must file both under Sunday, the way the board's own day bucketing
+  // does, and must keep both outside the 1:00-8:00 PM RedZone window.
+  const lateNight = [
+    ...Array.from({ length: 2 }, () => game("2026-09-20T17:00:00Z")),
+    game("2026-09-21T04:20:00Z"),
+  ];
+  const r = whiparoundSubtitle(redzone, "20260920", lateNight, clock(2026, 9, 20, 12, 30), TZ);
+  assert.ok(r, "two 1 PM kickoffs still clear the slate gate");
+  assert.equal(r.tiers[0], "RedZone \u00B7 1:00 PM ET");
+
+  // Drop to one in-window kickoff and the late game must not make up the gap.
+  const thin = [game("2026-09-20T17:00:00Z"), game("2026-09-21T04:20:00Z")];
+  assert.equal(whiparoundSubtitle(redzone, "20260920", thin, clock(2026, 9, 20, 12, 30), TZ), null);
 });
 
 test("one sport holds at most one show", () => {
@@ -202,4 +245,35 @@ test("one sport holds at most one show", () => {
 
 test("MLB keeps Big Inning and takes no whip-around entry", () => {
   assert.equal(getWhiparoundShow("mlb"), null);
+});
+
+test("CrunchTime counts the 7:00 PM tip-offs it cuts back to", () => {
+  // A real Monday slate: 7:00, 7:30, 8:00, 8:30, 9:00 and 10:00 PM ET tip-offs.
+  // Only three start after the 8:30 show time, so counting from the show's own
+  // start would make a normal Monday look too thin.
+  const monday = [
+    game("2026-10-26T23:00:00Z"),
+    game("2026-10-26T23:00:00Z"),
+    game("2026-10-26T23:30:00Z"),
+    game("2026-10-27T00:00:00Z"),
+  ];
+  const r = whiparoundSubtitle(crunchtime, "20261026", monday, clock(2026, 10, 26, 18, 0), TZ);
+  assert.ok(r);
+  assert.equal(r.tiers[0], "CrunchTime · 8:30 PM ET");
+
+  // An afternoon-only slate still fails the gate.
+  const afternoon = Array.from({ length: 4 }, () => game("2026-10-26T18:00:00Z"));
+  assert.equal(whiparoundSubtitle(crunchtime, "20261026", afternoon, clock(2026, 10, 26, 12, 0), TZ), null);
+});
+
+test("Frozen Frenzy clears its gate on the real all-32-teams slate", () => {
+  const frenzyNight = [
+    game("2026-10-13T22:00:00Z"),
+    game("2026-10-13T23:15:00Z"),
+    game("2026-10-14T00:30:00Z"),
+    game("2026-10-14T03:00:00Z"),
+  ];
+  const r = whiparoundSubtitle(frenzy, "20261013", frenzyNight, clock(2026, 10, 13, 12, 0), TZ);
+  assert.ok(r);
+  assert.equal(r.tiers[0], "Frozen Frenzy · 6:00 PM ET");
 });
