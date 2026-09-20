@@ -106,15 +106,20 @@ check(
   "getCompetitionTitleTokens gates on the preseason flag for the NFL only",
   /if \(sport === "nfl" && opts\?\.preseason\) return NFL_PRESEASON_TITLE_TOKENS;/.test(youtube),
 );
+// The options bag grows (playoff, playoffLabel joined preseason), and each of
+// these three patterns went red on a change that did not touch the gate at all
+// -- measured 2026-09-20, all three were false alarms. They are anchored on the
+// load-bearing token only, with the rest left open on purpose. Do NOT tighten
+// them back to an exact-argument match: a gate that cries wolf gets deleted.
 check(
   "GameHighlights derives the tokens from Game.isPreseason",
-  /getCompetitionTitleTokens\(game\.sport, \{ preseason: game\.isPreseason \}\)/.test(gh),
+  /getCompetitionTitleTokens\(game\.sport, \{ preseason: game\.isPreseason[,}]/.test(gh),
 );
 check("GameHighlights carries nss_comp on the modal fallback", /nss_comp=\$\{encodeURIComponent\(compTokens\.join\("\|"\)\)\}/.test(gh));
 check(
   "every GameHighlights resolve passes the tokens",
   gh.match(/resolveHighlightVideo\(/g)?.length ===
-    gh.match(/resolveHighlightVideo\([^;]*?weekNumber, compTokens\)/gs)?.length,
+    gh.match(/resolveHighlightVideo\([^;]*?weekNumber, compTokens(?:\.length \? compTokens : [\w.]+)?\)/gs)?.length,
 );
 check("VideoModal re-applies the competition gate on its retry", /compFallbackParam\(fallbackUrl\)/.test(vm));
 check("…and appends it to the retry URL", /\$\{raceParam\}\$\{weekParam\}\$\{compParam\}/.test(vm));
@@ -122,7 +127,7 @@ check("prebake mirrors the tokens", /HL_NFL_PRESEASON_TOKENS = \["preseason", "h
 check(
   "prebake sends them for a type-1 NFL event only",
   /const preseason = lg\.sport === "nfl" && event\.season\?\.type === 1;/.test(bake) &&
-    /const compTokens = preseason \? HL_NFL_PRESEASON_TOKENS : \(HL_COMPETITION_TOKENS\[lg\.sport\] \?\? null\);/.test(bake),
+    /const compTokens = preseason \? HL_NFL_PRESEASON_TOKENS : \([^;]*HL_COMPETITION_TOKENS\[lg\.sport\] \?\? null\);/.test(bake),
 );
 
 // ── 2. Live probe — a real slate, end to end through the deployed worker ─────
