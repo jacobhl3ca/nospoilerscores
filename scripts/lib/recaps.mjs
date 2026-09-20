@@ -226,6 +226,25 @@ export function parseWatchPagePublishMs(html) {
   return Number.isFinite(ms) ? ms : null;
 }
 
+// Upload-date window for a game highlight. A recap posts AFTER the final
+// whistle, never before it, and a league that re-cuts a game does so within a
+// fortnight. Two days of slack on the early side absorbs the gap between the
+// game's ET calendar date and the uploader's own timezone; fourteen on the
+// late side lets a delayed or re-uploaded cut through.
+// This is the only signal that separates two meetings of the same fixture in
+// different seasons: ESPN FC / CBS / MLS / Serie A recap titles carry no date
+// and no year, so the team, competition and week checks all pass for last
+// season's clip.
+// An unknown upload time (a failed fetch) reads as a PASS — a network blip
+// must never drop a good highlight.
+export const HL_UPLOAD_WINDOW_EARLY_MS = 2 * 24 * 60 * 60 * 1000;
+export const HL_UPLOAD_WINDOW_LATE_MS = 14 * 24 * 60 * 60 * 1000;
+export function uploadFitsGameDate(publishedMs, gameMs) {
+  if (!Number.isFinite(publishedMs) || !Number.isFinite(gameMs)) return true;
+  return publishedMs >= gameMs - HL_UPLOAD_WINDOW_EARLY_MS
+    && publishedMs <= gameMs + HL_UPLOAD_WINDOW_LATE_MS;
+}
+
 // ── Dates (all YYYYMMDD, ET) ─────────────────────────────────────────────────
 
 const ET = "America/New_York";

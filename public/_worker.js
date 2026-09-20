@@ -183,6 +183,51 @@ function raceTitleMatches(tokens, titleLower) {
   return false;
 }
 
+// YouTube's relative upload stamp, in ms per unit. Approximate by design —
+// the stamp itself is approximate.
+const PUBLISHED_UNIT_MS = {
+  second: 1000,
+  minute: 60 * 1000,
+  hour: 60 * 60 * 1000,
+  day: 24 * 60 * 60 * 1000,
+  week: 7 * 24 * 60 * 60 * 1000,
+  month: 30 * 24 * 60 * 60 * 1000,
+  year: 365 * 24 * 60 * 60 * 1000,
+};
+
+// "3 years ago" / "Streamed 5 months ago" → the NEWEST instant that text can
+// mean. YouTube floors the count, so "1 month ago" is anything from 30 to 59
+// days back and the real upload can only be OLDER than what this returns.
+// null when the stamp is absent or in a shape we don't read.
+function latestPossiblePublish(publishedText, nowMs) {
+  const m = String(publishedText || "")
+    .toLowerCase()
+    .match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/);
+  if (!m) return null;
+  const unit = PUBLISHED_UNIT_MS[m[2]];
+  if (!unit) return null;
+  return nowMs - parseInt(m[1], 10) * unit;
+}
+
+// AGE GATE — a highlight cannot predate its own game. ESPN FC / CBS / MLS /
+// Serie A title their recaps with the two clubs and nothing else: no date, no
+// year. For a fixture that repeats every season BOTH meetings therefore pass
+// the team, competition and week checks, and whichever ranks first wins. The
+// 2nd ("extended") highlight button made this visible: it re-asks with the
+// 1st video excluded, so the next-best hit is very often last season's cut.
+// Measured against the live manifest 2026-09-20: about 105 of 135 soccer
+// `extended` slots held the wrong season, the oldest a 2012 MLS game.
+// publishedTimeText is the only season signal those blocks carry.
+// Two days of slack absorbs the gap between the game's local date, the UTC
+// date built from the query, and YouTube's own rounding.
+const AGE_GATE_SLACK_MS = 2 * 24 * 60 * 60 * 1000;
+function publishedBeforeGame(publishedText, gameMs, nowMs) {
+  if (!gameMs) return false; // no date in the query (golf, tournaments) → unchanged
+  const latest = latestPossiblePublish(publishedText, nowMs);
+  if (latest === null) return false; // no stamp we can read → unchanged
+  return latest < gameMs - AGE_GATE_SLACK_MS;
+}
+
 export default {
   async fetch(request, env, ctx) {
    try {
@@ -467,6 +512,15 @@ export default {
         const queryMonth = dateInQueryMatch ? QUERY_MONTHS[dateInQueryMatch[1].slice(0,3).toLowerCase()] : null;
         const queryDay = dateInQueryMatch ? parseInt(dateInQueryMatch[2], 10) : null;
 
+        // The game date as ms, for the upload-age gate (publishedBeforeGame).
+        // Set only when the query carries a full "Mon D, YYYY" — GameCard
+        // always sends one, golf/tournament queries do not, and those keep
+        // today's behaviour.
+        const queryGameMs = (queryYear && queryMonth && queryDay)
+          ? Date.UTC(parseInt(queryYear, 10), queryMonth - 1, queryDay)
+          : null;
+        const ageGateNowMs = Date.now();
+
         // Extract series game number from query (e.g. "Game 2")
         const gameNumMatch = query.match(/Game (\d+)/i);
         const queryGameNum = gameNumMatch ? gameNumMatch[1] : null;
@@ -719,8 +773,14 @@ export default {
           const idMatch = block.match(/^"videoId":"([a-zA-Z0-9_-]{11})"/);
           const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
           const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
+          const publishedMatch = block.match(/"publishedTimeText":\{"simpleText":"(.*?)"/);
           if (!idMatch) return null;
           if (excludeSet.has(idMatch[1])) return null;
+          // Drop anything that cannot have been uploaded after this game.
+          // Done here rather than per-tier so every tier — channelTeamsId
+          // included, which is the one serving the wrong-season soccer cuts —
+          // sees the same filtered list.
+          if (publishedBeforeGame(publishedMatch ? publishedMatch[1] : "", queryGameMs, ageGateNowMs)) return null;
           return {
             videoId: idMatch[1],
             title: titleMatch ? titleMatch[1] : "",
@@ -1932,6 +1992,9 @@ export default {
                 if (!idMatch || excludeSet.has(idMatch[1])) continue;
                 const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
                 const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
+                const publishedMatch = block.match(/"publishedTimeText":\{"simpleText":"(.*?)"/);
+                // Same age gate as the main loop.
+                if (publishedBeforeGame(publishedMatch ? publishedMatch[1] : "", queryGameMs, ageGateNowMs)) continue;
                 const titleLower = (titleMatch ? titleMatch[1] : "").toLowerCase();
                 const channelLower = (channelMatch ? channelMatch[1] : "").toLowerCase();
                 // Same gates as the main loop: official WC channel, "World Cup"
