@@ -13,6 +13,11 @@ import { nflTeamChannelChain } from "@/lib/nflTeamChannels";
 import type { BakedHighlight } from "@/lib/highlights";
 import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
+// OFF 2026-09-20 pending QA: a club posts its cut mostly after a win, so the
+// nickname on the button names the winner, and some cuts were not full-game
+// highlights. The bake keeps writing the slot; flip this back on after QA.
+const CLUB_BUTTON_ENABLED = false;
+
 // Per-league buffer (hrs from game start) before showing the highlight button,
 // and regulation period counts for the OT-extra calc below. Both are constant
 // lookup tables with no per-render input, so they live at module scope rather
@@ -206,7 +211,7 @@ export default function GameHighlights({
   const awayAbbr = game.awayTeam.abbreviation;
   const homeAbbr = game.homeTeam.abbreviation;
   const verifiedClub = useCallback((baked: BakedHighlight | null): { id: string; channel: string; durationSec: number | null } | null => {
-    if (!isNfl || !baked?.clubChannel) return null;
+    if (!CLUB_BUTTON_ENABLED || !isNfl || !baked?.clubChannel) return null;
     const allowed = nflTeamChannelChain(awayAbbr, homeAbbr);
     if (!allowed.includes(baked.clubChannel)) return null;
     const id = getChannelVerifiedBakedId(baked, "club", baked.clubChannel, hlAway, hlHome);
