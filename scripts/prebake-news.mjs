@@ -10,7 +10,7 @@ import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
   parseRelativeTime, isoDurationToSec, etYmd, dailyCoversDate, weekdayCoversDate,
   weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
-  fillHeading, pickShorterClub, eplSeasonYear,
+  fillHeading, pickShorterClub, eplSeasonYear, uploadFitsGameDate,
 } from "./lib/recaps.mjs";
 
 const OUT_DIR = "public/news";
@@ -2854,6 +2854,25 @@ async function hlVideoMatchesChannel(id, channel) {
   return String(meta?.author ?? "").toLowerCase() === String(channel ?? "").toLowerCase();
 }
 
+// UPLOAD-DATE check — the season gate the title checks cannot be. The team,
+// competition and week checks all pass for the SAME two clubs meeting in an
+// earlier season, because ESPN FC / CBS / MLS / Serie A put neither a date nor
+// a year in a recap title. The 2nd (extended) button made it visible: it
+// re-asks with the 1st video excluded, and the next-best hit is last season's
+// cut. Measured against the live manifest 2026-09-20: ~105 of 135 soccer
+// `extended` slots held the wrong season, the oldest a 2012 MLS game.
+// The watch page's uploadDate settles it. A failed fetch yields null and the
+// id is KEPT — see uploadFitsGameDate. Cached per id per run, and the club
+// slot already pays this fetch, so it is at most one extra request per id.
+// Exported shape kept simple on purpose: PLAN-3 reuses it.
+async function hlVideoMatchesDate(id, gameIso) {
+  if (!id || !gameIso) return true;
+  const gameMs = Date.parse(gameIso);
+  if (!Number.isFinite(gameMs)) return true;
+  const { publishedMs } = await fetchYtWatchMeta(id);
+  return uploadFitsGameDate(publishedMs, gameMs);
+}
+
 async function hlIsTelemundoVideo(id) {
   return hlVideoMatchesChannel(id, "Telemundo Deportes");
 }
@@ -3120,8 +3139,16 @@ async function bakeGameHighlights() {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
         }
+        if (prevOfficial && !(await hlVideoMatchesDate(prevOfficial, item.date))) {
+          console.warn(`HIGHLIGHT-AGE-REJECT ${key} official=${prevOfficial} (${away} vs ${home} ${dateStr})`);
+          prevOfficial = null;
+        }
         if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
+          prevExtended = null;
+        }
+        if (prevExtended && !(await hlVideoMatchesDate(prevExtended, item.date))) {
+          console.warn(`HIGHLIGHT-AGE-REJECT ${key} extended=${prevExtended} (${away} vs ${home} ${dateStr})`);
           prevExtended = null;
         }
 
@@ -3133,12 +3160,20 @@ async function bakeGameHighlights() {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
           }
+          if (official && !(await hlVideoMatchesDate(official, item.date))) {
+            console.warn(`HIGHLIGHT-AGE-REJECT ${key} newly-resolved official=${official} (${away} vs ${home} ${dateStr})`);
+            official = null;
+          }
           for (const fb of official ? [] : fallbacks) {
             const tokens = officialTokensFor(fb);
             const id = await hlResolve(away, home, dateStr, series, fb.channel, undefined, competition, false, week, tokens);
             if (!id) continue;
             if (!(await hlVideoMatchesTeams(id, away, home)) || !(await hlVideoMatchesWeek(id, week)) || !(await hlVideoMatchesComp(id, tokens))) {
               console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home})`);
+              continue;
+            }
+            if (!(await hlVideoMatchesDate(id, item.date))) {
+              console.warn(`HIGHLIGHT-AGE-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home} ${dateStr})`);
               continue;
             }
             official = id;
@@ -3155,6 +3190,10 @@ async function bakeGameHighlights() {
           }
           if (extended && (!(await hlVideoMatchesTeams(extended, away, home)) || !(await hlVideoMatchesWeek(extended, week)) || !(await hlVideoMatchesComp(extended, compTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home})`);
+            extended = null;
+          }
+          if (extended && !(await hlVideoMatchesDate(extended, item.date))) {
+            console.warn(`HIGHLIGHT-AGE-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home} ${dateStr})`);
             extended = null;
           }
         }
