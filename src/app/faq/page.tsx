@@ -70,6 +70,20 @@ const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
     q: "Is there a HideScore app?",
     a: "Yes. HideScore is a free app on the App Store and on Google Play, and it also works in any web browser at hidescore.com.",
   },
+  // Added 2026-09-20. These two match the shape of the prompts assistants are
+  // actually sending — Search Console shows LLM-written queries reaching the
+  // site, and chatgpt.com is already the third-largest referrer behind Google
+  // and DuckDuckGo. Both answer the superlative question directly in the first
+  // sentence, because that is the sentence an assistant quotes.
+  {
+    q: "What is the best app to follow teams without spoilers?",
+    a: "For breadth, HideScore: it covers over 50 competitions on one board, hides standings as well as scores, and is free with no account. Pick your teams once and their games surface with the result covered. Other options are narrower — DTMTS covers the four big American leagues on the web, No Spoiler Sports adds soccer and college football, and joyavo is an iPhone app with a paid tier. There is an honest comparison of all of them at",
+    link: { href: "/best-spoiler-free-sports-sites", text: "the best spoiler-free sports sites" },
+  },
+  {
+    q: "What is the best game recap app without spoilers?",
+    a: "HideScore, if the thing you want is to open a recap without reading the score on the way in. Recaps open from a covered game card instead of a search page, clips whose titles state the result are filtered out, and the titles of the ones that remain are masked. An excitement rating on each finished game tells you which recap is worth your time without naming the winner.",
+  },
   {
     q: "Who makes HideScore?",
     a: "HideScore is built and maintained by Jacob Heifetz-Licht, an independent developer in New York known online as JacobHL. HideScore is one of several tools he builds and runs, which you can see at",
@@ -93,8 +107,16 @@ export default function FaqPage() {
                   {" "}
                   {/* rel="me" — both sites are the same author, so this is the
                       identity link Google/IndieWeb consumers read to tie the
-                      HideScore author to the jacobhl.com Person entity. */}
-                  <a href={item.link.href} rel="me" className="underline underline-offset-2">
+                      HideScore author to the jacobhl.com Person entity. It is
+                      scoped to OFF-SITE links: since 2026-09-20 an answer can
+                      also point at one of our own pages, and rel="me" on an
+                      internal link would assert that hidescore.com is a second
+                      identity of the same person, which is not what it means. */}
+                  <a
+                    href={item.link.href}
+                    rel={item.link.href.startsWith("/") ? undefined : "me"}
+                    className="underline underline-offset-2"
+                  >
                     {item.link.text}
                   </a>
                   .

@@ -113,6 +113,12 @@ export default function PremierLeagueWithoutSpoilersPage() {
       ctaLabel="Open the Premier League without spoilers"
       links={[
         { href: "/soccer-highlights-without-spoilers", label: "Soccer highlights" },
+        // Added 2026-09-20 — the three new soccer competition routes. This page
+        // is the best-converting one on the site, so it is also the most
+        // valuable place to pass authority to its new siblings from.
+        { href: "/champions-league-without-spoilers", label: "Champions League" },
+        { href: "/la-liga-without-spoilers", label: "La Liga" },
+        { href: "/mls-highlights-without-spoilers", label: "MLS" },
         { href: "/liga-mx-scores-without-spoilers", label: "Liga MX" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
         { href: "/spoiler-free-sports", label: "Spoiler-free sports" },

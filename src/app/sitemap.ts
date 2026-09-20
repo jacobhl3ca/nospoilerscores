@@ -1,5 +1,4 @@
 import type { MetadataRoute } from "next";
-import { WORLD_CUP_TEAMS } from "@/lib/worldCupTeams";
 
 // Static sitemap for hidescore.com. Works with `output: "export"` — Next emits
 // a static /sitemap.xml at build time. Keep the route list in sync with src/app.
@@ -9,10 +8,15 @@ const BASE = "https://hidescore.com";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const daily = ["", "/worldcup", "/worldcup/tomorrow", "/worldcup/highlights", "/today", "/tomorrow", "/yesterday"];
-  const worldCupTeams = [
-    "/worldcup/teams",
-    ...WORLD_CUP_TEAMS.map((team) => `/worldcup/teams/${team.slug}`),
-  ];
+  // Trimmed to the index page on 2026-09-20. The 48 per-team routes
+  // (/worldcup/teams/<slug>) stay LIVE and stay linked from /worldcup/teams —
+  // they are simply no longer submitted. Over the 30 days to 2026-09-20 all 48
+  // earned 0 views between them, which is two thirds of the 72 URLs in this
+  // file spending crawl budget that the eight new league pages added the same
+  // day actually need. The 2026 World Cup finished on July 19, so this is the
+  // off-cycle trough rather than a permanent verdict: restore the per-team
+  // routes when the 2030 cycle starts drawing searches again.
+  const worldCupTeams = ["/worldcup/teams"];
   const evergreen = [
     "/spoiler-free-sports",
     "/how-to-watch-sports-highlights-without-spoilers",
@@ -28,6 +32,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/liga-mx-scores-without-spoilers",
     "/cricket-highlights-without-spoilers",
     "/watch-world-cup-without-spoilers",
+    // Added 2026-09-20 — seven new per-league routes plus the comparison page.
+    // See each route's own header comment for the demand it answers and the
+    // ESPN feed its dated facts were verified against.
+    "/nba-highlights-without-spoilers",
+    "/champions-league-without-spoilers",
+    "/college-football-highlights-without-spoilers",
+    "/f1-without-spoilers",
+    "/ufc-results-without-spoilers",
+    "/la-liga-without-spoilers",
+    "/mls-highlights-without-spoilers",
+    "/best-spoiler-free-sports-sites",
     "/faq",
     "/privacy",
   ];
@@ -37,6 +52,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/watch-sports-highlights-without-spoilers",
     "/no-spoiler-scores",
     "/watch-world-cup-without-spoilers",
+    // Added 2026-09-20. Not a league page: it is a cross-service comparison
+    // aimed at answer engines (chatgpt.com is already the third-largest
+    // referrer to the site), so it sits with the hubs at 0.8 rather than with
+    // the per-league routes at 0.7.
+    "/best-spoiler-free-sports-sites",
   ]);
   const leagueIntent = new Set([
     "/nba-scores-without-spoilers",
@@ -62,6 +82,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // is searched on its own, and the World-Cup-shifted August 21 start date is
     // a question the soccer page cannot answer without becoming about one league.
     "/premier-league-without-spoilers",
+    // Added 2026-09-20. Each of these seven cleared the specificity gate rather
+    // than being a thin near-duplicate of the pages above: every one carries
+    // dated fixtures, kickoff times in ET and the US broadcaster, verified
+    // against the ESPN feed on the day it shipped, plus a section on that
+    // sport's own spoiler mechanism (the UCL's simultaneous 3:00 pm ET
+    // kickoffs, F1's pre-dawn races, a 65-game college football Saturday).
+    // A golf route was planned for the same batch and was DROPPED: the app
+    // covers only the four majors, none of which is in window until April 2027,
+    // so its call to action had nowhere live to land.
+    "/nba-highlights-without-spoilers",
+    "/champions-league-without-spoilers",
+    "/college-football-highlights-without-spoilers",
+    "/f1-without-spoilers",
+    "/ufc-results-without-spoilers",
+    "/la-liga-without-spoilers",
+    "/mls-highlights-without-spoilers",
   ]);
 
   // Build timestamp. This file is statically emitted on every Cloudflare deploy,

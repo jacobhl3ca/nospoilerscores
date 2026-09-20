@@ -90,6 +90,14 @@ export default function WatchSportsHighlightsWithoutSpoilersPage() {
         { href: "/nfl-highlights-without-spoilers", label: "NFL" },
         { href: "/nhl-highlights-without-spoilers", label: "NHL" },
         { href: "/soccer-highlights-without-spoilers", label: "Soccer" },
+        // Added 2026-09-20 with the new per-league batch. A highlights hub that
+        // omits the newest highlights routes is the orphan problem the
+        // /spoiler-free-sports footer note describes.
+        { href: "/nba-highlights-without-spoilers", label: "NBA highlights" },
+        { href: "/college-football-highlights-without-spoilers", label: "College football" },
+        { href: "/champions-league-without-spoilers", label: "Champions League" },
+        { href: "/mls-highlights-without-spoilers", label: "MLS" },
+        { href: "/best-spoiler-free-sports-sites", label: "Compare the apps" },
         { href: "/worldcup/highlights", label: "World Cup" },
       ]}
       faq={FAQ}
