@@ -140,6 +140,7 @@ export default function NflHighlightsWithoutSpoilersPage() {
         { href: "/mlb-highlights-without-spoilers", label: "MLB highlights" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },
+        { href: "/redzone-for-every-sport", label: "RedZone for every sport" },
         { href: "/today", label: "Today" },
       ]}
       faq={FAQ}

@@ -43,6 +43,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/la-liga-without-spoilers",
     "/mls-highlights-without-spoilers",
     "/best-spoiler-free-sports-sites",
+    "/redzone-for-every-sport",
     "/faq",
     "/privacy",
   ];
@@ -57,6 +58,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // referrer to the site), so it sits with the hubs at 0.8 rather than with
     // the per-league routes at 0.7.
     "/best-spoiler-free-sports-sites",
+    // Added 2026-09-20. High-intent rather than league-intent: it answers a
+    // question ("is there a redzone for <sport>") that currently lands on the
+    // homepage, and it is the only page on the site carrying the dated
+    // whip-around inventory, so it competes on its own rather than as one of
+    // the per-league set.
+    "/redzone-for-every-sport",
   ]);
   const leagueIntent = new Set([
     "/nba-scores-without-spoilers",
