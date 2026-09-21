@@ -62,6 +62,10 @@ export interface PlayoffTeam {
   /** Wins needed to clinch the division, when MLB publishes one. */
   magicNumber: string | null;
   eliminated: boolean;
+  /** Out of the division race. A club can be out of this and still alive. */
+  divisionEliminated: boolean;
+  /** Out of the wild-card race. Both true is what `eliminated` means. */
+  wildCardEliminated: boolean;
 }
 
 /** One published probability: the number to sort on, and the label to print. */
@@ -167,7 +171,12 @@ export function buildPicture(records: StatsApiRecord[], season: number): Playoff
       // altogether the division number is all there is, so fall back to it
       // rather than calling every out-of-it club alive.
       const wcElim = t.wildCardEliminationNumber;
-      const eliminated = isOut(t.eliminationNumber) && (wcElim == null || isOut(wcElim));
+      const divisionEliminated = isOut(t.eliminationNumber);
+      // A feed with no wild-card field at all only knows about the division, so
+      // the division verdict has to stand in for both rather than declaring a
+      // club alive on a road the feed never mentioned.
+      const wildCardEliminated = wcElim == null ? divisionEliminated : isOut(wcElim);
+      const eliminated = divisionEliminated && wildCardEliminated;
       const clinch = CLINCH_BY_INDICATOR[(t.clinchIndicator ?? "").trim().toLowerCase()] ?? null;
       teams.push({
         id: t.team.id,
@@ -186,6 +195,8 @@ export function buildPicture(records: StatsApiRecord[], season: number): Playoff
         wildCardGamesBack: t.wildCardGamesBack ?? "-",
         magicNumber: t.magicNumber ?? null,
         eliminated,
+        divisionEliminated,
+        wildCardEliminated,
       });
     }
   }
@@ -412,6 +423,66 @@ export function buildBracket(league: PlayoffLeague): LeagueBracket {
       { key: "cs", round: "championship", bestOf: BEST_OF.championship, sides: [winner("ds-a"), winner("ds-b")] },
     ],
   };
+}
+
+/**
+ * Who is still chasing each seat that is not yet locked up, keyed by seed.
+ *
+ * A club outside the six is chasing exactly one thing: the single seat it is
+ * likeliest to take. That is its own division's leader when the division is the
+ * better of its two roads, and otherwise the LAST wild card still open — seat 6
+ * before 5 before 4, because the bottom seat is the one a chaser actually
+ * displaces.
+ *
+ * A seat whose occupant has clinched takes no chasers. Clinching settles the
+ * spot; the seed order above it can still move, but nobody is fighting that
+ * club for a place in the field any more.
+ *
+ * Odds decide which road is better when ESPN has published them. When it has
+ * not, MLB's own two elimination numbers still say which races a club is alive
+ * in, so the chase is assigned from those rather than dropped — the box loses
+ * its percentages, not its contenders.
+ */
+export function contendersBySeed(
+  league: PlayoffLeague,
+  odds: PlayoffOdds | null,
+): Map<number, PlayoffTeam[]> {
+  const out = new Map<number, PlayoffTeam[]>();
+  const atSeed = (n: number) => league.seeded.find((t) => t.seed === n) ?? null;
+  const open = (t: PlayoffTeam | null) => !!t && !t.clinched;
+  // The bottom wild card still up for grabs — the seat a chaser takes.
+  const lastWildCard = [6, 5, 4].map(atSeed).find(open)?.seed ?? null;
+  const oddValue = (t: PlayoffTeam, field: "division" | "wildCard") =>
+    odds?.[t.abbrev]?.[field]?.value ?? 0;
+
+  for (const t of league.hunt) {
+    const divOdd = oddValue(t, "division");
+    const wcOdd = oddValue(t, "wildCard");
+    // A published 0% closes a road the elimination number has not caught up to
+    // yet; with nothing published, the elimination number is the only word.
+    const divAlive = !t.divisionEliminated && (odds == null || divOdd > 0);
+    const wcAlive = !t.wildCardEliminated && (odds == null || wcOdd > 0);
+    if (!divAlive && !wcAlive) continue;
+
+    let seat: number | null = null;
+    if (divAlive && (!wcAlive || divOdd >= wcOdd)) {
+      const leader = league.seeded.find((s) => s.division === t.division && s.divisionLeader) ?? null;
+      if (open(leader)) seat = leader!.seed;
+    }
+    if (seat == null && wcAlive) seat = lastWildCard;
+    if (seat == null) continue;
+
+    const list = out.get(seat);
+    if (list) list.push(t);
+    else out.set(seat, [t]);
+  }
+
+  // Best chance first, so a box that only has room for two shows the two that
+  // matter. `hunt` already arrives in record order, which breaks the ties.
+  for (const list of out.values()) {
+    list.sort((a, b) => (odds?.[b.abbrev]?.playoff?.value ?? 0) - (odds?.[a.abbrev]?.playoff?.value ?? 0));
+  }
+  return out;
 }
 
 export function roundLabel(round: BracketRound, league: LeagueKey): string {

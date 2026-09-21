@@ -5,6 +5,7 @@ import {
   BEST_OF,
   broadcastFor,
   buildBracket,
+  contendersBySeed,
   fetchPlayoffOdds,
   fetchPlayoffPicture,
   roundLabel,
@@ -12,8 +13,10 @@ import {
   teamLogo,
   type BracketMatchup,
   type BracketRound,
+  type BracketMatchupKey,
   type BracketSlot,
   type ClinchKind,
+  type LeagueBracket,
   type LeagueKey,
   type Odd,
   type PlayoffLeague,
@@ -314,61 +317,131 @@ function LeagueTable({ league, odds, showGamesBack, sort, onSort }: {
 
 // ── Bracket ──────────────────────────────────────────────────────────────────
 
-function Seat({ slot, odds }: { slot: BracketSlot; odds: PlayoffOdds | null }) {
+// The same shading rule the Odds tab paints its cells with, so a percentage
+// means the same thing on both tabs rather than going flat grey over here.
+function OddsPill({ odd, small = false }: { odd: Odd | null; small?: boolean }) {
+  if (!odd) return null;
+  return (
+    <span
+      className={`${small ? "text-[9px]" : "text-[10px]"} tabular-nums rounded px-1 py-px shrink-0 ml-auto`}
+      style={{ background: shadeFor(odd), color: "var(--text)" }}
+    >
+      {odd.label}
+    </span>
+  );
+}
+
+// An empty seat says who can still arrive in it. When the feeding matchup is
+// already two named clubs that is the pair itself ("TEX/CWS winner"); one round
+// further on, where the feeder is itself a winner seat, the round it comes out
+// of is all there is to say.
+function feederLabel(bracket: LeagueBracket, from: BracketMatchupKey): string {
+  const m = bracket.matchups.find((x) => x.key === from);
+  const a = m?.sides[0].team?.abbrev;
+  const b = m?.sides[1].team?.abbrev;
+  if (a && b) return `${a}/${b} winner`;
+  return `${m ? roundLabel(m.round, bracket.league) : "Round"} winner`;
+}
+
+// One club's line in a matchup card: seed, logo, abbreviation, its chance of
+// making the field. Wide and short on purpose — the old layout stacked two
+// near-square tiles, which read as a grid of boxes rather than as a bracket.
+function Seat({ slot, odds, chasers, emptyLabel }: {
+  slot: BracketSlot;
+  odds: PlayoffOdds | null;
+  chasers: PlayoffTeam[];
+  emptyLabel: string;
+}) {
   const t = slot.team;
   if (!t) {
     return (
-      <div
-        data-bracket-slot
-        className="rounded-lg flex items-center justify-center px-1 h-[64px] md:h-[70px]"
-        style={{ background: "var(--bg-card)", border: "1px dashed var(--border)" }}
-      >
-        <span className="text-[9px] text-center" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
-          {slot.seed ? `Seed ${slot.seed}` : "Winner"}
+      <div data-bracket-slot className="flex items-center gap-1.5 px-1.5 h-[30px]">
+        <span className="w-[18px] shrink-0" />
+        <span className="text-[9px] italic truncate min-w-0" style={{ color: "var(--text-muted)", opacity: 0.75 }} title={emptyLabel}>
+          {emptyLabel}
         </span>
       </div>
     );
   }
-  const odd = playoffOdd(t, odds);
+  const shown = chasers.slice(0, 2);
+  const extra = chasers.length - shown.length;
   return (
-    <div
-      data-bracket-team
-      className="relative rounded-lg flex flex-col items-center justify-center gap-0.5 px-1 h-[64px] md:h-[70px]"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-      title={t.name}
-    >
-      {slot.seed ? (
-        <span className="absolute top-0.5 left-1 text-[9px] font-bold tabular-nums" style={{ color: "var(--text-muted)" }}>
-          {slot.seed}
-        </span>
+    <div>
+      <div data-bracket-team className="flex items-center gap-1.5 px-1.5 h-[30px]" title={t.name}>
+        {slot.seed ? (
+          <span className="text-[9px] font-bold tabular-nums w-2 shrink-0" style={{ color: "var(--text-muted)" }}>
+            {slot.seed}
+          </span>
+        ) : null}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={teamLogo(t.id)}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          width={18}
+          height={18}
+          className="w-[18px] h-[18px] object-contain shrink-0"
+          draggable={false}
+          onError={(e) => { e.currentTarget.style.display = "none"; }}
+        />
+        <span className="text-[11px] font-bold leading-none shrink-0" style={{ color: "var(--text)" }}>{t.abbrev}</span>
+        {t.clinch || t.clinched ? (
+          <span className="text-[9px] leading-none shrink-0" style={{ color: "var(--accent)" }} title={t.clinch ? CLINCH_TEXT[t.clinch] : "Clinched berth"}>✓</span>
+        ) : null}
+        <OddsPill odd={playoffOdd(t, odds)} />
+      </div>
+      {shown.length ? (
+        <div className="pl-1.5 pr-1.5 pb-1">
+          <div className="text-[8px] uppercase tracking-wide leading-none mb-0.5" style={{ color: "var(--text-muted)", opacity: 0.65 }}>
+            Chasing this spot
+          </div>
+          {shown.map((c) => (
+            <div key={c.id} data-bracket-chaser className="flex items-center gap-1 h-[16px]" title={`${c.name} is still in it for this spot`}>
+              <span className="w-2 shrink-0 text-[9px] leading-none" style={{ color: "var(--text-muted)", opacity: 0.5 }}>↳</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={teamLogo(c.id)}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                width={12}
+                height={12}
+                className="w-[12px] h-[12px] object-contain shrink-0"
+                draggable={false}
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+              />
+              <span className="text-[9px] leading-none shrink-0" style={{ color: "var(--text-muted)" }}>{c.abbrev}</span>
+              <OddsPill odd={playoffOdd(c, odds)} small />
+            </div>
+          ))}
+          {extra > 0 ? (
+            <div className="text-[8px] pl-3 leading-none" style={{ color: "var(--text-muted)", opacity: 0.6 }}>+{extra} more</div>
+          ) : null}
+        </div>
       ) : null}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={teamLogo(t.id)}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        width={26}
-        height={26}
-        className="w-[26px] h-[26px] object-contain"
-        draggable={false}
-        onError={(e) => { e.currentTarget.style.display = "none"; }}
-      />
-      <span className="text-[10px] font-bold leading-none" style={{ color: "var(--text)" }}>{t.abbrev}</span>
-      {t.clinched ? (
-        <span className="text-[9px] leading-none" style={{ color: "var(--accent)" }} title="Clinched a spot">✓</span>
-      ) : (
-        <span className="text-[9px] leading-none tabular-nums" style={{ color: "var(--text-muted)" }}>{odd?.label ?? ""}</span>
-      )}
     </div>
   );
 }
 
-function MatchupBox({ matchup, odds }: { matchup: BracketMatchup; odds: PlayoffOdds | null }) {
+// One card per matchup, two lines and a hairline between them — the same shape
+// the World Cup bracket uses, so the two brackets in this app read alike.
+function MatchupBox({ matchup, bracket, odds, chasers }: {
+  matchup: BracketMatchup;
+  bracket: LeagueBracket;
+  odds: PlayoffOdds | null;
+  chasers: Map<number, PlayoffTeam[]>;
+}) {
+  const seatChasers = (slot: BracketSlot) => (slot.seed ? chasers.get(slot.seed) ?? [] : []);
+  const label = (slot: BracketSlot) => (slot.from ? feederLabel(bracket, slot.from) : slot.seed ? `Seed ${slot.seed}` : "Winner");
   return (
-    <div className="flex flex-col gap-1 w-[76px] md:w-[92px]">
-      <Seat slot={matchup.sides[0]} odds={odds} />
-      <Seat slot={matchup.sides[1]} odds={odds} />
+    <div
+      className="rounded-lg py-0.5 w-[124px] md:w-[140px]"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+    >
+      <Seat slot={matchup.sides[0]} odds={odds} chasers={seatChasers(matchup.sides[0])} emptyLabel={label(matchup.sides[0])} />
+      <div className="mx-1.5 h-px" style={{ background: "var(--border)", opacity: 0.6 }} />
+      <Seat slot={matchup.sides[1]} odds={odds} chasers={seatChasers(matchup.sides[1])} emptyLabel={label(matchup.sides[1])} />
     </div>
   );
 }
@@ -377,12 +450,14 @@ function MatchupBox({ matchup, odds }: { matchup: BracketMatchup; odds: PlayoffO
 // between columns line up with the boxes rather than with the labels.
 const HEADER_H = "h-[44px]";
 
-function RoundColumn({ round, league, season, matchups, odds }: {
+function RoundColumn({ round, league, season, matchups, bracket, odds, chasers }: {
   round: BracketRound;
   league: LeagueKey;
   season: number;
   matchups: BracketMatchup[];
+  bracket: LeagueBracket;
   odds: PlayoffOdds | null;
+  chasers: Map<number, PlayoffTeam[]>;
 }) {
   const channel = broadcastFor(season, round, league);
   return (
@@ -399,20 +474,7 @@ function RoundColumn({ round, league, season, matchups, odds }: {
         ) : null}
       </div>
       <div className="flex-1 flex flex-col justify-around gap-3">
-        {matchups.map((m) => <MatchupBox key={m.key} matchup={m} odds={odds} />)}
-      </div>
-    </div>
-  );
-}
-
-function Connector({ lines }: { lines: number }) {
-  return (
-    <div className="w-3 md:w-4 shrink-0 self-stretch flex flex-col" aria-hidden>
-      <div className={`${HEADER_H} shrink-0`} />
-      <div className="flex-1 flex flex-col justify-around">
-        {Array.from({ length: lines }, (_, i) => (
-          <div key={i} className="h-px" style={{ background: "var(--border)" }} />
-        ))}
+        {matchups.map((m) => <MatchupBox key={m.key} matchup={m} bracket={bracket} odds={odds} chasers={chasers} />)}
       </div>
     </div>
   );
@@ -425,22 +487,29 @@ function LeagueHalf({ league, season, odds, mirrored }: {
   mirrored: boolean;
 }) {
   const bracket = useMemo(() => buildBracket(league), [league]);
+  const chasers = useMemo(() => contendersBySeed(league, odds), [league, odds]);
   const of = (round: BracketRound) => bracket.matchups.filter((m) => m.round === round);
+  const col = (round: BracketRound) => (
+    <RoundColumn round={round} league={league.key} season={season} odds={odds} matchups={of(round)} bracket={bracket} chasers={chasers} />
+  );
+  // No drawn connectors. `justify-around` centres each matchup between the two
+  // it feeds on, so the halving rounds read as a tree on their own — the same
+  // thing WorldCupBracket does, and the only thing that stays aligned now that
+  // a card with chasers under it is taller than one without.
   return (
-    <div className={`flex items-stretch ${mirrored ? "flex-row md:flex-row-reverse" : "flex-row"}`}>
-      <RoundColumn round="wildCard" league={league.key} season={season} odds={odds} matchups={of("wildCard")} />
-      <Connector lines={2} />
-      <RoundColumn round="divisionSeries" league={league.key} season={season} odds={odds} matchups={of("divisionSeries")} />
-      <Connector lines={1} />
-      <RoundColumn round="championship" league={league.key} season={season} odds={odds} matchups={of("championship")} />
+    <div className={`flex items-stretch gap-2 md:gap-3 ${mirrored ? "flex-row md:flex-row-reverse" : "flex-row"}`}>
+      {col("wildCard")}
+      {col("divisionSeries")}
+      {col("championship")}
     </div>
   );
 }
 
 function WorldSeriesColumn({ season }: { season: number }) {
   const channel = broadcastFor(season, "worldSeries", "AL");
+  const empty = { team: null, seed: null, from: null } as BracketSlot;
   return (
-    <div className="flex flex-col shrink-0 px-2 md:px-3">
+    <div className="flex flex-col shrink-0">
       <div className={`${HEADER_H} text-center`}>
         <div className="text-[10px] font-bold uppercase tracking-wide leading-tight" style={{ color: "var(--text)" }}>World Series</div>
         <div className="text-[9px] leading-tight" style={{ color: "var(--text-muted)" }}>Best of {BEST_OF.worldSeries}</div>
@@ -449,9 +518,13 @@ function WorldSeriesColumn({ season }: { season: number }) {
         ) : null}
       </div>
       <div className="flex-1 flex flex-col justify-center">
-        <div className="flex flex-col gap-1 w-[76px] md:w-[92px]">
-          <Seat slot={{ team: null, seed: null, from: "cs" }} odds={null} />
-          <Seat slot={{ team: null, seed: null, from: "cs" }} odds={null} />
+        <div
+          className="rounded-lg py-0.5 w-[124px] md:w-[140px]"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        >
+          <Seat slot={empty} odds={null} chasers={[]} emptyLabel="AL champion" />
+          <div className="mx-1.5 h-px" style={{ background: "var(--border)", opacity: 0.6 }} />
+          <Seat slot={empty} odds={null} chasers={[]} emptyLabel="NL champion" />
         </div>
       </div>
     </div>
@@ -466,11 +539,19 @@ function BracketView({ picture, odds }: { picture: PlayoffPicture; odds: Playoff
     <div>
       {/* One DOM for both widths: the halves sit side by side with the World
           Series between them on desktop, and stack on a phone. The NL half is
-          mirrored only when there is room to mirror it. */}
-      <div className="flex flex-col items-center gap-4 md:flex-row md:items-stretch md:justify-center md:gap-0">
-        <LeagueHalf league={al} season={picture.season} odds={odds} mirrored={false} />
-        <WorldSeriesColumn season={picture.season} />
-        <LeagueHalf league={nl} season={picture.season} odds={odds} mirrored />
+          mirrored only when there is room to mirror it. The desktop row scrolls
+          sideways rather than squeezing the cards, since a narrow viewport
+          inside the dialog is the only thing the seven columns won't fit. */}
+      <div className="overflow-x-auto pb-1" tabIndex={0} role="group" aria-label="MLB postseason bracket">
+        {/* w-max so the row sizes to its own columns and the scroller has
+            something to scroll; mx-auto still centres it whenever it fits. A
+            phone stacks the halves but each half is still three columns wide,
+            so the sideways scroll is needed at every width, not just desktop. */}
+        <div className="flex flex-col items-center gap-4 w-max mx-auto md:flex-row md:items-stretch md:gap-2">
+          <LeagueHalf league={al} season={picture.season} odds={odds} mirrored={false} />
+          <WorldSeriesColumn season={picture.season} />
+          <LeagueHalf league={nl} season={picture.season} odds={odds} mirrored />
+        </div>
       </div>
       <p className="text-[10px] text-center mt-3 m-0" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
         If the season ended today. Seeds change until the last day.
@@ -626,7 +707,7 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="relative rounded-xl p-4 sm:p-5 w-full max-w-5xl max-h-[85vh] overflow-y-auto shadow-xl"
+        className="relative rounded-xl p-4 sm:p-5 w-full max-w-6xl max-h-[85vh] overflow-y-auto shadow-xl"
         style={{ background: "var(--bg)", border: "1px solid var(--border)", outline: "none" }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -749,7 +830,7 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
             </div>
             <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
               <p className="m-0">
-                Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards. The percentages are each club&rsquo;s chances of making the playoffs, winning the division and taking a wild card (FanGraphs, via ESPN). Standings are a spoiler, so this stays covered until you ask for it.
+                Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards. The percentages are each club&rsquo;s chances of making the playoffs, winning the division and taking a wild card (FanGraphs, via ESPN){tab === "bracket" ? ", shaded the same way on both tabs" : ""}.{tab === "bracket" ? " A seat nobody has clinched lists the clubs still chasing it underneath." : ""} Standings are a spoiler, so this stays covered until you ask for it.
               </p>
               {updatedLabel ? <p className="m-0 ml-auto whitespace-nowrap tabular-nums">Updated {updatedLabel}</p> : null}
             </div>
