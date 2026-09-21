@@ -118,6 +118,7 @@ export default function SoccerHighlightsWithoutSpoilersPage() {
         { href: "/champions-league-without-spoilers", label: "Champions League" },
         { href: "/la-liga-without-spoilers", label: "La Liga" },
         { href: "/mls-highlights-without-spoilers", label: "MLS" },
+        { href: "/redzone-for-every-sport", label: "Is there a soccer RedZone?" },
         { href: "/liga-mx-scores-without-spoilers", label: "Liga MX" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
       ]}
