@@ -3503,6 +3503,14 @@ async function bakeLeagueRecaps() {
   for (const [id, rec] of prior.byId) {
     const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
     if (!end || end < cutoff) continue;
+    // A daily record dated today or later with no upload time was stamped from
+    // an older run's bake clock, not from the cut itself (the `?? now` fallback
+    // removed below). It is the premature "Best of the day" pill, so it does
+    // not survive the carry.
+    if (rec.cadence !== "weekly" && !rec.published && rec.coversDate >= todayYmd) {
+      console.log(`recaps: dropping undated ${rec.sport}:${rec.key} stamped ${rec.coversDate}`);
+      continue;
+    }
     byId.set(id, rec);
   }
 
@@ -3558,8 +3566,18 @@ async function bakeLeagueRecaps() {
               }
               if (!win) win = weeklyWindowFromPublished(etYmd(hit.publishedMs ?? now));
               Object.assign(rec, win);
+            } else if (hit.titleDate) {
+              rec.coversDate = hit.titleDate;
+            } else if (hit.publishedMs) {
+              rec.coversDate = dailyCoversDate(new Date(hit.publishedMs).toISOString());
             } else {
-              rec.coversDate = hit.titleDate || dailyCoversDate(new Date(hit.publishedMs ?? now).toISOString());
+              // No date in the title and no upload time → the day this cut
+              // covers is unknown. Falling back to `now` stamped it with the
+              // bake day, which put a "Best of the day" pill on top of a slate
+              // still being played (Jacob 9/20, MLB Morning Lineup). A daily
+              // record with no readable date is dropped instead.
+              console.log(`${tag} → no publish time for a daily cut, skipped`);
+              rec = null;
             }
           }
         }
