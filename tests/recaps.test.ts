@@ -36,7 +36,7 @@ const {
   clubNickname,
 } = (await jiti.import("../src/lib/recaps.ts")) as {
   RECAP_EXPECTED_CHANNELS: Record<string, Record<string, string>>;
-  selectRecaps: (all: Record<string, RecapRecord[]> | null | undefined, sport: string, ymd: string) => RecapRecord[];
+  selectRecaps: (all: Record<string, RecapRecord[]> | null | undefined, sport: string, ymd: string, todayYmd?: string) => RecapRecord[];
   recapCoversDay: (rec: RecapRecord, ymd: string) => boolean;
   formatRecapDuration: (sec: number | null | undefined) => string;
   clubNickname: (channel: string | null | undefined) => string;
@@ -344,6 +344,26 @@ test("selectRecaps keeps uploader-verified records that cover the day, shortest 
   assert.deepEqual(selectRecaps(all, "mlb", "20260913").map((r) => r.key), ["realfast", "fastcast"]);
   assert.deepEqual(selectRecaps(all, "mlb", "20260912").map((r) => r.key), ["realfast"]);
   assert.deepEqual(selectRecaps(all, "nba", "20260913"), []);
+
+  // A day still being played has no "best of the day" cut. MLB's Morning
+  // Lineup came through stamped with the bake day on 9/20 and sat on top of
+  // the live Sunday board; the today gate holds it back until the day is over.
+  const live = {
+    mlb: [
+      { sport: "mlb", key: "morninglineup", heading: "Best of the day", label: "Daily recap", cadence: "daily", coversDate: "20260920", videoId: "7tDCNO0qaqU", pageUrl: "https://www.youtube.com/watch?v=7tDCNO0qaqU", channel: "MLB", durationSec: 547 } as RecapRecord,
+      { sport: "mlb", key: "realfast", heading: "Best of the day", label: "60 seconds", cadence: "daily", coversDate: "20260919", playbackUrl: "https://x/v.m3u8", pageUrl: "https://www.mlb.com/video/real-fast-saturday", channel: "MLB.com", durationSec: 60 } as RecapRecord,
+    ],
+  };
+  assert.deepEqual(selectRecaps(live, "mlb", "20260920", "20260920").map((r) => r.key), []);
+  // Yesterday's cut still shows on today's board — that is the column on its
+  // "last played" slate, and those games are over.
+  assert.deepEqual(selectRecaps(live, "mlb", "20260919", "20260920").map((r) => r.key), ["realfast"]);
+  // The day after, the same record is ordinary history.
+  assert.deepEqual(selectRecaps(live, "mlb", "20260920", "20260921").map((r) => r.key), ["morninglineup"]);
+  // No "today" passed = no gate, the old behaviour.
+  assert.deepEqual(selectRecaps(live, "mlb", "20260920").map((r) => r.key), ["morninglineup"]);
+  // Weekly records are untouched: the NFL week pill belongs on a live day.
+  assert.deepEqual(selectRecaps(all, "nfl", "20260913", "20260913").map((r) => r.key), ["top15", "everytd"]);
   // Overlapping weekly windows from two uploaders: only the latest week shows.
   const epl = {
     epl: [
