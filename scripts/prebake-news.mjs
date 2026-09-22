@@ -2819,17 +2819,51 @@ async function hlVideoMatchesTeams(id, away, home) {
   return !!meta?.title && hlTitleHasTeam(meta.title, away) && hlTitleHasTeam(meta.title, home);
 }
 
+// WEEK TOKEN — mirrors parseWeekFromTitle in public/_worker.js (kept as a
+// hand copy, not a shared import: this is a plain Node script, the worker
+// runs on Cloudflare's edge runtime). Reads both digit ("Week 15") and
+// spelled-out ("WEEK ONE" … "WEEK TWENTY-ONE") forms — TSN spells CFL weeks
+// 1–5 out in full and switches to digits from week 6 on, so the old
+// digit-only regex read a spelled title as carrying no week token at all,
+// which the revalidation below (like the worker) treats as "untouched" —
+// letting a Week 1 recap survive as the cached id for a Week 6/8 game
+// forever (measured live 2026-09-22). Keep this word list in sync with
+// public/_worker.js's WEEK_WORDS by hand.
+const HL_WEEK_WORDS = [
+  "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+  "nineteen", "twenty",
+];
+const HL_WEEK_TOKEN_RE = new RegExp(
+  `\\bw(?:ee)?k\\.?\\s*(\\d{1,2}|${HL_WEEK_WORDS.join("|")})(?:[\\s-]one)?\\b`,
+  "i",
+);
+function hlParseWeekFromTitle(title) {
+  const m = String(title ?? "").match(HL_WEEK_TOKEN_RE);
+  if (!m) return null;
+  const whole = m[0].toLowerCase();
+  const w = m[1].toLowerCase();
+  const base = /^\d+$/.test(w) ? parseInt(w, 10) : HL_WEEK_WORDS.indexOf(w);
+  if (base < 0 || Number.isNaN(base)) return null;
+  return base === 20 && /twenty[\s-]one\b/.test(whole) ? 21 : base;
+}
+
 // Gridiron week check for CARRIED entries. The matchup check above passes for
 // BOTH meetings of a division rival — same two teams, same season — so it is not
 // enough on its own for NFL/NCAAF. Same asymmetry as the worker's gate: a title
 // whose week token disagrees is rejected, a title with no week token is left
 // alone (postseason cuts say "Divisional Round", and the caller sends no week
-// for those anyway).
-async function hlVideoMatchesWeek(id, week) {
+// for those anyway) — UNLESS requireWeek is set, which flips a missing token to
+// a reject. CFL passes this true: TSN's 2024/2025 no-week uploads are a
+// different, older-season format, not a legitimately week-less cut (see
+// cflWeekRequired at the call sites). NFL/NCAAF/the NFL club check never pass
+// it, so their behavior is unchanged.
+async function hlVideoMatchesWeek(id, week, requireWeek = false) {
   if (!week) return true;
   const meta = await hlOembedMeta(id);
-  const tok = String(meta?.title ?? "").match(/\bw(?:ee)?k\.?\s*(\d{1,2})\b/i);
-  return !tok || parseInt(tok[1], 10) === week;
+  const titleWeek = hlParseWeekFromTitle(meta?.title);
+  if (titleWeek === null) return !requireWeek;
+  return titleWeek === week;
 }
 
 // Competition check for CARRIED entries — the analogue of hlVideoMatchesWeek one
@@ -3040,9 +3074,24 @@ async function bakeGameHighlights() {
   // (why so many past WC games showed no link). Already-baked games short-circuit
   // the resolve below, so this only re-scrapes the few still-missing ones.
   const fifaDates = Array.from({ length: 16 }, (_, i) => hlEtYmd(-i));
+  // CFL gets its own much wider window for the same reason as WC, one gate
+  // over: the age-gate fix (#84, 2026-09-20) landed AFTER several CFL games
+  // had already baked, so a game outside the default 7-day window never gets
+  // its carried id revalidated against the new checks and a bad id (a 2024
+  // upload served for wk15 SSK@WPG, baked ~9/13) survives forever — the
+  // revalidation logic itself is correct, it is simply never invoked for
+  // that key again. CFL is a short, small-volume league (one ~21-week season,
+  // at most a couple of games/day), so 30 days of ESPN/theScore scoreboard
+  // fetches is cheap: already-baked games short-circuit before any YouTube
+  // call, so this only costs one JSON fetch/day plus a couple of oembed
+  // lookups per game whose id needs revalidating, never a new search unless
+  // a check actually fails. 30 matches the one-off `--hl-days=30` catch-up
+  // this same bug needed for the games already stuck with a bad id.
+  const HL_CFL_DAYS = 30;
+  const cflDates = Array.from({ length: HL_CFL_DAYS }, (_, i) => hlEtYmd(-i));
   let resolved = 0;
   for (const lg of HL_LEAGUES) {
-    const lgDates = lg.sport === "fifa" ? fifaDates : dates;
+    const lgDates = lg.sport === "fifa" ? fifaDates : (lg.sport === "cfl" ? cflDates : dates);
     for (const ymd of lgDates) {
       let data;
       try {
@@ -3096,6 +3145,10 @@ async function bakeGameHighlights() {
         const key = `${lg.sport}:${item.id}`;
         const { away, home, series, week, preseason, cflPlayoff } = item;
         const isFifa = lg.sport === "fifa";
+        // CFL-only: see hlVideoMatchesWeek's requireWeek param. NFL/NCAAF keep
+        // the old "no token = untouched" behavior — their postseason and some
+        // per-team-channel cuts genuinely carry no week.
+        const cflWeekRequired = lg.sport === "cfl";
         const matchup = hlMatchupFingerprint(away, home);
         const rawPrev = games[key] ?? {};
         let prev = rawPrev;
@@ -3135,7 +3188,7 @@ async function bakeGameHighlights() {
 
         // Revalidate every carried slot against both its uploader and matchup.
         // A channel marker proves provenance, not that the clip is for this game.
-        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
+        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
         }
@@ -3143,7 +3196,7 @@ async function bakeGameHighlights() {
           console.warn(`HIGHLIGHT-AGE-REJECT ${key} official=${prevOfficial} (${away} vs ${home} ${dateStr})`);
           prevOfficial = null;
         }
-        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
+        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevExtended = null;
         }
@@ -3156,7 +3209,7 @@ async function bakeGameHighlights() {
         if (!official) {
           officialChannel = primaryChannel;
           official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, compTokens);
-          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week)) || !(await hlVideoMatchesComp(official, compTokens)))) {
+          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week, cflWeekRequired)) || !(await hlVideoMatchesComp(official, compTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
           }
@@ -3168,7 +3221,7 @@ async function bakeGameHighlights() {
             const tokens = officialTokensFor(fb);
             const id = await hlResolve(away, home, dateStr, series, fb.channel, undefined, competition, false, week, tokens);
             if (!id) continue;
-            if (!(await hlVideoMatchesTeams(id, away, home)) || !(await hlVideoMatchesWeek(id, week)) || !(await hlVideoMatchesComp(id, tokens))) {
+            if (!(await hlVideoMatchesTeams(id, away, home)) || !(await hlVideoMatchesWeek(id, week, cflWeekRequired)) || !(await hlVideoMatchesComp(id, tokens))) {
               console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home})`);
               continue;
             }
@@ -3188,7 +3241,7 @@ async function bakeGameHighlights() {
           if (extended && official && extended === official) {
             extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, week, compTokens);
           }
-          if (extended && (!(await hlVideoMatchesTeams(extended, away, home)) || !(await hlVideoMatchesWeek(extended, week)) || !(await hlVideoMatchesComp(extended, compTokens)))) {
+          if (extended && (!(await hlVideoMatchesTeams(extended, away, home)) || !(await hlVideoMatchesWeek(extended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(extended, compTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home})`);
             extended = null;
           }

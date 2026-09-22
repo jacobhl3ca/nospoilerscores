@@ -195,16 +195,29 @@ const PUBLISHED_UNIT_MS = {
   year: 365 * 24 * 60 * 60 * 1000,
 };
 
-// "3 years ago" / "Streamed 5 months ago" → the NEWEST instant that text can
-// mean. YouTube floors the count, so "1 month ago" is anything from 30 to 59
-// days back and the real upload can only be OLDER than what this returns.
-// null when the stamp is absent or in a shape we don't read.
+// Abbreviated spelling YouTube also emits for this same field ("2y ago",
+// "1mo ago", "3d ago" — measured live 2026-09-22 on a CFL search: the
+// SAME videoRenderer block that would read "2 years ago" elsewhere on the
+// site read "2y ago" here). The full-word regex below never matched these —
+// no space between the digit and the unit, and the unit itself is a letter
+// code, not a word — so latestPossiblePublish silently returned null and
+// publishedBeforeGame treated the stamp as unreadable ("no stamp → unchanged"),
+// letting a 2024 upload sail through the age gate for a 2026 game (wk6
+// HAM@SSK, wk15 SSK@WPG). Root cause of the #84 age-gate miss.
+const PUBLISHED_UNIT_ABBR = { s: "second", m: "minute", h: "hour", d: "day", w: "week", mo: "month", y: "year" };
+
+// "3 years ago" / "Streamed 5 months ago" / "2y ago" → the NEWEST instant
+// that text can mean. YouTube floors the count, so "1 month ago" (or "1mo
+// ago") is anything from 30 to 59 days back and the real upload can only be
+// OLDER than what this returns. null when the stamp is absent or in a shape
+// we don't read.
 function latestPossiblePublish(publishedText, nowMs) {
   const m = String(publishedText || "")
     .toLowerCase()
-    .match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/);
+    .match(/(\d+)\s*(second|minute|hour|day|week|month|year|mo|s|m|h|d|w|y)s?\s+ago/);
   if (!m) return null;
-  const unit = PUBLISHED_UNIT_MS[m[2]];
+  const unitWord = PUBLISHED_UNIT_ABBR[m[2]] || m[2];
+  const unit = PUBLISHED_UNIT_MS[unitWord];
   if (!unit) return null;
   return nowMs - parseInt(m[1], 10) * unit;
 }
@@ -227,6 +240,58 @@ function publishedBeforeGame(publishedText, gameMs, nowMs) {
   if (latest === null) return false; // no stamp we can read → unchanged
   return latest < gameMs - AGE_GATE_SLACK_MS;
 }
+
+// WEEK TOKEN — shared by the gridiron week gate below. Reads both digit
+// ("Week 15", "Wk 15") and spelled-out ("WEEK ONE" … "WEEK TWENTY-ONE")
+// forms. TSN spells CFL weeks 1–5 out in full ("CFL WEEK ONE: …", "CFL WEEK
+// FIVE: …") and switches to digits from week 6 on; the old digit-only regex
+// read a spelled title as carrying NO week token, which the wrong-week
+// hard-skip below treats as "untouched" — so wk6 OTT@EDM, wk8 CGY@WPG and
+// wk8 HAM@MTL all passed the gate under the WEEK ONE recap of the same
+// fixture (measured live 2026-09-22, 3/3 wrong). 21 covers a full CFL
+// regular season (18 weeks) plus margin; NFL/NCAAF never spell a week past
+// low single digits in practice, so this is a superset of the old behaviour,
+// never a narrower one.
+const WEEK_WORDS = [
+  "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+  "nineteen", "twenty",
+];
+const WEEK_TOKEN_RE = new RegExp(
+  `\\bw(?:ee)?k\\.?\\s*(\\d{1,2}|${WEEK_WORDS.join("|")})(?:[\\s-]one)?\\b`,
+  "i",
+);
+function weekWordToNumber(word) {
+  const w = word.toLowerCase();
+  if (/^\d+$/.test(w)) return parseInt(w, 10);
+  const base = WEEK_WORDS.indexOf(w);
+  return base >= 0 ? base : null;
+}
+// Returns the week number a title names, or null if it names none. The
+// "twenty-one" suffix rides on the same match as "twenty" (see the regex's
+// trailing `(?:[\s-]one)?` group) rather than a second capture group, so a
+// bare "twenty" still resolves to 20 and "twenty-one"/"twenty one" both
+// bump it to 21.
+function parseWeekFromTitle(title) {
+  const m = String(title || "").match(WEEK_TOKEN_RE);
+  if (!m) return null;
+  const whole = m[0].toLowerCase();
+  const base = weekWordToNumber(m[1]);
+  if (base === null) return null;
+  return base === 20 && /twenty[\s-]one\b/.test(whole) ? 21 : base;
+}
+// Channels whose regular-season title format ALWAYS carries a week token, so
+// a title with none is a different upload format entirely rather than a
+// same-format title the week gate just can't see. TSN's current 2026 CFL
+// cut is "CFL WEEK N: Away vs. Home | Full Highlights"; its own 2024/2025
+// re-uploads are "Away vs. Home | CFL HIGHLIGHTS" with no week and no year,
+// so without this a same-teams-different-season upload cleared the wrong-
+// week hard-skip below (which — correctly, for NFL/NCAAF — leaves a
+// no-week title untouched) and served a 2024 game for a 2026 query (wk6
+// HAM@SSK, live; wk15 SSK@WPG, baked — 2026-09-22 QA). NFL/NCAAF are NOT
+// listed: their postseason and some per-team-channel cuts genuinely carry no
+// week, and that has to keep passing through untouched.
+const WEEK_TOKEN_REQUIRED_CHANNELS = new Set(["tsn"]);
 
 export default {
   async fetch(request, env, ctx) {
@@ -591,6 +656,19 @@ export default {
         // full alias list (lets queries from ESPN's compact names match titles
         // that use the full club name, e.g. "Nottm Forest" ↔ "Nottingham Forest").
         const TEAM_ALIASES = {
+          // CFL — theScore's shortDisplayName (the query text) vs. TSN's own
+          // spelling and typos in its upload titles. "B.C. Lions" (periods) is
+          // TSN's house style against theScore's plain "BC Lions", so without
+          // the punctuated variant every BC game read as no-teams-matched and
+          // 404'd even though TSN had posted the recap (wk9 BC@WPG, measured
+          // 2026-09-22). "Saskatechewan"/"Roughiders" are TSN's own typos
+          // (extra "e", missing "r") reproduced verbatim so the real upload
+          // still matches; both were seen live on different 2026 uploads.
+          "bc lions": ["bc lions", "b.c. lions", "british columbia lions"],
+          "saskatchewan roughriders": [
+            "saskatchewan roughriders", "roughriders",
+            "saskatechewan roughriders", "saskatchewan roughiders",
+          ],
           "trail blazers": ["blazers", "trail blazers", "portland"],
           "timberwolves": ["timberwolves", "wolves", "minnesota"],
           "76ers": ["76ers", "sixers", "philadelphia"],
@@ -910,10 +988,28 @@ export default {
             queryHasSpecificTeams &&
             compTokens.includes("preseason") &&
             /\bpreseason/.test(titleLower);
+          // TSN doesn't always append "| Full Highlights" to a CFL cut — a
+          // handful of uploads are titled just "CFL WEEK N: Away vs. Home"
+          // with no highlight/recap keyword at all (wk9 EDM@SSK `eXrSguIPxd4`,
+          // verified live 2026-09-22: title carries neither word, no other
+          // channel or format difference from its "| Full Highlights" peers).
+          // Requires the bare CFL house prefix AND the title's own week token
+          // to agree with the query's — the same week token WEEK_TOKEN_REQUIRED
+          // above already demands for TSN, computed once here and reused below.
+          const titleWeek = parseWeekFromTitle(title);
+          const isStrictBareCflWeek =
+            strictChannelParam &&
+            isFromChannel &&
+            preferChannelLower === "tsn" &&
+            queryHasSpecificTeams &&
+            queryWeek !== null &&
+            titleWeek === queryWeek &&
+            /^cfl\s+week\b/i.test(titleLower.trim());
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
+            isStrictBareCflWeek ||
             roundOnlyTitleOk ||
             isStrictBareWnbaRecap ||
             isChessRoundBroadcast ||
@@ -1060,11 +1156,16 @@ export default {
           // asymmetry is what keeps this safe for the uploads that don't use the
           // house format at all (postseason cuts are titled "Divisional Round",
           // never "Week N", and the client sends no week for them anyway).
-          // "Week 15" / "Week15" / "Wk 15" are all accepted spellings; the
-          // \b…\b and 1–2 digit cap keep it off "Weeks" recaps and stray digits.
+          // "Week 15" / "Week15" / "Wk 15" / spelled-out "WEEK ONE"…"WEEK
+          // TWENTY-ONE" are all accepted spellings — see parseWeekFromTitle.
+          // WEEK_TOKEN_REQUIRED_CHANNELS flips the no-token case to a REJECT
+          // for CFL (channel=TSN), the one channel whose no-week uploads are
+          // a different, older season's format rather than a legitimately
+          // week-less cut.
           if (queryWeek) {
-            const weekTok = title.match(/\bw(?:ee)?k\.?\s*(\d{1,2})\b/i);
-            if (weekTok && parseInt(weekTok[1], 10) !== queryWeek) continue;
+            // titleWeek was already computed above for isStrictBareCflWeek.
+            if (titleWeek !== null && titleWeek !== queryWeek) continue;
+            if (titleWeek === null && WEEK_TOKEN_REQUIRED_CHANNELS.has(preferChannelLower)) continue;
           }
           const hasYear = titleHasExplicitDate
             ? titleDateMatches
