@@ -33,6 +33,25 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // with no year in the title. Playoffs carry no week and TSN titles them by
   // round ("EAST SEMI-FINAL: … FULL HIGHLIGHTS"); the worker's date tiers
   // pick the year there.
+  //
+  // 2026-09-22 QA (all 61 regular-season + playoff finals probed): three more
+  // failure modes found and fixed in the worker, all specific to TSN/CFL and
+  // inert for every other league on the same gate —
+  //   1. TSN spells weeks 1–5 out ("CFL WEEK ONE" … "WEEK FIVE"), which the
+  //      digit-only week regex read as "no week token" (the wrong-week gate's
+  //      intentional pass-through for postseason titles) and let a Week 1
+  //      recap serve for a Week 6/8 query. parseWeekFromTitle now reads
+  //      ONE–TWENTY-ONE spelled out too.
+  //   2. TSN's OWN 2024/2025 "Away vs. Home | CFL HIGHLIGHTS" re-uploads
+  //      carry no week and no year, so a title with no week token is a
+  //      genuinely different, older upload format for TSN specifically —
+  //      unlike NFL/NCAAF, where a no-week title can be a legitimate
+  //      same-season cut. WEEK_TOKEN_REQUIRED_CHANNELS (worker-only) flips
+  //      "no token" to a hard reject for channel=TSN alone.
+  //   3. The age gate (#84) missed these same re-uploads live because
+  //      YouTube's relative timestamp sometimes reads abbreviated ("2y ago")
+  //      rather than spelled out ("2 years ago"); latestPossiblePublish now
+  //      reads both.
   cfl: "TSN",
   // World Cup: FOX is the US English-language rightsholder and "FOX Sports"
   // posts a clean per-match "TeamA vs TeamB Highlights | 2026 FIFA World Cup™"
