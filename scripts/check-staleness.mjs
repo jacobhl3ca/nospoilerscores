@@ -29,7 +29,12 @@ const NEWS_HOURLY = [
   "reddit-cfl", "reddit-mls", "reddit-nba", "reddit-ncaabase", "reddit-ncaaf", "reddit-ncaah", "reddit-ncaam", "reddit-ncaaw",
   "reddit-f1", "reddit-indycar", "reddit-nascar", "reddit-nfl", "reddit-nhl", "reddit-nwsl", "reddit-soccer", "reddit-tennis",
   "reddit-ucl", "reddit-uel", "reddit-ufc", "reddit-ufl", "reddit-wnba",
-  "thescore-cfl", "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
+  // thescore-cfl is NOT here on purpose: api.thescore.com/cfl/articles returns
+  // [] (theScore publishes no CFL news), and writeFeed never writes an empty
+  // feed, so the file has 404'd since the CFL shipped 2026-09-13. Listing it
+  // failed this check every run and paged "feeds stale" twice a day for a feed
+  // that cannot exist. Re-add it once that endpoint returns items.
+  "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
   "thescore-nba", "thescore-ncaam", "thescore-nfl", "thescore-nhl",
   // Editorial substitute feeds + the two league video feeds that shipped after
   // this list was last swept and were never added — they baked unwatched for
