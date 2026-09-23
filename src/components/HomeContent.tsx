@@ -3549,9 +3549,12 @@ export default function HomeContent({
               : undefined;
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
-              shownElsewhere: displayedSports
-                .map((sport, i) => ({ sport, col: i + 1 }))
-                .filter((_, i) => i !== idx),
+              // `idx` is the raw slot (0-4), but empty slots collapse, so the
+              // column number is the position among the rendered entries.
+              shownElsewhere: slotEntries
+                .map((e, i) => ({ sport: e.league.sport, col: i + 1, slotIdx: e.slotIdx }))
+                .filter((e) => e.slotIdx !== idx)
+                .map(({ sport, col }) => ({ sport, col })),
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
               autoSport: autoSlotSports[idx],
               switcherMode: prefs.leagueSwitcherMode ?? ("dropdown" as const),
