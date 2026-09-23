@@ -3712,7 +3712,7 @@ async function googleNativeComplete(request, env) {
   const session = await _siwaMakeSession(env, {
     sub: handoff.sub, uid: handoff.uid, email: handoff.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
   });
-  return new Response(JSON.stringify({ ok: true, returnTo: body.returnTo || "/" }), {
+  return new Response(JSON.stringify({ ok: true, returnTo: _safeReturnTo(body.returnTo) }), {
     status: 200,
     headers: {
       "Content-Type": "application/json",

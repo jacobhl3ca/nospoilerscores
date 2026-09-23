@@ -6,7 +6,7 @@ import worker from "../public/_worker.js";
 // A `returnTo` / OAuth-state `r` value only ever has to be safe to put in a
 // same-site redirect Location. "//evil.com" and "/\evil.com" both pass a bare
 // `startsWith("/")` check but browsers treat them as scheme-relative and will
-// navigate off-site — that was the open redirect. All five call sites now
+// navigate off-site — that was the open redirect. All six call sites now
 // route through one shared `_safeReturnTo` helper instead of a bespoke check.
 
 const src = readFileSync(new URL("../public/_worker.js", import.meta.url), "utf8");
@@ -61,16 +61,17 @@ test("_safeReturnTo requires the resolved origin to stay same-site", () => {
   assert.equal(safeReturnTo("/settings"), "/settings");
 });
 
-test("all 5 returnTo/st.r call sites route through _safeReturnTo, not a bare startsWith(\"/\")", () => {
+test("all 6 returnTo/st.r call sites route through _safeReturnTo, not a bare startsWith(\"/\")", () => {
   const codeLines = src.split("\n").filter((l) => !l.trim().startsWith("//"));
   const code = codeLines.join("\n");
   // only the check inside _safeReturnTo's own definition should remain
   const guardSites = code.match(/startsWith\("\/"\)/g) || [];
   assert.equal(guardSites.length, 1);
-  // 5 call sites: siwaLogin, siwaCallback Location, googleLogin,
-  // googleCallback native-handoff returnTo, googleCallback Location.
+  // 6 call sites: siwaLogin, siwaCallback Location, googleLogin,
+  // googleCallback native-handoff returnTo, googleCallback Location,
+  // googleNativeComplete JSON echo.
   const callLines = codeLines.filter((l) => l.includes("_safeReturnTo(") && !l.includes("function _safeReturnTo"));
-  assert.equal(callLines.length, 5);
+  assert.equal(callLines.length, 6);
 });
 
 const stubEnv = () => ({
