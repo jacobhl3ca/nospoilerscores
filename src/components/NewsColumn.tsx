@@ -109,7 +109,9 @@ interface NewsColumnProps {
   // Callback receives undefined for Auto (revert to default) and "empty" to
   // hide the column entirely.
   swappableOptions?: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string }[];
-  shownElsewhere?: Sport[];
+  // The 1-based column number each sport lives in — used to label already-
+  // shown options "· col N" instead of greying them (see LeagueColumn).
+  shownElsewhere?: { sport: Sport; col: number }[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
   // Switch this column to the ESPN "Top news" headlines feed (see NewsColumnTitle).
@@ -170,7 +172,7 @@ export function NewsColumnTitle({
 }: {
   title: string;
   swappableOptions?: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string }[];
-  shownElsewhere?: Sport[];
+  shownElsewhere?: { sport: Sport; col: number }[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
   // When true (more than one column showing), render a subtle × on the title
@@ -301,7 +303,7 @@ export function NewsColumnTitle({
                 </button>
                 {swappableOptions!.map((opt) => {
                   const isCurrent = opt.sport === selectedSport;
-                  const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
+                  const elsewhere = isCurrent ? undefined : shownElsewhere?.find((e) => e.sport === opt.sport);
                   // The league this column falls back to on Auto — bolded and
                   // tagged so the fallback is visible before you commit to it.
                   const isAutoDefault = !autoIsEspn && opt.sport === autoSport;
@@ -316,16 +318,17 @@ export function NewsColumnTitle({
                       aria-current={isCurrent ? "true" : undefined}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{
-                        color: isCurrent ? "var(--accent)" : isElsewhere || opt.offseason ? "var(--text-muted)" : "var(--text)",
+                        color: isCurrent ? "var(--accent)" : opt.offseason ? "var(--text-muted)" : "var(--text)",
                         fontWeight: isCurrent || isAutoDefault ? 600 : 400,
                       }}
-                      title={isElsewhere ? "Already shown in another column — pick to add a second" : opt.upcomingLabel ? `Season starts ${opt.upcomingLabel}` : isAutoDefault ? "What Auto picks for this column" : undefined}
+                      title={elsewhere ? `Already shown in column ${elsewhere.col} — pick to add a second` : opt.upcomingLabel ? `Season starts ${opt.upcomingLabel}` : isAutoDefault ? "What Auto picks for this column" : undefined}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       {opt.label}
                       {opt.offseason && <em className="font-normal"> · offseason</em>}
                       {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
+                      {elsewhere && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · col {elsewhere.col}</em>}
                       {isAutoDefault && !isCurrent && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
                     </button>
                   );

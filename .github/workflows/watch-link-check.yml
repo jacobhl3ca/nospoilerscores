@@ -30,16 +30,17 @@ jobs:
         continue-on-error: true
       - if: steps.checkout.outcome == 'success' && steps.setup.outcome == 'success'
         run: node scripts/check-watch-links.mjs
-      # Real-failure alert — ntfy ONLY, never a GitHub issue (rewritten 2026-07-20;
+      # Real-failure alert — a push ONLY, never a GitHub issue (rewritten 2026-07-20;
       # see staleness-check.yml for the full rationale). House rule for all
       # monitors: DOWN-only, 1h grace, no green "recovered" pings. Only alerts if
       # the previous run of this workflow also failed, so a self-healing blip is
       # completely silent.
-      - name: Alert on sustained failure (ntfy, 1-run grace)
+      - name: Alert on sustained failure (Pushover, 1-run grace)
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
         run: |
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           prev="$(gh run list --workflow watch-link-check.yml --status completed \
@@ -48,10 +49,24 @@ jobs:
             echo "First failure (previous run: ${prev:-none}) — inside grace, staying silent."
             exit 0
           fi
-          if [ -z "$NTFY_TOPIC" ]; then
-            echo "::warning::NTFY_TOPIC secret unset — cannot alert."
-            exit 0
+          if [ -z "$PUSHOVER_TOKEN" ] || [ -z "$PUSHOVER_USER" ]; then
+            # Loud, not a warning: an alerter that cannot alert must not exit 0.
+            echo "::error::PUSHOVER_TOKEN / PUSHOVER_USER not set — this alert reached NOBODY."
+            exit 1
           fi
-          curl -s -H "Title: HideScore watch-links failing" -H "Priority: high" -H "Tags: rotating_light" \
-            -d "Watch-link check has failed twice in a row. $run_url" \
-            "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+          # Pushover since 2026-09-22 (ntfy is retired from the phone).
+          # priority -2 = lands in the Pushover app with no popup, mirroring the
+          # `HideScore|-2` rule in ~/private/pushover-allow, which a runner can't read.
+          resp="$(curl -s --max-time 20 \
+            --form-string "token=$PUSHOVER_TOKEN" \
+            --form-string "user=$PUSHOVER_USER" \
+            --form-string "title=HideScore watch-links failing" \
+            --form-string "message=Watch-link check has failed twice in a row." \
+            --form-string "priority=-2" \
+            --form-string "url=$run_url" \
+            --form-string "url_title=Open the failing run" \
+            https://api.pushover.net/1/messages.json)"
+          case "$resp" in
+            *'"status":1'*) echo "Pushover accepted the alert." ;;
+            *) echo "::error::Pushover rejected the alert: $resp"; exit 1 ;;
+          esac

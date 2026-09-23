@@ -51,7 +51,7 @@ test("news source types can be checked independently and persist", async ({ page
   await expect(page.getByRole("dialog", { name: "Filter news by source" }).getByRole("checkbox", { name: "Reddit" })).not.toBeChecked();
 });
 
-test("choosing a grey already-shown league creates a duplicate column", async ({ page }) => {
+test("choosing an already-shown league (full colour, labelled) creates a duplicate column", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
   await page.route("**/baseball/mlb/scoreboard?**", route => route.fulfill({
     status: 200,
@@ -76,15 +76,66 @@ test("choosing a grey already-shown league creates a duplicate column", async ({
 
   await page.getByRole("button", { name: "MLB", exact: true }).click();
   const switcher = page.getByRole("dialog", { name: "Switch league" });
-  const nfl = switcher.getByRole("button", { name: "NFL Preseason", exact: true });
-  await expect(nfl).toHaveAttribute("title", /pick to add a second/i);
+  // Not exact: the button's accessible name now includes the "· col 2" label.
+  const nfl = switcher.getByRole("button", { name: "NFL Preseason" });
+  await expect(nfl).toHaveAttribute("title", /already shown in column 2.*pick to add a second/i);
+  // Already-shown is no longer greyed — logged-out and logged-in alike see
+  // every league in full colour, with "· col N" explaining where it lives
+  // instead of looking disabled (Jacob 9/10).
+  await expect(nfl).not.toHaveAttribute("style", /--text-muted/);
+  await expect(nfl).toContainText("· col 2");
   await nfl.click();
 
-  await expect(page.getByRole("heading", { name: "NFL Pre", exact: true })).toHaveCount(2);
+  // Not "NFL Pre": that abbreviation never actually renders here — the
+  // heading is the full label at this viewport/column count.
+  await expect(page.getByRole("heading", { name: "NFL Preseason", exact: true })).toHaveCount(2);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
   expect(saved.firstLeague).toBe("nfl");
   expect(saved.secondLeague).toBe("nfl");
 });
+
+for (const viewport of [
+  { name: "desktop", width: 1280, height: 800 },
+  { name: "phone", width: 390, height: 844 },
+]) {
+  test(`${viewport.name}: column picker only greys the offseason league, not shown-elsewhere ones`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
+    for (const path of ["**/baseball/mlb/scoreboard?**", "**/football/nfl/scoreboard?**", "**/soccer/usa.1/scoreboard?**"]) {
+      await page.route(path, route => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: '{"events":[]}',
+      }));
+    }
+    await seedPrefs(page, {
+      defaultLandingView: "scores",
+      defaultDateMode: "today",
+      firstLeague: "mlb",
+      secondLeague: "nfl",
+      thirdLeague: "mls",
+      fourthLeague: "empty",
+      fifthLeague: "empty",
+    });
+    await page.goto("/");
+
+    await page.getByRole("button", { name: "MLB", exact: true }).click();
+    const switcher = page.getByRole("dialog", { name: "Switch league" });
+
+    // Not exact: both now carry a "· col N" suffix in their accessible name.
+    const nfl = switcher.getByRole("button", { name: "NFL Preseason" });
+    const mls = switcher.getByRole("button", { name: "MLS" });
+    const nba = switcher.getByRole("button", { name: "NBA · offseason", exact: true });
+
+    for (const shownElsewhere of [nfl, mls]) {
+      await expect(shownElsewhere).not.toHaveAttribute("style", /--text-muted/);
+    }
+    await expect(nfl).toContainText("· col 2");
+    await expect(mls).toContainText("· col 3");
+    // The one state that actually limits what picking it gets you stays grey.
+    await expect(nba).toHaveAttribute("style", /--text-muted/);
+  });
+}
 
 test("an empty Yesterday slate shows the league's last played games with highlights", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
