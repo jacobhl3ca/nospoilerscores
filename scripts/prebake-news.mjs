@@ -12,6 +12,7 @@ import {
   weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
   fillHeading, pickShorterClub, eplSeasonYear, uploadFitsGameDate,
 } from "./lib/recaps.mjs";
+import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
 
 const OUT_DIR = "public/news";
 
@@ -174,6 +175,8 @@ async function fetchDroprMp4(pageUrl) {
 // (cdn.streamain.com/...mp4 — 206 + video/mp4 + CORS *, so <video> plays it
 // natively). The poster is the same stem under /thumbnails/<stem>_thumb.jpg.
 // Mirrors the other resolvers; null on any failure so the post stays link-only.
+// 2026-09-22: the embed now serves media.sportits.com, which this no longer
+// matches; fetchClipMp4's generic reader picks it up from the <video> instead.
 async function fetchStreamainMp4(pageUrl) {
   try {
     const idm = pageUrl.match(
@@ -199,14 +202,57 @@ async function fetchStreamainMp4(pageUrl) {
   }
 }
 
-// Route an external clip-host /v/<id> page URL to the matching mp4 resolver.
-// Used by the redlib + RSS paths, which capture the host URL into one map.
-function fetchClipMp4(url) {
-  if (/^https?:\/\/streamff\.\w+\/v\//i.test(url)) return fetchStreamffMp4(url);
-  if (/^https?:\/\/streamin\.\w+\/v\//i.test(url)) return fetchStreaminMp4(url);
-  if (/^https?:\/\/dropr\.\w+\/v\//i.test(url)) return fetchDroprMp4(url);
-  if (/^https?:\/\/(?:streama\.in|streamain\.\w+)\//i.test(url)) return fetchStreamainMp4(url);
-  return Promise.resolve(null);
+// Any clip site we have no resolver for (the NEXT rotation), or a known one
+// whose resolver stopped matching (streama.in moved its CDN to
+// media.sportits.com on 2026-09-22): read the page's own player — og:video or
+// its first <video> — following a JS player's /embed/ iframe once. Unlike the
+// known hosts, an unknown one must PROVE the mp4 plays (a 2xx video/* answer)
+// before a row trusts it; a network blip means no clip, never a broken one.
+async function fetchGenericClipMp4(pageUrl) {
+  const getPage = async (url) => {
+    const res = await fetch(url, {
+      headers: { "User-Agent": UA, Referer: "https://www.reddit.com/" },
+      signal: AbortSignal.timeout(9000),
+    });
+    return res.ok ? { html: await res.text(), url: res.url || url } : null;
+  };
+  try {
+    const first = await getPage(pageUrl);
+    if (!first) return null;
+    let { mp4, thumb, embedUrl } = parseClipPage(first.html, first.url);
+    if (!mp4 && embedUrl) {
+      const embed = await getPage(embedUrl);
+      if (embed) {
+        const e = parseClipPage(embed.html, embed.url);
+        mp4 = e.mp4;
+        thumb = thumb || e.thumb;
+      }
+    }
+    if (!mp4) return null;
+    const probe = await fetch(mp4, {
+      headers: { "User-Agent": UA, Range: "bytes=0-1", Referer: pageUrl },
+      signal: AbortSignal.timeout(6000),
+    });
+    const type = probe.headers.get("content-type") || "";
+    if (!probe.ok || !/^(?:video\/|application\/octet-stream)/i.test(type)) return null;
+    return { mp4, thumb };
+  } catch {
+    return null;
+  }
+}
+
+// Route an external clip-host page URL to its mp4 resolver: the matching
+// per-host resolver first, then the generic player reader when that host is
+// unknown or its resolver comes back empty. Every Reddit path (redlib, RSS,
+// OAuth) funnels clip links through here.
+async function fetchClipMp4(url) {
+  let clip = null;
+  if (/^https?:\/\/streamff\.\w+\/v\//i.test(url)) clip = await fetchStreamffMp4(url);
+  else if (/^https?:\/\/streamin\.\w+\/v\//i.test(url)) clip = await fetchStreaminMp4(url);
+  else if (/^https?:\/\/dropr\.\w+\/v\//i.test(url)) clip = await fetchDroprMp4(url);
+  else if (/^https?:\/\/(?:streama\.in|streamain\.\w+)\//i.test(url)) clip = await fetchStreamainMp4(url);
+  if (clip || !isClipPageUrl(url)) return clip;
+  return fetchGenericClipMp4(url);
 }
 
 // ── YouTube lookup + validation + cache ───────────────────────────
@@ -1470,13 +1516,14 @@ async function fetchRedditVideoMap(subreddit) {
         block.match(/\/vid\/([a-z0-9]{8,16})\//i) ||
         block.match(/\/hls\/([a-z0-9]{8,16})/i);
       if (vm) map.set(idm[1], vm[1]);
-      // streamff / streamin goal clips render as a "no_thumbnail" link anchor
-      // (no <img>), so capture the /v/<id> url here for fetchRedditRSS to resolve
-      // into a playable mp4 (fetchClipMp4). v.redd.it wins if both.
-      const cl =
-        block.match(/href="(https?:\/\/(?:streamff|streamin|dropr)\.\w+\/v\/[^"]+)"/i) ||
-        block.match(/href="(https?:\/\/(?:streama\.in|streamain\.\w+)\/[^"]+)"/i);
-      if (cl && !map.has(idm[1])) clips.set(idm[1], decodeEntities(cl[1]));
+      // Clip-host goal clips render as a "no_thumbnail" link anchor (no <img>),
+      // so capture the clip page url here for fetchRedditRSS to resolve into a
+      // playable mp4 (fetchClipMp4). Any host, so a new one needs no code.
+      // v.redd.it wins if both.
+      const cl = [...block.matchAll(/href="(https?:\/\/[^"]+)"/gi)]
+        .map((h) => decodeEntities(h[1]))
+        .find(isClipPageUrl);
+      if (cl && !map.has(idm[1])) clips.set(idm[1], cl);
     }
     if (map.size > 0 || clips.size > 0) return { vreddit: map, clips };
   }
@@ -1756,26 +1803,14 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
           extUrl.match(/^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([\w-]{6,})/);
         const gifv = extUrl.match(/^https?:\/\/i\.imgur\.com\/(\w+)\.gifv/i);
         const mp4 = extUrl.match(/^https?:\/\/\S+\.mp4(?:$|\?)/i);
-        // streamff / streamin — r/soccer's goal-clip hosts (streamff is current).
-        // The /v/<id> page yields a direct mp4 + an og:image poster we resolve
-        // (fetchStreamff/StreaminMp4). These post as "no_thumbnail" links, so the
-        // clip's own poster is the only preview tile they get — without it the
-        // row collapses to text, unlike image-bearing posts from other subs.
-        const streamin = /^https?:\/\/streamin\.\w+\/v\//i.test(extUrl);
-        const streamff = /^https?:\/\/streamff\.\w+\/v\//i.test(extUrl);
-        const dropr = /^https?:\/\/dropr\.\w+\/v\//i.test(extUrl);
-        // streama.in posts as /<id>/watch, not /v/<id> — match on host only.
-        const streamain = /^https?:\/\/(?:streama\.in|streamain\.\w+)\//i.test(extUrl);
-        if (sm || streamff || streamin || dropr || streamain) {
-          const clip = sm
-            ? await fetchStreamableMp4(sm[1])
-            : streamff
-              ? await fetchStreamffMp4(extUrl)
-              : streamin
-                ? await fetchStreaminMp4(extUrl)
-                : dropr
-                  ? await fetchDroprMp4(extUrl)
-                  : await fetchStreamainMp4(extUrl);
+        // r/soccer's goal-clip hosts (any of them — see fetchClipMp4). The
+        // clip page yields a direct mp4 + an og:image poster. These post as
+        // "no_thumbnail" links, so the clip's own poster is the only preview
+        // tile they get — without it the row collapses to text, unlike
+        // image-bearing posts from other subs.
+        const clipPage = !sm && isClipPageUrl(extUrl);
+        if (sm || clipPage) {
+          const clip = sm ? await fetchStreamableMp4(sm[1]) : await fetchClipMp4(extUrl);
           if (clip) {
             videoUrl = clip.mp4;
             if (!imageUrl) imageUrl = clip.thumb;
@@ -2069,12 +2104,12 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
       // sitting right in the entry <content> (the post's link-out). redlib
       // mirrors are down most days, so without this the clip only resolves on the
       // rare run that reached a live mirror; the feed itself always carries the
-      // host URL. Host-agnostic so a future rotation only needs a fetchClipMp4
-      // entry (streamff → streamin → dropr so far, Jacob 6/23).
+      // host URL. Host-agnostic: the post's [link] href on any clip site
+      // resolves, so a future rotation needs no code (Jacob 6/23, 9/22).
+      const linkHref = (decodeEntities(content).match(/href="([^"]+)">\[link\]/) || [])[1];
       const clipUrl =
         media.clips.get(postId) ||
-        (content.match(/https?:\/\/(?:streamff|streamin|dropr)\.\w+\/v\/[a-z0-9]+/i) || [])[0] ||
-        null;
+        (linkHref && isClipPageUrl(linkHref) ? linkHref : null);
       if (clipUrl) {
         const clip = await fetchClipMp4(clipUrl);
         if (clip) {
@@ -2165,14 +2200,8 @@ async function fetchRedditListing(subreddit, sectionLabel, token) {
         const clip = await fetchStreamableMp4(m[1]);
         if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
       }
-    } else if (/^streamin\.\w+$/i.test(p.domain || "") && /\/v\//.test(p.url || "")) {
-      const clip = await fetchStreaminMp4(p.url);
-      if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
-    } else if (/^streamff\.\w+$/i.test(p.domain || "") && /\/v\//.test(p.url || "")) {
-      const clip = await fetchStreamffMp4(p.url);
-      if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
-    } else if (/^(?:streama\.in|streamain\.\w+)$/i.test(p.domain || "")) {
-      const clip = await fetchStreamainMp4(p.url || "");
+    } else if (isClipPageUrl(p.url || "")) {
+      const clip = await fetchClipMp4(p.url);
       if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
     }
     // i.redd.it image posts: surface the original full-res URL so the client
