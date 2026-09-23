@@ -1330,8 +1330,47 @@ const SCORE_RX = /(?<![-/])\b\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-/])/;
 //     genuine stoppage-time result is already caught by "winner"/"equali[sz]e".
 const SPOILER_RX = /\b(walk[- ]?off|buzzer[- ]?beaters?|comeback|come[- ]from[- ]behind|(?:storm|roar|claw)(?:s|ed|ing)?[- ]?back|battl(?:e|es|ed|ing)[- ]?back|fight(?:s|ing)?[- ]?back|fought[- ]?back|rall(?:y|ies|ied|ying) (?:past|back|from)|extra[- ]?innings?|overtime|extra[- ]?time|sudden[- ]?death|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|overwhelm\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|relegat\w*|overcome|overcomes|overcoming|overcame|dominat\w*|defeat\w*|beat\w*|edge\w*|pip(?:s|ped|ping)?|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|hold(?:s|ing)?[- ]?on|held[- ]?on|hang(?:s|ing)?[- ]?on|hung[- ]?on|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|top(?:s|ped)|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|capitulat\w*|choke\w*|collaps\w*|obliterat\w*|annihilat\w*|decimat\w*|vanquish\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|clobber\w*|shellac\w*|brush(?:es|ed|ing)?[- ]?aside|(?:runs?|running|ran) riot|to the sword|hammer(?:ed|ing)|batter(?:ed|ing)|cruise(?:s|d)?|canter(?:s|ed|ing)?|(?:eas(?:e|es|ed)|power(?:s|ed)?|breez(?:e|es|ed)|coast(?:s|ed)?|stroll(?:s|ed)?|waltz(?:es|ed)?|roll(?:s|ed)?)[- ]?past|(?:sneak(?:s|ed)?|snuck|slip(?:s|ped)?|squeez(?:e|es|ed))[- ]?past|triumph\w*|romp\w*|conquer\w*|dethron\w*|upset\w*|clinch\w*|seals?|sealed|snatch\w*|sweep\w*|swept|whitewash\w*|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|knock out|knock(?:s|ed|ing)? off|sent[- ]?packing|qualif(?:y|ies|ied)|advanc\w*|book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)|punch(?:es|ed)? (?:their|its|a) ticket|reach(?:es|ed|ing)? (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|through to (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|into (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|progress(?:es|ed|ing)? (?:to |into |through to )?(?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|crowned (?:world )?champions?|world[- ]?(?:cup[- ]?)?champions?|(?:lift|hoist)(?:s|ed|ing)? (?:the )?(?:world[- ]?cup|trophy)|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|(?:comes?|came)[- ]?out on top|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]?hitter|empty[- ]?net(?:s|ter|ters)?|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|blank(?:s|ed|ing)|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|salvag\w*|rescu\w*|consolat\w*|share(?:s|d)? the spoils|share(?:s|d)? the points|share(?:s|d)? the honou?rs|a point (?:apiece|each)|honou?rs even|held to an? (?:[\w-]+ )?draw|settl(?:e|es|ed|ing) for (?:a|an|the) (?:draw|point|stalemate)|all[- ]?square|equali[sz]\w*|level(?:l)?ers?|go[- ]?ahead (?:goal|run|homer|home[- ]?run|score|basket|bucket|touchdown|header|strike)s?|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|sees?[- ]?red|saw[- ]?red|red card|all three points|bowl(?:s|ed|ing)[- ]?out|all[- ]?out for|chas(?:e|es|ed|ing)[- ]?down|chas(?:e|es|ed) \d{2,3}\b|super[- ]?over|defend(?:s|ed|ing)? \d{2,3}\b|\d{2,3}\/(?:10|\d)\b|\d{2,3} for \d\b|five[- ]?for\b|fifer|wicket haul|skittl\w*|TKO|KOs?|KO'd|stops|stopped|def(?=\.)|retain(?:s|ed)|finish(?:es|ed)|starch\w*|submission\w*|submit(?:s|ted|ting)|tap(?:s|ped|ping)?[- ]?out|(?:unanimous|split|majority)[- ]?decision)\b/i;
 
+// SPOILER_RX carries /i so every keyword above matches regardless of case. This alternative
+// can't live there: under /i, [A-Z] means "any letter", so it caught lowercase listicle titles
+// too ("top 10 plays of week 2"). Kept as its own case-sensitive regex — it only means anything
+// when the two "teams" are genuinely capitalized proper names.
+//
+// Catches the box-score-style title SCORE_RX's hyphenated form misses entirely —
+// "GAME RECAP: Grizzlies 110, Lakers 105" and "Lakers 105 Grizzlies 110 final" both name two
+// teams and two scores with nothing but a space (comma optional) between them, no hyphen
+// anywhere. Each team name is one or more capitalized words so a bare number never qualifies as
+// a "team". Digits capped at 3 for the same reason as SCORE_RX (excludes years).
+const TEAM_SCORE_RX =
+  /\b([A-Z][\w.'-]+(?: [A-Z][\w.'-]+)*) (\d{1,3}),? ([A-Z][\w.'-]+(?: [A-Z][\w.'-]+)*) (\d{1,3})\b/;
+
+// A Title Case listicle/schedule headline ("Top 3 Storylines Heading Into Round 2", "Ranking
+// the Top 5 QBs After Week 6") still satisfies TEAM_SCORE_RX's shape even case-sensitively,
+// because every word in that kind of title is capitalized. None of these words is ever a real
+// team name, so a match naming one is rejected outright.
+const TEAM_SCORE_LISTICLE_WORDS = new Set([
+  "Top",
+  "Best",
+  "Week",
+  "Game",
+  "Round",
+  "Match",
+  "Day",
+  "Part",
+  "Episode",
+  "Vol",
+  "Season",
+]);
+
+function isTeamScoreSpoiler(text: string): boolean {
+  const m = text.match(TEAM_SCORE_RX);
+  if (!m) return false;
+  const [, team1, , team2] = m;
+  const words = [...team1.split(" "), ...team2.split(" ")];
+  return !words.some((word) => TEAM_SCORE_LISTICLE_WORDS.has(word));
+}
+
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
   if (!text) return false;
-  return SCORE_RX.test(text) || SPOILER_RX.test(text);
+  return SCORE_RX.test(text) || SPOILER_RX.test(text) || isTeamScoreSpoiler(text);
 }
