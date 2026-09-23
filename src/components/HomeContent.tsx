@@ -3315,9 +3315,9 @@ export default function HomeContent({
                   >
                     {renderedEntries.map((entry, idx) => {
                       const otherSports = renderedEntries
+                        .map((e, i) => ({ sport: e.sport, col: i + 1 }))
                         .filter((_, i) => i !== idx)
-                        .map((e) => e.sport)
-                        .filter((s): s is Sport => !!s);
+                        .filter((e): e is { sport: Sport; col: number } => !!e.sport);
                       // "News" (ESPN) col is swappable to a 3rd league via
                       // setNewsThirdLeague — matches hidescore.com's "News ▾".
                       const isEspn = entry.id === "espn";
@@ -3379,9 +3379,9 @@ export default function HomeContent({
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
+                    .map((e, i) => ({ sport: e.sport, col: i + 1 }))
                     .filter((_, i) => i !== idx)
-                    .map((e) => e.sport)
-                    .filter((s): s is Sport => !!s);
+                    .filter((e): e is { sport: Sport; col: number } => !!e.sport);
                   const isEspn = entry.id === "espn";
                   return (
                     <NewsColumn
@@ -3549,7 +3549,9 @@ export default function HomeContent({
               : undefined;
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
-              shownElsewhere: displayedSports.filter((_, i) => i !== idx),
+              shownElsewhere: displayedSports
+                .map((sport, i) => ({ sport, col: i + 1 }))
+                .filter((_, i) => i !== idx),
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
               autoSport: autoSlotSports[idx],
               switcherMode: prefs.leagueSwitcherMode ?? ("dropdown" as const),
