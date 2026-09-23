@@ -1306,7 +1306,7 @@ export default function SettingsPanel({
                 the wrong one looked like a bug (Jacob 8/31). */}
             <ToggleRow
               label="One wide column — scores"
-              hint="Stack your leagues in one wide column with bigger cards, instead of side-by-side columns. (The matching setting for news is under News.)"
+              hint="Stack your leagues in one wide column with bigger cards, instead of side-by-side columns. This device only. (The matching setting for news is under News.)"
               checked={prefs.singleColumn ?? false}
               onChange={(v) => updatePrefs({ singleColumn: v })}
             />
@@ -1408,7 +1408,7 @@ export default function SettingsPanel({
           <Section title="News">
             <ToggleRow
               label="One wide column — news"
-              hint="Stack all news columns into one wide column instead of side-by-side. (The matching setting for scores is under Board layout.)"
+              hint="Stack all news columns into one wide column instead of side-by-side. This device only. (The matching setting for scores is under Board layout.)"
               checked={prefs.newsSingleColumn ?? false}
               onChange={(v) => updatePrefs({ newsSingleColumn: v })}
             />
