@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { routeArrowKey, routeModalKey, type ArrowContext, type ModalKeyContext } from "../src/lib/modalArrowKeys.ts";
+import { nativeVideoOwnsKey, routeArrowKey, routeModalKey, type ArrowContext, type ModalKeyContext } from "../src/lib/modalArrowKeys.ts";
 
 // ←/→ inside the post modal (Jacob 9/4): plain arrows belong to the content —
 // a video scrubs, a gallery walks its pictures — and Shift+←/→ is the pager.
@@ -159,4 +159,13 @@ test("keys we deliberately do not handle stay the browser's", () => {
   for (const key of ["Enter", "Tab", "PageDown", "PageUp", "Home", "End", "a", "z", "?", "Shift", "f", "Escape"]) {
     assert.equal(routeModalKey(mctx({ key, canSeek: true })), null, key);
   }
+});
+
+// Jacob 9/12: "if i click play on video in news i lose ability to use h". A
+// click on an ESPN/MLB clip's native controls focuses the <video>, and every
+// key that landed on it was treated as text entry. Only the keys the element
+// acts on itself stay with it now.
+test("a focused native <video> keeps Space and the arrows, and nothing else", () => {
+  for (const k of [" ", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]) assert.equal(nativeVideoOwnsKey(k), true, k);
+  for (const k of ["h", "H", "Escape", "m", "j", "l", "0", "5", "?", "k", "f"]) assert.equal(nativeVideoOwnsKey(k), false, k);
 });

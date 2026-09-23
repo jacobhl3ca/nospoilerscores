@@ -610,6 +610,33 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
   const tiers = [...suffixTiers, ...baseTiers];
   const href = result?.href;
   const tiersKey = tiers.join("|");
+  // A tier below suffixTiers.length is a paired one, so the trailing
+  // " \u00B7 <promo>" is peeled back off and rendered as its own control.
+  const labelOf = (i: number) =>
+    i < suffixTiers.length
+      ? baseTiers.length
+        ? tiers[i].slice(0, -((tradePromo?.label.length ?? 0) + 3))
+        : ""
+      : tiers[i];
+  // Italic means plain text; a part you can tap sits upright with a trailing
+  // arrow ("\u25B8" opens something in the app, "\u2197" leaves the site).
+  // 9/23: a user did not know "Playoff picture" opened the modal while it
+  // wore the same muted italic as the "8:30 PM" beside it.
+  const promoArrow = tradePromo?.href ? " \u2197" : " \u25B8";
+  const labelTaps = !!(href || onClick);
+  // What tier i really draws, piece by piece. The probe measures these rather
+  // than the bare tier string, so the arrows and the upright glyphs count when
+  // it decides what fits — the bare string came up short by the arrow's width.
+  const piecesFor = (i: number): { text: string; upright: boolean }[] => {
+    const t = labelOf(i);
+    const pieces = t ? [{ text: t, upright: labelTaps }] : [];
+    if (t && !href && onClick) pieces.push({ text: " \u25B8", upright: true });
+    if (i < suffixTiers.length && tradePromo) {
+      if (t) pieces.push({ text: " \u00B7 ", upright: false });
+      pieces.push({ text: tradePromo.label + promoArrow, upright: true });
+    }
+    return pieces;
+  };
   const [tierIdx, setTierIdx] = useState(tiers.length ? tiers.length - 1 : 0);
   const [ready, setReady] = useState(false);
 
@@ -629,11 +656,18 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
     const padX = parseFloat(hostCs.paddingLeft || "0") + parseFloat(hostCs.paddingRight || "0");
     const available = host.clientWidth - padX;
     const probe = document.createElement("span");
-    probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font-family:${cs.fontFamily};font-size:${cs.fontSize};font-style:${cs.fontStyle};font-weight:${cs.fontWeight};letter-spacing:${cs.letterSpacing};`;
+    probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font-family:${cs.fontFamily};font-size:${cs.fontSize};font-weight:${cs.fontWeight};letter-spacing:${cs.letterSpacing};`;
     document.body.appendChild(probe);
     let chosen = tiers.length - 1;
     for (let i = 0; i < tiers.length; i++) {
-      probe.textContent = tiers[i];
+      probe.replaceChildren(
+        ...piecesFor(i).map((p) => {
+          const piece = document.createElement("span");
+          piece.textContent = p.text;
+          piece.style.fontStyle = p.upright ? "normal" : "italic";
+          return piece;
+        }),
+      );
       const w = probe.getBoundingClientRect().width;
       if (w <= available - 2) { chosen = i; break; }
     }
@@ -666,21 +700,18 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
   const usingFallback = !tiers.length && !!fallbackText;
   const baseCls = "text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5";
   const liveCls = `${baseCls} text-green-500 font-medium hover:text-green-400 transition-colors hover:underline`;
-  const linkCls = `${baseCls} italic hover:underline transition-colors`;
+  // Upright: this one is tappable (see promoArrow). Plain text stays italic.
+  const linkCls = `${baseCls} not-italic hover:underline transition-colors`;
   const spanCls = `${baseCls} italic`;
+  // A step brighter than the muted plain text, so a tappable part stands out
+  // from the words beside it without looking like a heading.
+  const tapColor = "color-mix(in srgb, var(--text-muted) 45%, var(--text-secondary))";
   const baseStyle = {
     visibility: ready || !tiers.length ? ("visible" as const) : ("hidden" as const),
     color: isLive ? undefined : (tiers.length || usingFallback ? "var(--text-muted)" : "transparent"),
   };
-  // A chosen tier below suffixTiers.length is a paired one, so the trailing
-  // " \u00B7 Trades" is peeled back off and re-rendered as its own link.
   const showsTradeBoard = tierIdx < suffixTiers.length;
-  const chosen = tiers.length ? tiers[tierIdx] : (fallbackText ?? "\u00A0");
-  const text = showsTradeBoard
-    ? baseTiers.length
-      ? chosen.slice(0, -((tradePromo?.label.length ?? 0) + 3))
-      : ""
-    : chosen;
+  const text = tiers.length ? labelOf(tierIdx) : (fallbackText ?? "\u00A0");
   // When live, peel the leading "\u25CF" off so we can animate just the dot.
   // The probe still measures the full string (including "\u25CF"), so layout
   // math stays accurate.
@@ -716,9 +747,10 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
         target="_blank"
         rel="noopener noreferrer"
         onClick={handleExternalClick(tradePromo.href)}
-        className="hover:underline transition-colors"
+        className="not-italic hover:underline transition-colors"
+        style={{ color: tapColor }}
       >
-        {tradePromo.label}
+        {tradePromo.label}<span aria-hidden="true">{promoArrow}</span>
       </a>
     ) : (
       // An in-app promo (the playoff picture) opens a dialog rather than
@@ -726,9 +758,10 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
       <button
         type="button"
         onClick={tradePromo.onClick}
-        className="hover:underline transition-colors cursor-pointer"
+        className="not-italic hover:underline transition-colors cursor-pointer"
+        style={{ color: tapColor }}
       >
-        {tradePromo.label}
+        {tradePromo.label}<span aria-hidden="true">{promoArrow}</span>
       </button>
     );
     let label: React.ReactNode = null;
@@ -742,15 +775,16 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
           className={
             isLive
               ? "text-green-500 font-medium hover:text-green-400 transition-colors hover:underline not-italic"
-              : "hover:underline transition-colors"
+              : "not-italic hover:underline transition-colors"
           }
+          style={isLive ? undefined : { color: tapColor }}
         >
           {renderText(text)}
         </a>
       );
     } else if (text && onClick) {
       label = (
-        <button type="button" onClick={onClick} className="hover:underline transition-colors cursor-pointer">
+        <button type="button" onClick={onClick} className="not-italic hover:underline transition-colors cursor-pointer" style={{ color: tapColor }}>
           {/* The "▸" is a decorative disclosure cue, not part of the button's
               name — hide it from assistive tech so the accessible name is just
               the label text, matching the aria-hidden treatment the live-pulse
@@ -766,8 +800,9 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
       <span
         ref={ref as React.RefObject<HTMLSpanElement>}
         className={spanCls}
-        // The wrapper always carries the muted colour so the promo reads as
-        // muted italic; a live label overrides it with its own green class.
+        // The wrapper carries the muted italic of plain text (the " \u00B7 "
+        // and a label that is not a link); each tappable piece sets its own
+        // upright style and brighter colour, and a live label its green.
         style={{ ...baseStyle, color: "var(--text-muted)" }}
       >
         {label}
@@ -785,7 +820,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
         rel="noopener noreferrer"
         onClick={handleExternalClick(href)}
         className={isLive ? liveCls : linkCls}
-        style={baseStyle}
+        style={isLive ? baseStyle : { ...baseStyle, color: tapColor }}
       >
         {renderText(text)}
       </a>
@@ -793,7 +828,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
   }
   // Tappable subtitle (e.g. the World Cup "Group Stage" line opens the all-
   // groups overlay). A trailing ▸ hints it's interactive; styled like the link
-  // variant (italic + hover underline).
+  // variant (upright + brighter + hover underline).
   if (onClick && tiers.length) {
     return (
       <button
@@ -801,7 +836,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
         type="button"
         onClick={onClick}
         className={`${linkCls} cursor-pointer`}
-        style={baseStyle}
+        style={{ ...baseStyle, color: tapColor }}
       >
         {/* The trailing "▸" is a decorative disclosure cue, not part of the
             button's name — hide it from assistive tech so the accessible name
