@@ -3049,6 +3049,24 @@ async function bakeGameHighlights() {
   // Carry forward recent channel-marked entries only. No sport gets an immortal
   // cache record: old cards can strict-resolve live, while a stale or repurposed
   // video ID cannot survive forever just because it once looked valid.
+  // --hl-days=N widens the window for a one-off re-bake after a matcher fix
+  // (2026-09-12: four US Open cards from Sep 4–9 missed on name order).
+  // Already-baked games short-circuit, so a wide window only re-scrapes the
+  // still-missing ones.
+  //
+  // Default widened 2 → 7 days (2026-09-12). With 2 days a recap that posts
+  // late was never retried, so the card stayed buttonless forever — a 9-day
+  // one-off resolved four EPL cards, and a 7-day timing run on the mini found
+  // three more (UCL, Liga MX, NWSL). Measured cost on the mini, highlights
+  // step only: 30 s → 104 s per run (the full run is ~23 min), +110 ESPN
+  // scoreboard fetches, and ~2 YouTube searches per still-missing game in the
+  // window (24 such games on 2026-09-12) until its clip appears or it ages out.
+  // Read before the carry-forward below, which uses it to tell an entry the
+  // per-game loop will revisit from one it will not.
+  const HL_DEFAULT_DAYS = 7;
+  const hlDaysArg = parseInt(process.argv.find((a) => a.startsWith("--hl-days="))?.slice("--hl-days=".length) ?? "", 10);
+  const hlDays = Number.isFinite(hlDaysArg) && hlDaysArg > 0 ? Math.min(hlDaysArg, 30) : HL_DEFAULT_DAYS;
+
   const games = {};
   const prior = await loadPriorHighlights();
   for (const [k, v] of Object.entries(prior?.games ?? {})) {
@@ -3062,7 +3080,32 @@ async function bakeGameHighlights() {
     const hasMatchupProvenance = Array.isArray(v.teams) && v.teams.length === 2
       && v.matchup === hlMatchupFingerprint(v.teams[0], v.teams[1]);
     if (v.sourcePolicy !== "official-channel" || !populatedSlots.length || !everySlotNamesItsChannel || !hasMatchupProvenance) continue;
-    if ((now - (v.t ?? 0)) < HL_ENTRY_TTL_MS) games[k] = v;
+    if ((now - (v.t ?? 0)) >= HL_ENTRY_TTL_MS) continue;
+
+    // AGE SWEEP for the frozen band. The per-game loop below only walks the
+    // last `hlDays` (7) of scoreboards, while this carry-forward keeps an entry
+    // for HL_ENTRY_TTL_MS (10 days). A game between those two numbers is still
+    // SERVED but is never revisited, so the upload-date gate cannot reach it:
+    // on the 2026-09-20 bake that band held 14 wrong-season clips, the oldest a
+    // 2019 MLS game. Check those slots here instead. Only out-of-window entries
+    // pay the fetch — in-window ones are gated by the loop below, and the watch
+    // page is cached per id per run either way. An entry from before eventDate
+    // was stamped has nothing to compare against and is left alone.
+    const gameAgeDays = v.eventDate ? Math.floor((now - Date.parse(v.eventDate)) / 86400000) : null;
+    if (gameAgeDays === null || !Number.isFinite(gameAgeDays) || gameAgeDays < hlDays) {
+      games[k] = v;
+      continue;
+    }
+    const kept = { ...v };
+    for (const slot of populatedSlots) {
+      if (await hlVideoMatchesDate(kept[slot], kept.eventDate)) continue;
+      console.warn(`HIGHLIGHT-AGE-REJECT ${k} carried ${slot}=${kept[slot]} (${kept.eventDate})`);
+      delete kept[slot];
+      delete kept[`${slot}Channel`];
+      delete kept[`${slot}DurationSec`];
+    }
+    if (populatedSlots.some((slot) => kept[slot])) games[k] = kept;
+    else console.warn(`HIGHLIGHT-AGE-DROP ${k} carried (${kept.eventDate})`);
   }
   for (const [k, seed] of Object.entries(HL_WORLD_CUP_SEEDS)) {
     const teams = seed.teams ?? String(seed.matchup ?? "").split("|").filter(Boolean);
@@ -3089,21 +3132,6 @@ async function bakeGameHighlights() {
     else delete games[k];
   }
 
-  // --hl-days=N widens the window for a one-off re-bake after a matcher fix
-  // (2026-09-12: four US Open cards from Sep 4–9 missed on name order).
-  // Already-baked games short-circuit, so a wide window only re-scrapes the
-  // still-missing ones.
-  //
-  // Default widened 2 → 7 days (2026-09-12). With 2 days a recap that posts
-  // late was never retried, so the card stayed buttonless forever — a 9-day
-  // one-off resolved four EPL cards, and a 7-day timing run on the mini found
-  // three more (UCL, Liga MX, NWSL). Measured cost on the mini, highlights
-  // step only: 30 s → 104 s per run (the full run is ~23 min), +110 ESPN
-  // scoreboard fetches, and ~2 YouTube searches per still-missing game in the
-  // window (24 such games on 2026-09-12) until its clip appears or it ages out.
-  const HL_DEFAULT_DAYS = 7;
-  const hlDaysArg = parseInt(process.argv.find((a) => a.startsWith("--hl-days="))?.slice("--hl-days=".length) ?? "", 10);
-  const hlDays = Number.isFinite(hlDaysArg) && hlDaysArg > 0 ? Math.min(hlDaysArg, 30) : HL_DEFAULT_DAYS;
   const dates = Array.from({ length: hlDays }, (_, i) => hlEtYmd(-i));
   // World Cup gets a much wider window than the daily leagues. WC has only a
   // handful of games/day but a recap can post late (or a bake can fail while the
@@ -3219,6 +3247,11 @@ async function bakeGameHighlights() {
         // concurrent resolve + collision re-resolve in GameHighlights.tsx.
         let prevOfficial = carriedOfficial;
         let prevExtended = carriedExtended;
+        // Slots refused by the upload-date gate this run. A resolve MISS and an
+        // age REJECT look the same by the time the entry is assembled — both
+        // leave the slot null — but they must not be treated the same. See the
+        // HIGHLIGHT-AGE-DROP branch at the write below.
+        let ageRejected = 0;
         if (prevOfficial && prevExtended && prevOfficial === prevExtended) {
           console.warn(`HIGHLIGHT-DUPLICATE-REJECT ${key} extended=${prevExtended}`);
           prevExtended = null;
@@ -3233,6 +3266,7 @@ async function bakeGameHighlights() {
         if (prevOfficial && !(await hlVideoMatchesDate(prevOfficial, item.date))) {
           console.warn(`HIGHLIGHT-AGE-REJECT ${key} official=${prevOfficial} (${away} vs ${home} ${dateStr})`);
           prevOfficial = null;
+          ageRejected++;
         }
         if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
@@ -3241,6 +3275,7 @@ async function bakeGameHighlights() {
         if (prevExtended && !(await hlVideoMatchesDate(prevExtended, item.date))) {
           console.warn(`HIGHLIGHT-AGE-REJECT ${key} extended=${prevExtended} (${away} vs ${home} ${dateStr})`);
           prevExtended = null;
+          ageRejected++;
         }
 
         let official = prevOfficial ?? null;
@@ -3254,6 +3289,7 @@ async function bakeGameHighlights() {
           if (official && !(await hlVideoMatchesDate(official, item.date))) {
             console.warn(`HIGHLIGHT-AGE-REJECT ${key} newly-resolved official=${official} (${away} vs ${home} ${dateStr})`);
             official = null;
+            ageRejected++;
           }
           for (const fb of official ? [] : fallbacks) {
             const tokens = officialTokensFor(fb);
@@ -3265,6 +3301,7 @@ async function bakeGameHighlights() {
             }
             if (!(await hlVideoMatchesDate(id, item.date))) {
               console.warn(`HIGHLIGHT-AGE-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home} ${dateStr})`);
+              ageRejected++;
               continue;
             }
             official = id;
@@ -3286,6 +3323,7 @@ async function bakeGameHighlights() {
           if (extended && !(await hlVideoMatchesDate(extended, item.date))) {
             console.warn(`HIGHLIGHT-AGE-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home} ${dateStr})`);
             extended = null;
+            ageRejected++;
           }
         }
         let telemundo = isFifa && sameChannel(prev.telemundoChannel, "Telemundo Deportes") ? (prev.telemundo ?? null) : null;
@@ -3407,6 +3445,19 @@ async function bakeGameHighlights() {
           } else if (isFifa && !rawPrev.matchup) {
             console.log(`HIGHLIGHT-MATCHUP-STAMPED ${key} ${matchup}`);
           }
+        } else if (ageRejected) {
+          // Every slot this game had was refused as an earlier season's clip,
+          // and nothing replaced it. The guard above deliberately leaves the
+          // carried record alone when an entry comes out empty, because a
+          // resolve MISS (no recap posted yet, a flaky lookup) must not drop a
+          // good cached id. An age REJECT is the opposite: a positive finding
+          // that the cached id is WRONG. Without this branch the carry-forward
+          // at the top of bakeGameHighlights hands the rejected id straight
+          // back into the manifest, which is exactly what happened on the
+          // 2026-09-20 bake — 88 ids were rejected and 18 of them were still
+          // being served afterwards.
+          delete games[key];
+          console.warn(`HIGHLIGHT-AGE-DROP ${key} (${away} vs ${home} ${dateStr})`);
         }
       }
     }
