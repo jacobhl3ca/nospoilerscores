@@ -5,11 +5,11 @@ import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
+import { buildKeyLegend } from "@/lib/modalKeyLegend";
+import ModalKeyHints, { initialKeyHintsState, persistKeyHintsOff, type KeyHintsState } from "@/components/ModalKeyHints";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
 import { routeModalKey } from "@/lib/modalArrowKeys";
-import { buildKeyLegend } from "@/lib/modalKeyLegend";
-import ModalKeyHints, { initialKeyHintsState, persistKeyHintsOff, type KeyHintsState } from "@/components/ModalKeyHints";
 
 interface VideoModalProps {
   videoId: string;
