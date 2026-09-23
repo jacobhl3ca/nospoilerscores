@@ -16,8 +16,11 @@ import { expect, test } from "@playwright/test";
 // the embed itself are both faked via page.route, and the post is opened
 // through the ?v= deep-link HomeContent already parses for shared highlights
 // (same one buildHighlightShareUrl produces), carrying a headline so H has
-// something to peek. A real Safari repro needs a manual WebKit pass — this
-// repo's playwright.config only provisions Chromium (see sticky-seam.spec.ts).
+// something to peek. The third test blocks the window "blur" event, the way
+// Safari drops it for this click, so the onStateChange path has to carry the
+// recovery on its own. Playwright's WebKit fires the blur like Chromium does,
+// so it cannot stand in for real Safari; run it with
+// `npx playwright test --config playwright.webkit.config.ts` for the engine.
 
 const FAKE_YT_API = `
 (function () {
@@ -90,7 +93,12 @@ const BASE_PREFS = {
   defaultDateMode: "today",
 };
 
-async function openDeepLinkedVideoPost(page: import("@playwright/test").Page) {
+async function openDeepLinkedVideoPost(page: import("@playwright/test").Page, opts: { dropWindowBlur?: boolean } = {}) {
+  if (opts.dropWindowBlur) {
+    // Registered before the app's own listener, so stopImmediatePropagation
+    // keeps it from ever seeing a window blur.
+    await page.addInitScript(() => window.addEventListener("blur", (e) => e.stopImmediatePropagation(), true));
+  }
   await page.route("https://www.youtube.com/iframe_api", (route) =>
     route.fulfill({ status: 200, contentType: "application/javascript", body: FAKE_YT_API })
   );
@@ -150,4 +158,17 @@ test("Esc still closes the modal after clicking play on its video", async ({ pag
 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("H still peeks the headline when the window blur never fires (Safari)", async ({ page }) => {
+  const headline = await openDeepLinkedVideoPost(page, { dropWindowBlur: true });
+  const title = page.getByRole("dialog").locator(".news-title", { hasText: headline });
+  await expect.poll(() => title.evaluate((el) => getComputedStyle(el).filter)).toMatch(/blur\(/);
+
+  await page.frameLocator("iframe").locator("#play").click();
+  await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("role"))).toBe("dialog");
+  await page.keyboard.press("h");
+  await expect.poll(() => title.evaluate((el) => getComputedStyle(el).filter), {
+    message: "the onStateChange path did not recover focus on its own",
+  }).toBe("none");
 });
