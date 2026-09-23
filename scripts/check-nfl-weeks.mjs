@@ -39,6 +39,33 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "ok  " : "FAIL"}  ${name}${detail ? `  — ${detail}` : ""}`);
 };
 
+// WEEK TOKEN — hand copy of parseWeekFromTitle in public/_worker.js (and
+// hlParseWeekFromTitle in scripts/prebake-news.mjs), kept in sync by hand.
+// This live check is NFL-only today and NFL never spells a week out, so the
+// digit path is all that fires in practice — but a title-parsing regex that
+// silently disagrees with the two copies that DO see spelled weeks (CFL: TSN
+// spells weeks 1–5 "WEEK ONE" … "WEEK FIVE") is exactly the kind of drift
+// that produced the 2026-09-22 CFL bug in the first place, so all three stay
+// byte-for-byte the same shape.
+const WEEK_WORDS = [
+  "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+  "nineteen", "twenty",
+];
+const WEEK_TOKEN_RE = new RegExp(
+  `\\bw(?:ee)?k\\.?\\s*(\\d{1,2}|${WEEK_WORDS.join("|")})(?:[\\s-]one)?\\b`,
+  "i",
+);
+function parseWeekFromTitle(title) {
+  const m = String(title ?? "").match(WEEK_TOKEN_RE);
+  if (!m) return null;
+  const whole = m[0].toLowerCase();
+  const w = m[1].toLowerCase();
+  const base = /^\d+$/.test(w) ? parseInt(w, 10) : WEEK_WORDS.indexOf(w);
+  if (base < 0 || Number.isNaN(base)) return null;
+  return base === 20 && /twenty[\s-]one\b/.test(whole) ? 21 : base;
+}
+
 // ── 1. The gate exists end to end ────────────────────────────────────────────
 // Each leg is a separate file, and a break in ANY one of them silently reverts
 // the whole thing to the pre-fix behaviour (a wrong-week recap, which looks
@@ -47,7 +74,23 @@ const worker = readFileSync("public/_worker.js", "utf8");
 check("worker reads the week param", /url\.searchParams\.get\("week"\)/.test(worker));
 check(
   "worker hard-skips a disagreeing week token",
-  /if \(queryWeek\) \{[\s\S]{0,400}?parseInt\(weekTok\[1\], 10\) !== queryWeek\) continue;/.test(worker),
+  /if \(queryWeek\) \{[\s\S]{0,400}?titleWeek !== null && titleWeek !== queryWeek\) continue;/.test(worker),
+);
+// 2026-09-22: CFL's own 2024/2025 no-week re-uploads need the OPPOSITE of the
+// NFL/NCAAF pass-through above — a no-week title has to be a hard reject, but
+// only for the channels in WEEK_TOKEN_REQUIRED_CHANNELS (TSN), never NFL/NCAAF.
+check(
+  "worker rejects a no-week title only for CFL, not for the NFL/NCAAF pass-through",
+  /WEEK_TOKEN_REQUIRED_CHANNELS = new Set\(\["tsn"\]\)/.test(worker) &&
+    /titleWeek === null && WEEK_TOKEN_REQUIRED_CHANNELS\.has\(preferChannelLower\)\) continue;/.test(worker),
+);
+// The week regex has to read TSN's spelled-out CFL weeks (1–5 are "WEEK ONE"
+// … "WEEK FIVE") or a title with a real, disagreeing week token reads as "no
+// token" and slips through the wrong-week gate above untouched (measured live
+// 2026-09-22: 3/3 wrong for wk6 OTT@EDM, wk8 CGY@WPG, wk8 HAM@MTL).
+check(
+  "worker's week token reads spelled-out numbers too",
+  /function parseWeekFromTitle\(title\) \{/.test(worker) && /"eleven", "twelve"/.test(worker),
 );
 
 const espn = readFileSync("src/lib/espn.ts", "utf8");
@@ -89,7 +132,27 @@ check("…and appends it to the retry URL", /\$\{raceParam\}\$\{weekParam\}/.tes
 
 const bake = readFileSync("scripts/prebake-news.mjs", "utf8");
 check("prebake sends the week", /if \(week\) url \+= `&week=\$\{week\}`/.test(bake));
-check("prebake evicts a carried wrong-week id", /hlVideoMatchesWeek\(prevOfficial, week\)/.test(bake));
+check("prebake evicts a carried wrong-week id", /hlVideoMatchesWeek\(prevOfficial, week, cflWeekRequired\)/.test(bake));
+// 2026-09-22: the carried-entry check has to flip to a hard reject on a
+// missing week token for CFL only (TSN's own no-week uploads are a different,
+// older season's format), and its own week-token regex has to read TSN's
+// spelled-out weeks 1–5, same as the worker's copy above.
+check(
+  "prebake requires a week token for CFL only, not NFL/NCAAF",
+  /const cflWeekRequired = lg\.sport === "cfl";/.test(bake) &&
+    /async function hlVideoMatchesWeek\(id, week, requireWeek = false\)/.test(bake),
+);
+check(
+  "prebake's week token reads spelled-out numbers too",
+  /function hlParseWeekFromTitle\(title\) \{/.test(bake) && /"eleven", "twelve"/.test(bake),
+);
+// 2026-09-22: CFL's own revalidation window has to be wider than the default
+// 7 days, or a game that ages out before a matcher fix lands (like the age
+// gate here, #84) never gets its carried id re-checked against the new rule.
+check(
+  "prebake widens the CFL revalidation window past the default 7 days",
+  /const HL_CFL_DAYS = 30;/.test(bake) && /lg\.sport === "cfl" \? cflDates : dates/.test(bake),
+);
 
 // ── 1b. The PRESEASON leg — the same channel, no week, no "highlights" ────────
 // The NFL titles its exhibitions "Detroit Lions vs Indianapolis Colts | 2026
@@ -111,15 +174,20 @@ check(
   "getCompetitionTitleTokens gates on the preseason flag for the NFL only",
   /if \(sport === "nfl" && opts\?\.preseason\) return NFL_PRESEASON_TITLE_TOKENS;/.test(youtube),
 );
+// The options bag grows (playoff, playoffLabel joined preseason), and each of
+// these three patterns went red on a change that did not touch the gate at all
+// -- measured 2026-09-20, all three were false alarms. They are anchored on the
+// load-bearing token only, with the rest left open on purpose. Do NOT tighten
+// them back to an exact-argument match: a gate that cries wolf gets deleted.
 check(
   "GameHighlights derives the tokens from Game.isPreseason",
-  /getCompetitionTitleTokens\(game\.sport, \{ preseason: game\.isPreseason \}\)/.test(gh),
+  /getCompetitionTitleTokens\(game\.sport, \{ preseason: game\.isPreseason[,}]/.test(gh),
 );
 check("GameHighlights carries nss_comp on the modal fallback", /nss_comp=\$\{encodeURIComponent\(compTokens\.join\("\|"\)\)\}/.test(gh));
 check(
   "every GameHighlights resolve passes the tokens",
   gh.match(/resolveHighlightVideo\(/g)?.length ===
-    gh.match(/resolveHighlightVideo\([^;]*?weekNumber, compTokens\)/gs)?.length,
+    gh.match(/resolveHighlightVideo\([^;]*?weekNumber, compTokens(?:\.length \? compTokens : [\w.]+)?\)/gs)?.length,
 );
 check("VideoModal re-applies the competition gate on its retry", /compFallbackParam\(fallbackUrl\)/.test(vm));
 check("…and appends it to the retry URL", /\$\{raceParam\}\$\{weekParam\}\$\{compParam\}/.test(vm));
@@ -127,7 +195,7 @@ check("prebake mirrors the tokens", /HL_NFL_PRESEASON_TOKENS = \["preseason", "h
 check(
   "prebake sends them for a type-1 NFL event only",
   /const preseason = lg\.sport === "nfl" && event\.season\?\.type === 1;/.test(bake) &&
-    /const compTokens = preseason \? HL_NFL_PRESEASON_TOKENS : \(HL_COMPETITION_TOKENS\[lg\.sport\] \?\? null\);/.test(bake),
+    /const compTokens = preseason \? HL_NFL_PRESEASON_TOKENS : \([^;]*HL_COMPETITION_TOKENS\[lg\.sport\] \?\? null\);/.test(bake),
 );
 
 // ── 2. Live probe — a real slate, end to end through the deployed worker ─────
@@ -176,10 +244,10 @@ if (LIVE) {
       `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${hit.videoId}&format=json`,
     );
     const title = meta?.title ?? "";
-    const tok = title.match(/\bw(?:ee)?k\.?\s*(\d{1,2})\b/i);
+    const titleWeek = parseWeekFromTitle(title);
     check(
       `live: ${away}@${home} resolves to Week ${week}`,
-      !!tok && parseInt(tok[1], 10) === week,
+      titleWeek !== null && titleWeek === week,
       title,
     );
   }

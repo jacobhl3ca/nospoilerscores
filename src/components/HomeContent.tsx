@@ -30,6 +30,7 @@ import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import LeagueRecapCard from "@/components/LeagueRecapCard";
+import { getRecapsFor } from "@/lib/recaps";
 import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
@@ -456,14 +457,19 @@ function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => 
 // A labeled on/off chip for the news toolbar (Headlines / Videos / Text posts).
 // Filled accent = ON, outline = OFF — one consistent shape so the row is easy to
 // read and toggle (Jacob 7/14).
-function NewsToggleChip({ active, onClick, title, ariaLabel, children }: {
-  active: boolean; onClick: () => void; title: string; ariaLabel: string; children: ReactNode;
+// `disabled` = the chip's pref is currently OVERRIDDEN by another chip (Text
+// posts while Videos only is on). It renders dimmed + aria-disabled but still
+// toggles, so the pref can be pre-set for when the override lifts — a real
+// disabled button would trap the user in the override.
+function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, children }: {
+  active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean; children: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
+      aria-disabled={disabled || undefined}
       // The visible text label is display:none below 640px (`hidden sm:inline`)
       // and the icon is aria-hidden, so on phones the only name source left is
       // `title` — which iOS VoiceOver doesn't reliably announce for buttons,
@@ -477,6 +483,7 @@ function NewsToggleChip({ active, onClick, title, ariaLabel, children }: {
         background: active ? "var(--accent)" : "var(--bg-card)",
         border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
         color: active ? "white" : "var(--text-muted)",
+        opacity: disabled ? 0.45 : undefined,
       }}
     >
       {children}
@@ -1487,14 +1494,14 @@ export default function HomeContent({
       return {
         title: "World Cup highlights, spoiler-free",
         body:
-          "Catch up on completed World Cup matches without result thumbnails, scorelines or winner headlines. HideScore surfaces official highlights after games finish and keeps the result hidden until you choose to reveal it.",
+          "Catch up on completed World Cup matches without result thumbnails, scorelines or winner headlines. HideScore surfaces official highlights after games finish, and the board they sit on never prints the result at all.",
         note: "Start with yesterday's slate, then jump to today or tomorrow.",
       };
     }
     return {
       title: "2026 World Cup, spoiler-free",
       body:
-        "104 matches, June 11 - July 19, across the US, Canada and Mexico - most kicking off at 1, 4 and 7 PM ET on weekdays. Watch every match on your own schedule: scores stay hidden until you tap, and the competitiveness rating tells you which games were instant classics without revealing who won.",
+        "104 matches, June 11 - July 19, across the US, Canada and Mexico - most kicking off at 1, 4 and 7 PM ET on weekdays. Watch every match on your own schedule: no score is printed anywhere, and the optional competitiveness rating tells you which games were instant classics without naming who won.",
       note: "Free · no tracking cookies · also on the App Store and Google Play.",
     };
   }, [worldCupHubMode]);
@@ -2308,6 +2315,41 @@ export default function HomeContent({
   const ptrVisible = pullDelta > 0 || refreshing;
   const ptrTranslateY = refreshing ? 28 : Math.max(0, pullDelta - 12);
 
+  // Recap-pill row alignment. When ONE column shows the league recap pill and
+  // a sibling has none for its day, the sibling's first card sat ~50px higher
+  // (Jacob 9/16). Resolve which visible columns have a recap here — same
+  // (sport, ymd) rule as recapTopCard, same slot → league queue as
+  // slotEntries — so every LeagueRecapCard can reserve the row. Cheap:
+  // getRecapsFor reads the session-cached /news/recaps.json.
+  const recapQueryKey = (() => {
+    if (selectedDate > getDateString(0)) return "";
+    const queue = [...sortedLeagues];
+    const pairs: string[] = [];
+    for (const slotIdx of SLOT_INDICES.slice(0, slotCount)) {
+      if (selectedSlotLeagues[slotIdx] === "empty") continue;
+      const league = queue.shift();
+      if (!league) continue;
+      const ymd = (league.games.length ? null : league.previousGameDay?.date) || selectedDate;
+      pairs.push(`${league.sport}:${ymd}`);
+    }
+    return pairs.join(",");
+  })();
+  const [recapSports, setRecapSports] = useState<{ key: string; sports: Set<string> }>({ key: "", sports: new Set() });
+  useEffect(() => {
+    if (!recapQueryKey) return;
+    let alive = true;
+    const pairs = recapQueryKey.split(",").map((p) => p.split(":") as [string, string]);
+    Promise.all(pairs.map(([sport, ymd]) => getRecapsFor(sport, ymd).then((list) => (list.length ? sport : null)).catch(() => null)))
+      .then((hits) => {
+        if (alive) setRecapSports({ key: recapQueryKey, sports: new Set(hits.filter((s): s is string => !!s)) });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [recapQueryKey]);
+  // A stale set from the previous date/column mix never reserves a row.
+  const anyRecap = recapSports.key === recapQueryKey && recapSports.sports.size > 0;
+
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Keyboard skip link (WCAG 2.4.1) — visually hidden until focused, then
@@ -2794,11 +2836,15 @@ export default function HomeContent({
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
               <span>Videos only</span>
             </NewsToggleChip>
+            {/* Videos only overrides Text posts (Jacob 9/14): a text post has no
+                clip, so it can never pass the Videos filter. Dim this chip while
+                that's the case so its state doesn't read as a lie. */}
             <NewsToggleChip
               active={!!prefs.showTextPosts}
               onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
-              title="Show or hide headline-only text posts"
+              title={prefs.newsVideosOnly ? "Off while Videos only is on" : "Show or hide headline-only text posts"}
               ariaLabel="Toggle text posts"
+              disabled={!!prefs.newsVideosOnly}
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
               <span>Text posts</span>
@@ -3144,7 +3190,13 @@ export default function HomeContent({
           // they don't push that column's reddit section below the others. Its
           // index is dynamic (col 2 in a 3-col board, col 1 in a 2-col one).
           const espnColIdx = renderedEntries.findIndex((e) => e.id === "espn");
-          const useEspnTopTail = stripActive && espnColIdx >= 0 && !prefs.newsThirdLeague;
+          // The tail fetches espn-top DIRECTLY (fetchPrebaked), bypassing the
+          // orderedColumnSourcesFor funnel every column goes through — so gate it
+          // on the same two things the funnel checks: the "espn" source type is
+          // selected and the ESPN label isn't hidden. Otherwise a Reddit-only
+          // funnel still showed ESPN headlines in col 3's tail.
+          const useEspnTopTail = stripActive && espnColIdx >= 0 && !prefs.newsThirdLeague
+            && newsTypeFilters.includes("espn") && !newsHiddenSources.includes("ESPN");
           // Sources stripped of the video lead when the strip is active.
           const sourcesForEntry = (entry: typeof renderedEntries[number], idx: number) => {
             const all = renderSourcesFor(entry);
@@ -3268,9 +3320,9 @@ export default function HomeContent({
                   >
                     {renderedEntries.map((entry, idx) => {
                       const otherSports = renderedEntries
+                        .map((e, i) => ({ sport: e.sport, col: i + 1 }))
                         .filter((_, i) => i !== idx)
-                        .map((e) => e.sport)
-                        .filter((s): s is Sport => !!s);
+                        .filter((e): e is { sport: Sport; col: number } => !!e.sport);
                       // "News" (ESPN) col is swappable to a 3rd league via
                       // setNewsThirdLeague — matches hidescore.com's "News ▾".
                       const isEspn = entry.id === "espn";
@@ -3299,6 +3351,7 @@ export default function HomeContent({
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
                     tailColIdx={useEspnTopTail ? espnColIdx : undefined}
                     showTextPosts={!!prefs.showTextPosts}
+                    videosOnly={!!prefs.newsVideosOnly}
                     hiddenCategories={hiddenNewsCategories}
                     oldestFirst={!!prefs.newsOldestFirst}
                   />
@@ -3331,9 +3384,9 @@ export default function HomeContent({
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
+                    .map((e, i) => ({ sport: e.sport, col: i + 1 }))
                     .filter((_, i) => i !== idx)
-                    .map((e) => e.sport)
-                    .filter((s): s is Sport => !!s);
+                    .filter((e): e is { sport: Sport; col: number } => !!e.sport);
                   const isEspn = entry.id === "espn";
                   return (
                     <NewsColumn
@@ -3473,12 +3526,27 @@ export default function HomeContent({
             // League-wide recap pill on top of each column, past dates only
             // (the ask). Follows the "Last played" slate when the column is
             // showing one, so the NFL Week-1 card tracks Sun 9/13 on Tue/Wed.
-            const recapTopCard = (league: LeagueData) => isPast
+            // A column with no recap of its own reserves the pill's row
+            // (invisible) when a sibling shows one, so first cards line up.
+            // Only when columns sit side by side: boardRowCls below is a
+            // flex-row whenever !singleColumn — phones included (2–3 narrow
+            // columns) — and a flex-col stack when singleColumn, where there
+            // is nothing to align with. A lone column has no sibling either.
+            const reserveRecapSlot = anyRecap && !(prefs.singleColumn ?? false)
+              && SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length >= 2
+              && sortedLeagues.length >= 2;
+            // Today's board shows it too, game day or not: Thursday night and
+            // Monday night both want last week's cut sitting above them, and
+            // the one day it must NOT appear — the live football Sunday — is
+            // held out by the record's own skipDays, not by a rule here.
+            // Tomorrow and later stay clear.
+            const recapTopCard = (league: LeagueData) => isPast || isToday
               ? (
                 <LeagueRecapCard
                   sport={league.sport}
                   date={selectedDate}
                   lastPlayedDate={league.games.length ? null : league.previousGameDay?.date}
+                  reserveSlot={reserveRecapSlot}
                   onPlayHighlight={openVideoModal}
                   onPlayEmbed={openEmbedModal}
                 />
@@ -3486,7 +3554,12 @@ export default function HomeContent({
               : undefined;
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
-              shownElsewhere: displayedSports.filter((_, i) => i !== idx),
+              // `idx` is the raw slot (0-4), but empty slots collapse, so the
+              // column number is the position among the rendered entries.
+              shownElsewhere: slotEntries
+                .map((e, i) => ({ sport: e.league.sport, col: i + 1, slotIdx: e.slotIdx }))
+                .filter((e) => e.slotIdx !== idx)
+                .map(({ sport, col }) => ({ sport, col })),
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
               autoSport: autoSlotSports[idx],
               switcherMode: prefs.leagueSwitcherMode ?? ("dropdown" as const),
@@ -3899,13 +3972,13 @@ export default function HomeContent({
             <p>
               HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
               MLB, MLS, the Premier League, La Liga, Serie A, the Bundesliga, Ligue 1, the Champions
-              League, the 2026 World Cup and golf without ever seeing who won — every score and
-              result stays hidden until you choose to reveal it.
+              League, the 2026 World Cup and golf without ever seeing who won — no score or result
+              is written on the board at all.
             </p>
             <p>
-              Before you commit to a replay, our competitiveness rating tells you whether a game was a
-              blowout or an instant classic, so you can watch the best sports highlights without
-              spoilers and skip the duds — all without learning the final score.
+              Before you commit to a replay, switch on our competitiveness rating and it tells you
+              whether a game was a blowout or an instant classic, so you can watch the best sports
+              highlights without spoilers and skip the duds — all without learning the final score.
             </p>
             <p>
               It&apos;s free, has no tracking cookies, and works in any browser or as an iPhone or Android app. Jump to{" "}
@@ -3919,13 +3992,21 @@ export default function HomeContent({
               <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
               <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
               <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>,{" "}
-              <a href="/nhl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NHL highlights</a>, or{" "}
+              <a href="/nhl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NHL highlights</a>,{" "}
+              <a href="/nba-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NBA highlights</a>,{" "}
+              <a href="/college-football-highlights-without-spoilers" style={{ textDecoration: "underline" }}>college football highlights</a>, or{" "}
               <a href="/soccer-highlights-without-spoilers" style={{ textDecoration: "underline" }}>soccer highlights</a> — including the{" "}
               <a href="/premier-league-without-spoilers" style={{ textDecoration: "underline" }}>Premier League</a>,{" "}
+              <a href="/champions-league-without-spoilers" style={{ textDecoration: "underline" }}>Champions League</a>,{" "}
+              <a href="/la-liga-without-spoilers" style={{ textDecoration: "underline" }}>La Liga</a>,{" "}
+              <a href="/mls-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLS</a>,{" "}
               <a href="/liga-mx-scores-without-spoilers" style={{ textDecoration: "underline" }}>Liga MX</a> and{" "}
               <a href="/cricket-highlights-without-spoilers" style={{ textDecoration: "underline" }}>cricket</a> — plus spoiler-free{" "}
-              <a href="/nba-scores-without-spoilers" style={{ textDecoration: "underline" }}>NBA scores</a> and{" "}
-              <a href="/nhl-scores-without-spoilers" style={{ textDecoration: "underline" }}>NHL scores</a>. Also see the{" "}
+              <a href="/nba-scores-without-spoilers" style={{ textDecoration: "underline" }}>NBA scores</a>,{" "}
+              <a href="/nhl-scores-without-spoilers" style={{ textDecoration: "underline" }}>NHL scores</a>,{" "}
+              <a href="/f1-without-spoilers" style={{ textDecoration: "underline" }}>F1</a> and{" "}
+              <a href="/ufc-results-without-spoilers" style={{ textDecoration: "underline" }}>UFC</a>. Compare us with the other{" "}
+              <a href="/best-spoiler-free-sports-sites" style={{ textDecoration: "underline" }}>spoiler-free sports apps</a>, or see the{" "}
               <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Or read our{" "}
               <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>

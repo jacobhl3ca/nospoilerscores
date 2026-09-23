@@ -7,6 +7,7 @@
 // Records carry NO title or thumbnail on purpose — the bake strips them
 // (scripts/lib/recaps.mjs stripRecapRecord) because the titles spoil.
 import { getApiBase } from "./youtube";
+import { getEtServiceDate, toYmd } from "./etDay";
 
 export type RecapRecord = {
   sport: string;
@@ -18,6 +19,10 @@ export type RecapRecord = {
   coversWeek?: number;   // weekly
   windowStart?: string;  // YYYYMMDD (weekly)
   windowEnd?: string;    // YYYYMMDD (weekly)
+  // Days inside the window the record must NOT cover — for the NFL, next
+  // week's Sunday, so a completed week's cut never sits on top of a live
+  // football Sunday. See nflWeekWindow in scripts/lib/recaps.mjs.
+  skipDays?: string[];
   videoId?: string;      // YouTube
   playbackUrl?: string;  // MLB.com HLS
   poster?: string | null;
@@ -27,6 +32,9 @@ export type RecapRecord = {
   published?: string;
   t?: number;
   sourcePolicy?: "official-channel" | "mlb.com";
+  // Bake-time verdict from YouTube's /embed/ shell. The NFL blocks embeds per
+  // video, so `true` lets a cut play in the modal despite its channel.
+  embeddable?: boolean;
 };
 
 // The uploader each series is allowed to come from. A record naming any other
@@ -52,7 +60,8 @@ export function recapChannelVerified(rec: RecapRecord | null | undefined): boole
 export function recapCoversDay(rec: RecapRecord, ymd: string): boolean {
   if (!/^\d{8}$/.test(ymd)) return false;
   if (rec.cadence === "weekly") {
-    return !!rec.windowStart && !!rec.windowEnd && rec.windowStart <= ymd && ymd <= rec.windowEnd;
+    return !!rec.windowStart && !!rec.windowEnd && rec.windowStart <= ymd && ymd <= rec.windowEnd
+      && !(rec.skipDays ?? []).includes(ymd);
   }
   return rec.coversDate === ymd;
 }
@@ -91,9 +100,22 @@ export function loadBakedRecaps(): Promise<Record<string, RecapRecord[]>> {
 // day (EPL: the PL channel's Matchweek 4 and NBC's Matchweek 3 both cover the
 // Monday between them), so when matching weekly records disagree on the week
 // only the latest week is kept — one heading, one set of buttons.
-export function selectRecaps(all: Record<string, RecapRecord[]> | null | undefined, sport: string, ymd: string): RecapRecord[] {
+export function selectRecaps(
+  all: Record<string, RecapRecord[]> | null | undefined,
+  sport: string,
+  ymd: string,
+  // The board's own "today". A DAILY cut of a day that has not finished cannot
+  // exist — MLB's "Best of the day" for tonight's slate posts tomorrow morning
+  // — so a daily record dated today or later is premature and never renders
+  // (Jacob 9/20: a 9m "Best of the day" sat on top of MLB's live Sunday board,
+  // stamped today because the bake could not read the upload time). Weekly
+  // records are unaffected: the NFL week pill belongs on a live Thursday.
+  todayYmd?: string,
+): RecapRecord[] {
   const list = Array.isArray(all?.[sport]) ? all![sport] : [];
-  const hits = list.filter((rec) => recapChannelVerified(rec) && recapCoversDay(rec, ymd) && (rec.videoId || rec.playbackUrl));
+  const today = /^\d{8}$/.test(todayYmd ?? "") ? todayYmd! : "";
+  const hits = list.filter((rec) => recapChannelVerified(rec) && recapCoversDay(rec, ymd) && (rec.videoId || rec.playbackUrl)
+    && !(rec.cadence === "daily" && today && (rec.coversDate ?? "") >= today));
   const weeks = hits.map((r) => (r.cadence === "weekly" ? r.coversWeek : undefined)).filter((w): w is number => Number.isFinite(w));
   const latestWeek = weeks.length ? Math.max(...weeks) : null;
   return hits
@@ -102,7 +124,8 @@ export function selectRecaps(all: Record<string, RecapRecord[]> | null | undefin
 }
 
 export async function getRecapsFor(sport: string, ymd: string): Promise<RecapRecord[]> {
-  return selectRecaps(await loadBakedRecaps(), sport, ymd);
+  // Same "today" the date nav uses, so the gate agrees with the board.
+  return selectRecaps(await loadBakedRecaps(), sport, ymd, toYmd(getEtServiceDate()));
 }
 
 // "▶ 8m" — whole minutes, rounded; under a minute reads in seconds; unknown

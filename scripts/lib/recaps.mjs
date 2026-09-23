@@ -39,7 +39,7 @@ export const RECAP_SERIES = {
   nfl: [
     {
       key: "top15", enabled: true, source: "youtube", cadence: "weekly",
-      heading: "Week {n} top plays", label: "Top 15 plays",
+      heading: "Week {n}", label: "Top 15 plays",
       channelId: "UCDVYQ4Zhbm3S2dlz7P1GBDg", channelName: "NFL", handle: "NFL",
       titleRx: /^Top 15 Plays (?:From|of) Week \d{1,2}\b/i,
       weekRx: NFL_WEEK_RX, seasonRx: NFL_SEASON_RX, seasonRequired: true,
@@ -47,7 +47,7 @@ export const RECAP_SERIES = {
     },
     {
       key: "everytd", enabled: true, source: "youtube", cadence: "weekly",
-      heading: "Week {n} top plays", label: "Every touchdown",
+      heading: "Week {n}", label: "Every touchdown",
       channelId: "UCDVYQ4Zhbm3S2dlz7P1GBDg", channelName: "NFL", handle: "NFL",
       titleRx: /^Every Touchdown (?:From|of) Week \d{1,2}\b/i,
       weekRx: NFL_WEEK_RX, seasonRx: NFL_SEASON_RX, seasonRequired: true,
@@ -55,7 +55,7 @@ export const RECAP_SERIES = {
     },
     {
       key: "topplays", enabled: true, source: "youtube", cadence: "weekly",
-      heading: "Week {n} top plays", label: "Top plays, full",
+      heading: "Week {n}", label: "Top plays, full",
       channelId: "UCDVYQ4Zhbm3S2dlz7P1GBDg", channelName: "NFL", handle: "NFL",
       titleRx: /^Top Plays (?:From|of) Week \d{1,2}\b/i,
       weekRx: NFL_WEEK_RX, seasonRx: NFL_SEASON_RX, seasonRequired: true,
@@ -65,7 +65,7 @@ export const RECAP_SERIES = {
     // before the Top 15, so it is what the Monday /yesterday board shows.
     {
       key: "bestsunday", enabled: true, source: "youtube", cadence: "weekly",
-      heading: "Week {n} top plays", label: "Sunday's best plays",
+      heading: "Week {n}", label: "Sunday's best plays",
       channelId: "UCDVYQ4Zhbm3S2dlz7P1GBDg", channelName: "NFL", handle: "NFL",
       titleRx: /^Best Plays From Sunday!?\s*\|/i,
       weekRx: NFL_WEEK_RX, seasonRx: NFL_SEASON_RX, seasonRequired: true,
@@ -226,6 +226,25 @@ export function parseWatchPagePublishMs(html) {
   return Number.isFinite(ms) ? ms : null;
 }
 
+// Upload-date window for a game highlight. A recap posts AFTER the final
+// whistle, never before it, and a league that re-cuts a game does so within a
+// fortnight. Two days of slack on the early side absorbs the gap between the
+// game's ET calendar date and the uploader's own timezone; fourteen on the
+// late side lets a delayed or re-uploaded cut through.
+// This is the only signal that separates two meetings of the same fixture in
+// different seasons: ESPN FC / CBS / MLS / Serie A recap titles carry no date
+// and no year, so the team, competition and week checks all pass for last
+// season's clip.
+// An unknown upload time (a failed fetch) reads as a PASS — a network blip
+// must never drop a good highlight.
+export const HL_UPLOAD_WINDOW_EARLY_MS = 2 * 24 * 60 * 60 * 1000;
+export const HL_UPLOAD_WINDOW_LATE_MS = 14 * 24 * 60 * 60 * 1000;
+export function uploadFitsGameDate(publishedMs, gameMs) {
+  if (!Number.isFinite(publishedMs) || !Number.isFinite(gameMs)) return true;
+  return publishedMs >= gameMs - HL_UPLOAD_WINDOW_EARLY_MS
+    && publishedMs <= gameMs + HL_UPLOAD_WINDOW_LATE_MS;
+}
+
 // ── Dates (all YYYYMMDD, ET) ─────────────────────────────────────────────────
 
 const ET = "America/New_York";
@@ -296,15 +315,61 @@ export function weeklyWindowFromPublished(publishedYmd) {
   return { windowStart: shiftYmd(publishedYmd, -6), windowEnd: publishedYmd };
 }
 
-// NFL: first to last ET game day of the week per the ESPN scoreboard, extended
-// to the day before the next week's first game so the card follows the
-// "Last played" slate through the Tue/Wed the cut actually posts on.
-export function nflWeekWindow(weekEvents, nextWeekEvents) {
+// The ET day a week's main slate falls on — the Sunday. Counting games is the
+// discriminator, not the calendar: Thursday and Monday night carry one game
+// each while the Sunday carries a dozen, and a flexed or international kickoff
+// moves the date without moving the slate. Earliest day wins a tie (the Map
+// keeps the sorted insertion order).
+function mainSlateDay(events) {
+  const counts = new Map();
+  for (const d of (events ?? []).map((e) => etYmd(e?.date)).filter(Boolean).sort()) {
+    counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  let main = "";
+  for (const [d, n] of counts) if (!main || n > counts.get(main)) main = d;
+  return main;
+}
+
+// NFL: the completed week's cut belongs on EVERY board except the next
+// football Sunday (Jacob 9/20 — "if its football sunday dont need the weeks
+// highlights left, but every other day of week that previous weeks
+// highlights"). So the window runs from the week's first ET game day out to
+// the day before the slate AFTER next, and names next week's Sunday as the one
+// day it skips. Two consequences worth keeping straight:
+//
+//   • The reach past next week's Sunday is what closes the Monday gap. Week N+1
+//     is played by then but its cut does not post until Monday night at the
+//     earliest, so without the overshoot Monday shows nothing at all. Once the
+//     newer cut does land, selectRecaps' latest-week rule takes every
+//     overlapping day off this record — the overshoot is a floor, not a claim.
+//   • skipDays is one day, not "every Sunday". A past Sunday still shows the
+//     cut for the week it belongs to, which is exactly what Jacob asked for
+//     when he said yesterday's board keeps the card.
+//
+// No next week on the scoreboard (the regular season's last week) → the window
+// ends on the week's own last game day, as before.
+export function nflWeekWindow(weekEvents, nextWeekEvents, weekAfterEvents) {
   const days = (weekEvents ?? []).map((e) => etYmd(e?.date)).filter(Boolean).sort();
   if (!days.length) return null;
-  const nextDays = (nextWeekEvents ?? []).map((e) => etYmd(e?.date)).filter(Boolean).sort();
-  const windowEnd = nextDays.length ? shiftYmd(nextDays[0], -1) : days[days.length - 1];
-  return { windowStart: days[0], windowEnd: windowEnd < days[days.length - 1] ? days[days.length - 1] : windowEnd };
+  const last = days[days.length - 1];
+  const nextMain = mainSlateDay(nextWeekEvents);
+  const afterMain = mainSlateDay(weekAfterEvents);
+  const horizon = afterMain ? shiftYmd(afterMain, -1) : nextMain ? shiftYmd(nextMain, -1) : last;
+  const windowEnd = horizon < last ? last : horizon;
+  const win = { windowStart: days[0], windowEnd };
+  if (nextMain && nextMain >= win.windowStart && nextMain <= windowEnd) win.skipDays = [nextMain];
+  return win;
+}
+
+// Does YouTube's /embed/<id> shell say the video plays embedded? The NFL blocks
+// embeds per VIDEO, not per channel: measured 2026-09-20 with scripts/check-
+// embeddable.mjs, "Top 15 plays" and "Every touchdown" PLAY from hidescore.com
+// while "Sunday's best" returns error 150 — and this field agreed on all three.
+// true / false, or null when the shell carries no verdict (treated as blocked).
+export function parseEmbedPlayable(html) {
+  const m = String(html ?? "").match(/previewPlayabilityStatus\\?":\{\\?"status\\?":\\?"([A-Z_]+)\\?"(?:,\\?"playableInEmbed\\?":(true|false))?/);
+  if (!m) return null;
+  return m[1] === "OK" && m[2] === "true";
 }
 
 // ── Candidate pick ───────────────────────────────────────────────────────────
@@ -377,7 +442,7 @@ export function pickNewest(matches) {
 const RECORD_KEYS = [
   "sport", "key", "heading", "label", "cadence", "coversDate", "coversWeek",
   "windowStart", "windowEnd", "videoId", "playbackUrl", "poster", "pageUrl",
-  "channel", "durationSec", "published", "t", "sourcePolicy",
+  "channel", "durationSec", "published", "t", "sourcePolicy", "embeddable", "skipDays",
 ];
 
 export function stripRecapRecord(rec) {
@@ -395,7 +460,10 @@ export function fillHeading(template, n) {
 // Is `ymd` inside this record's coverage?
 export function recapCoversDay(rec, ymd) {
   if (!rec || !/^\d{8}$/.test(String(ymd))) return false;
-  if (rec.cadence === "weekly") return !!rec.windowStart && !!rec.windowEnd && rec.windowStart <= ymd && ymd <= rec.windowEnd;
+  if (rec.cadence === "weekly") {
+    return !!rec.windowStart && !!rec.windowEnd && rec.windowStart <= ymd && ymd <= rec.windowEnd
+      && !(rec.skipDays ?? []).includes(ymd);
+  }
   return rec.coversDate === ymd;
 }
 

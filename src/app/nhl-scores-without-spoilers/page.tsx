@@ -14,8 +14,14 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // TNT/truTV and ESPN/ESPN+/Hulu/Disney+.
 const TITLE = "NHL Scores Without Spoilers | HideScore";
 const DESC =
-  "Check NHL scores, standings, and playoffs without seeing who won. HideScore hides every result until you tap, so you can pick a game worth watching first.";
+  "Check the NHL schedule and playoff picture without seeing who won. HideScore prints no hockey result anywhere, so you can pick a game worth watching first.";
 const CANONICAL = "/nhl-scores-without-spoilers";
+
+// ⚠️ Corrected 2026-09-20. This page claimed a tap-to-reveal scoreline and a
+// covered standings table. Neither exists: nothing outside GolfLeaderboard
+// reads Team.score, and the app ships no standings view. Ratings are opt-in
+// (showRatings: false in preferences.ts; the default "auto" mode holds them off
+// before noon ET).
 
 const FAQ = [
   {
@@ -24,7 +30,7 @@ const FAQ = [
   },
   {
     q: "Can I check NHL scores without seeing the final?",
-    a: "Yes. Every NHL game on HideScore opens with the score covered. The matchup, the puck-drop time, and whether the game has ended are all visible — the scoreline appears only when you tap it, so you can look at the whole night without learning how any of it went.",
+    a: "Yes. An NHL game on HideScore shows the matchup, the puck-drop time, the broadcaster and whether it has ended. No scoreline is written on the card, and no control on the page will write one, so you can look at the whole night without learning how any of it went.",
   },
   {
     q: "How do I avoid spoilers on a late West Coast game?",
@@ -32,11 +38,11 @@ const FAQ = [
   },
   {
     q: "Which hockey games were actually worth watching?",
-    a: "A spoiler-free rating on each finished game tells you it was tight, high-scoring, or went to overtime — without naming the winner or the score. Hockey rewards this more than most sports: a 2-1 game that went to OT and a 6-1 blowout look identical on a covered card until the rating tells you which was which.",
+    a: "Switch Ratings on in Settings and each finished game is marked tight, high-scoring, or gone to overtime — never with the winner or the score. Hockey rewards this more than most sports: an overtime nail-biter and a one-sided rout look identical on an unscored card until the rating tells you which was which. Ratings start off, and the default setting holds them back until noon Eastern.",
   },
   {
     q: "Do the standings give the result away?",
-    a: "Yes, and they are treated as a spoiler in their own right. In a league decided by two or three points over a season, a division table tells you exactly how last night ended. Standings stay covered alongside scores.",
+    a: "Yes, which is why the app ships no standings view. In a league decided by two or three points over a season, a division table tells you exactly how last night ended. The only league position you will see rides on a game nobody has played yet, and it comes off the card once that game is final.",
   },
   {
     q: "Where can I watch NHL games in the US in 2026-27?",
@@ -106,7 +112,7 @@ export default function NhlScoresWithoutSpoilersPage() {
         },
         {
           h: "The standings give it away too",
-          p: "In a league where a season comes down to two or three points, a division table is a scoreboard by another name. If a team moved up a spot, last night's result is out. Standings are covered with the same care as scores, so checking the race does not cost you the game you were saving.",
+          p: "In a league where a season comes down to two or three points, a division table is a scoreboard by another name. If a team moved up a spot, last night's result is out. So there is no table here to open — the only league position the app shows sits on a game that has not been played, and it leaves the card as soon as it has.",
         },
         {
           h: "A route to the broadcaster, not to a box score",
@@ -118,10 +124,10 @@ export default function NhlScoresWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "NHL scores hidden until you tap.",
+        "No NHL score printed anywhere on the board.",
         "The whole night on one board, from the 5:00 pm start to the 10:30 pm one.",
-        "Spoiler-free ratings — tight, high-scoring, went to overtime.",
-        "Standings treated as a spoiler, not as neutral information.",
+        "Optional spoiler-free ratings — tight, high-scoring, went to overtime.",
+        "No standings table, because a table restates last night's result.",
         "Watch links that point at a broadcaster, not a box score.",
         "Works the same through the Stanley Cup playoffs.",
       ]}

@@ -1,4 +1,6 @@
 import llwsRegions from "./llwsRegions.json";
+import collegeHighlightChannels from "./collegeHighlightChannels.json";
+import { buildCollegeFallbackChain, type ChainTeam, type CollegeHighlightConfig, type FallbackChannel } from "./collegeHighlights";
 import { isNflTeamChannel } from "./nflTeamChannels";
 
 // The JSON import types as a literal object, which cannot be indexed by an
@@ -31,6 +33,25 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // with no year in the title. Playoffs carry no week and TSN titles them by
   // round ("EAST SEMI-FINAL: … FULL HIGHLIGHTS"); the worker's date tiers
   // pick the year there.
+  //
+  // 2026-09-22 QA (all 61 regular-season + playoff finals probed): three more
+  // failure modes found and fixed in the worker, all specific to TSN/CFL and
+  // inert for every other league on the same gate —
+  //   1. TSN spells weeks 1–5 out ("CFL WEEK ONE" … "WEEK FIVE"), which the
+  //      digit-only week regex read as "no week token" (the wrong-week gate's
+  //      intentional pass-through for postseason titles) and let a Week 1
+  //      recap serve for a Week 6/8 query. parseWeekFromTitle now reads
+  //      ONE–TWENTY-ONE spelled out too.
+  //   2. TSN's OWN 2024/2025 "Away vs. Home | CFL HIGHLIGHTS" re-uploads
+  //      carry no week and no year, so a title with no week token is a
+  //      genuinely different, older upload format for TSN specifically —
+  //      unlike NFL/NCAAF, where a no-week title can be a legitimate
+  //      same-season cut. WEEK_TOKEN_REQUIRED_CHANNELS (worker-only) flips
+  //      "no token" to a hard reject for channel=TSN alone.
+  //   3. The age gate (#84) missed these same re-uploads live because
+  //      YouTube's relative timestamp sometimes reads abbreviated ("2y ago")
+  //      rather than spelled out ("2 years ago"); latestPossiblePublish now
+  //      reads both.
   cfl: "TSN",
   // World Cup: FOX is the US English-language rightsholder and "FOX Sports"
   // posts a clean per-match "TeamA vs TeamB Highlights | 2026 FIFA World Cup™"
@@ -55,7 +76,18 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // companion) — the worker's extended-vs-standard demote still picks them
   // because nothing else competes at the same tier.
   ucl: "CBS Sports Golazo",
-  uel: "CBS Sports Golazo",
+  // UEL: the uploader MOVED. CBS split its European coverage onto a second
+  // channel, "CBS Sports Golazo - Europe", and the Europa League went with it —
+  // the 2026-09-16 League Phase MD1 slate read 0/18 baked on the old string.
+  // Re-probed against the LIVE worker with strict=1 over the first 8 fixtures
+  // of that matchday: "CBS Sports Golazo - Europe" 6/8, 0 wrong; the old
+  // channel 0/8. Titles are unchanged in shape ("Omonia vs. Celta Vigo:
+  // Extended Highlights | UEL League Phase MD1 | CBS Sports Golazo"), so the
+  // signature that moved is the author_name, not the title. The old channel
+  // stays on as the strict 2nd slot (SECONDARY_CHANNELS) in case an older tie
+  // or a stray upload still lives there. ⚠️ UCL is NOT changed here — probe it
+  // the same way on its own next matchday before touching `ucl`.
+  uel: "CBS Sports Golazo - Europe",
   // Serie A: Paramount+ / CBS holds the US rights, same as UCL/UEL, and the
   // same Golazo channel posts the per-match Extended Highlights.
   seriea: "CBS Sports Golazo",
@@ -161,12 +193,40 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // with it World Rugby is 10/18 correct and 0/18 wrong.
   nationschamp: "World Rugby",
   // euro + cricket deliberately have NO entry — see the block comment below.
-  // laliga + ligue1 deliberately have NO approved channel.
-  // LALIGA's channel ("LALIGA EA SPORTS") posts Spanish-language full matches
-  // rather than clean per-match English highlights, and Ligue 1's author name
-  // is sponsor-suffixed with a curly apostrophe ("Ligue 1 McDonald's") that
-  // re-brands every cycle. A wrong string silently kills the official slot, so
-  // both stay dark instead of falling through to an unscoped search.
+  //
+  // ── La Liga + Ligue 1, LIT 2026-09-19. Both were dark because the LEAGUE's
+  // own channel was unusable: LALIGA's ("LALIGA EA SPORTS") posts
+  // Spanish-language full matches rather than per-match English highlights, and
+  // Ligue 1's author name is sponsor-suffixed with a curly apostrophe ("Ligue 1
+  // McDonald's") that re-brands every cycle. Neither objection applies to the
+  // US BROADCASTER, which is the same answer EPL→NBC Sports and UCL→CBS Sports
+  // Golazo already use.
+  //
+  // Ligue 1: beIN SPORTS USA holds the US rights and posts a per-match
+  // "Lorient vs Toulouse | HIGHLIGHTS Ligue 1 | 09/12/2026 | beIN SPORTS USA".
+  // Probed against the LIVE worker with strict=1 over the first 8 finished
+  // fixtures of the Sep 12-13 2026 slate: 7/8 hits, 0 wrong. Every title
+  // carries both the competition name and an explicit MM/DD/YYYY, so the date
+  // gate is live too. The one miss (Angers–Le Havre) has no recap anywhere.
+  ligue1: "beIN SPORTS USA",
+  // La Liga: ESPN FC (ESPN holds the US rights) posts "Real Sociedad vs.
+  // Atletico Madrid | LALIGA Highlights | ESPN FC". Probed against the LIVE
+  // worker with strict=1 over 8 finished fixtures of the Sep 12-13 2026 slate:
+  // 4/8 hits, 0 wrong — it cuts the big-club games and skips the rest, so
+  // expect about half the slate to stay dark.
+  //
+  // ⚠️ 4/8 does NOT clear the old "≥4/5 strict hits" gate, and shipping it is a
+  // deliberate widening (approved 2026-09-19). The gate that actually protects
+  // a no-spoiler card is ZERO WRONG MATCHES, not hit rate: a miss hides the
+  // button, which is recoverable, while a wrong match puts someone else's
+  // scoreline on the card. So the rule for a broadcaster channel is now: 0
+  // wrong over at least 8 probes, any non-zero hit rate, PLUS a required
+  // competition title token whenever the channel cuts more than one
+  // competition. ESPN FC cuts the FA Cup, the Copa del Rey and the Premier
+  // League alongside LALIGA — and Copa del Rey measured that exact failure on
+  // 2026-09-14 (a LALIGA Elche–Betis served for the cup tie) — so La Liga ships
+  // with the "laliga" token in COMPETITION_TITLE_TOKENS, same as facup.
+  laliga: "ESPN FC",
   // Golf majors — each tournament has its own channel. Keys must match the
   // label-derived lookup key `golf_${label.toLowerCase().replace(/\s+/g,"")}`
   // (see getOfficialChannelName), so the PGA Championship — whose league label
@@ -314,7 +374,10 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // Championships" hit 1/5 (the Wisconsin–Kentucky semifinal only) and "ESPN"
 // 0/3; two regular-season Sep 2026 queries were 0/2. Well under the 4/5 gate,
 // and regular-season matches stream on ESPN+ / B1G+ with no official upload.
-// Dark.
+// Lit 2026-09-16 WITHOUT a fixed channel: the conference channels (Big Ten
+// Volleyball, ACC Digital Network, Big 12 Conference, SEC) post per-match cuts,
+// so each match uses its own schools' conference chain. See
+// lib/collegeHighlights.ts; a match outside those four conferences stays dark.
 //
 // uecl / copadelrey / dfbpokal (added 2026-09-14, all three DARK). Probed
 // against the LIVE worker with strict=1 on 5 completed 2025-26 fixtures each,
@@ -337,13 +400,13 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "dfbpokal",
   "euro",
   "esports",
-  "laliga",
-  "ligue1",
+  // laliga + ligue1 left this set 2026-09-19 — both now resolve against their
+  // US broadcaster (ESPN FC / beIN SPORTS USA), each behind a required
+  // competition title token. See OFFICIAL_CHANNELS above.
   "ncaah",
   "ncaawh",
   "ncaabase",
   "ncaasoft",
-  "ncaavb",
   "rugbychamp",
   "rugbytest",
   "ufl",
@@ -389,6 +452,10 @@ const SECONDARY_CHANNELS: Record<string, string[]> = {
   // The league channel skipped Courage–Summit on 2026-08-05 while W Golazo
   // published an official, embeddable cut, so keep it as the strict 2nd slot.
   nwsl: ["CBS Sports W Golazo"],
+  // UEL's 2nd slot is the channel it just moved OFF — "CBS Sports Golazo" still
+  // holds the older ties, and keeping it strict here costs nothing when it has
+  // no cut for a match. See the uel note in OFFICIAL_CHANNELS.
+  uel: ["CBS Sports Golazo"],
   // Nations Championship: the two hemispheres post separately. World Rugby
   // covers the fixtures hosted in the north, and Super Rugby Pacific — the
   // SANZAAR channel, already this app's primary for `superrugby` — posts the
@@ -553,9 +620,25 @@ export function getCompetitionName(sport: string): string | null {
 // (a LaLiga Elche–Betis served for the cup tie, 2026-09-14), so the FA Cup
 // requires its name in the title. Every ESPN FC FA Cup cut is titled
 // "… | FA Cup Highlights | ESPN FC" (7/7 hits carried it).
+// ncaavb: its conference channels (SEC, Big Ten Network, ESPN) post football and
+// basketball between the same schools; strict probes served both. Every match
+// cut says "Volleyball" in the title. See lib/collegeHighlights.ts.
+// laliga: the SAME ESPN FC channel again, and the same hazard facup carries —
+// it cuts LALIGA, the FA Cup, the Copa del Rey and the Premier League, and the
+// Copa del Rey probe served a LaLiga meeting of the same two clubs for a cup
+// tie. Every ESPN FC LaLiga cut is titled "… | LALIGA Highlights | ESPN FC"
+// (4/4 hits carried it). Both spellings are listed because the token match is
+// punctuation-insensitive but NOT space-insensitive — "LA LIGA Highlights"
+// normalizes to "la liga", which the bare "laliga" token would miss.
+// ligue1: beIN SPORTS USA also carries the Coupe de France, Ligue 2 and beIN's
+// other rights, so the league name is required in the title. All 7 hits are
+// titled "… | HIGHLIGHTS Ligue 1 | MM/DD/YYYY | beIN SPORTS USA".
 const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
+  ncaavb: ["volleyball"],
   nationschamp: ["nations championship"],
   facup: ["fa cup"],
+  laliga: ["laliga", "la liga"],
+  ligue1: ["ligue 1"],
 };
 
 // NFL preseason — the same failure one season-phase over. The NFL channel
@@ -600,6 +683,27 @@ export function getCompetitionTitleTokens(
   if (sport === "nfl" && opts?.preseason) return NFL_PRESEASON_TITLE_TOKENS;
   if (sport === "cfl" && opts?.playoff) return cflPlayoffTitleTokens(opts.playoffLabel);
   return COMPETITION_TITLE_TOKENS[sport] ?? [];
+}
+
+// Per-game fallback uploaders for the official slot, tried in order only after
+// the primary channel misses. Empty for every sport without an entry in
+// collegeHighlightChannels.json. See lib/collegeHighlights.ts.
+const COLLEGE_HIGHLIGHT_CONFIG = collegeHighlightChannels as Record<string, CollegeHighlightConfig>;
+
+export function getHighlightFallbackChannels(
+  sport: string,
+  primaryChannel: string | null | undefined,
+  home: ChainTeam | null | undefined,
+  away: ChainTeam | null | undefined,
+  broadcasts: readonly string[] | null | undefined,
+): FallbackChannel[] {
+  return buildCollegeFallbackChain(COLLEGE_HIGHLIGHT_CONFIG[sport], primaryChannel, home, away, broadcasts);
+}
+
+// True for a sport with no fixed uploader whose official channel is the first
+// channel of each game's chain (ncaavb). A game whose chain is empty stays dark.
+export function highlightPrimaryFromChain(sport: string): boolean {
+  return !!COLLEGE_HIGHLIGHT_CONFIG[sport]?.primaryFromChain;
 }
 
 // Returns the full curated fallback chain of YouTube channels to try for the
@@ -654,9 +758,23 @@ function aliasTeam(name: string): string {
 // apart would make the bake and the client disagree on matchup identity, at which
 // point getChannelVerifiedBakedId rejects every entry the bake writes.
 
+// College football titles spell the school out ("Western Kentucky Hilltoppers
+// vs. Georgia Bulldogs"), but ESPN's shortDisplayName abbreviates it ("Western
+// KY", "Arizona St", "E Michigan"), and the worker's both-teams gate then
+// rejects the real upload. ESPN's `location` is the plain school name. Measured
+// 2026-09-16 on the 9/12 slate against the live worker, strict on ESPN College
+// Football: every game the short name found, the location found too, plus
+// Western Kentucky–Georgia and Eastern Michigan–Michigan State.
+// ncaavb (same date): location 11 hits over 143 conference-channel probes,
+// shortDisplayName 1 over 35.
+const LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb"]);
+
 // Rewrite a team name into the form the sport's official uploader puts in its
-// titles. Identity for every sport but LLWS, so nothing else can regress.
-export function highlightTeamName(sport: string, name: string): string {
+// titles. Identity for every sport but LLWS and the LOCATION_NAME_SPORTS, so
+// nothing else can regress. `location` is ESPN's team.location; when it is
+// missing the short name stands.
+export function highlightTeamName(sport: string, name: string, location?: string | null): string {
+  if (LOCATION_NAME_SPORTS.has(sport)) return location?.trim() || name;
   if (sport !== "llws") return name;
   const code = name.trim().split(/\s+/).pop() ?? "";
   return LLWS_REGION_NAMES[code.toUpperCase()] ?? name;

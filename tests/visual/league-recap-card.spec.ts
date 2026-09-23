@@ -86,8 +86,8 @@ const RECAPS = JSON.stringify({
   fetchedAt: "2026-09-14T14:00:00Z",
   recaps: {
     nfl: [
-      { sport: "nfl", key: "bestsunday", heading: "Week 1 top plays", label: "Sunday's best plays", cadence: "weekly", coversWeek: 1, windowStart: "20260909", windowEnd: "20260916", videoId: "AGzdTAjWr7U", pageUrl: "https://www.youtube.com/watch?v=AGzdTAjWr7U", channel: "NFL", durationSec: 1801, t: 1, sourcePolicy: "official-channel" },
-      { sport: "nfl", key: "top15", heading: "Week 1 top plays", label: "Top 15 plays", cadence: "weekly", coversWeek: 1, windowStart: "20260909", windowEnd: "20260916", videoId: "XUpaSUiyy5I", pageUrl: "https://www.youtube.com/watch?v=XUpaSUiyy5I", channel: "NFL", durationSec: 481, t: 1, sourcePolicy: "official-channel" },
+      { sport: "nfl", key: "bestsunday", heading: "Week 1", label: "Sunday's best plays", cadence: "weekly", coversWeek: 1, windowStart: "20260909", windowEnd: "20260916", videoId: "AGzdTAjWr7U", pageUrl: "https://www.youtube.com/watch?v=AGzdTAjWr7U", channel: "NFL", durationSec: 1801, t: 1, sourcePolicy: "official-channel" },
+      { sport: "nfl", key: "top15", heading: "Week 1", label: "Top 15 plays", cadence: "weekly", coversWeek: 1, windowStart: "20260909", windowEnd: "20260916", videoId: "XUpaSUiyy5I", pageUrl: "https://www.youtube.com/watch?v=XUpaSUiyy5I", channel: "NFL", durationSec: 481, t: 1, sourcePolicy: "official-channel" },
     ],
     mlb: [
       { sport: "mlb", key: "fastcast", heading: "Best of the day", label: "Best of the day", cadence: "daily", coversDate: "20260913", playbackUrl: "https://example.invalid/fastcast.m3u8", pageUrl: "https://www.mlb.com/video/fastcast-sunday-s-best-in-15-minutes-x8085", channel: "MLB.com", durationSec: 900, t: 1, sourcePolicy: "mlb.com" },
@@ -129,7 +129,7 @@ test("the recap pill sits on top of the NFL and MLB columns on /yesterday, and t
   // never a title.
   const nflPill = page.locator('[data-league-recap="nfl"]');
   await expect(nflPill).toBeVisible({ timeout: 15_000 });
-  await expect(nflPill).toContainText("Week 1 top plays");
+  await expect(nflPill).toContainText("Week 1");
   await expect(nflPill.getByRole("button")).toHaveCount(2);
   await expect(nflPill.getByRole("button", { name: "Top 15 plays (8m)" })).toBeVisible();
   await expect(nflPill.getByRole("button", { name: "Sunday's best plays (30m)" })).toBeVisible();
@@ -166,9 +166,10 @@ test("the recap pill sits on top of the NFL and MLB columns on /yesterday, and t
 
   // NFL game card: league cut with minutes + the club short cut beside it;
   // the card whose clubs posted nothing shows the league button only.
-  await expect(page.getByRole("button", { name: "Detroit Lions highlights" })).toHaveCount(1, { timeout: 15_000 });
-  await expect(page.getByRole("button", { name: "Detroit Lions highlights" })).toHaveText(/Lions 10m/);
-  await expect(page.getByRole("button", { name: "NFL highlights" })).toHaveCount(2);
+  // Club button is OFF pending QA (CLUB_BUTTON_ENABLED in GameHighlights.tsx):
+  // the baked club slot must not render, even though the record carries it.
+  await expect(page.getByRole("button", { name: "NFL highlights" })).toHaveCount(2, { timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Detroit Lions highlights" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "NFL highlights" }).first()).toHaveText(/NFL 17m/);
   await expect(page.getByRole("button", { name: "NFL highlights" }).nth(1)).toHaveText(/NFL 14m/);
 

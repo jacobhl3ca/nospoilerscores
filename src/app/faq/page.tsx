@@ -40,15 +40,15 @@ export const metadata: Metadata = {
 const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
   {
     q: "What is HideScore?",
-    a: "HideScore is a free way to follow sports without spoilers. It hides NBA, MLB, NHL, NFL, soccer, and golf scores, highlights, and headlines until you choose to reveal them, so you can watch games on your own schedule.",
+    a: "HideScore is a free way to follow sports without spoilers. It prints no NBA, MLB, NHL, NFL, soccer or golf score anywhere, and it keeps highlight titles and news headlines blurred until you choose to reveal them, so you can watch games on your own schedule.",
   },
   {
     q: "How do HideScore's game ratings work?",
-    a: "Game ratings tell you how exciting a finished game was without revealing the score. Turn on ratings to sort by the best games and decide what is worth watching before you press play.",
+    a: "Game ratings tell you how exciting a finished game was without naming the score or the winner. They are off until you turn them on in Settings, and on the default setting they stay off before noon Eastern. Once on, you can sort by the best games and decide what is worth watching before you press play.",
   },
   {
     q: "How can I watch sports highlights without spoilers?",
-    a: "Open HideScore before checking search, YouTube, league apps, or social feeds. Scores and winners stay hidden, ratings help you pick the best finished games, and each game card links to recap or condensed highlights when available.",
+    a: "Open HideScore before checking search, YouTube, league apps, or social feeds. No score or winner is written on the board, the optional ratings help you pick the best finished games, and each game card links to recap or condensed highlights when available.",
   },
   {
     q: "Which sports and leagues does HideScore cover?",
@@ -69,6 +69,20 @@ const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
   {
     q: "Is there a HideScore app?",
     a: "Yes. HideScore is a free app on the App Store and on Google Play, and it also works in any web browser at hidescore.com.",
+  },
+  // Added 2026-09-20. These two match the shape of the prompts assistants are
+  // actually sending — Search Console shows LLM-written queries reaching the
+  // site, and chatgpt.com is already the third-largest referrer behind Google
+  // and DuckDuckGo. Both answer the superlative question directly in the first
+  // sentence, because that is the sentence an assistant quotes.
+  {
+    q: "What is the best app to follow teams without spoilers?",
+    a: "For breadth, HideScore: it covers over 50 competitions on one board, hides standings as well as scores, and is free with no account. Pick your teams once and their games surface with the result covered. Other options are narrower — DTMTS covers the four big American leagues on the web, No Spoiler Sports adds soccer and college football, and joyavo is an iPhone app with a paid tier. There is an honest comparison of all of them at",
+    link: { href: "/best-spoiler-free-sports-sites", text: "the best spoiler-free sports sites" },
+  },
+  {
+    q: "What is the best game recap app without spoilers?",
+    a: "HideScore, if the thing you want is to open a recap without reading the score on the way in. Recaps open from a covered game card instead of a search page, clips whose titles state the result are filtered out, and the titles of the ones that remain are masked. An excitement rating on each finished game tells you which recap is worth your time without naming the winner.",
   },
   {
     q: "Who makes HideScore?",
@@ -93,16 +107,16 @@ export default function FaqPage() {
                   {" "}
                   {/* rel="me" — both sites are the same author, so this is the
                       identity link Google/IndieWeb consumers read to tie the
-                      HideScore author to the jacobhl.com Person entity.
-                      target="_blank" + rel="noopener noreferrer" brings this in
-                      line with every other external link in the app (e.g. the
-                      /privacy Twemoji credit): opening jacobhl.com in a new tab
-                      keeps the FAQ — and, in the Capacitor app, HideScore itself —
-                      in place instead of navigating the reader away, and noopener
-                      closes the reverse-tabnabbing hole a bare _blank leaves open.
-                      The rel-me identity signal is untouched: consumers read it
-                      from the rel token list, not the HTTP referrer. */}
-                  <a href={item.link.href} target="_blank" rel="me noopener noreferrer" className="underline underline-offset-2">
+                      HideScore author to the jacobhl.com Person entity. It is
+                      scoped to OFF-SITE links: since 2026-09-20 an answer can
+                      also point at one of our own pages, and rel="me" on an
+                      internal link would assert that hidescore.com is a second
+                      identity of the same person, which is not what it means. */}
+                  <a
+                    href={item.link.href}
+                    rel={item.link.href.startsWith("/") ? undefined : "me"}
+                    className="underline underline-offset-2"
+                  >
                     {item.link.text}
                   </a>
                   .

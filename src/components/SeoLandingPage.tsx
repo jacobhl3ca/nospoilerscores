@@ -24,6 +24,19 @@ type SeoLandingPageProps = {
   schemaDescription: string;
   canonical: string;
   about: string[];
+  // Extra JSON-LD nodes appended to this page's @graph. Added 2026-09-20 for
+  // /best-spoiler-free-sports-sites, which needs an ItemList beside the
+  // WebPage/BreadcrumbList/FAQPage nodes every landing page already emits.
+  // Deliberately an append rather than an override: the three standard nodes
+  // and their @id cross-links are the part that must not vary per page, and a
+  // caller that passes nothing gets byte-identical output to before.
+  extraSchema?: Record<string, unknown>[];
+  // @id of a node in `extraSchema` that this page is primarily ABOUT, wired to
+  // the WebPage node as `mainEntity`. Without it an appended node floats in the
+  // @graph unreferenced, the way the BreadcrumbList and FAQPage nodes used to
+  // before the refs above were added — Google merges the graph either way, but
+  // an unlinked list is not attributed to the page it describes.
+  mainEntityId?: string;
 };
 
 export default function SeoLandingPage({
@@ -40,6 +53,8 @@ export default function SeoLandingPage({
   schemaDescription,
   canonical,
   about,
+  extraSchema = [],
+  mainEntityId,
 }: SeoLandingPageProps) {
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
@@ -144,6 +159,7 @@ export default function SeoLandingPage({
                 // is a valid WebPage property, and tying it to the page node is
                 // Google's recommended pattern for the breadcrumb rich result.
                 breadcrumb: { "@id": `https://hidescore.com${canonical}#breadcrumb` },
+                ...(mainEntityId ? { mainEntity: { "@id": mainEntityId } } : {}),
                 about: about.map((name) => ({ "@type": "Thing", name })),
               },
               {
@@ -183,6 +199,7 @@ export default function SeoLandingPage({
                   acceptedAnswer: { "@type": "Answer", text: item.a },
                 })),
               },
+              ...extraSchema,
             ],
           }).replace(/</g, "\\u003c"),
         }}

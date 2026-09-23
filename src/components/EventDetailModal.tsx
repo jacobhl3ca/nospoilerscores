@@ -323,6 +323,15 @@ export default function EventDetailModal({
             {externalNoun}
           </button>
         ) : null}
+        {/* Lichess has no results-hiding mode — buildChessEventUrl links the
+            live round when it can, but a board already finished within that
+            round still shows its result there. Say so rather than promise a
+            clean page (A7). */}
+        {showExternal && event.kind === "chess" ? (
+          <p className="mt-2 text-[11px] text-center" style={{ color: "var(--text-muted)" }}>
+            Lichess shows results of finished boards.
+          </p>
+        ) : null}
       </div>
     </div>
   );

@@ -80,13 +80,28 @@ jobs:
       - name: Alert on failure
         if: failure()
         env:
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
         run: |
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          if [ -z "$NTFY_TOPIC" ]; then
-            echo "::warning::NTFY_TOPIC secret unset — cannot alert."
-            exit 0
+          if [ -z "$PUSHOVER_TOKEN" ] || [ -z "$PUSHOVER_USER" ]; then
+            # Loud, not a warning: an alerter that cannot alert must not exit 0.
+            echo "::error::PUSHOVER_TOKEN / PUSHOVER_USER not set — this alert reached NOBODY."
+            exit 1
           fi
-          curl -s -H "Title: HideScore sticky header regression" -H "Priority: high" -H "Tags: rotating_light" \
-            -d "The league title can be pushed onto the first game card again (the 'no top outline' bug). $run_url" \
-            "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+          # Pushover since 2026-09-22 (ntfy is retired from the phone).
+          # priority -2 = lands in the Pushover app with no popup, mirroring the
+          # `HideScore|-2` rule in ~/private/pushover-allow, which a runner can't read.
+          resp="$(curl -s --max-time 20 \
+            --form-string "token=$PUSHOVER_TOKEN" \
+            --form-string "user=$PUSHOVER_USER" \
+            --form-string "title=HideScore sticky header regression" \
+            --form-string "message=The league title can be pushed onto the first game card again (the 'no top outline' bug)." \
+            --form-string "priority=-2" \
+            --form-string "url=$run_url" \
+            --form-string "url_title=Open the failing run" \
+            https://api.pushover.net/1/messages.json)"
+          case "$resp" in
+            *'"status":1'*) echo "Pushover accepted the alert." ;;
+            *) echo "::error::Pushover rejected the alert: $resp"; exit 1 ;;
+          esac

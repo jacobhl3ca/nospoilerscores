@@ -9,9 +9,10 @@ import { dirname } from "node:path";
 import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
   parseRelativeTime, isoDurationToSec, etYmd, dailyCoversDate, weekdayCoversDate,
-  weeklyWindowFromPublished, nflWeekWindow, matchSeriesTitle, pickNewest, stripRecapRecord,
-  fillHeading, pickShorterClub, eplSeasonYear,
+  weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
+  fillHeading, pickShorterClub, eplSeasonYear, uploadFitsGameDate,
 } from "./lib/recaps.mjs";
+import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
 
 const OUT_DIR = "public/news";
 
@@ -167,13 +168,91 @@ async function fetchDroprMp4(pageUrl) {
   }
 }
 
-// Route an external clip-host /v/<id> page URL to the matching mp4 resolver.
-// Used by the redlib + RSS paths, which capture the host URL into one map.
-function fetchClipMp4(url) {
-  if (/^https?:\/\/streamff\.\w+\/v\//i.test(url)) return fetchStreamffMp4(url);
-  if (/^https?:\/\/streamin\.\w+\/v\//i.test(url)) return fetchStreaminMp4(url);
-  if (/^https?:\/\/dropr\.\w+\/v\//i.test(url)) return fetchDroprMp4(url);
-  return Promise.resolve(null);
+// streama.in / streamain.com — r/soccer's CURRENT dominant goal-clip host
+// (verified 2026-09-18: a month of the sub shows 0 streamff posts, ~8 dropr,
+// and a full search page of streama.in). The /<id>/watch page is a JS player
+// with no og:video, but /embed/<id> server-renders the direct CDN mp4
+// (cdn.streamain.com/...mp4 — 206 + video/mp4 + CORS *, so <video> plays it
+// natively). The poster is the same stem under /thumbnails/<stem>_thumb.jpg.
+// Mirrors the other resolvers; null on any failure so the post stays link-only.
+// 2026-09-22: the embed now serves media.sportits.com, which this no longer
+// matches; fetchClipMp4's generic reader picks it up from the <video> instead.
+async function fetchStreamainMp4(pageUrl) {
+  try {
+    const idm = pageUrl.match(
+      /^https?:\/\/(?:streama\.in|streamain\.\w+)\/(?:[a-z]{2}\/)?([A-Za-z0-9_-]{6,40})(?:\/|$)/i,
+    );
+    if (!idm) return null;
+    const res = await fetch(`https://streamain.com/embed/${idm[1]}`, {
+      headers: { "User-Agent": UA, Referer: "https://www.reddit.com/" },
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const m = html.match(/(https?:\/\/cdn\.streamain\.\w+\/[^"'\s]+\.mp4)/i);
+    if (!m) return null;
+    const mp4 = m[1].split(/[?#]/)[0];
+    const stem = (mp4.match(/\/([^/]+)\.mp4$/) || [])[1];
+    return {
+      mp4,
+      thumb: stem ? `https://streamain.com/thumbnails/${stem}_thumb.jpg` : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Any clip site we have no resolver for (the NEXT rotation), or a known one
+// whose resolver stopped matching (streama.in moved its CDN to
+// media.sportits.com on 2026-09-22): read the page's own player — og:video or
+// its first <video> — following a JS player's /embed/ iframe once. Unlike the
+// known hosts, an unknown one must PROVE the mp4 plays (a 2xx video/* answer)
+// before a row trusts it; a network blip means no clip, never a broken one.
+async function fetchGenericClipMp4(pageUrl) {
+  const getPage = async (url) => {
+    const res = await fetch(url, {
+      headers: { "User-Agent": UA, Referer: "https://www.reddit.com/" },
+      signal: AbortSignal.timeout(9000),
+    });
+    return res.ok ? { html: await res.text(), url: res.url || url } : null;
+  };
+  try {
+    const first = await getPage(pageUrl);
+    if (!first) return null;
+    let { mp4, thumb, embedUrl } = parseClipPage(first.html, first.url);
+    if (!mp4 && embedUrl) {
+      const embed = await getPage(embedUrl);
+      if (embed) {
+        const e = parseClipPage(embed.html, embed.url);
+        mp4 = e.mp4;
+        thumb = thumb || e.thumb;
+      }
+    }
+    if (!mp4) return null;
+    const probe = await fetch(mp4, {
+      headers: { "User-Agent": UA, Range: "bytes=0-1", Referer: pageUrl },
+      signal: AbortSignal.timeout(6000),
+    });
+    const type = probe.headers.get("content-type") || "";
+    if (!probe.ok || !/^(?:video\/|application\/octet-stream)/i.test(type)) return null;
+    return { mp4, thumb };
+  } catch {
+    return null;
+  }
+}
+
+// Route an external clip-host page URL to its mp4 resolver: the matching
+// per-host resolver first, then the generic player reader when that host is
+// unknown or its resolver comes back empty. Every Reddit path (redlib, RSS,
+// OAuth) funnels clip links through here.
+async function fetchClipMp4(url) {
+  let clip = null;
+  if (/^https?:\/\/streamff\.\w+\/v\//i.test(url)) clip = await fetchStreamffMp4(url);
+  else if (/^https?:\/\/streamin\.\w+\/v\//i.test(url)) clip = await fetchStreaminMp4(url);
+  else if (/^https?:\/\/dropr\.\w+\/v\//i.test(url)) clip = await fetchDroprMp4(url);
+  else if (/^https?:\/\/(?:streama\.in|streamain\.\w+)\//i.test(url)) clip = await fetchStreamainMp4(url);
+  if (clip || !isClipPageUrl(url)) return clip;
+  return fetchGenericClipMp4(url);
 }
 
 // ── YouTube lookup + validation + cache ───────────────────────────
@@ -1416,17 +1495,13 @@ async function fetchRedditVideoMap(subreddit) {
   const offset = [...subreddit].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
   for (let k = 0; k < REDLIB_INSTANCES.length; k++) {
     const base = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
-    let html;
-    try {
-      const res = await fetch(`${base}/r/${subreddit}/hot`, {
-        headers: { "User-Agent": UA },
-        signal: AbortSignal.timeout(12000),
-      });
-      if (!res.ok) continue;
-      html = await res.text();
-    } catch {
-      continue; // dead / blocked mirror — try the next
-    }
+    // Go through redlibGet, not a raw fetch: safereddit.com (the only mirror
+    // still answering as of 2026-09-18) serves an Anubis challenge page —
+    // HTTP 200, zero posts — to anything sending a browser User-Agent, and the
+    // real listing only to a UA-less request. redlibGet tries both and checks
+    // the body, so a challenge page no longer reads as success.
+    const html = await redlibGet(base, `/r/${subreddit}/hot`, /<div class="post[ "]/);
+    if (!html) continue; // dead / blocked / challenged mirror — try the next
     // Redlib renders each post inside <div class="post ...">; the post-id is in
     // its /r/<sub>/comments/<id>/ permalink and the v.redd.it id appears in the
     // media element — usually the /vid/<id>/ proxy path, but match the raw and
@@ -1441,11 +1516,14 @@ async function fetchRedditVideoMap(subreddit) {
         block.match(/\/vid\/([a-z0-9]{8,16})\//i) ||
         block.match(/\/hls\/([a-z0-9]{8,16})/i);
       if (vm) map.set(idm[1], vm[1]);
-      // streamff / streamin goal clips render as a "no_thumbnail" link anchor
-      // (no <img>), so capture the /v/<id> url here for fetchRedditRSS to resolve
-      // into a playable mp4 (fetchClipMp4). v.redd.it wins if both.
-      const cl = block.match(/href="(https?:\/\/(?:streamff|streamin|dropr)\.\w+\/v\/[^"]+)"/i);
-      if (cl && !map.has(idm[1])) clips.set(idm[1], decodeEntities(cl[1]));
+      // Clip-host goal clips render as a "no_thumbnail" link anchor (no <img>),
+      // so capture the clip page url here for fetchRedditRSS to resolve into a
+      // playable mp4 (fetchClipMp4). Any host, so a new one needs no code.
+      // v.redd.it wins if both.
+      const cl = [...block.matchAll(/href="(https?:\/\/[^"]+)"/gi)]
+        .map((h) => decodeEntities(h[1]))
+        .find(isClipPageUrl);
+      if (cl && !map.has(idm[1])) clips.set(idm[1], cl);
     }
     if (map.size > 0 || clips.size > 0) return { vreddit: map, clips };
   }
@@ -1725,22 +1803,14 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
           extUrl.match(/^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([\w-]{6,})/);
         const gifv = extUrl.match(/^https?:\/\/i\.imgur\.com\/(\w+)\.gifv/i);
         const mp4 = extUrl.match(/^https?:\/\/\S+\.mp4(?:$|\?)/i);
-        // streamff / streamin — r/soccer's goal-clip hosts (streamff is current).
-        // The /v/<id> page yields a direct mp4 + an og:image poster we resolve
-        // (fetchStreamff/StreaminMp4). These post as "no_thumbnail" links, so the
-        // clip's own poster is the only preview tile they get — without it the
-        // row collapses to text, unlike image-bearing posts from other subs.
-        const streamin = /^https?:\/\/streamin\.\w+\/v\//i.test(extUrl);
-        const streamff = /^https?:\/\/streamff\.\w+\/v\//i.test(extUrl);
-        const dropr = /^https?:\/\/dropr\.\w+\/v\//i.test(extUrl);
-        if (sm || streamff || streamin || dropr) {
-          const clip = sm
-            ? await fetchStreamableMp4(sm[1])
-            : streamff
-              ? await fetchStreamffMp4(extUrl)
-              : streamin
-                ? await fetchStreaminMp4(extUrl)
-                : await fetchDroprMp4(extUrl);
+        // r/soccer's goal-clip hosts (any of them — see fetchClipMp4). The
+        // clip page yields a direct mp4 + an og:image poster. These post as
+        // "no_thumbnail" links, so the clip's own poster is the only preview
+        // tile they get — without it the row collapses to text, unlike
+        // image-bearing posts from other subs.
+        const clipPage = !sm && isClipPageUrl(extUrl);
+        if (sm || clipPage) {
+          const clip = sm ? await fetchStreamableMp4(sm[1]) : await fetchClipMp4(extUrl);
           if (clip) {
             videoUrl = clip.mp4;
             if (!imageUrl) imageUrl = clip.thumb;
@@ -1826,18 +1896,13 @@ async function fillMissingRedlibVideos(items, subreddit) {
     const base = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
     if (tried.has(base)) continue;
     tried.add(base);
-    let html;
-    try {
-      const res = await fetch(`${base}/r/${subreddit}/hot`, {
-        headers: { "User-Agent": UA },
-        signal: AbortSignal.timeout(9000),
-      });
-      if (!res.ok) continue;
-      html = await res.text();
-    } catch {
-      continue; // dead / blocked mirror — try the next
-    }
-    if (!/<div class="post[ "]/.test(html)) continue;
+    // Go through redlibGet, not a raw fetch: safereddit.com (the only mirror
+    // still answering as of 2026-09-18) serves an Anubis challenge page —
+    // HTTP 200, zero posts — to anything sending a browser User-Agent, and the
+    // real listing only to a UA-less request. redlibGet tries both and checks
+    // the body, so a challenge page no longer reads as success.
+    const html = await redlibGet(base, `/r/${subreddit}/hot`, /<div class="post[ "]/);
+    if (!html) continue; // dead / blocked / challenged mirror — try the next
     for (const block of html.split(/<div class="post[ "]/).slice(1)) {
       const idm = block.match(new RegExp(`/r/${subreddit}/comments/(\\w+)/`, "i"));
       if (!idm || !missing.has(idm[1])) continue;
@@ -2039,12 +2104,12 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
       // sitting right in the entry <content> (the post's link-out). redlib
       // mirrors are down most days, so without this the clip only resolves on the
       // rare run that reached a live mirror; the feed itself always carries the
-      // host URL. Host-agnostic so a future rotation only needs a fetchClipMp4
-      // entry (streamff → streamin → dropr so far, Jacob 6/23).
+      // host URL. Host-agnostic: the post's [link] href on any clip site
+      // resolves, so a future rotation needs no code (Jacob 6/23, 9/22).
+      const linkHref = (decodeEntities(content).match(/href="([^"]+)">\[link\]/) || [])[1];
       const clipUrl =
         media.clips.get(postId) ||
-        (content.match(/https?:\/\/(?:streamff|streamin|dropr)\.\w+\/v\/[a-z0-9]+/i) || [])[0] ||
-        null;
+        (linkHref && isClipPageUrl(linkHref) ? linkHref : null);
       if (clipUrl) {
         const clip = await fetchClipMp4(clipUrl);
         if (clip) {
@@ -2135,11 +2200,8 @@ async function fetchRedditListing(subreddit, sectionLabel, token) {
         const clip = await fetchStreamableMp4(m[1]);
         if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
       }
-    } else if (/^streamin\.\w+$/i.test(p.domain || "") && /\/v\//.test(p.url || "")) {
-      const clip = await fetchStreaminMp4(p.url);
-      if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
-    } else if (/^streamff\.\w+$/i.test(p.domain || "") && /\/v\//.test(p.url || "")) {
-      const clip = await fetchStreamffMp4(p.url);
+    } else if (isClipPageUrl(p.url || "")) {
+      const clip = await fetchClipMp4(p.url);
       if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
     }
     // i.redd.it image posts: surface the original full-res URL so the client
@@ -2422,7 +2484,15 @@ const HL_LEAGUES = [
   { sport: "epl",   path: "/soccer/eng.1/scoreboard",                         channel: "NBC Sports" },
   { sport: "mls",   path: "/soccer/usa.1/scoreboard",                         channel: "Major League Soccer" },
   { sport: "ucl",   path: "/soccer/uefa.champions/scoreboard",                channel: "CBS Sports Golazo" },
-  { sport: "uel",   path: "/soccer/uefa.europa/scoreboard",                   channel: "CBS Sports Golazo" },
+  // UEL moved to CBS's second European channel — see the uel note in
+  // src/lib/youtube.ts. The old channel stays as the strict 2nd slot.
+  { sport: "uel",   path: "/soccer/uefa.europa/scoreboard",                   channel: "CBS Sports Golazo - Europe", secondaryChannel: "CBS Sports Golazo" },
+  // La Liga + Ligue 1 (lit 2026-09-19): their US broadcasters, each gated on a
+  // competition title token in HL_COMPETITION_TOKENS below. ESPN FC also cuts
+  // the FA Cup / Copa del Rey / Premier League and beIN also cuts the Coupe de
+  // France, so the token is load-bearing, not decoration.
+  { sport: "laliga",     path: "/soccer/esp.1/scoreboard",                    channel: "ESPN FC" },
+  { sport: "ligue1",     path: "/soccer/fra.1/scoreboard",                    channel: "beIN SPORTS USA" },
   { sport: "seriea",     path: "/soccer/ita.1/scoreboard",                    channel: "CBS Sports Golazo" },
   { sport: "bundesliga", path: "/soccer/ger.1/scoreboard",                    channel: "Bundesliga" },
   // ⚠️ "TUDN USA", NOT "TUDN México" — the third and last copy of this string.
@@ -2490,6 +2560,8 @@ const HL_WORKER_BASE = process.env.HIDESCORE_BASE || "https://hidescore.com";
 const HL_COMPETITION_TOKENS = {
   nationschamp: ["nations championship"],
   facup: ["fa cup"],
+  laliga: ["laliga", "la liga"],
+  ligue1: ["ligue 1"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts. Sent per
 // EVENT: TSN titles the postseason by round with no year, and a playoff card
@@ -2561,7 +2633,31 @@ const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
 const HL_LLWS_REGION_NAMES = JSON.parse(
   readFileSync(new URL("../src/lib/llwsRegions.json", import.meta.url), "utf8"),
 );
-const hlHighlightTeamName = (sport, name) => {
+// College football titles use the full school name ESPN keeps in team.location
+// ("Western Kentucky"), not the shortDisplayName ("Western KY"). Mirrors
+// LOCATION_NAME_SPORTS in src/lib/youtube.ts.
+const HL_LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb"]);
+// Per-game fallback uploaders (conference + TV network) for the official slot.
+// SAME FILE src/lib/youtube.ts reads; the chain builder mirrors
+// buildCollegeFallbackChain in src/lib/collegeHighlights.ts.
+const HL_COLLEGE_CHANNELS = JSON.parse(
+  readFileSync(new URL("../src/lib/collegeHighlightChannels.json", import.meta.url), "utf8"),
+);
+const hlFallbackChain = (sport, primaryChannel, homeTeam, awayTeam, broadcasts) => {
+  const cfg = HL_COLLEGE_CHANNELS[sport];
+  if (!cfg) return [];
+  const confKey = (t) => (t?.conferenceId ? String(t.conferenceId) : (t?.id ? cfg.teamConferences?.[String(t.id)] : undefined));
+  const channels = [];
+  const add = (c) => { if (c && c !== primaryChannel && !channels.includes(c)) channels.push(c); };
+  const homeConf = confKey(homeTeam);
+  const awayConf = confKey(awayTeam);
+  add(homeConf ? cfg.conferences[homeConf] : undefined);
+  add(awayConf ? cfg.conferences[awayConf] : undefined);
+  for (const name of broadcasts ?? []) add(cfg.networks.find((n) => n.names.includes(name))?.channel);
+  return channels.map((channel) => ({ channel, titleTokens: cfg.channelTitleTokens?.[channel] ?? cfg.titleTokens }));
+};
+const hlHighlightTeamName = (sport, name, location) => {
+  if (HL_LOCATION_NAME_SPORTS.has(sport)) return (location && String(location).trim()) || name;
   if (sport !== "llws") return name;
   const code = String(name).trim().split(/\s+/).pop() ?? "";
   return HL_LLWS_REGION_NAMES[code.toUpperCase()] ?? name;
@@ -2756,17 +2852,51 @@ async function hlVideoMatchesTeams(id, away, home) {
   return !!meta?.title && hlTitleHasTeam(meta.title, away) && hlTitleHasTeam(meta.title, home);
 }
 
+// WEEK TOKEN — mirrors parseWeekFromTitle in public/_worker.js (kept as a
+// hand copy, not a shared import: this is a plain Node script, the worker
+// runs on Cloudflare's edge runtime). Reads both digit ("Week 15") and
+// spelled-out ("WEEK ONE" … "WEEK TWENTY-ONE") forms — TSN spells CFL weeks
+// 1–5 out in full and switches to digits from week 6 on, so the old
+// digit-only regex read a spelled title as carrying no week token at all,
+// which the revalidation below (like the worker) treats as "untouched" —
+// letting a Week 1 recap survive as the cached id for a Week 6/8 game
+// forever (measured live 2026-09-22). Keep this word list in sync with
+// public/_worker.js's WEEK_WORDS by hand.
+const HL_WEEK_WORDS = [
+  "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+  "nineteen", "twenty",
+];
+const HL_WEEK_TOKEN_RE = new RegExp(
+  `\\bw(?:ee)?k\\.?\\s*(\\d{1,2}|${HL_WEEK_WORDS.join("|")})(?:[\\s-]one)?\\b`,
+  "i",
+);
+function hlParseWeekFromTitle(title) {
+  const m = String(title ?? "").match(HL_WEEK_TOKEN_RE);
+  if (!m) return null;
+  const whole = m[0].toLowerCase();
+  const w = m[1].toLowerCase();
+  const base = /^\d+$/.test(w) ? parseInt(w, 10) : HL_WEEK_WORDS.indexOf(w);
+  if (base < 0 || Number.isNaN(base)) return null;
+  return base === 20 && /twenty[\s-]one\b/.test(whole) ? 21 : base;
+}
+
 // Gridiron week check for CARRIED entries. The matchup check above passes for
 // BOTH meetings of a division rival — same two teams, same season — so it is not
 // enough on its own for NFL/NCAAF. Same asymmetry as the worker's gate: a title
 // whose week token disagrees is rejected, a title with no week token is left
 // alone (postseason cuts say "Divisional Round", and the caller sends no week
-// for those anyway).
-async function hlVideoMatchesWeek(id, week) {
+// for those anyway) — UNLESS requireWeek is set, which flips a missing token to
+// a reject. CFL passes this true: TSN's 2024/2025 no-week uploads are a
+// different, older-season format, not a legitimately week-less cut (see
+// cflWeekRequired at the call sites). NFL/NCAAF/the NFL club check never pass
+// it, so their behavior is unchanged.
+async function hlVideoMatchesWeek(id, week, requireWeek = false) {
   if (!week) return true;
   const meta = await hlOembedMeta(id);
-  const tok = String(meta?.title ?? "").match(/\bw(?:ee)?k\.?\s*(\d{1,2})\b/i);
-  return !tok || parseInt(tok[1], 10) === week;
+  const titleWeek = hlParseWeekFromTitle(meta?.title);
+  if (titleWeek === null) return !requireWeek;
+  return titleWeek === week;
 }
 
 // Competition check for CARRIED entries — the analogue of hlVideoMatchesWeek one
@@ -2789,6 +2919,25 @@ async function hlVideoMatchesComp(id, compTokens) {
 async function hlVideoMatchesChannel(id, channel) {
   const meta = await hlOembedMeta(id);
   return String(meta?.author ?? "").toLowerCase() === String(channel ?? "").toLowerCase();
+}
+
+// UPLOAD-DATE check — the season gate the title checks cannot be. The team,
+// competition and week checks all pass for the SAME two clubs meeting in an
+// earlier season, because ESPN FC / CBS / MLS / Serie A put neither a date nor
+// a year in a recap title. The 2nd (extended) button made it visible: it
+// re-asks with the 1st video excluded, and the next-best hit is last season's
+// cut. Measured against the live manifest 2026-09-20: ~105 of 135 soccer
+// `extended` slots held the wrong season, the oldest a 2012 MLS game.
+// The watch page's uploadDate settles it. A failed fetch yields null and the
+// id is KEPT — see uploadFitsGameDate. Cached per id per run, and the club
+// slot already pays this fetch, so it is at most one extra request per id.
+// Exported shape kept simple on purpose: PLAN-3 reuses it.
+async function hlVideoMatchesDate(id, gameIso) {
+  if (!id || !gameIso) return true;
+  const gameMs = Date.parse(gameIso);
+  if (!Number.isFinite(gameMs)) return true;
+  const { publishedMs } = await fetchYtWatchMeta(id);
+  return uploadFitsGameDate(publishedMs, gameMs);
 }
 
 async function hlIsTelemundoVideo(id) {
@@ -2958,9 +3107,24 @@ async function bakeGameHighlights() {
   // (why so many past WC games showed no link). Already-baked games short-circuit
   // the resolve below, so this only re-scrapes the few still-missing ones.
   const fifaDates = Array.from({ length: 16 }, (_, i) => hlEtYmd(-i));
+  // CFL gets its own much wider window for the same reason as WC, one gate
+  // over: the age-gate fix (#84, 2026-09-20) landed AFTER several CFL games
+  // had already baked, so a game outside the default 7-day window never gets
+  // its carried id revalidated against the new checks and a bad id (a 2024
+  // upload served for wk15 SSK@WPG, baked ~9/13) survives forever — the
+  // revalidation logic itself is correct, it is simply never invoked for
+  // that key again. CFL is a short, small-volume league (one ~21-week season,
+  // at most a couple of games/day), so 30 days of ESPN/theScore scoreboard
+  // fetches is cheap: already-baked games short-circuit before any YouTube
+  // call, so this only costs one JSON fetch/day plus a couple of oembed
+  // lookups per game whose id needs revalidating, never a new search unless
+  // a check actually fails. 30 matches the one-off `--hl-days=30` catch-up
+  // this same bug needed for the games already stuck with a bad id.
+  const HL_CFL_DAYS = 30;
+  const cflDates = Array.from({ length: HL_CFL_DAYS }, (_, i) => hlEtYmd(-i));
   let resolved = 0;
   for (const lg of HL_LEAGUES) {
-    const lgDates = lg.sport === "fifa" ? fifaDates : dates;
+    const lgDates = lg.sport === "fifa" ? fifaDates : (lg.sport === "cfl" ? cflDates : dates);
     for (const ymd of lgDates) {
       let data;
       try {
@@ -2978,8 +3142,12 @@ async function bakeGameHighlights() {
             // Rewritten to the uploader's title form before anything else
             // touches it, so the query, the matchup fingerprint and the title
             // check all agree with the client. Identity outside LLWS.
-            const away = hlHighlightTeamName(lg.sport, comps.find((c) => c.homeAway === "away")?.team?.shortDisplayName);
-            const home = hlHighlightTeamName(lg.sport, comps.find((c) => c.homeAway === "home")?.team?.shortDisplayName);
+            const awayTeam = comps.find((c) => c.homeAway === "away")?.team;
+            const homeTeam = comps.find((c) => c.homeAway === "home")?.team;
+            const away = hlHighlightTeamName(lg.sport, awayTeam?.shortDisplayName, awayTeam?.location);
+            const home = hlHighlightTeamName(lg.sport, homeTeam?.shortDisplayName, homeTeam?.location);
+            const broadcasts = (comp?.broadcasts ?? []).flatMap((b) => b?.names ?? []);
+            const fallbacks = hlFallbackChain(lg.sport, lg.channel, homeTeam, awayTeam, broadcasts);
             if (!event.id || !away || !home) return [];
             let series = null;
             for (const note of comp?.notes ?? []) {
@@ -3004,12 +3172,16 @@ async function bakeGameHighlights() {
             const cflPlayoff = lg.sport === "cfl" && event.season?.type === 3
               ? hlCflPlayoffTokens(comp?.notes?.[0]?.headline)
               : null;
-            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff }];
+            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks }];
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
         const { away, home, series, week, preseason, cflPlayoff } = item;
         const isFifa = lg.sport === "fifa";
+        // CFL-only: see hlVideoMatchesWeek's requireWeek param. NFL/NCAAF keep
+        // the old "no token = untouched" behavior — their postseason and some
+        // per-team-channel cuts genuinely carry no week.
+        const cflWeekRequired = lg.sport === "cfl";
         const matchup = hlMatchupFingerprint(away, home);
         const rawPrev = games[key] ?? {};
         let prev = rawPrev;
@@ -3028,7 +3200,14 @@ async function bakeGameHighlights() {
         const primaryChannel = item.channel;
         const secondaryChannel = isFifa ? "FOX Sports" : (lg.secondaryChannel ?? primaryChannel);
         const sameChannel = (actual, expected) => !!actual && !!expected && actual.toLowerCase() === expected.toLowerCase();
-        const carriedOfficial = sameChannel(prev.officialChannel, primaryChannel) ? prev.official : null;
+        // The official slot may come from the primary channel or, when that
+        // skipped the game, from a fallback in this game's chain. Each fallback
+        // carries the title token its lookups and revalidation must require.
+        const fallbacks = item.fallbacks ?? [];
+        const carriedFallback = fallbacks.find((f) => sameChannel(prev.officialChannel, f.channel)) ?? null;
+        const carriedOfficial = sameChannel(prev.officialChannel, primaryChannel) || carriedFallback ? prev.official : null;
+        let officialChannel = carriedFallback ? carriedFallback.channel : primaryChannel;
+        const officialTokensFor = (fb) => (fb && !compTokens?.length ? fb.titleTokens : compTokens);
         const carriedExtended = sameChannel(prev.extendedChannel, secondaryChannel) ? prev.extended : null;
         // 1st button (official/primary) and 2nd button (extended/secondary),
         // deduped so the two buttons never play the same clip — mirrors the
@@ -3042,21 +3221,51 @@ async function bakeGameHighlights() {
 
         // Revalidate every carried slot against both its uploader and matchup.
         // A channel marker proves provenance, not that the clip is for this game.
-        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, primaryChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week)) || !(await hlVideoMatchesComp(prevOfficial, compTokens)))) {
+        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
         }
-        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
+        if (prevOfficial && !(await hlVideoMatchesDate(prevOfficial, item.date))) {
+          console.warn(`HIGHLIGHT-AGE-REJECT ${key} official=${prevOfficial} (${away} vs ${home} ${dateStr})`);
+          prevOfficial = null;
+        }
+        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
+          prevExtended = null;
+        }
+        if (prevExtended && !(await hlVideoMatchesDate(prevExtended, item.date))) {
+          console.warn(`HIGHLIGHT-AGE-REJECT ${key} extended=${prevExtended} (${away} vs ${home} ${dateStr})`);
           prevExtended = null;
         }
 
         let official = prevOfficial ?? null;
         if (!official) {
+          officialChannel = primaryChannel;
           official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, compTokens);
-          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week)) || !(await hlVideoMatchesComp(official, compTokens)))) {
+          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week, cflWeekRequired)) || !(await hlVideoMatchesComp(official, compTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
+          }
+          if (official && !(await hlVideoMatchesDate(official, item.date))) {
+            console.warn(`HIGHLIGHT-AGE-REJECT ${key} newly-resolved official=${official} (${away} vs ${home} ${dateStr})`);
+            official = null;
+          }
+          for (const fb of official ? [] : fallbacks) {
+            const tokens = officialTokensFor(fb);
+            const id = await hlResolve(away, home, dateStr, series, fb.channel, undefined, competition, false, week, tokens);
+            if (!id) continue;
+            if (!(await hlVideoMatchesTeams(id, away, home)) || !(await hlVideoMatchesWeek(id, week, cflWeekRequired)) || !(await hlVideoMatchesComp(id, tokens))) {
+              console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home})`);
+              continue;
+            }
+            if (!(await hlVideoMatchesDate(id, item.date))) {
+              console.warn(`HIGHLIGHT-AGE-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home} ${dateStr})`);
+              continue;
+            }
+            official = id;
+            officialChannel = fb.channel;
+            console.log(`${lg.sport} fallback → ${fb.channel} ${id} (${away} vs ${home})`);
+            break;
           }
         }
         let extended = prevExtended ?? null;
@@ -3065,8 +3274,12 @@ async function bakeGameHighlights() {
           if (extended && official && extended === official) {
             extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, week, compTokens);
           }
-          if (extended && (!(await hlVideoMatchesTeams(extended, away, home)) || !(await hlVideoMatchesWeek(extended, week)) || !(await hlVideoMatchesComp(extended, compTokens)))) {
+          if (extended && (!(await hlVideoMatchesTeams(extended, away, home)) || !(await hlVideoMatchesWeek(extended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(extended, compTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home})`);
+            extended = null;
+          }
+          if (extended && !(await hlVideoMatchesDate(extended, item.date))) {
+            console.warn(`HIGHLIGHT-AGE-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home} ${dateStr})`);
             extended = null;
           }
         }
@@ -3152,7 +3365,7 @@ async function bakeGameHighlights() {
         const entry = { t: now, teams: [away, home], matchup, eventDate: item.date };
         if (official) {
           entry.official = official;
-          entry.officialChannel = primaryChannel;
+          entry.officialChannel = officialChannel;
           if (Number.isFinite(officialDurationSec)) entry.officialDurationSec = officialDurationSec;
         }
         if (club) {
@@ -3260,6 +3473,17 @@ async function fetchYtWatchMeta(id) {
   YT_WATCH_META_CACHE.set(id, meta);
   return meta;
 }
+// Per-video embed verdict for a recap (see parseEmbedPlayable). The Referer is
+// the production origin because embed permission is judged against it.
+async function fetchYtEmbeddable(id) {
+  try {
+    const res = await fetch(`https://www.youtube.com/embed/${id}`, { headers: { "User-Agent": UA, Referer: "https://hidescore.com/" } });
+    return res.ok ? parseEmbedPlayable(await res.text()) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchYtDurationSec(id) {
   return (await fetchYtWatchMeta(id)).durationSec;
 }
@@ -3365,6 +3589,14 @@ async function bakeLeagueRecaps() {
   for (const [id, rec] of prior.byId) {
     const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
     if (!end || end < cutoff) continue;
+    // A daily record dated today or later with no upload time was stamped from
+    // an older run's bake clock, not from the cut itself (the `?? now` fallback
+    // removed below). It is the premature "Best of the day" pill, so it does
+    // not survive the carry.
+    if (rec.cadence !== "weekly" && !rec.published && rec.coversDate >= todayYmd) {
+      console.log(`recaps: dropping undated ${rec.sport}:${rec.key} stamped ${rec.coversDate}`);
+      continue;
+    }
     byId.set(id, rec);
   }
 
@@ -3412,12 +3644,26 @@ async function bakeLeagueRecaps() {
               rec.coversWeek = hit.week;
               let win = null;
               if (sport === "nfl" && nflSeasonYear && hit.week) {
-                win = nflWeekWindow(await fetchNflWeekEvents(nflSeasonYear, hit.week), await fetchNflWeekEvents(nflSeasonYear, hit.week + 1));
+                win = nflWeekWindow(
+                  await fetchNflWeekEvents(nflSeasonYear, hit.week),
+                  await fetchNflWeekEvents(nflSeasonYear, hit.week + 1),
+                  await fetchNflWeekEvents(nflSeasonYear, hit.week + 2),
+                );
               }
               if (!win) win = weeklyWindowFromPublished(etYmd(hit.publishedMs ?? now));
               Object.assign(rec, win);
+            } else if (hit.titleDate) {
+              rec.coversDate = hit.titleDate;
+            } else if (hit.publishedMs) {
+              rec.coversDate = dailyCoversDate(new Date(hit.publishedMs).toISOString());
             } else {
-              rec.coversDate = hit.titleDate || dailyCoversDate(new Date(hit.publishedMs ?? now).toISOString());
+              // No date in the title and no upload time → the day this cut
+              // covers is unknown. Falling back to `now` stamped it with the
+              // bake day, which put a "Best of the day" pill on top of a slate
+              // still being played (Jacob 9/20, MLB Morning Lineup). A daily
+              // record with no readable date is dropped instead.
+              console.log(`${tag} → no publish time for a daily cut, skipped`);
+              rec = null;
             }
           }
         }
@@ -3435,8 +3681,12 @@ async function bakeLeagueRecaps() {
         // A carried record keeps its first-seen timestamps and duration; only a
         // different id for the same coverage replaces it.
         const sameVideo = prev && (prev.videoId ?? prev.pageUrl) === (rec.videoId ?? rec.pageUrl);
+        // Re-probed every run while the series is current: a rights holder
+        // can flip embedding either way. A failed probe keeps the last verdict.
+        const embeddable = rec.videoId ? (await fetchYtEmbeddable(rec.videoId)) ?? (sameVideo ? prev.embeddable : undefined) : undefined;
         const merged = stripRecapRecord({
           ...rec,
+          ...(typeof embeddable === "boolean" ? { embeddable } : {}),
           t: sameVideo ? prev.t : now,
           published: sameVideo && prev.published ? prev.published : rec.published,
           durationSec: Number.isFinite(rec.durationSec) ? rec.durationSec : prev?.durationSec,

@@ -52,10 +52,11 @@ async function setLeagues(page: Page, leagues: string[]) {
 
 // Two finished games on one slate, named so a highlight mock can resolve one
 // and not the other — the exact mixed column that used to go ragged.
-function twoFinishedGames(names: [string, string, string, string], idBase = 900001, startIso = "2026-08-06T02:00:00Z") {
+function twoFinishedGames(names: [string, string, string, string], idBase = 900001, startIso = "2026-08-06T02:00:00Z", conferenceId?: string) {
   const team = (id: string, name: string, abbr: string, score: string) => ({
     id, displayName: name, shortDisplayName: name, abbreviation: abbr, score,
     logo: "", color: "666666",
+    ...(conferenceId ? { conferenceId } : {}),
   });
   const event = (id: string, away: ReturnType<typeof team>, home: ReturnType<typeof team>) => ({
     id,
@@ -284,4 +285,81 @@ test("the floor crosses columns: one clip in one league lifts the finished cards
   const withVideo = cards.find((c) => c.hasBtn)!;
   expect(withVideo.name).toBe("Aces");
   for (const card of cards) expect(card.slot).toBe(withVideo.btnRow);
+});
+
+// ── …and never on a league that has no trusted uploader at all ──────────────
+//
+// The reserve answers "this card will never get a button" for a game whose
+// league DOES have one — a college football game on a channel ESPN skips. A
+// league in NO_HIGHLIGHT_FALLBACK (NCAA volleyball: 1/5 strict on the 2025
+// tournament, regular season on ESPN+/B1G+ with no official upload) never earns
+// a button on any card, so the reserve there is a permanent blank band — the
+// volleyball column in Jacob's 9/16 screenshot. GameHighlights emits the same
+// [data-hl-pending] marker for it, permanently.
+// 9/16, not 8/6: volleyball's season opens 08-21, so an August board drops the column.
+test("a dark league reserves nothing, even beside a league that has a clip", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-16T20:00:00-04:00"));
+  await setLeagues(page, ["wnba", "ncaavb"]);
+  await page.route("**/basketball/wnba/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["Aces", "Lynx", "Fever", "Sky"], 900001, "2026-09-16T18:00:00Z"),
+  }));
+  await page.route("**/volleyball/womens-college-volleyball/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["North Florida", "William & Mary", "Rhode Island", "Penn"], 920001, "2026-09-16T18:00:00Z"),
+  }));
+  await resolveOnly(page, "Aces");
+
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { name: "WNBA" })).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => {
+    const cards = await measuredCards(page);
+    return cards.find((c) => c.name.includes("Aces"))?.hasBtn ?? null;
+  }, { timeout: 15_000 }).toBe(true);
+  await page.waitForTimeout(1500);
+
+  const cards = await measuredCards(page);
+  const aces = cards.find((c) => c.name.includes("Aces"))!;
+  const vb = cards.filter((c) => c.name.includes("North Florida") || c.name.includes("Rhode Island"));
+  expect(vb).toHaveLength(2);
+  expect(aces.slot).toBeGreaterThan(20);
+  for (const card of vb) {
+    expect(card.hasBtn).toBe(false);
+    expect(card.slot).toBe(0);
+  }
+});
+
+// ── …and not on a volleyball card that DOES map to a conference channel ─────
+//
+// The dark-league case above is a volleyball game with no channel at all. A P4
+// game maps to one ("Big Ten Volleyball", conference 5, from #75) — and that
+// channel posts football, not volleyball, so the card resolved nothing, emitted
+// no marker and reserved a permanent 36px band. 18 of them on Jacob's 9/17
+// board. ncaavb is in NEVER_RESERVE_SPORTS now: a volleyball card reserves
+// nothing whether or not it has a channel.
+test("a P4 volleyball card with a conference channel still reserves nothing", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-16T20:00:00-04:00"));
+  await setLeagues(page, ["wnba", "ncaavb"]);
+  await page.route("**/basketball/wnba/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["Aces", "Lynx", "Fever", "Sky"], 900001, "2026-09-16T18:00:00Z"),
+  }));
+  await page.route("**/volleyball/womens-college-volleyball/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["Illinois", "Purdue", "Michigan", "Indiana"], 930001, "2026-09-16T18:00:00Z", "5"),
+  }));
+  await resolveOnly(page, "Aces");
+
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { name: "WNBA" })).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => {
+    const cards = await measuredCards(page);
+    return cards.find((c) => c.name.includes("Aces"))?.hasBtn ?? null;
+  }, { timeout: 15_000 }).toBe(true);
+  await page.waitForTimeout(1500);
+
+  const cards = await measuredCards(page);
+  const vb = cards.filter((c) => c.name.includes("Illinois") || c.name.includes("Michigan"));
+  expect(vb).toHaveLength(2);
+  for (const card of vb) expect(card.slot).toBe(0);
 });

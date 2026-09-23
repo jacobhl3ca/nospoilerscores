@@ -8,7 +8,7 @@ const TITLE = "Cricket Highlights Without Spoilers | HideScore";
 // rating and a watch link — see NO_HIGHLIGHT_FALLBACK in src/lib/youtube.ts.
 // Keep the copy on this page matched to that, and re-check if the rights move.
 const DESC =
-  "Follow the IPL and catch up on cricket without seeing the result first. Scores, wickets, and the chase stay hidden until you tap.";
+  "Follow the IPL and catch up on cricket without seeing the result first. No score, wicket count, or chase total is printed anywhere.";
 const CANONICAL = "/cricket-highlights-without-spoilers";
 
 const FAQ = [
@@ -80,7 +80,7 @@ export default function CricketHighlightsWithoutSpoilersPage() {
       h1="Cricket highlights without spoilers"
       intro={[
         "Cricket may be the sport most often ruined before you watch it. IPL matches are played in India, so for most of the world they finish overnight — which means almost everybody is watching a replay, and almost everybody has already been told how it ended.",
-        "HideScore is built for exactly that gap. Match cards stay hidden, the score reveals only when you tap, and the ratings tell you whether a chase was worth your time without telling you who won it.",
+        "HideScore is built for exactly that gap. A match card carries the fixture and the start time and no score at all, and the optional ratings tell you whether a chase was worth your time without telling you who won it.",
       ]}
       sections={[
         {
@@ -97,7 +97,7 @@ export default function CricketHighlightsWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "IPL scores hidden until you tap.",
+        "No IPL score printed anywhere on the board.",
         "Ratings built on wickets in hand and balls to spare, never on the winner.",
         "Cricket-aware spoiler filtering on headlines and highlight titles.",
         "A watch link to the broadcast rather than to a scorecard.",

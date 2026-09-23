@@ -740,16 +740,15 @@ export default function SettingsPanel({
       revealNewsTitles: undefined,
       revealNewsMedia: undefined,
       // The remaining news-view state the toolbar persists was still omitted, so
-      // a reset kept the user's Feed-vs-Cards view, the 🎥 Videos-only filter, the
-      // ⇅ oldest-first sort, and their drag-reordered source-type order.
-      // newsHiddenSources belongs here too: it has no live setter, but it is still
-      // APPLIED as a source filter, so a value left in localStorage from an earlier
-      // build hides sources with no UI to clear it — a reset is the only way out.
-      // All five have no non-undefined default, so clearing to undefined restores
-      // the fresh-install default (Cards view, no video filter, newest-first,
-      // default order, nothing hidden). newsOldestFirst was the lone news-header
-      // toolbar toggle still missing here — its ⇅ pill persists to prefs like
-      // newsFeedView/newsVideosOnly, so a reset otherwise left the feed reversed.
+      // a reset kept the user's Feed-vs-Cards view, the 🎥 Videos-only filter, and
+      // their drag-reordered source-type order. newsHiddenSources belongs here
+      // too: it has no live setter, but it is still APPLIED as a source filter, so
+      // a value left in localStorage from an earlier build hides sources with no
+      // UI to clear it — a reset is the only way out. All four have no non-
+      // undefined default, so clearing to undefined restores the fresh-install
+      // default (Cards view, no video filter, default order, nothing hidden).
+      // newsOldestFirst (the ⇅ control) was the last toolbar pref still
+      // surviving a reset; it has no non-undefined default either.
       newsFeedView: undefined,
       newsVideosOnly: undefined,
       newsOldestFirst: undefined,
@@ -1270,7 +1269,7 @@ export default function SettingsPanel({
             <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
               Pick <em>⭐ Top events</em> for any column (tap a column header, or a slot above) to get the biggest games across every league in one column.
               Auto ranks your starred teams first, then what espn.com is featuring on its homepage right now, live games, playoffs, ranked matchups and national TV.
-              Scores stay hidden, same as everywhere else.
+              No score is printed, same as everywhere else.
             </p>
             <Field label="Which leagues" hint="Auto follows ESPN's homepage plus your teams; Manual uses only the leagues you tick">
               <RadioGroup

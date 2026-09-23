@@ -37,7 +37,9 @@ async function gotoNews(page: import("@playwright/test").Page, extra: Record<str
 test("news toolbar pills are on top of the sticky seam cover, not under it", async ({ page }) => {
   await gotoNews(page);
 
-  const headlinesChip = page.getByRole("button", { name: /Headlines/ }).first();
+  // The chip's accessible name is its aria-label, not the visible "Headlines"
+  // text (the label is display:none on phones, so the name is pinned).
+  const headlinesChip = page.getByRole("button", { name: "Toggle headline reveal" }).first();
   await expect(headlinesChip).toBeVisible();
 
   // Hit-test the chip's own center: whatever the browser would deliver a click

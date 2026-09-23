@@ -3,7 +3,7 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 
 const TITLE = "MLB Highlights Without Spoilers | HideScore";
 const DESC =
-  "Watch MLB highlights and catch up on baseball games without seeing the final score first. HideScore keeps results hidden until you tap.";
+  "Watch MLB highlights and catch up on baseball games without seeing the final score first. HideScore prints no result anywhere on the board.";
 const CANONICAL = "/mlb-highlights-without-spoilers";
 
 const FAQ = [
@@ -87,6 +87,7 @@ export default function MlbHighlightsWithoutSpoilersPage() {
       links={[
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },
+        { href: "/redzone-for-every-sport", label: "Big Inning and other whip-around shows" },
         { href: "/today", label: "Today" },
       ]}
       faq={FAQ}

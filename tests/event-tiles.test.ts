@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   chessEventState,
+  buildChessEventUrl,
   buildBoxingTokens,
   boxingChannelFor,
   boxingHighlightQuery,
@@ -38,6 +39,43 @@ test("an unknown end time is not evidence the chess event ended", () => {
 test("chess states Lichess reports directly are passed through untouched", () => {
   assert.equal(chessEventState("pre", NOW - 99 * H, NOW), "pre");
   assert.equal(chessEventState("post", NOW + 99 * H, NOW), "post");
+});
+
+// ── Chess: the Lichess link (A7 — no results before the click) ──────────────
+
+const FIXTURE_TOUR = {
+  url: "https://lichess.org/broadcast/sinquefield-cup-2026/abcd1234",
+  website: "https://grandchesstour.org/",
+};
+const ROUND_URL = "https://lichess.org/broadcast/sinquefield-cup-2026/round-3/wxyz9876";
+
+test("an ongoing round links straight to the live boards", () => {
+  assert.equal(
+    buildChessEventUrl({ ...FIXTURE_TOUR, round: { url: ROUND_URL, ongoing: true } }),
+    ROUND_URL,
+  );
+});
+
+test("a round that has not started or already ended falls back to the tour url", () => {
+  assert.equal(
+    buildChessEventUrl({ ...FIXTURE_TOUR, round: { url: ROUND_URL, ongoing: false } }),
+    FIXTURE_TOUR.url,
+  );
+});
+
+test("no round data at all falls back to the tour url, then the organizer site", () => {
+  assert.equal(buildChessEventUrl({ ...FIXTURE_TOUR, round: null }), FIXTURE_TOUR.url);
+  assert.equal(
+    buildChessEventUrl({ url: null, website: "https://grandchesstour.org/", round: null }),
+    "https://grandchesstour.org/",
+  );
+});
+
+test("an ongoing round missing its url still falls back rather than building a broken link", () => {
+  assert.equal(
+    buildChessEventUrl({ ...FIXTURE_TOUR, round: { url: null, ongoing: true } }),
+    FIXTURE_TOUR.url,
+  );
 });
 
 // ── Boxing: fighter surnames out of a boxing-data.com card title ─────────────

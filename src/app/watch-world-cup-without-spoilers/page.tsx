@@ -3,7 +3,7 @@ import Link from "next/link";
 
 const TITLE = "How to Watch the 2026 World Cup Without Spoilers | HideScore";
 const DESC =
-  "A simple guide to following the 2026 FIFA World Cup spoiler-free: hide scores until you tap and see which matches were classics without learning who won.";
+  "A simple guide to following the 2026 FIFA World Cup spoiler-free: a schedule that prints no score, ratings that name no winner, and how to watch on delay.";
 // Guide publish / last-revised dates (the file's real git create + last-edit
 // days). Single source of truth: the openGraph article:* tags below AND the
 // Article JSON-LD's datePublished/dateModified both read these, so the two
@@ -64,7 +64,7 @@ export const metadata: Metadata = {
 const FAQ: { q: string; a: string }[] = [
   {
     q: "Can I follow the World Cup without seeing the score?",
-    a: "Yes. HideScore shows the full World Cup schedule with every score hidden until you tap, so you can check what is on and what is coming up without learning any results.",
+    a: "Yes. HideScore shows the full World Cup schedule and prints no score on any of it, so you can check what is on and what is coming up without learning any results.",
   },
   {
     q: "How do I know if a World Cup match was good without spoilers?",
@@ -128,15 +128,15 @@ export default function WatchWorldCupWithoutSpoilersPage() {
         Because the US is hosting, most weekday matches kick off in the afternoon — so a lot of fans are at work, and a
         lot of the world is asleep. Results then leak from everywhere at once: phone notifications, social feeds, news
         sites, betting odds, coworkers, and even the thumbnail on a highlight video. Watching the World Cup on delay
-        only works if you can keep the score hidden until you choose to see it.
+        only works if the place you check the schedule never states the score.
       </p>
 
-      <h2 className="text-lg font-semibold mt-8 mb-2">The simplest fix: hide every score until you tap</h2>
+      <h2 className="text-lg font-semibold mt-8 mb-2">The simplest fix: a schedule with no score on it</h2>
       <p className="mb-4" style={{ color: "var(--text-muted)" }}>
         <Link href="/worldcup" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
           HideScore&apos;s spoiler-free World Cup hub
         </Link>{" "}
-        shows the entire schedule with every score hidden until you tap to reveal it. There is no login, no tracking,
+        shows the entire schedule and prints no score on any match. There is no login, no tracking,
         and nothing to pay. It works in any browser at hidescore.com/worldcup and as a free app on iPhone and Android, so you can check
         what&apos;s on without risking the result.
       </p>

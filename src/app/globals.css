@@ -376,7 +376,9 @@ body {
    9/6). GameHighlights renders the marker while its buffer is closed and drops
    it the minute the buffer opens (its own 60s tick re-renders it), so the card
    sits at the plain height until the clip is actually due and takes the floor
-   from then on, clip or no clip. */
+   from then on, clip or no clip. A league with no trusted uploader at all
+   (hasNoTrustedHighlightSource — NCAA volleyball etc.) emits the same marker
+   permanently: it never lines up because it never earns a button (Jacob 9/16). */
 :root { --hl-btn-h: 28px; }
 .hl-slot { display: flow-root; }
 .hl-slot .highlight-btn { height: var(--hl-btn-h); box-sizing: border-box; }
