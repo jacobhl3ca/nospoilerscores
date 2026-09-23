@@ -70,8 +70,9 @@ interface LeagueColumnProps {
   // Favorite-stars next to team names on the cards (Settings can hide them).
   // Suppressed automatically when the column is a single Finals matchup.
   showTeamStars?: boolean;
-  // Sports shown in the other columns — dropdown greys these (still selectable).
-  shownElsewhere?: Sport[];
+  // Sports shown in the other columns, with the 1-based column number each
+  // lives in — dropdown labels these "· col N" (still full-colour, selectable).
+  shownElsewhere?: { sport: Sport; col: number }[];
   // Manual retry for the "Schedule unavailable" empty state. Pull-to-refresh
   // covers mobile; this is the desktop-equivalent path.
   onRetry?: () => void;
@@ -1856,18 +1857,24 @@ export default function LeagueColumn({
                     >
                       Auto
                     </button>
-                    {/* Sort leagues already shown in another column (greyed) to
-                        the bottom, just above Empty — they're the least useful to
-                        pick again (Jacob 6/9). Stable sort keeps the rest in order. */}
+                    {/* Sort leagues already shown in another column to the
+                        bottom, just above Empty — they're the least useful to
+                        pick again (Jacob 6/9). Stable sort keeps the rest in
+                        order. They stay full-colour (not greyed) since they
+                        are still a normal, one-tap choice — logged-out and
+                        logged-in alike (Jacob 9/10: "when not logged in,
+                        maybe show every league here?"). Grey is reserved for
+                        offseason, the one state that actually limits what
+                        picking it gets you. */}
                     {[...swappableOptions!].sort((a, b) => {
                       // The cross-league pill leads the list wherever it appears.
                       if ((a.sport === "top") !== (b.sport === "top")) return a.sport === "top" ? -1 : 1;
-                      const ae = a.sport !== league.sport && !!shownElsewhere?.includes(a.sport);
-                      const be = b.sport !== league.sport && !!shownElsewhere?.includes(b.sport);
+                      const ae = a.sport !== league.sport && !!shownElsewhere?.some((e) => e.sport === a.sport);
+                      const be = b.sport !== league.sport && !!shownElsewhere?.some((e) => e.sport === b.sport);
                       return (ae ? 1 : 0) - (be ? 1 : 0);
                     }).map((opt) => {
                       const isCurrent = opt.sport === league.sport;
-                      const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
+                      const elsewhere = isCurrent ? undefined : shownElsewhere?.find((e) => e.sport === opt.sport);
                       const isAutoDefault = opt.sport === autoSport;
                       return (
                         <button
@@ -1880,16 +1887,17 @@ export default function LeagueColumn({
                           aria-current={isCurrent ? "true" : undefined}
                           className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                           style={{
-                            color: isCurrent ? "var(--accent)" : isElsewhere || opt.offseason ? "var(--text-muted)" : "var(--text)",
+                            color: isCurrent ? "var(--accent)" : opt.offseason ? "var(--text-muted)" : "var(--text)",
                             fontWeight: isCurrent || isAutoDefault ? 600 : 400,
                           }}
-                          title={isElsewhere ? "Already shown in another column — pick to add a second" : opt.upcomingLabel ? `Season starts ${opt.upcomingLabel}` : isAutoDefault ? "What Auto picks for this column" : undefined}
+                          title={elsewhere ? `Already shown in column ${elsewhere.col} — pick to add a second` : opt.upcomingLabel ? `Season starts ${opt.upcomingLabel}` : isAutoDefault ? "What Auto picks for this column" : undefined}
                           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
                           {opt.sport === "top" ? "⭐ " : ""}{opt.label}
                           {opt.offseason && <em className="font-normal"> · offseason</em>}
                           {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
+                          {elsewhere && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · col {elsewhere.col}</em>}
                           {isAutoDefault && !isCurrent && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
                         </button>
                       );

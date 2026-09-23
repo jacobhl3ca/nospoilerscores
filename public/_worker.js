@@ -1740,6 +1740,38 @@ export default {
           //     still passing, including the Super Bowl and date-format traps). Byte-identical to the
           //     worker's copy.
           const SPOILER_RX = /\b(walk[- ]?off|buzzer[- ]?beaters?|comeback|come[- ]from[- ]behind|(?:storm|roar|claw)(?:s|ed|ing)?[- ]?back|battl(?:e|es|ed|ing)[- ]?back|fight(?:s|ing)?[- ]?back|fought[- ]?back|rall(?:y|ies|ied|ying) (?:past|back|from)|extra[- ]?innings?|overtime|extra[- ]?time|sudden[- ]?death|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|overwhelm\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|relegat\w*|overcome|overcomes|overcoming|overcame|dominat\w*|defeat\w*|beat\w*|edge\w*|pip(?:s|ped|ping)?|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|hold(?:s|ing)?[- ]?on|held[- ]?on|hang(?:s|ing)?[- ]?on|hung[- ]?on|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|top(?:s|ped)|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|capitulat\w*|choke\w*|collaps\w*|obliterat\w*|annihilat\w*|decimat\w*|vanquish\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|clobber\w*|shellac\w*|brush(?:es|ed|ing)?[- ]?aside|(?:runs?|running|ran) riot|to the sword|hammer(?:ed|ing)|batter(?:ed|ing)|cruise(?:s|d)?|canter(?:s|ed|ing)?|(?:eas(?:e|es|ed)|power(?:s|ed)?|breez(?:e|es|ed)|coast(?:s|ed)?|stroll(?:s|ed)?|waltz(?:es|ed)?|roll(?:s|ed)?)[- ]?past|(?:sneak(?:s|ed)?|snuck|slip(?:s|ped)?|squeez(?:e|es|ed))[- ]?past|triumph\w*|romp\w*|conquer\w*|dethron\w*|upset\w*|clinch\w*|seals?|sealed|snatch\w*|sweep\w*|swept|whitewash\w*|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|knock out|knock(?:s|ed|ing)? off|sent[- ]?packing|qualif(?:y|ies|ied)|advanc\w*|book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)|punch(?:es|ed)? (?:their|its|a) ticket|reach(?:es|ed|ing)? (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|through to (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|into (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|progress(?:es|ed|ing)? (?:to |into |through to )?(?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|crowned (?:world )?champions?|world[- ]?(?:cup[- ]?)?champions?|(?:lift|hoist)(?:s|ed|ing)? (?:the )?(?:world[- ]?cup|trophy)|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|(?:comes?|came)[- ]?out on top|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]?hitter|empty[- ]?net(?:s|ter|ters)?|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|blank(?:s|ed|ing)|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|salvag\w*|rescu\w*|consolat\w*|share(?:s|d)? the spoils|share(?:s|d)? the points|share(?:s|d)? the honou?rs|a point (?:apiece|each)|honou?rs even|held to an? (?:[\w-]+ )?draw|settl(?:e|es|ed|ing) for (?:a|an|the) (?:draw|point|stalemate)|all[- ]?square|equali[sz]\w*|level(?:l)?ers?|go[- ]?ahead (?:goal|run|homer|home[- ]?run|score|basket|bucket|touchdown|header|strike)s?|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|sees?[- ]?red|saw[- ]?red|red card|all three points|bowl(?:s|ed|ing)[- ]?out|all[- ]?out for|chas(?:e|es|ed|ing)[- ]?down|chas(?:e|es|ed) \d{2,3}\b|super[- ]?over|defend(?:s|ed|ing)? \d{2,3}\b|\d{2,3}\/(?:10|\d)\b|\d{2,3} for \d\b|five[- ]?for\b|fifer|wicket haul|skittl\w*|TKO|KOs?|KO'd|stops|stopped|def(?=\.)|retain(?:s|ed)|finish(?:es|ed)|starch\w*|submission\w*|submit(?:s|ted|ting)|tap(?:s|ped|ping)?[- ]?out|(?:unanimous|split|majority)[- ]?decision)\b/i;
+          // SPOILER_RX carries /i, so under [A-Z] means "any letter" and a team/score/team/score
+          // alternative living there caught lowercase listicle titles too ("top 10 plays of week 2").
+          // Kept as its own case-sensitive regex, byte-identical to spoilers.ts — it only means
+          // anything when the two "teams" are genuinely capitalized proper names. Catches the
+          // comma-or-space box score SCORE_RX's hyphenated form misses ("Grizzlies 110, Lakers 105",
+          // "Lakers 105 Grizzlies 110").
+          const TEAM_SCORE_RX =
+            /\b([A-Z][\w.'-]+(?: [A-Z][\w.'-]+)*) (\d{1,3}),? ([A-Z][\w.'-]+(?: [A-Z][\w.'-]+)*) (\d{1,3})\b/;
+          // A Title Case listicle/schedule headline ("Top 3 Storylines Heading Into Round 2",
+          // "Ranking the Top 5 QBs After Week 6") still satisfies TEAM_SCORE_RX's shape even
+          // case-sensitively, because every word in that kind of title is capitalized. None of
+          // these words is ever a real team name, so a match naming one is rejected outright.
+          const TEAM_SCORE_LISTICLE_WORDS = new Set([
+            "Top",
+            "Best",
+            "Week",
+            "Game",
+            "Round",
+            "Match",
+            "Day",
+            "Part",
+            "Episode",
+            "Vol",
+            "Season",
+          ]);
+          const isTeamScoreSpoiler = (text) => {
+            const m = text.match(TEAM_SCORE_RX);
+            if (!m) return false;
+            const [, team1, , team2] = m;
+            const words = [...team1.split(" "), ...team2.split(" ")];
+            return !words.some((word) => TEAM_SCORE_LISTICLE_WORDS.has(word));
+          };
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks
@@ -1747,7 +1779,12 @@ export default {
           const isOfficialWorldCupUpload = isWorldCupQuery && WC_OFFICIAL_CHANNELS.includes(channel.toLowerCase());
           const isMaskedOfficialCombatUpload =
             strictChannelParam && isFromChannel && MASKED_COMBAT_CHANNELS.has(preferChannelLower);
-          if (!isOfficialWorldCupUpload && !isMaskedOfficialCombatUpload && (SCORE_RX.test(title) || SPOILER_RX.test(title))) continue;
+          if (
+            !isOfficialWorldCupUpload &&
+            !isMaskedOfficialCombatUpload &&
+            (SCORE_RX.test(title) || SPOILER_RX.test(title) || isTeamScoreSpoiler(title))
+          )
+            continue;
 
           // Simulation/videogame hard-skip — NBA 2K, MLB The Show, FIFA,
           // Madden, NHL 2K sim channels autopost "highlights" of games
@@ -2220,6 +2257,12 @@ export default {
             website: info.website || null,
             image: tour.image || null,
             tier: tour.tier || 0,
+            // The round's own url + ongoing flag, so the client can prefer it
+            // over the tour url (which points at the CURRENT round and leaks
+            // finished-board results — see A7 / buildChessEventUrl in
+            // src/lib/eventTiles.ts).
+            roundUrl: round.url || null,
+            ongoing: !!round.ongoing,
           };
         };
         const events = [];
@@ -3042,6 +3085,22 @@ function _siwaErrRedirect(code) {
   return new Response(null, { status: 303, headers: { Location: `/?auth_error=${code}` } });
 }
 
+// A `returnTo` / state `r` redirect target must stay same-path, same-origin.
+// "//evil.com" and "/\evil.com" both start with "/" but browsers normalize
+// them to a scheme-relative URL, so a bare startsWith("/") check lets an
+// open redirect through — reject those two forms as well.
+function _safeReturnTo(raw) {
+  if (typeof raw !== "string" || !raw.startsWith("/")) return "/";
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  if (/[\x00-\x1f\x7f]/.test(raw) || raw.includes("\\")) return "/";
+  try {
+    if (new URL(raw, "https://x.invalid").origin !== "https://x.invalid") return "/";
+  } catch {
+    return "/";
+  }
+  return raw;
+}
+
 // GET /auth/apple/login -> 302 to Apple's authorize endpoint.
 // State + nonce are signed (HMAC) and round-tripped via the `state` param, so
 // no pre-callback cookie is needed (Apple POSTs the callback cross-site, where
@@ -3049,7 +3108,7 @@ function _siwaErrRedirect(code) {
 async function siwaLogin(request, env, url) {
   if (!_siwaConfigured(env)) return new Response("Sign in is not configured yet", { status: 503 });
   const returnToRaw = url.searchParams.get("returnTo") || "/";
-  const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/";
+  const returnTo = _safeReturnTo(returnToRaw);
   const nonce = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(16)));
   let linkUid = null;
   if (url.searchParams.get("link") === "1") {
@@ -3119,7 +3178,7 @@ async function siwaCallback(request, env, url) {
   return new Response(null, {
     status: 303,
     headers: {
-      Location: st.r && st.r.startsWith("/") ? st.r : "/",
+      Location: _safeReturnTo(st.r),
       "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
     },
   });
@@ -3652,7 +3711,7 @@ async function _googleVerifyIdToken(idToken, env) {
 async function googleLogin(request, env, url) {
   if (!_googleConfigured(env)) return new Response("Sign in is not configured yet", { status: 503 });
   const returnToRaw = url.searchParams.get("returnTo") || "/";
-  const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/";
+  const returnTo = _safeReturnTo(returnToRaw);
   const nativeChallengeRaw = url.searchParams.get("nativeChallenge") || "";
   const nativeChallenge = /^[A-Za-z0-9_-]{43}$/.test(nativeChallengeRaw) ? nativeChallengeRaw : null;
   if (url.searchParams.has("nativeChallenge") && !nativeChallenge) {
@@ -3747,7 +3806,7 @@ async function googleCallback(request, env, url) {
     }), { httpMetadata: { contentType: "application/json" } });
     const callback = new URL("hidescore-auth://google");
     callback.searchParams.set("code", handoffCode);
-    callback.searchParams.set("returnTo", st.r && st.r.startsWith("/") ? st.r : "/");
+    callback.searchParams.set("returnTo", _safeReturnTo(st.r));
     return new Response(null, { status: 303, headers: { Location: callback.toString() } });
   }
 
@@ -3757,7 +3816,7 @@ async function googleCallback(request, env, url) {
   return new Response(null, {
     status: 303,
     headers: {
-      Location: st.r && st.r.startsWith("/") ? st.r : "/",
+      Location: _safeReturnTo(st.r),
       "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
     },
   });
@@ -3797,7 +3856,7 @@ async function googleNativeComplete(request, env) {
   const session = await _siwaMakeSession(env, {
     sub: handoff.sub, uid: handoff.uid, email: handoff.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
   });
-  return new Response(JSON.stringify({ ok: true, returnTo: body.returnTo || "/" }), {
+  return new Response(JSON.stringify({ ok: true, returnTo: _safeReturnTo(body.returnTo) }), {
     status: 200,
     headers: {
       "Content-Type": "application/json",
