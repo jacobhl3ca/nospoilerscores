@@ -7,7 +7,7 @@ import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
-import { routeModalKey } from "@/lib/modalArrowKeys";
+import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
 
 interface VideoModalProps {
   videoId: string;
@@ -1159,45 +1159,51 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // document, not ours: ↑/↓ become volume, Esc and f and h never arrive. The
   // modal looked like it had simply lost its keyboard.
   //
-  // A cross-origin frame tells us nothing directly, but it does make the TOP
-  // window blur, and after that blur document.activeElement is the iframe
-  // element itself — which is the whole signal. YouTube has already handled the
-  // click by then, so pulling focus back costs the user nothing.
-  //
-  // Deferred ~250ms on purpose: a scrubber DRAG inside the frame is mousedown,
-  // a stream of moves, then mouseup, and yanking focus on the mousedown would
-  // cut it (the parent never sees pointer events from inside the frame, which
-  // is why the blur is the only handle we have).
+  // A cross-origin frame tells us nothing directly, so the same check runs
+  // off two signals:
+  //   1. the top window's "blur": clicking into the frame blurs the parent,
+  //      and after it document.activeElement is the iframe element itself.
+  //      Enough in Chromium and in Playwright's WebKit. A Brightcove-style
+  //      embed (embedMode) has no player API, so it gets this one only.
+  //   2. the IFrame API's onStateChange(PLAYING/PAUSED) (see the player setup
+  //      below). Jacob 9/12 lost H after clicking play on a news post's clip
+  //      in Safari, so the play/pause click can no longer rest on the blur
+  //      alone: a click on YouTube's own play button always ends in one of
+  //      those two states.
+  // YouTube has already handled the click by then, so pulling focus back
+  // costs the user nothing. Deferred ~250ms on purpose: a scrubber DRAG inside
+  // the frame is mousedown, a stream of moves, then mouseup, and yanking focus
+  // on the mousedown would cut it (the parent never sees pointer events from
+  // inside the frame).
+  const focusRecoveryTimerRef = useRef<number | null>(null);
+  const frameRecoveryOn = (ytMode && youtubeNativeControls) || embedMode;
+  const recoverFocusFromFrame = useCallback(() => {
+    if (!frameRecoveryOn) return;
+    if (focusRecoveryTimerRef.current) window.clearTimeout(focusRecoveryTimerRef.current);
+    focusRecoveryTimerRef.current = window.setTimeout(() => {
+      focusRecoveryTimerRef.current = null;
+      const active = document.activeElement;
+      // Only when focus really went INTO a frame inside this modal. A plain
+      // Cmd-Tab away leaves activeElement wherever it was, so this stays a
+      // no-op, and so does a click on our own CC/close buttons.
+      if (!(active instanceof HTMLIFrameElement) || !dialogRef.current?.contains(active)) return;
+      active.blur();
+      dialogRef.current.focus({ preventScroll: true });
+    }, 250);
+  }, [frameRecoveryOn]);
+  // The player effect reads it through a ref: a dep there would rebuild the
+  // YouTube player whenever the callback identity changed.
+  const recoverFocusRef = useRef(recoverFocusFromFrame);
+  useEffect(() => { recoverFocusRef.current = recoverFocusFromFrame; }, [recoverFocusFromFrame]);
+
   useEffect(() => {
-    if (!ytMode || !youtubeNativeControls) return;
-    let timer: number | null = null;
-    const ytFrame = (): HTMLIFrameElement | null => {
-      try {
-        const f = playerRef.current?.getIframe?.();
-        if (f) return f;
-      } catch { /* player destroyed mid-teardown */ }
-      // The YT API replaces our #yt-player div with the iframe, keeping the id.
-      const host = document.getElementById("yt-player");
-      if (host instanceof HTMLIFrameElement) return host;
-      return host?.querySelector("iframe") ?? null;
-    };
-    const onBlur = () => {
-      if (timer) window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        const frame = ytFrame();
-        // Only when focus really went INTO the player. A plain Cmd-Tab away
-        // leaves activeElement wherever it was, so this stays a no-op.
-        if (!frame || document.activeElement !== frame) return;
-        frame.blur();
-        dialogRef.current?.focus({ preventScroll: true });
-      }, 250);
-    };
-    window.addEventListener("blur", onBlur);
+    if (!frameRecoveryOn) return;
+    window.addEventListener("blur", recoverFocusFromFrame);
     return () => {
-      window.removeEventListener("blur", onBlur);
-      if (timer) window.clearTimeout(timer);
+      window.removeEventListener("blur", recoverFocusFromFrame);
+      if (focusRecoveryTimerRef.current) window.clearTimeout(focusRecoveryTimerRef.current);
     };
-  }, [ytMode, youtubeNativeControls]);
+  }, [frameRecoveryOn, recoverFocusFromFrame]);
 
   // Keep nativeFs in sync with the browser, and remember when we left so a
   // co-delivered Escape doesn't also close the modal.
@@ -1262,17 +1268,18 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       const t = e.target as HTMLElement | null;
       const tag = t?.tagName;
       const dir = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+      // e.key is " " for the space bar everywhere modern, but e.code is the
+      // reliable one when a layout remaps it.
+      const key = e.code === "Space" ? " " : e.key;
       const action = routeModalKey({
-        // e.key is " " for the space bar everywhere modern, but e.code is the
-        // reliable one when a layout remaps it.
-        key: e.code === "Space" ? " " : e.key,
+        key,
         shift: e.shiftKey,
         chord: e.metaKey || e.ctrlKey || e.altKey,
         repeat: e.repeat,
-        // VIDEO is in this list on purpose: a focused native <video controls>
-        // (the HLS path) already toggles itself on Space and seeks itself on
-        // the arrows, so routing the same press would double-act.
-        inTextEntry: !!t && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "VIDEO" || t.isContentEditable),
+        // A focused native <video controls> (the HLS path) toggles itself on
+        // Space and seeks itself on the arrows, so those presses are its own;
+        // every other key still routes (nativeVideoOwnsKey).
+        inTextEntry: !!t && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable || (tag === "VIDEO" && nativeVideoOwnsKey(key))),
         onControl: !!t && (tag === "BUTTON" || tag === "A"),
         // hlsMode included: MLB/Reddit direct streams seek through the <video>
         // element (see seekBy), so ← → skip on them like they do on YouTube.
@@ -1827,6 +1834,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // cross-origin frame.
             if (event.data === 2 || event.data === 0) setPlayerState("paused");
             else if (event.data === 1 || event.data === 3) setPlayerState("playing");
+            // A click on YouTube's own play/pause button took focus into the
+            // frame — recover it (see recoverFocusFromFrame above).
+            if (event.data === 1 || event.data === 2) recoverFocusRef.current();
             // Playback actually started — kill the watchdog.
             if (event.data === 1 || event.data === 3) {
               clearAutoplayBlocked();
@@ -2905,6 +2915,21 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 onPlaying={trackVideoPlay}
                 onPlay={() => setPlayerState("playing")}
                 onPause={() => setPlayerState("paused")}
+                // A click on the native controls focuses the <video>, and a
+                // focused video keeps Space and the arrows for itself, so ↓/↑
+                // stopped paging after one click on a news clip (Jacob 9/12,
+                // reproduced 9/23 on hidescore.com in Chromium and WebKit).
+                // Hand focus back to the dialog once the click is done: on
+                // pointerup, so a scrubber drag is never cut, and not while
+                // the video itself is fullscreen. Tab still reaches the video
+                // for keyboard users; this only undoes pointer focus.
+                onPointerUp={(e) => {
+                  const v = e.currentTarget;
+                  window.setTimeout(() => {
+                    const fs = document.fullscreenElement || (v as HTMLVideoElement & { webkitDisplayingFullscreen?: boolean }).webkitDisplayingFullscreen;
+                    if (document.activeElement === v && !fs) dialogRef.current?.focus({ preventScroll: true });
+                  }, 0);
+                }}
                 // Spoiler-safe accessible name — matching the sibling <iframe>'s
                 // title and the dialog's aria-label: the PeekBlur'd headline can
                 // carry a score, so setting it as this focusable player's
