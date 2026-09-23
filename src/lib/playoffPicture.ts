@@ -315,6 +315,15 @@ export async function fetchPlayoffOdds(signal?: AbortSignal): Promise<PlayoffOdd
   return oddsFromEspn((await r.json()) as EspnStandingsNode);
 }
 
+// ESPN shades its odds cells by the number in them. `color-mix` keeps that tied
+// to the theme's own accent, so the shade follows a theme switch instead of
+// baking in a light-mode blue. Any 0–100 figure can ride the same scale — the
+// picks leaderboard shades its "% correct" with it.
+export function shadeFor(odd: Pick<Odd, "value"> | null): string | undefined {
+  if (!odd || !(odd.value > 0)) return undefined;
+  return `color-mix(in srgb, var(--accent) ${(odd.value * 0.35).toFixed(1)}%, transparent)`;
+}
+
 // ── Sorting ──────────────────────────────────────────────────────────────────
 
 export type SortKey = "seed" | "playoff" | "division" | "wildCard";
