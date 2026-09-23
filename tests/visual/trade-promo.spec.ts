@@ -42,8 +42,10 @@ test.describe("seasonal trade-board promos", () => {
 
         const link = page.locator(promo.selector);
         await expect(link).toBeVisible({ timeout: 20_000 });
-        await expect(link).toHaveText("Trades");
-        await expect(link).toHaveCSS("font-style", "italic");
+        // Upright with a trailing "↗": the cue that this part of the italic
+        // line is a link that leaves the site.
+        await expect(link).toHaveText("Trades ↗");
+        await expect(link).toHaveCSS("font-style", "normal");
         const subtitle = link.locator("xpath=..");
         const fits = await subtitle.evaluate(
           (element) => element.scrollWidth <= element.clientWidth,
