@@ -32,6 +32,35 @@ test("_safeReturnTo rejects protocol-relative and backslash payloads", () => {
   assert.equal(safeReturnTo("/settings?tab=account"), "/settings?tab=account");
 });
 
+// Decode the same way `url.searchParams.get(...)` decodes a query value, so
+// these tests exercise the exact string _safeReturnTo receives at runtime.
+function decodeLikeSearchParams(rawQueryValue) {
+  return new URL(`https://hidescore.com/?returnTo=${rawQueryValue}`).searchParams.get("returnTo");
+}
+
+test("_safeReturnTo rejects control characters (tab/newline) and embedded backslashes", () => {
+  const safeReturnTo = loadSafeReturnTo();
+
+  // /%09/evil.com -> "/" + TAB + "/evil.com" -- browsers strip the TAB and
+  // land on //evil.com, i.e. https://evil.com/.
+  assert.equal(decodeLikeSearchParams("%2F%09%2Fevil.com"), "/\t/evil.com");
+  assert.equal(safeReturnTo("/\t/evil.com"), "/");
+
+  // /%0a/evil.com -- the raw LF used to reach `new Headers()` and throw a 500.
+  assert.equal(decodeLikeSearchParams("%2F%0A%2Fevil.com"), "/\n/evil.com");
+  assert.equal(safeReturnTo("/\n/evil.com"), "/");
+
+  // /%09%5Cevil.com -- TAB immediately followed by a backslash.
+  assert.equal(decodeLikeSearchParams("%2F%09%5Cevil.com"), "/\t\\evil.com");
+  assert.equal(safeReturnTo("/\t\\evil.com"), "/");
+});
+
+test("_safeReturnTo requires the resolved origin to stay same-site", () => {
+  const safeReturnTo = loadSafeReturnTo();
+  assert.equal(safeReturnTo("/\t/evil.com"), "/");
+  assert.equal(safeReturnTo("/settings"), "/settings");
+});
+
 test("all 5 returnTo/st.r call sites route through _safeReturnTo, not a bare startsWith(\"/\")", () => {
   const codeLines = src.split("\n").filter((l) => !l.trim().startsWith("//"));
   const code = codeLines.join("\n");
@@ -84,5 +113,16 @@ for (const [label, path] of [["Apple", "/auth/apple/login"], ["Google", "/auth/g
       stubEnv(),
     );
     assert.equal(decodeStateReturnTo(legit.headers.get("Location")), "/settings");
+  });
+
+  test(`${label} login: control-char returnTo payloads neither bypass the guard nor 500`, async () => {
+    for (const encodedPayload of ["%2F%09%2Fevil.com", "%2F%0A%2Fevil.com", "%2F%09%5Cevil.com"]) {
+      const res = await worker.fetch(
+        new Request(`https://hidescore.com${path}?returnTo=${encodedPayload}`),
+        stubEnv(),
+      );
+      assert.equal(res.status, 302);
+      assert.equal(decodeStateReturnTo(res.headers.get("Location")), "/");
+    }
   });
 }
