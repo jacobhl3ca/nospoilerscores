@@ -13,6 +13,10 @@ import {
   fillHeading, pickShorterClub, eplSeasonYear, uploadFitsGameDate,
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
+import {
+  FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
+  findFotmobFixture, gateFotmobVideo,
+} from "./lib/fotmob.mjs";
 
 const OUT_DIR = "public/news";
 
@@ -3019,6 +3023,146 @@ function hlTennisMatches(events, ymd) {
   return matches;
 }
 
+// ── FotMob: second source for the soccer official slot ──────────────────
+// See scripts/lib/fotmob.mjs for what is read and why. The step runs ONLY for
+// a game whose official slot is still empty after every channel lookup, so it
+// never replaces a clip the resolver found. Its id then passes the same gates
+// a resolved one does (oEmbed + both teams + upload date) plus an embed check,
+// and the entry is tagged `src: "fotmob"` so a bad batch can be removed with
+// one filter.
+//
+// Limits (FotMob's terms do not grant scraping — keep it small):
+//   • mini bake only: off under GitHub Actions (the manual news-prebake
+//     fallback) and off with HL_FOTMOB=0 (the off switch; it also drops every
+//     carried FotMob id, so one bake clears a bad batch);
+//   • ≤11 league pages + ≤30 match pages per bake (≤41 requests), 1 per second;
+//   • a game FotMob answered is not re-asked for 6 hours;
+//   • any non-200 or missing __NEXT_DATA__ is skipped silently for that bake;
+//     three bakes in a row with requests but zero parses send one silent
+//     (priority -2) Pushover.
+const HL_FOTMOB_ON = process.env.HL_FOTMOB !== "0" && process.env.GITHUB_ACTIONS !== "true";
+const HL_FOTMOB_MAX_LEAGUE_FETCHES = 11;
+const HL_FOTMOB_MAX_MATCH_FETCHES = 30;
+const HL_FOTMOB_GAP_MS = 1000;
+const HL_FOTMOB_REASK_MS = 6 * 60 * 60 * 1000;
+const HL_FOTMOB_DARK_BAKES = 3;
+// Outside public/news on purpose: the mini uploads every public/news/*.json to
+// R2. Ignored by git, so the mini's reset to origin/main leaves it in place.
+const HL_FOTMOB_STATE_PATH = ".bake-state/fotmob.json";
+const hlFotmob = { requests: 0, leagueFetches: 0, matchFetches: 0, parsed: 0, lastAt: 0, fixtures: new Map(), state: null };
+
+async function hlFotmobState() {
+  if (hlFotmob.state) return hlFotmob.state;
+  let state = null;
+  try { state = JSON.parse(await readFile(HL_FOTMOB_STATE_PATH, "utf8")); } catch { /* first run */ }
+  hlFotmob.state = {
+    asked: state?.asked && typeof state.asked === "object" ? state.asked : {},
+    darkBakes: Number.isFinite(state?.darkBakes) ? state.darkBakes : 0,
+  };
+  return hlFotmob.state;
+}
+
+// One FotMob page → its __NEXT_DATA__, or null. Spaced HL_FOTMOB_GAP_MS apart.
+async function hlFotmobGet(path) {
+  const wait = hlFotmob.lastAt + HL_FOTMOB_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  hlFotmob.requests++;
+  try {
+    const res = await fetch(`https://www.fotmob.com${path}`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+    if (!res.ok) return null;
+    const data = parseFotmobNextData(await res.text());
+    if (data) hlFotmob.parsed++;
+    return data;
+  } catch {
+    return null;
+  } finally {
+    hlFotmob.lastAt = Date.now();
+  }
+}
+
+// Finished fixtures for one league, fetched at most once per bake.
+async function hlFotmobFixturesFor(sport) {
+  if (hlFotmob.fixtures.has(sport)) return hlFotmob.fixtures.get(sport);
+  const path = fotmobLeaguePath(sport);
+  if (!path || hlFotmob.leagueFetches >= HL_FOTMOB_MAX_LEAGUE_FETCHES) return null;
+  hlFotmob.leagueFetches++;
+  const data = await hlFotmobGet(path);
+  const fixtures = data ? fotmobFixtures(data) : null;
+  hlFotmob.fixtures.set(sport, fixtures);
+  return fixtures;
+}
+
+const hlTeamVariantsOf = (name) => [hlAlias(name), ...(HL_WORKER_TEAM_VARIANTS[hlNormalizeTeam(name)] ?? [])];
+
+// The official id FotMob links for this game, gated, or null. A carried
+// FotMob id is re-gated without asking FotMob again.
+async function hlFotmobOfficial(sport, key, item, away, home, prev) {
+  if (!HL_FOTMOB_ON || !FOTMOB_LEAGUES[sport]) return null;
+  const gate = (id) => gateFotmobVideo(id, {
+    oembedMeta: hlOembedMeta,
+    embeddable: async (v) => (await fetchYtEmbeddable(v)) === true,
+    matchesTeams: (v) => hlVideoMatchesTeams(v, away, home),
+    matchesDate: (v) => hlVideoMatchesDate(v, item.date),
+  });
+  if (prev?.src === "fotmob" && prev.official && prev.officialChannel) {
+    const carried = await gate(prev.official);
+    if (carried.ok && carried.channel.toLowerCase() === prev.officialChannel.toLowerCase()) {
+      return { id: prev.official, channel: prev.officialChannel };
+    }
+    console.warn(`HIGHLIGHT-FOTMOB-REJECT ${key} carried ${prev.official} ${carried.ok ? "channel" : carried.reason}`);
+  }
+  const state = await hlFotmobState();
+  if (Date.now() - (state.asked[key] ?? 0) < HL_FOTMOB_REASK_MS) return null;
+  const fixtures = await hlFotmobFixturesFor(sport);
+  if (!fixtures) return null;
+  const fixture = findFotmobFixture(fixtures, { away, home, dateIso: item.date }, hlTeamVariantsOf);
+  if (!fixture) {
+    console.warn(`HIGHLIGHT-FOTMOB-REJECT ${key} no-fixture (${away} vs ${home})`);
+    return null;
+  }
+  if (hlFotmob.matchFetches >= HL_FOTMOB_MAX_MATCH_FETCHES) return null;
+  hlFotmob.matchFetches++;
+  const data = await hlFotmobGet(fixture.path);
+  if (!data) return null;
+  state.asked[key] = Date.now();
+  const videoId = fotmobHighlightVideoId(data);
+  if (!videoId) {
+    console.warn(`HIGHLIGHT-FOTMOB-REJECT ${key} no-link (${away} vs ${home})`);
+    return null;
+  }
+  const verdict = await gate(videoId);
+  if (!verdict.ok) {
+    console.warn(`HIGHLIGHT-FOTMOB-REJECT ${key} ${videoId} ${verdict.reason} (${away} vs ${home})`);
+    return null;
+  }
+  console.log(`HIGHLIGHT-FOTMOB ${key} ${videoId} ${verdict.channel}`);
+  return { id: videoId, channel: verdict.channel };
+}
+
+// End of bake: request tally, the dark-bake streak and the state file.
+async function hlFotmobFinish() {
+  console.log(`HIGHLIGHT-FOTMOB-REQUESTS n=${hlFotmob.requests} leagues=${hlFotmob.leagueFetches} matches=${hlFotmob.matchFetches} parsed=${hlFotmob.parsed}`);
+  if (!hlFotmob.requests && !hlFotmob.state) return;
+  const state = await hlFotmobState();
+  if (hlFotmob.requests) state.darkBakes = hlFotmob.parsed ? 0 : state.darkBakes + 1;
+  if (state.darkBakes === HL_FOTMOB_DARK_BAKES) {
+    const message = `FotMob: ${HL_FOTMOB_DARK_BAKES} bakes in a row parsed nothing (last: ${hlFotmob.requests} requests). The page shape or access changed.`;
+    console.warn(`HIGHLIGHT-FOTMOB-DARK ${message}`);
+    try {
+      const { execFile } = await import("node:child_process");
+      await new Promise((resolve) => execFile(`${process.env.HOME}/scripts/push.sh`, ["-t", "HideScore FotMob", "-m", message, "-p", "-2"], { timeout: 20000 }, () => resolve()));
+    } catch { /* no push script on this host */ }
+  }
+  const cutoff = Date.now() - HL_ENTRY_TTL_MS;
+  for (const [k, at] of Object.entries(state.asked)) if (!(at > cutoff)) delete state.asked[k];
+  try {
+    await mkdir(dirname(HL_FOTMOB_STATE_PATH), { recursive: true });
+    await writeFile(HL_FOTMOB_STATE_PATH, JSON.stringify(state));
+  } catch (e) {
+    console.warn(`HIGHLIGHT-FOTMOB state not saved: ${e?.message || e}`);
+  }
+}
+
 async function loadPriorHighlights() {
   let local = null;
   try {
@@ -3081,6 +3225,16 @@ async function bakeGameHighlights() {
       && v.matchup === hlMatchupFingerprint(v.teams[0], v.teams[1]);
     if (v.sourcePolicy !== "official-channel" || !populatedSlots.length || !everySlotNamesItsChannel || !hasMatchupProvenance) continue;
     if ((now - (v.t ?? 0)) >= HL_ENTRY_TTL_MS) continue;
+    // HL_FOTMOB=0 clears every FotMob-sourced official id, not only the ones
+    // the per-game loop below revisits.
+    if (!HL_FOTMOB_ON && v.src === "fotmob") {
+      console.warn(`HIGHLIGHT-FOTMOB-REJECT ${k} carried ${v.official} switched-off`);
+      if (!populatedSlots.some((slot) => slot !== "official")) continue;
+      const rest = { ...v };
+      for (const field of ["src", "official", "officialChannel", "officialDurationSec"]) delete rest[field];
+      games[k] = rest;
+      continue;
+    }
 
     // AGE SWEEP for the frozen band. The per-game loop below only walks the
     // last `hlDays` (7) of scoreboards, while this carry-forward keeps an entry
@@ -3310,6 +3464,18 @@ async function bakeGameHighlights() {
             break;
           }
         }
+        // Every channel lookup missed: ask FotMob (soccer only, see
+        // hlFotmobOfficial). Its channel is whatever uploader FotMob linked —
+        // a club, a league or a broadcaster — confirmed through oEmbed.
+        let officialSrc = null;
+        if (!official) {
+          const fotmob = await hlFotmobOfficial(lg.sport, key, item, away, home, prev);
+          if (fotmob && fotmob.id !== prevExtended) {
+            official = fotmob.id;
+            officialChannel = fotmob.channel;
+            officialSrc = "fotmob";
+          }
+        }
         let extended = prevExtended ?? null;
         if (!extended) {
           extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, week, compTokens);
@@ -3416,6 +3582,7 @@ async function bakeGameHighlights() {
           entry.official = official;
           entry.officialChannel = officialChannel;
           if (Number.isFinite(officialDurationSec)) entry.officialDurationSec = officialDurationSec;
+          if (officialSrc) entry.src = officialSrc;
         }
         if (club) {
           entry.club = club;
@@ -3466,6 +3633,8 @@ async function bakeGameHighlights() {
   if (scoreboardResponses === 0) {
     throw new Error("all highlight scoreboard requests failed; preserving the prior manifest");
   }
+
+  if (HL_FOTMOB_ON) await hlFotmobFinish();
 
   const ageLine = `HIGHLIGHT-AGE-UNREADABLE n=${hlAgeUnreadable}/${hlAgeChecks} (upload date unreadable; those ids were KEPT)`;
   if (hlAgeUnreadable > 0) console.warn(ageLine); else console.log(ageLine);

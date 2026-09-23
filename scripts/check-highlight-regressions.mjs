@@ -433,6 +433,28 @@ check(
     prebake.includes('laliga: ["laliga", "la liga"]') &&
     prebake.includes('ligue1: ["ligue 1"]'),
 );
+// FotMob (2026-09-23): a second source for an EMPTY soccer official slot only,
+// mini-only, off with HL_FOTMOB=0, ≤41 requests per bake, tagged src "fotmob".
+// The client trusts it under its own channel and keeps its title covered.
+{
+  const gameHighlights = readFileSync("src/components/GameHighlights.tsx", "utf8");
+  const videoModal = readFileSync("src/components/VideoModal.tsx", "utf8");
+  check(
+    "FotMob is bake-only, capped, switchable and tagged",
+    prebake.includes('process.env.HL_FOTMOB !== "0"') &&
+      prebake.includes('process.env.GITHUB_ACTIONS !== "true"') &&
+      prebake.includes("HL_FOTMOB_MAX_LEAGUE_FETCHES = 11") &&
+      prebake.includes("HL_FOTMOB_MAX_MATCH_FETCHES = 30") &&
+      prebake.includes("if (!official) {\n          const fotmob = await hlFotmobOfficial(") &&
+      prebake.includes("if (officialSrc) entry.src = officialSrc;"),
+  );
+  check(
+    "FotMob officials are trusted under their own channel with the title mask forced on",
+    gameHighlights.includes('baked?.src === "fotmob" && baked.officialChannel') &&
+      gameHighlights.includes("&nss_mask_title=1") &&
+      videoModal.includes("|| fallbackForcesTitleMask(fallbackUrl)"),
+  );
+}
 check(
   "prebaker revalidates persistent World Cup seed uploader and matchup",
   prebake.includes("HIGHLIGHT-SEED-REJECT") &&

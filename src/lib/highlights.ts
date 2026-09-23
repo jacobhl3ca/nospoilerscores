@@ -32,6 +32,11 @@ export type BakedHighlight = {
   officialDurationSec?: number;
   mlbOrder?: "official-first";
   sourcePolicy?: "official-channel";
+  // Soccer only: the official id came from the match's FotMob page, not from a
+  // channel lookup, so officialChannel is whatever uploader FotMob linked (a
+  // club, league or broadcaster). The bake gated it through oEmbed, both teams
+  // and the upload date. See scripts/lib/fotmob.mjs.
+  src?: "fotmob";
 };
 
 const BAKED_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000;

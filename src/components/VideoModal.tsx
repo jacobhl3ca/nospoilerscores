@@ -187,6 +187,18 @@ function strictFallbackChannels(fallbackUrl: string): string[] {
   }
 }
 
+// Title mask forced on by the caller (`nss_mask_title=1`), for a clip whose
+// uploader is not known up front and may title by result: a FotMob-sourced
+// soccer official (see GameHighlights). Same effect as the channels in
+// channelAlwaysMasksTitle — the title bar never uncovers.
+function fallbackForcesTitleMask(fallbackUrl: string): boolean {
+  try {
+    return new URL(fallbackUrl).searchParams.get("nss_mask_title") === "1";
+  } catch {
+    return false;
+  }
+}
+
 // Motorsport race gate carried the same way (`nss_race=` — see EventCard).
 // Exactly the same failure mode the channel gate above was added for: the
 // official F1/NASCAR/INDYCAR channel uploads every round, so an ungated retry
@@ -599,7 +611,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // …except on the combat channels, where the title bar never uncovers at all —
   // see channelAlwaysMasksTitle. Read from the same strict-channel gate the
   // embed check uses, so it holds for the fallback swaps too.
-  const titleAlwaysMasked = channelAlwaysMasksTitle(strictFallbackChannels(fallbackUrl));
+  const titleAlwaysMasked = channelAlwaysMasksTitle(strictFallbackChannels(fallbackUrl)) || fallbackForcesTitleMask(fallbackUrl);
   // PAUSED (or ENDED) means YouTube draws its own overlay on top of the iframe:
   // the "More videos" grid on pause, the suggested-video endscreen at the end.
   // Both are pure spoiler vectors — rel:0 only narrows them to the SAME channel,

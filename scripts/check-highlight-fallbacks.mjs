@@ -523,8 +523,12 @@ function expectedBakedSlots(sport, bakedHighlight) {
       return { slot, marker, channel: TENNIS_CHANNELS.has(candidate) ? candidate : null, visible: true };
     });
   }
+  // A FotMob-sourced official (src "fotmob", see scripts/lib/fotmob.mjs) names
+  // the uploader FotMob linked — often a club or league channel — and the
+  // client trusts it under that name, so it is checked against that uploader.
+  const official = bakedHighlight?.src === "fotmob" && bakedHighlight.officialChannel ? bakedHighlight.officialChannel : primary;
   return [
-    { slot: "official", marker: "officialChannel", channel: primary, visible: sport !== "fifa" },
+    { slot: "official", marker: "officialChannel", channel: official, visible: sport !== "fifa" },
     { slot: "extended", marker: "extendedChannel", channel: secondary, visible: true },
     ...(sport === "fifa" ? [
       { slot: "telemundo", marker: "telemundoChannel", channel: "Telemundo Deportes", visible: true },
