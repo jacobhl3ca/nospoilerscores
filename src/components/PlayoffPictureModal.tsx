@@ -828,9 +828,10 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
                 </button>
               ) : null}
             </div>
-            <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+            <div data-picture-footer className={`flex ${tab === "odds" ? "flex-wrap" : ""} items-baseline justify-between gap-x-4 gap-y-1 text-[10px] mt-3`} style={{ color: "var(--text-muted)", opacity: 0.7 }}>
               <p className="m-0">
-                Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards. The percentages are each club&rsquo;s chances of making the playoffs, winning the division and taking a wild card (FanGraphs, via ESPN){tab === "bracket" ? ", shaded the same way on both tabs" : ""}.{tab === "bracket" ? " A seat nobody has clinched lists the clubs still chasing it underneath." : ""} Standings are a spoiler, so this stays covered until you ask for it.
+                Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards.
+                {tab === "odds" ? " The percentages are each club’s chances of making the playoffs, winning the division and taking a wild card (FanGraphs, via ESPN). Standings are a spoiler, so this stays covered until you ask for it." : ""}
               </p>
               {updatedLabel ? <p className="m-0 ml-auto whitespace-nowrap tabular-nums">Updated {updatedLabel}</p> : null}
             </div>
