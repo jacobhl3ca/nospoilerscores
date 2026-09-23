@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streamain</title>
+    <link rel="icon" href="https://streamain.com/images/favicon.png" />
+    <link rel="stylesheet" href="https://streamain.com/assets/vendor/libs/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="https://streamain.com/assets/vendor/libs/plyr/plyr.min.css" />
+    <link rel="stylesheet" href="https://streamain.com/assets/css/application.658089fe93f85d6ba525ff17b0e2dd74.css">
+</head>
+
+<body class="pt-0">
+    <div class="fileviewer-embed">
+        <video playsinline webkit-playsinline controls autoplay muted preload="auto" id="playbob-video"
+            data-link="https://media.sportits.com/guests/RHWoxN3Or3Sfvlk_1790110783.mp4">
+        </video>
+    </div>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3f5f7bf8c9742c0',t:'MTc5MDEyODk1Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script type="39ad45b7af8cb903146b27a9-text/javascript">
+    "use strict";
+    const config = {
+        lang: "en",
+        baseURL: "https://streamain.com",
+        primaryColor: "#4E54C8",
+        secondaryColor: "#8A8FF7",
+        alertActionTitle: "Are you sure?",
+        alertActionText: "Confirm that you want do this action",
+        alertActionConfirmButton: "Confirm",
+        alertActionCancelButton: "Cancel",
+        copiedToClipboardSuccess: "Copied to clipboard",
+    };
+</script>
+<script type="39ad45b7af8cb903146b27a9-text/javascript">
+    "use strict";
+    let configObjects = JSON.stringify(config),
+        getConfig = JSON.parse(configObjects);
+</script>
+<script src="https://streamain.com/assets/vendor/libs/jquery/jquery.min.js" type="39ad45b7af8cb903146b27a9-text/javascript"></script>
+<script src="https://streamain.com/assets/vendor/libs/bootstrap/bootstrap.bundle.min.js" type="39ad45b7af8cb903146b27a9-text/javascript"></script>
+<script src="https://streamain.com/assets/vendor/libs/plyr/plyr.min.js" type="39ad45b7af8cb903146b27a9-text/javascript"></script>
+<script type="39ad45b7af8cb903146b27a9-text/javascript">
+    "use strict";
+    const videoTitle = "26-09-22 22-56-15";
+    const videoType = "video/mp4";
+</script>
+<script src="https://streamain.com/assets/js/application.e10d7db99e6c4c8a79f38b21e4185735.js" type="39ad45b7af8cb903146b27a9-text/javascript"></script>
+<script type="39ad45b7af8cb903146b27a9-text/javascript">
+    (() => {
+        const autoplayVideo = document.querySelector('#playbob-video');
+
+        if (!autoplayVideo) {
+            return;
+        }
+
+        autoplayVideo.muted = true;
+        autoplayVideo.defaultMuted = true;
+        autoplayVideo.autoplay = true;
+
+        const startPlayback = () => {
+            const playAttempt = autoplayVideo.play();
+
+            if (playAttempt !== undefined) {
+                playAttempt.catch(() => {
+                    // Keep the native play control available if a browser blocks autoplay.
+                });
+            }
+        };
+
+        if (autoplayVideo.readyState >= 2) {
+            startPlayback();
+        } else {
+            autoplayVideo.addEventListener('canplay', startPlayback, { once: true });
+        }
+    })();
+</script>
+
+<script src="/cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="39ad45b7af8cb903146b27a9-|49" defer></script></html>
