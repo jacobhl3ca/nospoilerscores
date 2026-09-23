@@ -219,10 +219,31 @@ export function parseWatchPageLengthSeconds(html) {
 
 // "publishDate":"2026-03-27T04:30:00-07:00" (microformat) → ms. The results
 // page sometimes omits a card's age; the watch page never does.
+//
+// YouTube serves SOME clients a watch page that carries neither microformat
+// key, and which variant you get is intermittent — the same id read minutes
+// apart, same UA, flips. Measured on the mini 2026-09-20 over a 10-video
+// sweep: 0 pages carried uploadDate, 10 carried "dateText". A null here reads
+// as a PASS in uploadFitsGameDate, so without the fallback the age gate kept
+// 93 wrong-season videos and logged nothing.
+//
+// ⛔ Do NOT read "publishedTimeText" off a WATCH page — it belongs to a
+// RECOMMENDED video ("25 minutes ago" sitting beside a February upload). It is
+// this video's own age only inside a videoRenderer on a SEARCH page, which is
+// where parseYtVideoRenderers already reads it.
+const WATCH_DATE_TEXT_PREFIX = /^(?:Premiered|Streamed live on|Started streaming on)\s+/i;
 export function parseWatchPagePublishMs(html) {
-  const m = String(html ?? "").match(/"(?:publishDate|uploadDate)":"([^"]+)"/);
-  if (!m) return null;
-  const ms = Date.parse(m[1]);
+  const str = String(html ?? "");
+  const m = str.match(/"(?:publishDate|uploadDate)":"([^"]+)"/);
+  if (m) {
+    const ms = Date.parse(m[1]);
+    if (Number.isFinite(ms)) return ms;
+  }
+  const d = str.match(/"dateText":\{"simpleText":"((?:[^"\\]|\\.)*)"/);
+  if (!d) return null;
+  let text = d[1];
+  try { text = JSON.parse(`"${d[1]}"`); } catch { /* keep the raw capture */ }
+  const ms = Date.parse(text.replace(WATCH_DATE_TEXT_PREFIX, "").trim());
   return Number.isFinite(ms) ? ms : null;
 }
 

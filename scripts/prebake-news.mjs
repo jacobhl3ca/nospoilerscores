@@ -2928,11 +2928,20 @@ async function hlVideoMatchesChannel(id, channel) {
 // id is KEPT — see uploadFitsGameDate. Cached per id per run, and the club
 // slot already pays this fetch, so it is at most one extra request per id.
 // Exported shape kept simple on purpose: PLAN-3 reuses it.
+// Fail-open tally for the gate below. An unreadable upload date returns PASS
+// on purpose, so a stale id survives and nothing is written to the log —
+// exactly how 93 wrong-season videos outlived a clean re-bake on 2026-09-20.
+// Printed once at the end of the bake so the next silent fail-open is visible.
+let hlAgeChecks = 0;
+let hlAgeUnreadable = 0;
+
 async function hlVideoMatchesDate(id, gameIso) {
   if (!id || !gameIso) return true;
   const gameMs = Date.parse(gameIso);
   if (!Number.isFinite(gameMs)) return true;
   const { publishedMs } = await fetchYtWatchMeta(id);
+  hlAgeChecks++;
+  if (!Number.isFinite(publishedMs)) hlAgeUnreadable++;
   return uploadFitsGameDate(publishedMs, gameMs);
 }
 
@@ -3406,6 +3415,9 @@ async function bakeGameHighlights() {
   if (scoreboardResponses === 0) {
     throw new Error("all highlight scoreboard requests failed; preserving the prior manifest");
   }
+
+  const ageLine = `HIGHLIGHT-AGE-UNREADABLE n=${hlAgeUnreadable}/${hlAgeChecks} (upload date unreadable; those ids were KEPT)`;
+  if (hlAgeUnreadable > 0) console.warn(ageLine); else console.log(ageLine);
 
   await mkdir(dirname(HL_OUT_PATH), { recursive: true });
   await writeFile(HL_OUT_PATH, JSON.stringify({ fetchedAt: new Date().toISOString(), games }));

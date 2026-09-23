@@ -193,6 +193,39 @@ test("length, ISO duration, relative time and watch-page seconds parse", () => {
   assert.equal(parseWatchPagePublishMs("<html></html>"), null);
 });
 
+// YouTube serves some clients a watch page with no publishDate/uploadDate at
+// all. Every such page still carried "dateText" (mini, 2026-09-20).
+test("a watch page with no microformat date falls back to dateText", () => {
+  assert.equal(
+    parseWatchPagePublishMs('x"dateText":{"simpleText":"Premiered Feb 20, 2026"}y'),
+    Date.parse("Feb 20, 2026"),
+  );
+  assert.equal(
+    parseWatchPagePublishMs('x"dateText":{"simpleText":"Streamed live on Sep 5, 2026"}y'),
+    Date.parse("Sep 5, 2026"),
+  );
+  assert.equal(
+    parseWatchPagePublishMs('x"dateText":{"simpleText":"Sep 5, 2026"}y'),
+    Date.parse("Sep 5, 2026"),
+  );
+  // uploadDate still wins when both are present.
+  assert.equal(
+    parseWatchPagePublishMs('"uploadDate":"2026-03-27T04:30:00-07:00" "dateText":{"simpleText":"Feb 20, 2026"}'),
+    Date.parse("2026-03-27T04:30:00-07:00"),
+  );
+  // Neither key → null, so uploadFitsGameDate keeps failing open.
+  assert.equal(parseWatchPagePublishMs('{"videoDetails":{"lengthSeconds":"596"}}'), null);
+  // A relative dateText is not a date; null beats a wrong answer.
+  assert.equal(parseWatchPagePublishMs('"dateText":{"simpleText":"2 days ago"}'), null);
+});
+
+// ⛔ publishedTimeText on a WATCH page is a RECOMMENDED video's age, not this
+// one's. Reading it would date a February upload as today and pass the gate.
+test("watch-page publishedTimeText never overrides dateText", () => {
+  const html = '"publishedTimeText":{"simpleText":"25 minutes ago"} "dateText":{"simpleText":"Premiered Feb 20, 2026"}';
+  assert.equal(parseWatchPagePublishMs(html), Date.parse("Feb 20, 2026"));
+});
+
 // ── Window / coversDate math ─────────────────────────────────────────────────
 
 test("a daily cut posted before 2 pm ET covers the previous day; after, the same day", () => {
