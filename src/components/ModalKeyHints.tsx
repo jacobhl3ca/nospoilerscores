@@ -21,8 +21,11 @@ import type { KeyLegendRow } from "@/lib/modalKeyLegend";
 // "?" is the way back after that, which is why the legend lists "?" as one of
 // its own rows — you read how to return it before you ever remove it.
 //
-// Desktop only. These are keys; a phone has none, and the corner is where the
-// mobile Prev/Next buttons and the thumb live.
+// Desktop only. These are keys; a phone has none.
+//
+// It stands directly on top of the modal's ‹ › ✕ cluster (VideoModal's
+// controlCluster: 44px, 1rem off the corner), so the corner reads as one
+// column: keys above, buttons below (Jacob 9/12).
 
 /** How long the Undo sits there before the corner clears itself. */
 export const UNDO_MS = 6000;
@@ -84,7 +87,7 @@ export default function ModalKeyHints({
     "hidden sm:block fixed z-[60] pointer-events-none select-none";
   const wrapperStyle = {
     right: "calc(env(safe-area-inset-right) + 1rem)",
-    bottom: "calc(env(safe-area-inset-bottom) + 1rem)",
+    bottom: "calc(env(safe-area-inset-bottom) + 1rem + 44px + 0.5rem)",
   } as const;
 
   if (state === "undo") {

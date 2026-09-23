@@ -24,27 +24,12 @@ export type ControlsHintProps = {
   enabled: boolean;
   /** Persist the ✕. */
   onDismiss: () => void;
-  /** True while the post modal is open — the list swaps to the player keys. */
+  /** True while the post modal is open. The modal prints its own keys then
+   *  (ModalKeyHints, above its ‹ › ✕ cluster), so this steps aside. */
   modalOpen: boolean;
 };
 
 type Row = { keys: string[]; what: string };
-
-// The post-modal keyboard, in the order someone would reach for it. Kept in
-// sync by hand with routeModalKey in lib/modalArrowKeys.ts — that module owns
-// the behaviour, this one only describes it.
-const MODAL_ROWS: Row[] = [
-  { keys: ["↓", "↑"], what: "Next / previous post" },
-  { keys: ["⇧", "←", "→"], what: "Next / previous post" },
-  { keys: ["←", "→"], what: "Skip 5s in a video" },
-  { keys: ["J", "L"], what: "Skip 10s" },
-  { keys: ["Space"], what: "Play / pause" },
-  { keys: ["M"], what: "Mute" },
-  { keys: ["0", "–", "9"], what: "Jump to 0–90%" },
-  { keys: ["H"], what: "Peek this headline" },
-  { keys: ["F"], what: "Fullscreen" },
-  { keys: ["Esc"], what: "Close" },
-];
 
 // The board/news view. The page's own keyboard is thin — three rows and they
 // are all "Tab to it" — so on its own it would be a card not worth opening.
@@ -125,27 +110,26 @@ export default function ControlsHint({ enabled, onDismiss, modalOpen }: Controls
     return () => document.removeEventListener("pointerdown", away);
   }, [open]);
 
-  if (!enabled) return null;
+  // With the post modal open, its own legend (ModalKeyHints) owns the corner:
+  // it is built from the same flags the key router uses, and two key lists
+  // stacked over the ‹ › ✕ cluster read as clutter. This used to swap to a
+  // hand-kept copy of the modal keys instead.
+  if (!enabled || modalOpen) return null;
 
-  const rows = modalOpen ? MODAL_ROWS : BOARD_ROWS;
-  const previewRows = modalOpen ? [] : BOARD_PREVIEW_ROWS;
+  const rows = BOARD_ROWS;
+  const previewRows = BOARD_PREVIEW_ROWS;
 
   return (
     <div
       ref={rootRef}
-      // Above the post modal, which sets zIndex 9999 on its own root — so the
-      // guide stays readable AND clickable while the very keys it documents are
-      // live. A Tailwind z-* class can't reach that, hence the inline value.
-      // Fixed to the viewport corner, above the iOS home indicator. With the
-      // post modal open, that corner holds the modal's ‹ › ✕ cluster (44px,
-      // 1rem up), so the guide sits just above it.
+      // zIndex 10000 keeps it above the app's overlays. The post modal (9999)
+      // is the exception: it hides this and prints its own keys (see above).
+      // Fixed to the viewport corner, above the iOS home indicator.
       className="hs-controls-hint fixed flex flex-col items-end gap-2"
       style={{
         zIndex: 10000,
         right: "max(0.75rem, env(safe-area-inset-right))",
-        bottom: modalOpen
-          ? "calc(env(safe-area-inset-bottom) + 1rem + 44px + 0.5rem)"
-          : "max(0.75rem, env(safe-area-inset-bottom))",
+        bottom: "max(0.75rem, env(safe-area-inset-bottom))",
       }}
     >
       {open && (
@@ -162,7 +146,7 @@ export default function ControlsHint({ enabled, onDismiss, modalOpen }: Controls
         >
           <div className="flex items-center justify-between gap-4 mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-              {modalOpen ? "Post controls" : "Controls"}
+              Controls
             </span>
             <button
               type="button"

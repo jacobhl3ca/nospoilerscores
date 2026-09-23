@@ -72,6 +72,27 @@ test("the legend sits in the bottom-right corner and names ? as the way back", a
   await expect(panel(page).getByText("Show / hide these")).toBeVisible();
 });
 
+test("the legend stands on the ‹ › ✕ cluster, and the page's Keys pill steps aside", async ({ page }) => {
+  await gotoNews(page);
+  // The page's own guide is up before a post opens …
+  await expect(page.locator(".hs-controls-hint")).toBeVisible();
+  await openAPost(page);
+  // … and gone while the modal prints its own list.
+  await expect(page.locator(".hs-controls-hint")).toHaveCount(0);
+
+  const p = (await panel(page).boundingBox())!;
+  const c = (await page.getByTestId("modal-controls").boundingBox())!;
+  // Directly above: no overlap, a small gap, right edges flush.
+  expect(p.y + p.height).toBeLessThanOrEqual(c.y);
+  expect(c.y - (p.y + p.height)).toBeLessThanOrEqual(12);
+  expect(Math.abs((p.x + p.width) - (c.x + c.width))).toBeLessThanOrEqual(1);
+
+  // The Undo takes the same spot, so it clears the cluster too.
+  await panel(page).getByRole("button", { name: "Hide keyboard shortcuts" }).click();
+  const u = (await undo(page).boundingBox())!;
+  expect(u.y + u.height).toBeLessThanOrEqual(c.y);
+});
+
 test("the legend is click-through — it can't swallow the video's own controls", async ({ page }) => {
   await gotoNews(page);
   await openAPost(page);
