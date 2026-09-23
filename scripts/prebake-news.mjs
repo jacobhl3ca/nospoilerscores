@@ -3351,11 +3351,17 @@ async function bakeGameHighlights() {
               console.log(`nfl club → ${clubChannel} ${club} ${Number.isFinite(clubDurationSec) ? `${clubDurationSec}s` : "?s"} (${away} vs ${home} wk${week})`);
             }
           }
-          if (official) {
-            officialDurationSec = official === rawPrev.official && Number.isFinite(rawPrev.officialDurationSec)
-              ? rawPrev.officialDurationSec
-              : await fetchYtDurationSec(official);
-          }
+        }
+
+        // Every league's official clip carries its length, not just the NFL's:
+        // the button reads "9m" and the league name is already the column it
+        // sits in. Costs no extra network - hlVideoMatchesDate above already
+        // pulled this id's watch page and fetchYtWatchMeta caches per run - and
+        // an unchanged carried id short-circuits on rawPrev before even that.
+        if (official) {
+          officialDurationSec = official === rawPrev.official && Number.isFinite(rawPrev.officialDurationSec)
+            ? rawPrev.officialDurationSec
+            : await fetchYtDurationSec(official);
         }
 
         const entry = { t: now, teams: [away, home], matchup, eventDate: item.date };

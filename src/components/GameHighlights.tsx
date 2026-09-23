@@ -78,7 +78,11 @@ const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, n
   // buffer was right by accident; stating it keeps that an intent, not luck.
   sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2 };
 
-// The highlight-button badge uppercases the sport KEY (nba → "NBA"), which reads
+// Fallback label for the official-highlight button. That button normally
+// reads the clip's LENGTH ("9m") - the league name is redundant beside a card
+// that already sits in its league's column - and drops back to this badge only
+// when the bake has no duration for the video yet.
+// The badge uppercases the sport KEY (nba → "NBA"), which reads
 // right for the leagues whose key IS the abbreviation. A couple of later
 // additions use two-word descriptive keys, so the bare uppercase jams the words
 // together ("SERIEA", "LIGAMX") on their official-highlight button. Restore the
@@ -220,7 +224,7 @@ export default function GameHighlights({
   }, [isNfl, awayAbbr, homeAbbr, hlAway, hlHome]);
   const [club, setClub] = useState(() => verifiedClub(initialBaked));
   const [officialDurationSec, setOfficialDurationSec] = useState<number | null>(
-    isNfl && initialOfficialId && Number.isFinite(initialBaked?.officialDurationSec) ? (initialBaked!.officialDurationSec as number) : null,
+    initialOfficialId && Number.isFinite(initialBaked?.officialDurationSec) ? (initialBaked!.officialDurationSec as number) : null,
   );
   const prefetchedVideoId = useRef<string | null>(initialSecondaryId ?? null);
   const prefetchedOfficialId = useRef<string | null>(initialOfficialId ?? null);
@@ -385,7 +389,7 @@ export default function GameHighlights({
   // The club channel rides the strict gate too: leadChannelBlocksEmbeds knows
   // every club name, so VideoModal opens on the hand-off card at once.
   const clubModalFallbackUrl = club ? modalFallbackUrl([club.channel]) : null;
-  const officialMins = isNfl ? formatRecapDuration(officialDurationSec) : "";
+  const officialMins = formatRecapDuration(officialDurationSec);
   const telemundoModalFallbackUrl = isFifa && highlightUrl ? `${highlightUrl}&nss_no_fallback=1` : highlightUrl;
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
@@ -419,10 +423,8 @@ export default function GameHighlights({
         const baked = await getBakedHighlight(game.sport, game.id);
         const bakedOfficialHit = bakedOfficialFromChain(baked);
         const bakedOfficial = bakedOfficialHit?.id ?? null;
-        if (isNfl) {
-          setClub(verifiedClub(baked));
-          setOfficialDurationSec(bakedOfficial && Number.isFinite(baked?.officialDurationSec) ? (baked!.officialDurationSec as number) : null);
-        }
+        if (isNfl) setClub(verifiedClub(baked));
+        setOfficialDurationSec(bakedOfficial && Number.isFinite(baked?.officialDurationSec) ? (baked!.officialDurationSec as number) : null);
         const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel, away, home);
         // MLB's official slot is never rendered (showYouTube requires !isMlb —
         // its visible row is MLB.com-native, per the initialOfficialId guard
@@ -642,7 +644,7 @@ export default function GameHighlights({
               ) : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium whitespace-nowrap">{demoActive ? "Watch" : isFifa ? "2m" : `${highlightBadgeLabel[game.sport] ?? game.sport.toUpperCase()}${officialMins ? ` ${officialMins}` : ""}`}</span>
+                  <span className="text-[10px] font-medium whitespace-nowrap">{demoActive ? "Watch" : isFifa ? "2m" : (officialMins || highlightBadgeLabel[game.sport] || game.sport.toUpperCase())}</span>
                 </>
               )}
             </button>

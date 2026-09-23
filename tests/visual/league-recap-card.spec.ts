@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 // The league-wide recap card (LeagueRecapCard) on a past-date board: one pill
 // on TOP of the NFL and MLB columns, above the first game card, fed by a mocked
 // /news/recaps.json. Also covers the NFL club short cut on the game card
-// ("NFL 17m" beside "Lions 10m") from a mocked /news/highlights.json.
+// ("17m" beside "Lions 10m") from a mocked /news/highlights.json.
 //
 // DOM assertions plus one attached screenshot of the two columns — not a
 // pixel baseline, which would churn on every unrelated style change (see
@@ -170,8 +170,10 @@ test("the recap pill sits on top of the NFL and MLB columns on /yesterday, and t
   // the baked club slot must not render, even though the record carries it.
   await expect(page.getByRole("button", { name: "NFL highlights" })).toHaveCount(2, { timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Detroit Lions highlights" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "NFL highlights" }).first()).toHaveText(/NFL 17m/);
-  await expect(page.getByRole("button", { name: "NFL highlights" }).nth(1)).toHaveText(/NFL 14m/);
+  // Minutes ALONE on the visible label - the league name lives in the column
+  // heading and in the button's aria-label, which the getByRole above uses.
+  await expect(page.getByRole("button", { name: "NFL highlights" }).first()).toHaveText(/^17m$/);
+  await expect(page.getByRole("button", { name: "NFL highlights" }).nth(1)).toHaveText(/^14m$/);
 
   // Clicking the NFL pill opens the modal on the hand-off card (embed-blocked
   // channel), not a black player.
