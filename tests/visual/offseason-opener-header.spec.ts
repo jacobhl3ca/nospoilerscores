@@ -30,8 +30,8 @@ async function openOffseasonNba(page: Page, tab: string) {
   await expect(page.locator(NBA_TRADES)).toBeVisible({ timeout: 20_000 });
 }
 
-// The whole italic subtitle line, promo included: "Starts 10/20 · Trades" once
-// the schedule is out, a bare "Trades" before it drops.
+// The whole subtitle line, promo included: "Starts 10/20 · Trades ↗" once the
+// schedule is out, a bare "Trades ↗" before it drops.
 async function subtitleText(page: Page) {
   return (await page.locator(NBA_TRADES).locator("xpath=..").innerText()).trim();
 }
@@ -44,7 +44,7 @@ for (const tab of TABS) {
     // below would pass vacuously. Skip loudly instead of reporting a green tick.
     test.skip(!subtitle.startsWith("Starts "), `ESPN has published no opening-night slate for ${tab} yet`);
     // Start date AND the promo, one line, promo last so it sheds first.
-    expect(subtitle).toMatch(/^Starts \d{1,2}\/\d{1,2} · Trades$/);
+    expect(subtitle).toMatch(/^Starts \d{1,2}\/\d{1,2} · Trades ↗$/);
     // ...and the two-line block it replaced is gone from the column body.
     await expect(page.getByText(/^Season starts /)).toHaveCount(0);
     await expect(page.getByText(/^\d+ weeks away$/)).toHaveCount(0);
