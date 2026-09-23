@@ -2948,6 +2948,12 @@ function _siwaErrRedirect(code) {
 function _safeReturnTo(raw) {
   if (typeof raw !== "string" || !raw.startsWith("/")) return "/";
   if (raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  if (/[\x00-\x1f\x7f]/.test(raw) || raw.includes("\\")) return "/";
+  try {
+    if (new URL(raw, "https://x.invalid").origin !== "https://x.invalid") return "/";
+  } catch {
+    return "/";
+  }
   return raw;
 }
 
