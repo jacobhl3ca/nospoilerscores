@@ -2418,7 +2418,7 @@ export default function HomeContent({
           titles pin. Sits under the header, over the cards — see
           .sticky-seam-cover in globals.css for why this exists rather than
           another round of offset arithmetic. */}
-      <div className="sticky-seam-cover" aria-hidden="true" data-testid="sticky-seam-cover" />
+      <div className="sticky-seam-cover" aria-hidden="true" data-testid="sticky-seam-cover" data-news={showNews ? "" : undefined} />
       {/* FIXED, not sticky — and the flow space it vacates is given back by
           <div className="header-flow-spacer"> right below </header>, whose
           height is var(--header-h): the SAME variable every sticky row below
