@@ -1159,43 +1159,51 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // document, not ours: ↑/↓ become volume, Esc and f and h never arrive. The
   // modal looked like it had simply lost its keyboard.
   //
-  // Used to run off the top window's "blur" event (a cross-origin frame gives
-  // no direct signal, but taking focus does make the parent window blur).
-  // Safari does not reliably fire that blur for a click on a news post's
-  // YouTube embed (Jacob 9/12 — H stopped peeking the headline after clicking
-  // play, Chromium was fine), so this now runs off two signals blur never
-  // needed: a capture-phase pointerdown on the player wrapper, which sees the
-  // click before it can reach YouTube's document, and the IFrame API's own
-  // onStateChange(PLAYING/PAUSED) below, which always follows a click on
-  // YouTube's built-in play button. Both defer 250ms before checking, same as
-  // the old blur handler, so a scrubber DRAG inside the frame (mousedown, a
-  // stream of moves, then mouseup, all still inside) isn't cut off mid-drag.
+  // A cross-origin frame tells us nothing directly, so the same check runs
+  // off two signals:
+  //   1. the top window's "blur": clicking into the frame blurs the parent,
+  //      and after it document.activeElement is the iframe element itself.
+  //      Enough in Chromium and in Playwright's WebKit. A Brightcove-style
+  //      embed (embedMode) has no player API, so it gets this one only.
+  //   2. the IFrame API's onStateChange(PLAYING/PAUSED) (see the player setup
+  //      below). Jacob 9/12 lost H after clicking play on a news post's clip
+  //      in Safari, so the play/pause click can no longer rest on the blur
+  //      alone: a click on YouTube's own play button always ends in one of
+  //      those two states.
+  // YouTube has already handled the click by then, so pulling focus back
+  // costs the user nothing. Deferred ~250ms on purpose: a scrubber DRAG inside
+  // the frame is mousedown, a stream of moves, then mouseup, and yanking focus
+  // on the mousedown would cut it (the parent never sees pointer events from
+  // inside the frame).
   const focusRecoveryTimerRef = useRef<number | null>(null);
+  const frameRecoveryOn = (ytMode && youtubeNativeControls) || embedMode;
   const recoverFocusFromFrame = useCallback(() => {
-    if (!youtubeNativeControls) return;
+    if (!frameRecoveryOn) return;
     if (focusRecoveryTimerRef.current) window.clearTimeout(focusRecoveryTimerRef.current);
     focusRecoveryTimerRef.current = window.setTimeout(() => {
-      let frame: HTMLIFrameElement | null = null;
-      try {
-        const f = playerRef.current?.getIframe?.();
-        if (f) frame = f;
-      } catch { /* player destroyed mid-teardown */ }
-      if (!frame) {
-        // The YT API replaces our #yt-player div with the iframe, keeping the id.
-        const host = document.getElementById("yt-player");
-        frame = host instanceof HTMLIFrameElement ? host : (host?.querySelector("iframe") ?? null);
-      }
-      // Only when focus really went INTO the player — a click elsewhere in the
-      // wrapper (our own CC/close buttons) leaves activeElement alone.
-      if (!frame || document.activeElement !== frame) return;
-      frame.blur();
-      dialogRef.current?.focus({ preventScroll: true });
+      focusRecoveryTimerRef.current = null;
+      const active = document.activeElement;
+      // Only when focus really went INTO a frame inside this modal. A plain
+      // Cmd-Tab away leaves activeElement wherever it was, so this stays a
+      // no-op, and so does a click on our own CC/close buttons.
+      if (!(active instanceof HTMLIFrameElement) || !dialogRef.current?.contains(active)) return;
+      active.blur();
+      dialogRef.current.focus({ preventScroll: true });
     }, 250);
-  }, [youtubeNativeControls]);
+  }, [frameRecoveryOn]);
+  // The player effect reads it through a ref: a dep there would rebuild the
+  // YouTube player whenever the callback identity changed.
+  const recoverFocusRef = useRef(recoverFocusFromFrame);
+  useEffect(() => { recoverFocusRef.current = recoverFocusFromFrame; }, [recoverFocusFromFrame]);
 
-  useEffect(() => () => {
-    if (focusRecoveryTimerRef.current) window.clearTimeout(focusRecoveryTimerRef.current);
-  }, []);
+  useEffect(() => {
+    if (!frameRecoveryOn) return;
+    window.addEventListener("blur", recoverFocusFromFrame);
+    return () => {
+      window.removeEventListener("blur", recoverFocusFromFrame);
+      if (focusRecoveryTimerRef.current) window.clearTimeout(focusRecoveryTimerRef.current);
+    };
+  }, [frameRecoveryOn, recoverFocusFromFrame]);
 
   // Keep nativeFs in sync with the browser, and remember when we left so a
   // co-delivered Escape doesn't also close the modal.
@@ -1827,7 +1835,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             else if (event.data === 1 || event.data === 3) setPlayerState("playing");
             // A click on YouTube's own play/pause button took focus into the
             // frame — recover it (see recoverFocusFromFrame above).
-            if (event.data === 1 || event.data === 2) recoverFocusFromFrame();
+            if (event.data === 1 || event.data === 2) recoverFocusRef.current();
             // Playback actually started — kill the watchdog.
             if (event.data === 1 || event.data === 3) {
               clearAutoplayBlocked();
@@ -1907,7 +1915,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     // titleAlwaysMasked is derived from fallbackUrl (already a dep), so it can
     // never change on its own — listed to keep exhaustive-deps quiet.
-  }, [currentId, fallbackUrl, titleAlwaysMasked, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked, trackVideoPlay, recoverFocusFromFrame]);
+  }, [currentId, fallbackUrl, titleAlwaysMasked, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked, trackVideoPlay]);
 
   // Shared sizing for the YT video region + control bar so both line up and,
   // in fullscreen, the video is capped to leave room for the bar underneath.
@@ -2364,11 +2372,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             {/* Video region — 16:9 in-flow, or capped to leave bar room in FS */}
             <div
               onMouseMove={bumpCursor}
-              // Capture phase: sees the pointerdown before it can reach
-              // YouTube's cross-origin document, so focus recovery is queued
-              // the moment a click on the frame is even possible (see
-              // recoverFocusFromFrame above).
-              onPointerDownCapture={recoverFocusFromFrame}
               className="group relative mx-auto w-full overflow-hidden bg-black"
               style={fsActive
                 ? { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: 0 }
