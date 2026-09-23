@@ -8,6 +8,7 @@ import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, hasNoTrustedHighlightSource, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId } from "@/lib/highlights";
+import { isDuplicateHighlightId } from "@/lib/highlightDedupe";
 import { clubNickname, formatRecapDuration } from "@/lib/recaps";
 import { nflTeamChannelChain } from "@/lib/nflTeamChannels";
 import type { BakedHighlight } from "@/lib/highlights";
@@ -665,7 +666,7 @@ export default function GameHighlights({
               <span className="text-[10px] font-medium whitespace-nowrap">{clubNickname(club.channel)}{formatRecapDuration(club.durationSec) ? ` ${formatRecapDuration(club.durationSec)}` : ""}</span>
             </button>
           )}
-          {searchStatus === "found" && (
+          {searchStatus === "found" && !isDuplicateHighlightId(prefetchedOfficialId.current, prefetchedVideoId.current) && (
             <button
               type="button"
               onClick={async (e) => {
@@ -703,11 +704,7 @@ export default function GameHighlights({
               ) : (
                   <>
                     <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                    {isFifa && (
-                      <span className="text-[10px] font-medium">
-                        <span>FOX 15m</span>
-                      </span>
-                    )}
+                    <span className="text-[10px] font-medium whitespace-nowrap">{isFifa ? "FOX 15m" : "Alt"}</span>
                   </>
               )}
             </button>
