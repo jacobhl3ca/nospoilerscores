@@ -36,6 +36,27 @@ test("the combat words do not swallow ordinary highlight titles", () => {
   }
 });
 
+// A box-score-style title names two teams and two scores with nothing but a
+// space (comma optional) between them — no hyphen anywhere for SCORE_RX to
+// catch, and no outcome keyword either.
+test("a comma or space scoreline never reads as a clean title", () => {
+  for (const title of [
+    "GAME RECAP: Grizzlies 110, Lakers 105",
+    "GAME RECAP: Grizzlies 110 Lakers 105",
+    "Lakers 105 Grizzlies 110 final",
+    "Chelsea 2-1 Arsenal",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// A bare number after a comma is not a second team name, so these must stay clean.
+test("a date or listicle number does not read as a scoreline", () => {
+  for (const title of ["Week 2, 2026 Highlights", "Top 10 plays, Sept 10"]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
