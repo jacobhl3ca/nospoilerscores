@@ -213,8 +213,8 @@ function TeamRow({ team, seed, odds, showGamesBack }: {
         </div>
       </td>
       <OddsCell odd={playoffOdd(team, odds)} className="w-[46px]" />
-      <OddsCell odd={row?.division ?? null} className="w-[46px] hidden md:table-cell" />
-      <OddsCell odd={row?.wildCard ?? null} className="w-[46px] hidden md:table-cell" />
+      <OddsCell odd={row?.division ?? null} className="w-[46px] hidden sm:table-cell" />
+      <OddsCell odd={row?.wildCard ?? null} className="w-[46px] hidden sm:table-cell" />
       <td
         className="text-[10px] tabular-nums text-right px-1 py-1 w-[104px] whitespace-nowrap"
         style={{ color: status?.tone === "good" ? "var(--accent)" : "var(--text-muted)", opacity: !status || status.tone === "good" ? 1 : 0.75 }}
@@ -264,12 +264,16 @@ function LeagueTable({ league, odds, showGamesBack, sort, onSort }: {
     [bySeed, league.seeded, league.hunt, odds, sort.key, sort.dir],
   );
 
+  // Capped at what the widest club name needs: max-w-0 on the name cell hands
+  // it all the table's slack, so an uncapped table left a wide gap between
+  // the name and its odds. The second league sits flush right when the two
+  // are side by side, so the pair spans the panel edge to edge.
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 w-full max-w-[24rem] sm:max-w-[30rem] lg:even:justify-self-end">
       <div className="text-[10px] font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>
         {league.name}
       </div>
-      {/* Auto layout, not table-fixed: below `md` the Division and Wild card
+      {/* Auto layout, not table-fixed: below `sm` the Division and Wild card
           cells are display:none, and a fixed-layout table still treats their
           columns as auto and hands them a third of the row — which left the
           team name one letter wide on a phone. Auto layout drops a hidden
@@ -283,8 +287,8 @@ function LeagueTable({ league, odds, showGamesBack, sort, onSort }: {
             <SortHeader colKey="seed" sort={sort} onSort={onSort} className="w-11" />
             <th scope="col" className="px-1 py-1 font-normal text-left">Team</th>
             <SortHeader colKey="playoff" sort={sort} onSort={onSort} className="w-[46px]" title="Chance of making the playoffs" />
-            <SortHeader colKey="division" sort={sort} onSort={onSort} className="w-[46px] hidden md:table-cell" title="Chance of winning the division" />
-            <SortHeader colKey="wildCard" sort={sort} onSort={onSort} className="w-[46px] hidden md:table-cell" title="Chance of taking a wild card" />
+            <SortHeader colKey="division" sort={sort} onSort={onSort} className="w-[46px] hidden sm:table-cell" title="Chance of winning the division" />
+            <SortHeader colKey="wildCard" sort={sort} onSort={onSort} className="w-[46px] hidden sm:table-cell" title="Chance of taking a wild card" />
             <th scope="col" className="px-1 py-1 font-normal text-right w-[104px]">Status</th>
           </tr>
         </thead>
@@ -803,7 +807,9 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
                 aria-hidden={revealed ? undefined : true}
               >
                 {tab === "odds" ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  // Side by side only from `lg`: at `md` each half was ~355px,
+                  // and six columns in that squeezed every name to one letter.
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {picture.leagues.map((l) => (
                       <LeagueTable key={l.key} league={l} odds={odds} showGamesBack={showGamesBack} sort={sort} onSort={onSort} />
                     ))}
