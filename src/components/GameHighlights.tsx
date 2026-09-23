@@ -690,7 +690,7 @@ export default function GameHighlights({
                 }
               }}
               disabled={fetchingOnClick !== null}
-              className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
               aria-label={isFifa ? "FOX full highlights" : "Official alternate highlights"}
               // aria-busy conveys the in-flight fetch that the visible "Loading..."
