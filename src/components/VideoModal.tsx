@@ -1991,24 +1991,50 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     </div>
   ) : null;
 
-  // News prev/next paging: phones keep labelled bottom buttons for thumb
-  // reach; desktop gets subtle side chevrons so the footer links never overlap.
-  const mobilePager = hasPager ? (
-    <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex sm:hidden items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
-      <button type="button" onClick={(e) => { e.stopPropagation(); goPrev(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
-        className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
-        style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
-        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-        Prev
-      </button>
-      <button type="button" onClick={(e) => { e.stopPropagation(); goNext(); }} disabled={!onNext} aria-label="Next post" title="Next post"
-        className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
-        style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
-        Next
-        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+  // ONE control cluster, bottom-right, every width (Jacob 9/12: "the controls
+  // for news modals should be on bottom right simply but clearly. make sure
+  // looks good for mobiel and web"). ‹ › page the list, ✕ closes. It replaces
+  // the inline ✕ row that sat above each post type and the phone's
+  // bottom-centre Prev/Next pills, so Close is in the same place on every
+  // post and on every screen. 44px targets for a thumb. The wrapper's bottom
+  // reserve keeps the footer row clear of it, and the media caps (mediaMaxH)
+  // leave that band free, so it never sits on a player's scrubber.
+  // Desktop keeps the side chevrons too, as a second way to page.
+  // In YouTube fullscreen the fullscreen wrapper covers this (z 10000), so
+  // that view keeps its own inline ✕.
+  const clusterBtn = "w-11 h-11 flex items-center justify-center rounded-full text-white/85 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors";
+  const clusterBtnStyle = { background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" } as const;
+  const controlCluster = (
+    <div
+      data-testid="modal-controls"
+      className="fixed z-[60] flex items-center gap-2"
+      style={{ right: "calc(env(safe-area-inset-right) + 1rem)", bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {hasPager && (
+        <>
+          <button type="button" onClick={(e) => { e.stopPropagation(); goPrev(); }} disabled={!onPrev}
+            aria-label="Previous post" title="Previous post (↑)" aria-keyshortcuts="ArrowUp"
+            className={clusterBtn} style={clusterBtnStyle}>
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); goNext(); }} disabled={!onNext}
+            aria-label="Next post" title="Next post (↓)" aria-keyshortcuts="ArrowDown"
+            className={clusterBtn} style={clusterBtnStyle}>
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+          </button>
+        </>
+      )}
+      <button type="button" onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
+        aria-label="Close" title="Close (Esc)" aria-keyshortcuts="Escape"
+        className={clusterBtn} style={clusterBtnStyle}>
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
       </button>
     </div>
-  ) : null;
+  );
   const desktopPager = hasPager ? (
     <>
       <button type="button"
@@ -2063,10 +2089,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       <div
         // Wider side padding on desktop when a pager is present so the fixed
         // left/right chevrons sit in a gutter beside the media instead of on top
-        // of it (Jacob 7/11–13). The bottom Prev/Next buttons need a bottom
-        // reserve so the footer clears them — image posts included, now that
-        // they get the buttons too.
-        className={`relative flex min-h-full items-center justify-center p-4 ${hasPager ? "pt-[calc(env(safe-area-inset-top)+4.5rem)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] sm:px-24 sm:py-8" : "sm:p-8"}`}
+        // of it (Jacob 7/11–13). The bottom-right control cluster is there on
+        // every post and every width, so the bottom reserve that keeps the
+        // footer clear of it is too.
+        className={`relative flex min-h-full items-center justify-center p-4 pb-[calc(env(safe-area-inset-bottom)+4.5rem)] ${hasPager ? "pt-[calc(env(safe-area-inset-top)+4.5rem)] sm:px-24 sm:pt-8" : "sm:px-8 sm:pt-8"}`}
       >
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC
@@ -2094,79 +2120,45 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // score, and an accessible name would read it aloud unblurred.
         aria-label={imageMode ? "Image viewer" : textMode ? "Post" : "Video player"}
       >
-        {/* News prev/next post paging now renders as a labelled row BELOW the
-            media (see `pager`, inserted after the player) instead of overlaid on
-            the video — keeps mobile footage/dismiss/seek zones clear. */}
-        {/* Close affordances now live in-flow just above each content block
-            (image / text card / video frame), aligned to that block's real
-            right edge — see the per-mode Close rows below. */}
+        {/* Close and Prev/Next live in the bottom-right cluster
+            (controlCluster), the same spot for every post type. */}
 
         {/* Player area — image lightbox (no aspect lock), YouTube (custom
             chrome), or 16:9 video for HLS/embed */}
-        {/* imageMode's Close sits ON the image's top-right corner instead of in
-            this row (see below), so it hugs the actual content for any aspect. */}
-        {!ytMode && !textMode && !imageMode && (
+        {/* HLS captions sit in a row above the video; the ✕ that used to end
+            this row moved to the cluster, so it only exists for CC. */}
+        {hlsMode && hasCaptionTrack && (
           <div
             className="mx-auto mb-2 flex items-center justify-end gap-1.5"
             style={{ width: mediaFrameWidth }}
             onClick={(e) => e.stopPropagation()}
           >
-            {hlsMode && hasCaptionTrack && (
-              <button type="button"
-                onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
-                aria-pressed={showCC}
-                aria-label={showCC ? "Hide captions" : "Show captions"}
-                className="h-8 px-2.5 flex items-center justify-center rounded-full text-xs font-bold transition-colors cursor-pointer"
-                style={{
-                  color: showCC ? "white" : "rgba(255,255,255,0.7)",
-                  background: showCC ? "var(--accent)" : "rgba(0,0,0,0.45)",
-                  border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.15)",
-                }}
-                title={showCC ? "Hide captions" : "Show captions"}
-              >
-                CC
-              </button>
-            )}
             <button type="button"
-              onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
-              className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
-              aria-label="Close"
-              title="Close (Esc)"
+              onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
+              aria-pressed={showCC}
+              aria-label={showCC ? "Hide captions" : "Show captions"}
+              className="h-8 px-2.5 flex items-center justify-center rounded-full text-xs font-bold transition-colors cursor-pointer"
+              style={{
+                color: showCC ? "white" : "rgba(255,255,255,0.7)",
+                background: showCC ? "var(--accent)" : "rgba(0,0,0,0.45)",
+                border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.15)",
+              }}
+              title={showCC ? "Hide captions" : "Show captions"}
             >
-              <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
+              CC
             </button>
           </div>
         )}
         {imageMode ? (
-          // The column hugs the RENDERED image (w-fit), so the Close row spans
-          // the image's real width and lands just ABOVE its top-right corner —
-          // never over the photo, for any aspect ratio (Jacob 7/13). Desktop adds
-          // side chevrons in the gutter; mobile drops all buttons — swipe
-          // left/right navigates and the image gets the full width.
+          // The column hugs the RENDERED image (w-fit). Close and Prev/Next
+          // are in the bottom-right cluster; desktop adds side chevrons in the
+          // gutter, and swipe left/right still navigates on a phone.
           <div
             className="mx-auto w-fit max-w-full"
             onClick={(e) => e.stopPropagation()}
             onTouchStart={onSwipeStart}
             onTouchEnd={onSwipeEnd}
           >
-            {/* Close sits OUTSIDE the image — a right-aligned row the image's own
-                width, so it hugs the top-right corner without covering content. */}
-            <div className="mb-2 flex justify-end">
-              <button type="button"
-                onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
-                className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
-                aria-label="Close"
-                title="Close (Esc)"
-              >
-                <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
             <div ref={containerRef} className="relative rounded-lg overflow-hidden bg-black leading-[0]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -2248,30 +2240,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // whose image failed to load) get a clean card layout instead of
           // an empty lightbox. Everything stays on hidescore until the user
           // hits the "Open on …" button at the bottom.
-          // A tidy reading column (max-w-2xl) with the Close row just ABOVE the
-          // card's top-right corner — same treatment as the image lightbox, so
-          // the affordance is consistent for every post type (Jacob 7/13). The
-          // card scrolls internally (maxHeight), so Close stays put; horizontal
-          // swipe navigates between posts.
+          // A tidy reading column (max-w-2xl). Close is in the bottom-right
+          // cluster like every other post type. The card scrolls internally
+          // (maxHeight); horizontal swipe navigates between posts.
           <div
             className="mx-auto w-full max-w-2xl"
             onClick={(e) => e.stopPropagation()}
             onTouchStart={onSwipeStart}
             onTouchEnd={onSwipeEnd}
           >
-            <div className="mb-2 flex justify-end">
-              <button type="button"
-                onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
-                className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
-                aria-label="Close"
-                title="Close (Esc)"
-              >
-                <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
             <div ref={containerRef} className="relative w-full rounded-lg p-6 sm:p-8 overflow-y-auto" style={{ maxHeight: mediaMaxH, background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               {sourceLabel && (
                 <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
@@ -2348,7 +2325,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               >
                 CC
               </button>
-              <button type="button"
+              {/* Out of fullscreen the ✕ is in the bottom-right cluster. The
+                  fullscreen wrapper covers that cluster, so it keeps this one. */}
+              {fsActive && <button type="button"
                 onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-white/75 hover:text-white bg-black/50 hover:bg-black/70 border border-white/15 transition-colors cursor-pointer"
                 aria-label="Close"
@@ -2358,7 +2337,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
-              </button>
+              </button>}
             </div>
             {/* Video region — 16:9 in-flow, or capped to leave bar room in FS */}
             <div
@@ -3037,7 +3016,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         {/* Image posts used to page by swipe only, with nothing on screen to
             say so — an Instagram screenshot filled the phone and looked like a
             dead end. Swipe still works; the buttons just make it visible. */}
-        {mobilePager}
+        {controlCluster}
         {desktopPager}
       </div>
       </div>

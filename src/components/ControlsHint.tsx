@@ -136,12 +136,16 @@ export default function ControlsHint({ enabled, onDismiss, modalOpen }: Controls
       // Above the post modal, which sets zIndex 9999 on its own root — so the
       // guide stays readable AND clickable while the very keys it documents are
       // live. A Tailwind z-* class can't reach that, hence the inline value.
-      // Fixed to the viewport corner, above the iOS home indicator.
+      // Fixed to the viewport corner, above the iOS home indicator. With the
+      // post modal open, that corner holds the modal's ‹ › ✕ cluster (44px,
+      // 1rem up), so the guide sits just above it.
       className="hs-controls-hint fixed flex flex-col items-end gap-2"
       style={{
         zIndex: 10000,
         right: "max(0.75rem, env(safe-area-inset-right))",
-        bottom: "max(0.75rem, env(safe-area-inset-bottom))",
+        bottom: modalOpen
+          ? "calc(env(safe-area-inset-bottom) + 1rem + 44px + 0.5rem)"
+          : "max(0.75rem, env(safe-area-inset-bottom))",
       }}
     >
       {open && (
