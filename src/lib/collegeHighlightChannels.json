@@ -140,5 +140,29 @@
         "channel": "Women's Sports on FOX"
       }
     ]
+  },
+  "ncaawh": {
+    "primaryFromChain": true,
+    "titleTokens": [
+      "women"
+    ],
+    "conferences": {
+      "ecac": "ECAC Hockey"
+    },
+    "teamConferences": {
+      "225": "ecac",
+      "2137": "ecac",
+      "2142": "ecac",
+      "172": "ecac",
+      "159": "ecac",
+      "108": "ecac",
+      "163": "ecac",
+      "2514": "ecac",
+      "2528": "ecac",
+      "2779": "ecac",
+      "2785": "ecac",
+      "43": "ecac"
+    },
+    "networks": []
   }
 }

@@ -345,9 +345,16 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // regular-season games stream on ESPN+ with no official upload. Dark. A
 // postseason-only channel gate is the way to light it for the March tournament.
 //
-// ncaawh (NCAA women's hockey, added 2026-09-14): same evidence as the men's —
-// regular-season games stream on ESPN+ with no per-game uploader. Dark; the
-// same postseason-only gate would light both tournaments together.
+// ncaawh (NCAA women's hockey, added 2026-09-14, lit 2026-09-23). The 9/14
+// note said "same evidence as the men's: ESPN+ only, no per-game uploader".
+// That was never probed for the women's game and was wrong: the ECAC Hockey
+// channel posts a per-game cut ("RPI at Mercyhurst | NCAA Women's Ice Hockey |
+// Highlights - September 18, 2026 | #ECACHockey"), 3/3 strict on the 9/18-9/19
+// opening weekend with a `women` title token, no score in the title. Lit
+// WITHOUT a fixed channel, like ncaavb: a game with an ECAC school uses the
+// conference chain, every other game stays dark. The channel probe (AHA prints
+// scores, Hockey East/WCHA/NEWHA post no per-game cut) is in
+// lib/collegeHighlights.ts, with the men's re-probe and what ncaah still needs.
 //
 // ufl (UFL spring football, added 2026-09-14): probed against the LIVE worker
 // with strict=1 on 5 completed 2026 fixtures (May 3, May 16, May 29, Jun 7
@@ -404,7 +411,6 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   // US broadcaster (ESPN FC / beIN SPORTS USA), each behind a required
   // competition title token. See OFFICIAL_CHANNELS above.
   "ncaah",
-  "ncaawh",
   "ncaabase",
   "ncaasoft",
   "rugbychamp",
@@ -639,6 +645,11 @@ const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   facup: ["fa cup"],
   laliga: ["laliga", "la liga"],
   ligue1: ["ligue 1"],
+  // ncaawh: ECAC Hockey posts the men's and the women's cut of the same two
+  // schools, often the same weekend. "women" is in every women's title and in
+  // no men's title. The reverse token must be "ncaa men": "men" alone is a
+  // substring of "women s" once punctuation folds to spaces.
+  ncaawh: ["women"],
 };
 
 // NFL preseason — the same failure one season-phase over. The NFL channel
@@ -733,6 +744,9 @@ const TEAM_NAME_ALIASES: Record<string, string> = {
   // clubs. The strict resolver requires both teams, so query the title form.
   "Tempo": "Toronto Tempo",
   "Valkyries": "Golden State Valkyries",
+  // ESPN names RPI by its full name; the ECAC Hockey titles say "RPI" ("RPI at
+  // Mercyhurst | NCAA Women's Ice Hockey | …"). 0/2 strict without this.
+  "Rensselaer": "RPI",
 };
 
 function aliasTeam(name: string): string {

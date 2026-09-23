@@ -46,3 +46,29 @@ test("volleyball finds the conference from the ESPN team id and gates on volleyb
   // Two schools outside the four channel conferences: no chain, so no lookups.
   assert.deepEqual(buildCollegeFallbackChain(NCAAVB, null, { id: "ncaavb-2335" }, { id: "ncaavb-2226" }, []), []);
 });
+
+test("women's hockey lights ECAC games only, behind the women token", () => {
+  const NCAAWH = CONFIG.ncaawh;
+  assert.equal(NCAAWH.primaryFromChain, true);
+  // Rensselaer (2528, ECAC) at Mercyhurst (2385, Atlantic Hockey America): the
+  // ECAC school alone puts the game on the ECAC Hockey channel.
+  const chain = buildCollegeFallbackChain(NCAAWH, null, { id: "ncaawh-2385" }, { id: "ncaawh-2528" }, []);
+  assert.deepEqual(chain, [{ channel: "ECAC Hockey", titleTokens: ["women"] }]);
+  // Lindenwood at Post: no lit conference, no lookups.
+  assert.deepEqual(buildCollegeFallbackChain(NCAAWH, null, { id: "ncaawh-430" }, { id: "ncaawh-2815" }, []), []);
+  // All twelve ECAC schools are mapped, and nothing else is.
+  assert.equal(Object.keys(NCAAWH.teamConferences ?? {}).length, 12);
+  assert.deepEqual(Object.values(NCAAWH.conferences), ["ECAC Hockey"]);
+});
+
+test("the women token cannot match a men's cut, and plain men would match a women's one", () => {
+  // Same fold as compTitleMatches in public/_worker.js: lowercase, every
+  // non-alphanumeric run becomes one space.
+  const fold = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const women = fold("RPI at Mercyhurst | NCAA Women's Ice Hockey | Highlights - September 18, 2026 | #ECACHockey");
+  const men = fold("Harvard at Yale | NCAA Men's Ice Hockey | Highlights - February 14, 2026 | #ECACHockey");
+  assert.ok(women.includes("women"));
+  assert.ok(!men.includes("women"));
+  assert.ok(women.includes("men"), "why ncaah can never use a bare men token");
+  assert.ok(men.includes("ncaa men") && !women.includes("ncaa men"));
+});
