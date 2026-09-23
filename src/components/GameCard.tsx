@@ -131,12 +131,6 @@ function cleanStatusDetail(detail: string, stripDate: boolean): string {
   return cleaned.trim();
 }
 
-// "BOS leads series 3-1" → "BOS leads 3-1"; "Series tied 2-2" → "Tied 2-2"
-function formatSeriesStatus(s: string): string {
-  const stripped = s.replace(/\bseries\s+/gi, "").trim();
-  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
-}
-
 // Compact network label for the inline status-bar chip (Jacob 6/10): the rating
 // badge centers on the card, so the network sits small and short beside it.
 // "MLB.TV" → "MLB", "MLB Network" → "MLB", "Prime Video" → "Prime", "Apple TV+"
@@ -537,7 +531,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       aria-label={cardClickable ? cardLabel : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
-      {/* Playoff series state ("NY leads 1-0") — DAY-OF-GAME ONLY (Jacob 6/12):
+      {/* Playoff game number ("Game 3") — DAY-OF-GAME ONLY (Jacob 6/12):
           a lookahead card ("Tomorrow - 8:30PM" on today's board, nextGameDate
           set) already carries another day's game info, so the series line stays
           off until the game is actually today. On game day: WIDE columns (xl)
@@ -545,11 +539,17 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           time + network — see below); NARROW columns can't fit that without
           truncating ("NY L…"), so it moves to its OWN row ABOVE the status bar —
           which also keeps the network in its top-right spot instead of getting
-          bumped (Jacob 6/5–6/7). Pre-game + ratings mode only (it's a spoiler);
-          shown once (compact rows don't render it). */}
-      {game.seriesStatus && isFuture && showRatings && isToday && !nextGameDate && (
+          bumped (Jacob 6/5–6/7). Pre-game + ratings mode only; shown once
+          (compact rows don't render it).
+          It used to print ESPN's series score ("NYY leads 2-1", "Tied 1-1"),
+          which tells someone catching up how the earlier games went, and the
+          app never shows a score, so there is no reveal state to gate it on.
+          Jacob 9/23: hide it. seriesStatus now only marks the game as part of
+          a playoff series; the slot shows the neutral game number from the
+          notes headline (game.seriesNote), or nothing when ESPN gives none. */}
+      {game.seriesStatus && game.seriesNote && isFuture && showRatings && isToday && !nextGameDate && (
         <div className="xl:hidden mb-1 text-[11px] text-center italic" style={{ color: "var(--text-muted)" }}>
-          {formatSeriesStatus(game.seriesStatus)}
+          {game.seriesNote}
         </div>
       )}
 
@@ -805,8 +805,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               // — no overlap. flex-1 still centers it in the slack; no min-w-0 so
               // the nowrap badge can't shrink-to-zero and overflow its cell.
               <span className="flex-1 flex justify-center"><RatingBadge rating={game.rating!} /></span>
-            ) : game.seriesStatus && isFuture && showRatings && isToday && !nextGameDate ? (
-              // Series state inline ONLY on wide (xl) columns where it fits
+            ) : game.seriesStatus && game.seriesNote && isFuture && showRatings && isToday && !nextGameDate ? (
+              // Game number inline ONLY on wide (xl) columns where it fits
               // next to the bare time; narrower columns render it as the banner
               // above instead. Day-of-game only, same gate as the banner (6/12).
               <span className="min-w-0 flex-1 hidden xl:flex justify-center">
@@ -814,7 +814,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   className="text-[11px] italic whitespace-nowrap truncate pr-0.5"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  {formatSeriesStatus(game.seriesStatus!)}
+                  {game.seriesNote}
                 </span>
               </span>
             ) : null}
