@@ -296,7 +296,12 @@ test("the seam cover exists and tracks the league title's pin offset", async ({ 
   });
   expect(geom, "seam cover must be rendered").not.toBeNull();
   expect(geom!.coverTop).toBe(0);
-  // The cover's bottom edge is exactly where the sticky title pins.
-  expect(Math.abs(geom!.coverBottom - geom!.titleTop)).toBeLessThan(1.5);
+  // The cover's bottom edge runs just PAST where the sticky title pins (the
+  // 2px --seam-overlap), so device-pixel rounding at a fractional zoom can
+  // never open a row between them. Past by more than ~3px would start eating
+  // the title itself.
+  const overlap = geom!.coverBottom - geom!.titleTop;
+  expect(overlap, "cover must reach past the title's pin line").toBeGreaterThanOrEqual(1);
+  expect(overlap, "cover must not reach into the title text").toBeLessThan(3.5);
   expect(geom!.opaque).not.toContain("rgba(0, 0, 0, 0)");
 });
