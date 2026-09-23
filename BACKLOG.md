@@ -1,5 +1,28 @@
 # HideScore — Master Backlog
 
+## 2026-09-22 — CFL highlight gates: spelled-out weeks, TSN's no-week re-uploads, team typos, an abbreviated age stamp
+
+**Situation:** QA probed all 61 completed CFL 2026 games against production (client/prebake query → `/api/youtube?…&channel=TSN&week=N&strict=1`). 51/61 right, 8 wrong: 3 served a Week 1 recap for a Week 6/8 query, 2 served a 2024 upload for a 2026 game (one live, one baked), 2 came back with no result though TSN had posted one, 1 shared a title format quirk with the no-result case. Root causes, all specific to TSN/CFL and inert for every other league sharing the same gates:
+
+1. **Spelled-out weeks.** TSN spells CFL weeks 1–5 in full ("CFL WEEK ONE" … "WEEK FIVE") and switches to digits from week 6 on. The digit-only week regex (`\bw(?:ee)?k\.?\s*(\d{1,2})\b`) read a spelled title as carrying NO week token — which the wrong-week hard-skip correctly treats as "untouched" for NFL/NCAAF postseason titles — so a Week 1 recap passed the gate for a Week 6/8 query (wk6 OTT@EDM, wk8 CGY@WPG, wk8 HAM@MTL).
+2. **TSN's own no-week re-uploads.** TSN's 2024/2025 "Away vs. Home | CFL HIGHLIGHTS" cuts carry no week and no year, and unlike NFL/NCAAF (where a no-week title can be a legitimate same-season cut) a no-week TSN title is always that older format. wk6 HAM@SSK (live) and wk15 SSK@WPG (baked before #84's age gate existed) both served a 2024 video.
+3. **The age gate's own miss.** #84 (9/20) added an upload-age gate reading YouTube's relative "N years ago" stamp, but the same field sometimes reads abbreviated ("2y ago", "1mo ago", "3d ago") — same field, different spelling, only on some result blocks. `latestPossiblePublish`'s regex never matched the abbreviated form, so the stamp read as unreadable ("no stamp → unchanged") and the 2024 upload sailed through.
+4. **Team-name gaps.** theScore's plain "BC Lions" never matched TSN's punctuated "B.C. Lions" title (wk9 BC@WPG, 404 despite a real upload existing); TSN's own typos "Saskatechewan" and "Roughiders" (missing an "e"/"r") didn't match "Saskatchewan Roughriders" either.
+5. **A bare title.** wk9 SSK@EDM's TSN upload is titled just "CFL WEEK 9: Edmonton Elks vs. Saskatchewan Roughriders" — no "Highlights"/"Recap" word at all, so the general highlight-keyword gate dropped it.
+
+**Fixed 2026-09-22** on branch `fix/cfl-highlight-gates` (not pushed):
+- `parseWeekFromTitle` (one copy each in `public/_worker.js`, `scripts/prebake-news.mjs` as `hlParseWeekFromTitle`, `scripts/check-nfl-weeks.mjs`) reads ONE–TWENTY-ONE spelled out, digits unchanged. NFL/NCAAF behavior is a strict superset of before.
+- `WEEK_TOKEN_REQUIRED_CHANNELS` (worker-only, `{"tsn"}`) flips a missing week token from "pass through untouched" to a hard reject, but only for channel=TSN. Mirrored in the prebake as `hlVideoMatchesWeek(id, week, requireWeek)` / `cflWeekRequired = lg.sport === "cfl"`.
+- `latestPossiblePublish` now reads both "2 years ago" and "2y ago" (full unit table: s/m/h/d/w/mo/y).
+- `TEAM_ALIASES["bc lions"]` and `["saskatchewan roughriders"]` added to the worker's alias table (the prebake reads this same table from `public/_worker.js` at bake time — no separate copy needed there).
+- `isStrictBareCflWeek`: a bare "CFL WEEK N: Away vs. Home" title counts as a highlight when channel=TSN, strict, and the title's own week token agrees with the query's — narrow enough that no other sport's bare title can widen through it.
+- Prebake CFL revalidation window widened 7 → 30 days (`HL_CFL_DAYS`) so a game that ages out of the default window before a matcher fix lands (like this one) still gets its carried id rechecked; the default 7-day window otherwise never revisits a CFL game once it's more than a week old.
+
+**Proof:** `tsc --noEmit` clean, `eslint` 0 new warnings, `test:unit` 451/451 (14 new cases in `tests/cfl-week-gate.test.mjs` pin all 5 failure modes against the exact real titles above), `highlights:check` and `nfl:check` (extended with CFL-specific assertions) both green. Re-probed all 61 games against a local import of `public/_worker.js` hitting live YouTube (not production, not the real bake): **61/61 resolve to the right game** — the three spelled-week misses, the two old-season misses, the two no-result misses, and the one bare-title miss are all fixed; zero regressions on the games that were already right.
+
+- [ ] **Push + deploy** — not done. `git push -u origin fix/cfl-highlight-gates`, open a PR, merge, then `git push origin main` deploys via the Cloudflare Pages GitHub integration (no manual `vercel`/`wrangler` step). Not run: instructed not to push or deploy.
+- [ ] **Real bake / R2** — the existing `wk15 SSK@WPG` baked entry (`FrP2vaiZqV8`, wrong) will self-correct on the next scheduled bake run once this ships, thanks to the widened CFL revalidation window — no manual `--hl-days=30` one-off needed, but one could be run after merge if a Jacob wants it fixed sooner than the next cron tick. Not run against production R2 per instructions.
+
 ## 2026-09-14 — GitHub Actions free quota ran out: feed crons move to the mini, PR-check burn cut
 
 **Situation:** every Actions job failed in 2 s from ~2pm ET ("recent account payments have failed or your
