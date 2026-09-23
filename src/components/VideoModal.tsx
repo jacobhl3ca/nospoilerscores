@@ -7,7 +7,7 @@ import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
-import { routeModalKey } from "@/lib/modalArrowKeys";
+import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
 
 interface VideoModalProps {
   videoId: string;
@@ -1268,17 +1268,18 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       const t = e.target as HTMLElement | null;
       const tag = t?.tagName;
       const dir = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+      // e.key is " " for the space bar everywhere modern, but e.code is the
+      // reliable one when a layout remaps it.
+      const key = e.code === "Space" ? " " : e.key;
       const action = routeModalKey({
-        // e.key is " " for the space bar everywhere modern, but e.code is the
-        // reliable one when a layout remaps it.
-        key: e.code === "Space" ? " " : e.key,
+        key,
         shift: e.shiftKey,
         chord: e.metaKey || e.ctrlKey || e.altKey,
         repeat: e.repeat,
-        // VIDEO is in this list on purpose: a focused native <video controls>
-        // (the HLS path) already toggles itself on Space and seeks itself on
-        // the arrows, so routing the same press would double-act.
-        inTextEntry: !!t && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "VIDEO" || t.isContentEditable),
+        // A focused native <video controls> (the HLS path) toggles itself on
+        // Space and seeks itself on the arrows, so those presses are its own;
+        // every other key still routes (nativeVideoOwnsKey).
+        inTextEntry: !!t && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable || (tag === "VIDEO" && nativeVideoOwnsKey(key))),
         onControl: !!t && (tag === "BUTTON" || tag === "A"),
         // hlsMode included: MLB/Reddit direct streams seek through the <video>
         // element (see seekBy), so ← → skip on them like they do on YouTube.
@@ -2914,6 +2915,21 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 onPlaying={trackVideoPlay}
                 onPlay={() => setPlayerState("playing")}
                 onPause={() => setPlayerState("paused")}
+                // A click on the native controls focuses the <video>, and a
+                // focused video keeps Space and the arrows for itself, so ↓/↑
+                // stopped paging after one click on a news clip (Jacob 9/12,
+                // reproduced 9/23 on hidescore.com in Chromium and WebKit).
+                // Hand focus back to the dialog once the click is done: on
+                // pointerup, so a scrubber drag is never cut, and not while
+                // the video itself is fullscreen. Tab still reaches the video
+                // for keyboard users; this only undoes pointer focus.
+                onPointerUp={(e) => {
+                  const v = e.currentTarget;
+                  window.setTimeout(() => {
+                    const fs = document.fullscreenElement || (v as HTMLVideoElement & { webkitDisplayingFullscreen?: boolean }).webkitDisplayingFullscreen;
+                    if (document.activeElement === v && !fs) dialogRef.current?.focus({ preventScroll: true });
+                  }, 0);
+                }}
                 // Spoiler-safe accessible name — matching the sibling <iframe>'s
                 // title and the dialog's aria-label: the PeekBlur'd headline can
                 // carry a score, so setting it as this focusable player's
