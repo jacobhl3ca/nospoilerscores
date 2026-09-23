@@ -425,6 +425,17 @@ try {
       return { fromRight: Math.round(b.right - a.right), fromBottom: Math.round(b.bottom - a.bottom) };
     }).catch(() => null);
     ok("updated-at sits bottom right", !!placed && placed.fromRight < 40 && placed.fromBottom < 40, JSON.stringify(placed));
+    // Bracket footer = the seed line alone, bottom left, on the SAME row as
+    // "Updated" bottom right. The odds explainer stays on the Odds tab only.
+    const foot = await dialog.evaluate(() => {
+      const f = document.querySelector('[role="dialog"][aria-label="MLB playoff picture"] [data-picture-footer]');
+      if (!f) return null;
+      const [left, right] = f.querySelectorAll("p");
+      const a = left.getBoundingClientRect(), b = right?.getBoundingClientRect();
+      return { text: left.innerText.trim(), sameRow: !!b && Math.abs(a.top - b.top) < 4 };
+    });
+    ok("bracket footer is the seed line only", foot?.text === "Seeds 1\u20133 are the division winners, 4\u20136 the wild cards.", foot?.text);
+    ok("seed line shares the Updated row", foot?.sameRow === true, JSON.stringify(foot));
   }
 } catch (e) {
   ok("run completed without throwing", false, e.message);
