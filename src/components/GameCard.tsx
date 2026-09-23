@@ -475,9 +475,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     ) : !team.logo ? (
       // No logo on the event at all (ESPN has none for the amateur hosts in the
       // DFB-Pokal / Copa del Rey early rounds — 5 of 11 first-round cards on
-      // 2026-08-22). An <img src=""> never reaches onError, so it rendered as
-      // an empty bordered box; a same-size muted tile keeps the row aligned.
-      <span aria-hidden="true" className="w-4 h-4 sm:w-6 sm:h-6 rounded shrink-0" style={{ background: "var(--bg-card-hover)" }} />
+      // 2026-08-22, nor for Maryville (Mo) in NCAA hockey, 2026-09-23). An
+      // <img src=""> never reaches onError, so it rendered as an empty bordered
+      // box; a same-size muted tile keeps the row aligned. `block` is load-
+      // bearing: an inline <span> ignores w-/h-, so without it the tile was
+      // zero-wide and the bare name sat flush-left under a logo'd opponent.
+      <span aria-hidden="true" className="block w-4 h-4 sm:w-6 sm:h-6 rounded shrink-0" style={{ background: "var(--bg-card-hover)" }} />
     ) : (
       // Decorative: the team name renders beside this logo (see the row at the
       // logo() call site), so alt="" avoids a duplicate screen-reader read of
@@ -485,8 +488,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       // onError hides a 404'd/blocked ESPN logo so it degrades to the team name
       // beside it rather than the browser's broken-image glyph (matches the
       // remote-image guards in NewsColumn/AlignedVideoStrip/VideoModal).
+      // visibility, not display: the box must keep its width so the name
+      // stays aligned with the other row.
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={team.logo} alt="" title={team.displayName} loading="lazy" decoding="async" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+      <img src={team.logo} alt="" title={team.displayName} loading="lazy" decoding="async" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
     );
 
   // Clicking the card body opens a spoiler-safe details popup. Inner
