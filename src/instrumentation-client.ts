@@ -10,19 +10,40 @@ Sentry.init({
     /EmptyRanges/,
     /runtime\.sendMessage/,
     /Unable to load image data:image\/svg\+xml/,
-    // ⛔ The old comment here claimed detailEvent "has never existed in HideScore
-    // source" and called this injected-extension noise. That is wrong, and the
-    // 2026-08-16 Sentry audit caught it: `detailEvent` is declared at
-    // HomeContent.tsx:512 (`useState`) and used at 3875-3879, and the captured
-    // stack frame is our own `HomeContent` in src_components_HomeContent_tsx_*.js,
-    // not an extension. Every one of the 5 events was `next dev` on localhost
-    // (environment=development), so this is a stale-closure artifact of Turbopack
-    // hot reload, not a browser extension.
+    // ResizeObserver's spec-mandated safety valve, not a HideScore fault: the
+    // browser fires it when a resize callback dirties layout again and the loop
+    // has not settled inside one frame. Nothing throws in our code, nothing is
+    // left broken, and the next frame reconciles — it is in Sentry's own
+    // recommended ignoreErrors. Filtered 2026-09-01 after JAVASCRIPT-NEXTJS-NY-K
+    // reported 6 events from a single Android 12 WebView inside four minutes,
+    // 0 users affected. Not scoped to development: this one is genuinely
+    // unactionable in production too, unlike the detailEvent rule below.
+    // Chrome says "loop limit exceeded"; Firefox and newer Chrome say
+    // "loop completed with undelivered notifications".
+    /ResizeObserver loop (limit exceeded|completed with undelivered notifications)/,
+    // ⛔ The comment that used to sit here claimed detailEvent "has never existed
+    // in HideScore source" and called it injected-extension noise. That was
+    // wrong, and the 2026-08-16 audit caught it: `detailEvent` is ours, declared
+    // in HomeContent.tsx and captured in our own
+    // src_components_HomeContent_tsx_*.js frame. Every event was `next dev` on
+    // localhost, so it is a Turbopack Fast Refresh stale-closure artifact.
     //
-    // Kept, because it is dev-only and unactionable — but scoped to development
-    // so that a real production `detailEvent` ReferenceError is NOT swallowed.
-    // The blanket rule would have hidden one.
-    ...(process.env.NODE_ENV === "development" ? [/detailEvent is not defined/] : []),
+    // Generalised 2026-09-01 from that one identifier to the shape, after
+    // JAVASCRIPT-NEXTJS-NY-H arrived as the identical thing wearing a different
+    // name: `enabledCategories is not defined`, thrown from
+    // HomeContent.useMemo[hiddenNewsCategories] on http://localhost:3178 under
+    // HeadlessChrome, with `[Fast Refresh] rebuilding` in the breadcrumbs one
+    // line above it. `enabledCategories` is imported at HomeContent.tsx:6 and
+    // used at 1942-1943 — it exists, it is spelled right, and only a hot reload
+    // ever fails to find it. Naming each identifier as it appears is a queue,
+    // not a filter; the third one is already on its way.
+    //
+    // Still scoped to development, which is the whole safety property: a real
+    // production ReferenceError is NOT swallowed by this. In dev the error is
+    // already in the console and the Next overlay before Sentry ever sees it.
+    ...(process.env.NODE_ENV === "development"
+      ? [/^(?:ReferenceError: )?\w+ is not defined$/]
+      : []),
   ],
   denyUrls: [
     /^chrome-extension:\/\//,
