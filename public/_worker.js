@@ -2119,6 +2119,12 @@ export default {
             website: info.website || null,
             image: tour.image || null,
             tier: tour.tier || 0,
+            // The round's own url + ongoing flag, so the client can prefer it
+            // over the tour url (which points at the CURRENT round and leaks
+            // finished-board results — see A7 / buildChessEventUrl in
+            // src/lib/eventTiles.ts).
+            roundUrl: round.url || null,
+            ongoing: !!round.ongoing,
           };
         };
         const events = [];

@@ -10,6 +10,7 @@ import { fetchPokerEvent } from "./poker";
 import { fetchCuratedBoxingEvent } from "./boxing";
 import {
   chessEventState,
+  buildChessEventUrl,
   boxingChannelFor,
   buildBoxingTokens,
   boxingHighlightQuery,
@@ -3528,6 +3529,8 @@ interface ChessApiEvent {
   startsAt: number | null; endsAt: number | null; format: string;
   timeControl: string; location: string; players: string[];
   url: string | null; website: string | null; tier: number;
+  // The round's own url + ongoing flag — see buildChessEventUrl.
+  roundUrl?: string | null; ongoing?: boolean;
 }
 
 // Chess has NO highlight package anywhere — verified 2026-08-10 across every
@@ -3647,7 +3650,14 @@ export async function fetchChessEvent(date?: string): Promise<EventFetchResult> 
       raceTokens: buildChessTokens(chosen.name),
       // Lichess's own board is the watch destination — it is live, free, and
       // (unlike a results page) shows the game rather than the outcome.
-      eventUrl: chosen.url ?? chosen.website ?? undefined,
+      // buildChessEventUrl prefers the ROUND url while it's ongoing, so the
+      // page opens on live boards rather than the tour's current-round list,
+      // which shows finished-board results (Jacob, A7).
+      eventUrl: buildChessEventUrl({
+        url: chosen.url,
+        website: chosen.website,
+        round: { url: chosen.roundUrl, ongoing: chosen.ongoing },
+      }),
     };
     return { card, failed: false };
   } catch {

@@ -32,6 +32,26 @@ export function chessEventState(
   return endsAt < now - CHESS_STALE_LIVE_MS ? "post" : state;
 }
 
+// The tour URL (`lichess.org/broadcast/<tourSlug>/<tourId>`) lands on the
+// CURRENT round's board list, and a round with any finished boards shows their
+// "1-0"/"½-½" result right there — the leak Jacob flagged (A7). Lichess's own
+// `round.url` (`.../<tourSlug>/<roundSlug>/<roundId>`) opens straight on that
+// round's boards instead, and when `round.ongoing` is true there is no
+// earlier-round leak (a board already finished within that live round is
+// unavoidable — Lichess has no results-hiding mode). Falls back to the tour
+// URL (then the organizer's own site) whenever the round isn't ongoing or
+// Lichess omitted its url, so a quiet day or an older payload degrades to the
+// pre-A7 behaviour rather than a dead link.
+export function buildChessEventUrl(tour: {
+  url?: string | null;
+  website?: string | null;
+  round?: { url?: string | null; ongoing?: boolean } | null;
+}): string | undefined {
+  const round = tour.round;
+  if (round?.ongoing && round.url) return round.url;
+  return tour.url ?? tour.website ?? undefined;
+}
+
 // ── Boxing ──────────────────────────────────────────────────────────────────
 
 // boxing-data.com names the BROADCASTER; the PROMOTER is who posts the fight
