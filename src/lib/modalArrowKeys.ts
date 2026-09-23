@@ -85,15 +85,27 @@ export type ModalKeyAction =
   | "seek-10"
   | "jump-pct";
 
+/**
+ * The keys a focused native <video controls> acts on by itself: Space toggles
+ * it, the arrows seek it (and, in some browsers, set its volume). Only these
+ * count as "text entry" when the key lands on the video, so routing them again
+ * would double-act. Every other modal key (H, Esc, m, j/l, 0-9, ?) still
+ * reaches the modal. Before 9/23 ANY key on a focused video was dropped, so
+ * one click on a news clip's player silenced H until the modal closed
+ * (Jacob 9/12: "if i click play on video in news i lose ability to use h").
+ */
+export function nativeVideoOwnsKey(key: string): boolean {
+  return key === " " || key === "ArrowLeft" || key === "ArrowRight" || key === "ArrowUp" || key === "ArrowDown";
+}
+
 /** null = leave the key alone (no preventDefault). */
 export function routeModalKey(ctx: ModalKeyContext): ModalKeyAction | null {
   // Cmd/Ctrl/Alt belong to the browser and the window manager: Cmd+← is Back,
   // Ctrl+←/→/↑/↓ switch macOS desktops before the page is even told, Alt+← is
   // Back on Windows. The 9/4 reasoning for ←/→, now for every key here.
   if (ctx.chord) return null;
-  // Typing is sacred. A native <video controls> counts as text entry for this
-  // purpose: it toggles ITSELF on Space and seeks itself on ←/→ (the HLS path),
-  // so routing the same press again would double-act.
+  // Typing is sacred. A native <video controls> counts as text entry only for
+  // the keys it acts on itself (nativeVideoOwnsKey): the caller decides that.
   if (ctx.inTextEntry) return null;
 
   const { key } = ctx;
