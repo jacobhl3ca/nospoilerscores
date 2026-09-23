@@ -7,6 +7,7 @@ import { enabledCategories } from "@/lib/sensitiveNews";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
+import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import type { TopEventsOptions } from "@/lib/espn";
 import { TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
@@ -79,9 +80,12 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
   };
   // The remote copy is canonical for a signed-in account. Its missing marker,
   // not the new device's local marker, decides whether the account is legacy.
-  return remote.switcherDefaultsVersion === 2
+  const reconciled = remote.switcherDefaultsVersion === 2
     ? merged
     : migrateLegacySwitcherPreferences({ ...merged, switcherDefaultsVersion: undefined });
+  // Single-column view stays per device: a server blob written before this
+  // rule (or by an older client) still carries it, so ignore it on the pull.
+  return keepDeviceLocalPrefs(reconciled, local);
 }
 
 // What the Top events column reads from prefs. A pure projection so fetchData
@@ -429,13 +433,16 @@ const SLOT_INDICES = [0, 1, 2, 3, 4];
 // one wide column with bigger, condensed cards, vs the side-by-side board. The
 // glyph shows the CURRENT state (one wide bar when on, two columns when off);
 // accent-tinted when single-column is active. Mirrors the bare-icon styling of
-// the calendar button it sits beside.
-function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
+// the calendar button it sits beside. `compact` = the phone header copy, sized
+// like the phone's 28px calendar icon, and only at 390px and up: below that the
+// header row is already full (the calendar reaches the moon at 375), so a
+// narrower phone keeps Settings → Board layout as its switch.
+function SingleColToggle({ active, onClick, compact }: { active: boolean; onClick: () => void; compact?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="ml-0.5 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+      className={`${compact ? "hidden min-[390px]:flex w-7 h-7 shrink-0" : "flex ml-0.5 w-8 h-8"} items-center justify-center rounded-full transition-colors cursor-pointer`}
       style={{ color: active ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
       title={active ? "Single-column view (on) — tap for columns" : "Single-column view — one wide column, bigger cards"}
       aria-label="Toggle single-column view"
@@ -2518,11 +2525,13 @@ export default function HomeContent({
                     {calendarOpen && (
                       <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
                     )}
-                    {/* The single-column "II" toggle used to sit here, but on a
-                        phone it crowded col 2 and visually collided with the moon
-                        in col 3 (Jacob 6/18). It's redundant with Settings → Board
-                        layout → Single column, so it's dropped from the mobile
-                        header; desktop keeps its own copy below. */}
+                    {/* The single-column toggle left this row on 6/18 (the 32px
+                        copy crowded col 2 into the moon in col 3) and Settings
+                        was the only way to flip it on a phone. Jacob 9/22 turned
+                        it on at the PC, it followed him to the phone, and he had
+                        to go landscape to find a button. It is back at the
+                        calendar's 28px size, from 390px up (see SingleColToggle). */}
+                    <SingleColToggle compact active={prefs.singleColumn ?? false} onClick={() => updatePrefs({ singleColumn: !prefs.singleColumn })} />
                   </span>
                 } />
               </div>
