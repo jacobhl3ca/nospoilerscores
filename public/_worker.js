@@ -2941,6 +2941,16 @@ function _siwaErrRedirect(code) {
   return new Response(null, { status: 303, headers: { Location: `/?auth_error=${code}` } });
 }
 
+// A `returnTo` / state `r` redirect target must stay same-path, same-origin.
+// "//evil.com" and "/\evil.com" both start with "/" but browsers normalize
+// them to a scheme-relative URL, so a bare startsWith("/") check lets an
+// open redirect through — reject those two forms as well.
+function _safeReturnTo(raw) {
+  if (typeof raw !== "string" || !raw.startsWith("/")) return "/";
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  return raw;
+}
+
 // GET /auth/apple/login -> 302 to Apple's authorize endpoint.
 // State + nonce are signed (HMAC) and round-tripped via the `state` param, so
 // no pre-callback cookie is needed (Apple POSTs the callback cross-site, where
@@ -2948,7 +2958,7 @@ function _siwaErrRedirect(code) {
 async function siwaLogin(request, env, url) {
   if (!_siwaConfigured(env)) return new Response("Sign in is not configured yet", { status: 503 });
   const returnToRaw = url.searchParams.get("returnTo") || "/";
-  const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/";
+  const returnTo = _safeReturnTo(returnToRaw);
   const nonce = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(16)));
   let linkUid = null;
   if (url.searchParams.get("link") === "1") {
@@ -3018,7 +3028,7 @@ async function siwaCallback(request, env, url) {
   return new Response(null, {
     status: 303,
     headers: {
-      Location: st.r && st.r.startsWith("/") ? st.r : "/",
+      Location: _safeReturnTo(st.r),
       "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
     },
   });
@@ -3551,7 +3561,7 @@ async function _googleVerifyIdToken(idToken, env) {
 async function googleLogin(request, env, url) {
   if (!_googleConfigured(env)) return new Response("Sign in is not configured yet", { status: 503 });
   const returnToRaw = url.searchParams.get("returnTo") || "/";
-  const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/";
+  const returnTo = _safeReturnTo(returnToRaw);
   const nativeChallengeRaw = url.searchParams.get("nativeChallenge") || "";
   const nativeChallenge = /^[A-Za-z0-9_-]{43}$/.test(nativeChallengeRaw) ? nativeChallengeRaw : null;
   if (url.searchParams.has("nativeChallenge") && !nativeChallenge) {
@@ -3646,7 +3656,7 @@ async function googleCallback(request, env, url) {
     }), { httpMetadata: { contentType: "application/json" } });
     const callback = new URL("hidescore-auth://google");
     callback.searchParams.set("code", handoffCode);
-    callback.searchParams.set("returnTo", st.r && st.r.startsWith("/") ? st.r : "/");
+    callback.searchParams.set("returnTo", _safeReturnTo(st.r));
     return new Response(null, { status: 303, headers: { Location: callback.toString() } });
   }
 
@@ -3656,7 +3666,7 @@ async function googleCallback(request, env, url) {
   return new Response(null, {
     status: 303,
     headers: {
-      Location: st.r && st.r.startsWith("/") ? st.r : "/",
+      Location: _safeReturnTo(st.r),
       "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
     },
   });

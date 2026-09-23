@@ -1,0 +1,88 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import worker from "../public/_worker.js";
+
+// A `returnTo` / OAuth-state `r` value only ever has to be safe to put in a
+// same-site redirect Location. "//evil.com" and "/\evil.com" both pass a bare
+// `startsWith("/")` check but browsers treat them as scheme-relative and will
+// navigate off-site — that was the open redirect. All five call sites now
+// route through one shared `_safeReturnTo` helper instead of a bespoke check.
+
+const src = readFileSync(new URL("../public/_worker.js", import.meta.url), "utf8");
+
+function loadSafeReturnTo() {
+  const m = src.match(/function _safeReturnTo\([\s\S]*?\n\}/);
+  assert.ok(m, "_safeReturnTo helper not found in public/_worker.js");
+  const fn = new Function(`${m[0]}\nreturn _safeReturnTo;`)();
+  return fn;
+}
+
+test("_safeReturnTo rejects protocol-relative and backslash payloads", () => {
+  const safeReturnTo = loadSafeReturnTo();
+  assert.equal(safeReturnTo("//evil.com"), "/");
+  assert.equal(safeReturnTo("/\\evil.com"), "/");
+  // still rejects the plain non-"/"-prefixed cases the old check also caught
+  assert.equal(safeReturnTo("https://evil.com"), "/");
+  assert.equal(safeReturnTo("evil.com"), "/");
+  assert.equal(safeReturnTo(""), "/");
+  assert.equal(safeReturnTo(null), "/");
+  // legitimate same-site paths still pass through untouched
+  assert.equal(safeReturnTo("/"), "/");
+  assert.equal(safeReturnTo("/settings?tab=account"), "/settings?tab=account");
+});
+
+test("all 5 returnTo/st.r call sites route through _safeReturnTo, not a bare startsWith(\"/\")", () => {
+  const codeLines = src.split("\n").filter((l) => !l.trim().startsWith("//"));
+  const code = codeLines.join("\n");
+  // only the check inside _safeReturnTo's own definition should remain
+  const guardSites = code.match(/startsWith\("\/"\)/g) || [];
+  assert.equal(guardSites.length, 1);
+  // 5 call sites: siwaLogin, siwaCallback Location, googleLogin,
+  // googleCallback native-handoff returnTo, googleCallback Location.
+  const callLines = codeLines.filter((l) => l.includes("_safeReturnTo(") && !l.includes("function _safeReturnTo"));
+  assert.equal(callLines.length, 5);
+});
+
+const stubEnv = () => ({
+  APPLE_SERVICES_ID: "com.example.services",
+  APPLE_TEAM_ID: "TEAM123456",
+  APPLE_KEY_ID: "KEY1234567",
+  APPLE_PRIVATE_KEY: "dummy",
+  GOOGLE_CLIENT_ID: "dummy-client-id",
+  GOOGLE_CLIENT_SECRET: "dummy-secret",
+  SESSION_SECRET: "test-session-secret",
+  ASSETS: { async fetch() { return new Response("STATIC", { status: 404 }); } },
+});
+
+function decodeStateReturnTo(location) {
+  const state = new URL(location).searchParams.get("state");
+  const stateBody = state.slice(0, state.lastIndexOf("."));
+  const padded = stateBody.replace(/-/g, "+").replace(/_/g, "/");
+  const json = Buffer.from(padded, "base64").toString("utf8");
+  return JSON.parse(json).r;
+}
+
+for (const [label, path] of [["Apple", "/auth/apple/login"], ["Google", "/auth/google/login"]]) {
+  test(`${label} login never signs a protocol-relative returnTo into the OAuth state`, async () => {
+    const evil = await worker.fetch(
+      new Request(`https://hidescore.com${path}?returnTo=${encodeURIComponent("//evil.com")}`),
+      stubEnv(),
+    );
+    assert.equal(evil.status, 302);
+    assert.equal(decodeStateReturnTo(evil.headers.get("Location")), "/");
+
+    const evilBackslash = await worker.fetch(
+      new Request(`https://hidescore.com${path}?returnTo=${encodeURIComponent("/\\evil.com")}`),
+      stubEnv(),
+    );
+    assert.equal(evilBackslash.status, 302);
+    assert.equal(decodeStateReturnTo(evilBackslash.headers.get("Location")), "/");
+
+    const legit = await worker.fetch(
+      new Request(`https://hidescore.com${path}?returnTo=${encodeURIComponent("/settings")}`),
+      stubEnv(),
+    );
+    assert.equal(decodeStateReturnTo(legit.headers.get("Location")), "/settings");
+  });
+}
