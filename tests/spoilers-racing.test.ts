@@ -73,3 +73,34 @@ test("the podium anchor does not swallow the lectern or ceremony sense", () => {
     assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
   }
 });
+
+// "Laps the field" is the crushing-dominance reveal the winner-only flag/line/
+// podium idioms miss: a leader who laps the entire field has won by a full lap,
+// yet the phrase names no placing digit for SCORE_RX and matches no result verb.
+// It is a race outcome across F1/NASCAR/IndyCar/MotoGP, track cycling and
+// athletics. Pinned to the finite/participle forms + the object "the field", so
+// the everyday racing senses stay visible (see the guard test below).
+test("a laps-the-field reveal never reads as a clean title", () => {
+  for (const title of [
+    "Verstappen laps the field at Monza",
+    "Hamilton lapped the field",
+    "He was lapping the field all afternoon | Race Highlights",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The anchor is the whole phrase "laps the field": the bare "laps" of a swim
+// set or the metaphor "laps up", and "field" on its own, name no outcome, so
+// the mask must still lift for them. The infinitive "lap the field" (a preview
+// question) is deliberately left out — only the finite/participle forms fire.
+test("the laps-the-field anchor does not swallow ordinary racing titles", () => {
+  for (const title of [
+    "20 laps of the pool | Training day",
+    "Ferrari laps up the Monza atmosphere",
+    "Two laps to go and the field is bunched",
+    "Can Verstappen lap the field this weekend?",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
