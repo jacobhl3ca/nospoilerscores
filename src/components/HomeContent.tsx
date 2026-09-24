@@ -15,7 +15,7 @@ import { fromYmd } from "@/lib/etDay";
 import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
-import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
+import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
@@ -818,6 +818,13 @@ export default function HomeContent({
       // would silently do nothing before noon ET. Resolved before setPrefs so
       // the first render already has it.
       if (landing === "ratings") p.showRatings = true;
+      // ?demo=1 screenshot overrides — a capture session states exactly what it
+      // wants (ratings on, a theme) via URL flags instead of clicking through
+      // the UI, and skips the ratings explainer bar so the shot is clean. News
+      // is handled below (it wants its bar VISIBLE, the opposite of ratings).
+      if (isDemoRatingsForced()) { p.showRatings = true; p.skipExplainer = true; }
+      const demoTheme = getDemoThemeOverride();
+      if (demoTheme) p.theme = demoTheme;
       setPrefs(p);
       // Stored prefs are now in state. Anything that would otherwise render
       // once against the hardcoded defaults above — and then vanish a frame
@@ -828,9 +835,13 @@ export default function HomeContent({
       // News view to Scores so the user never lands on yesterday's spoilers
       // (Jacob 6/19). Same-day reopens still restore News.
       const newDayPassed = !!p.lastOpenDay && p.lastOpenDay !== getDateString(0);
-      if (landing === "news") setShowNews(true);
+      const demoNews = isDemoNewsRequested();
+      if (demoNews || landing === "news") setShowNews(true);
       else if (landing === "scores" || landing === "ratings") setShowNews(false);
       else if (p.showNews && !newDayPassed) setShowNews(true);
+      // ?demo=1&view=news wants the first-time spoiler-warning bar ON SCREEN
+      // for the shot, not skipped like every other first-time explainer here.
+      if (demoNews) setNewsNotice(true);
       document.documentElement.setAttribute("data-theme", getResolvedTheme(p.theme));
       // Apply the headline reveal state at launch (mirrored in the effect below)
       // so reveal-on users don't see a one-frame blur flash before it runs.
@@ -1072,6 +1083,15 @@ export default function HomeContent({
 
   const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => {
     clearReopen();
+    // See demoHighlightPoster's comment in demoMode.ts: a resolved videoId can
+    // still be a real clip even off an anonymized card, because it's keyed by
+    // the untouched real game.id. Swap it for the placeholder here, at the one
+    // place every highlight button's tap ends up, instead of chasing each
+    // button. No share URL either — a demo tap has nothing real to share.
+    if (isDemoModeActive()) {
+      setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
+      return;
+    }
     setVideoModal({ videoId, fallbackUrl, shareCard, alternates });
     const href = modalShareHref({ videoId, fallbackUrl, shareCard });
     if (href) window.history.pushState({ videoModal: true }, "", href);
@@ -1082,6 +1102,13 @@ export default function HomeContent({
   // Esc dismiss it AND copying the URL bar matches Copy link (the matchup card).
   const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => {
     clearReopen();
+    // Same demo substitution as openVideoModal above — an NHL/MLB Brightcove
+    // recap is exactly as real (and exactly as keyed off the untouched
+    // game.id) as a YouTube one.
+    if (isDemoModeActive()) {
+      setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
+      return;
+    }
     setVideoModal({ videoId: "", fallbackUrl, embedUrl, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard });
     const href = modalShareHref({ embedUrl, fallbackUrl, playbackUrl: playbackUrl || null, sourceLabel, shareCard });
     window.history.pushState({ videoModal: true }, "", href ?? window.location.href);
@@ -1108,8 +1135,16 @@ export default function HomeContent({
     sibIndex: opts.index ?? null,
   }), []);
   const playNewsVideo = useCallback<PlayHandler>((opts) => {
-    const m = optsToModal(opts);
     clearReopen();
+    // News posts embed real third-party photos/clips (Reddit, ESPN) that the
+    // board-side anonymizer never touches — same substitution as the two
+    // highlight modals above, so opening a story from the News tab under
+    // ?demo=1 can't put a real thumbnail or video on screen either.
+    if (isDemoModeActive()) {
+      setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
+      return;
+    }
+    const m = optsToModal(opts);
     setVideoModal(m);
     // Sync the address bar to the share link for EVERY news item (pics, redd.it
     // videos, NHL embeds — not just YouTube), so copying the URL bar previews the
@@ -1734,6 +1769,14 @@ export default function HomeContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- PICKER_RANK is a literal constant
   }, [thirdLeagueOptions]);
 
+  // Display-only anonymization for the ?demo=1&picker=1 sheet — see
+  // anonymizeLeaguePickerOptions in demoMode.ts. null outside that one capture
+  // state, so every other session renders the real catalog exactly as before.
+  const demoPickerLabels = useMemo(
+    () => (isDemoModeActive() && isDemoPickerRequested() ? anonymizeLeaguePickerOptions(pickerOptions) : null),
+    [pickerOptions],
+  );
+
   // Settings is the durable league catalog, so it must not hide a saved pick
   // merely because that league is between seasons. A sport can have several
   // seasonal configs (golf majors, tennis Slams); mark it in-season when ANY
@@ -1795,9 +1838,20 @@ export default function HomeContent({
   useEffect(() => {
     if (firstRunRef.current && authSettled && !prefs.leaguesOnboarded && thirdLeagueOptions.length > 0) {
       firstRunRef.current = false;
+      // ?demo=1 without &picker=1 must never flash the real, un-anonymized
+      // league picker (MLB/NFL/NBA… with real logos — the original 4.1(a)
+      // rejection) in front of a screenshot session. Skip straight to the
+      // same auto-picked board "Use defaults" produces. ?demo=1&picker=1 is
+      // the one capture state that wants the picker sheet itself on screen
+      // (applyDemoMode has already anonymized its league list — see
+      // demoMode.ts).
+      if (isDemoModeActive() && !isDemoPickerRequested()) {
+        updatePrefs({ leaguesOnboarded: true });
+        return;
+      }
       setShowLeaguePicker(true);
     }
-  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled]);
+  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled, updatePrefs]);
 
   // How many leagues the picker lets you take = how many columns this viewport
   // will actually render (3 phone / 5 wide). It said "up to 3" on a desktop that
@@ -4393,6 +4447,7 @@ export default function HomeContent({
                 const idx = pickerSel.indexOf(o.sport);
                 const on = idx >= 0;
                 const full = pickerSel.length >= pickerMax && !on;
+                const demoOption = demoPickerLabels?.get(o.sport);
                 return (
                   <button
                     key={o.sport}
@@ -4426,7 +4481,7 @@ export default function HomeContent({
                     <span className="inline-flex items-center justify-center w-[20px] h-[20px] rounded-full shrink-0 bg-white">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={LEAGUE_LOGO[o.sport]}
+                        src={demoOption?.logo ?? LEAGUE_LOGO[o.sport]}
                         alt=""
                         width={16}
                         height={16}
@@ -4440,7 +4495,7 @@ export default function HomeContent({
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                       />
                     </span>
-                    <span>{o.label}</span>
+                    <span>{demoOption?.label ?? o.label}</span>
                     {/* Start dates dropped here on purpose (Jacob 8/9): six
                         "· starts Aug 21" tails made the grid unreadable and are
                         noise at signup. The kickoff banner still announces them
