@@ -9,7 +9,7 @@ const CANONICAL = "/liga-mx-scores-without-spoilers";
 const FAQ = [
   {
     q: "Can I check Liga MX scores without spoilers?",
-    a: "Yes. Every Liga MX match card starts with the score hidden. You choose when to reveal it, so you can line up a replay or the highlights first.",
+    a: "Yes. A Liga MX match card carries the fixture and the kickoff time and never a score, so you can line up a replay or the highlights first.",
   },
   {
     q: "Does HideScore cover both Apertura and Clausura?",
@@ -67,7 +67,7 @@ export default function LigaMxScoresWithoutSpoilersPage() {
       h1="Liga MX scores without spoilers"
       intro={[
         "Liga MX is one of the most-watched soccer leagues in the United States, and it is one of the easiest to have ruined for you. Friday and Saturday night kickoffs land in the middle of everyone's weekend, so by the time you get to the replay a notification or a group chat has already told you how it ended.",
-        "HideScore gives you a place to start that will not do that. Match cards stay hidden, ratings tell you whether a game is worth your evening without telling you who won, and the score only appears when you tap it.",
+        "HideScore gives you a place to start that will not do that. Match cards carry no score at all, and the optional ratings tell you whether a game is worth your evening without telling you who won.",
       ]}
       sections={[
         {

@@ -22,7 +22,7 @@ const CANONICAL = "/redzone-for-every-sport";
 const FAQ = [
   {
     q: "How do I watch a whip-around show without spoilers for the late games?",
-    a: "Open HideScore first. Scores stay hidden until you tap, so you can see which games are still in progress, start the whip-around show from the league header, and keep the late window unspoiled for a replay afterwards.",
+    a: "Open HideScore first. No score is printed on the board, so you can see which games are still in progress, start the whip-around show from the league header, and keep the late window unspoiled for a replay afterwards.",
   },
   {
     q: "Is there a RedZone for college football?",
@@ -132,7 +132,7 @@ export default function RedzoneForEverySportPage() {
         "NBA CrunchTime is free with an NBA ID; RedZone needs a paid add-on.",
         "NHL Frozen Frenzy happens once a season: Tuesday, October 13, 2026.",
         "HideScore shows each league's whip-around time in the column header, and turns it into a link once the show is on air.",
-        "Scores stay hidden until you tap, so the late window survives the show.",
+        "No score is printed on the board, so the late window survives the show.",
       ]}
       ctaLabel="Open today's board"
       ctaHref="/today"

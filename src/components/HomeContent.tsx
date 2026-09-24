@@ -4187,11 +4187,15 @@ export default function HomeContent({
               <a href="/f1-without-spoilers" style={{ textDecoration: "underline" }}>F1</a> and{" "}
               <a href="/ufc-results-without-spoilers" style={{ textDecoration: "underline" }}>UFC</a>. Compare us with the other{" "}
               <a href="/best-spoiler-free-sports-sites" style={{ textDecoration: "underline" }}>spoiler-free sports apps</a>, or see the{" "}
-              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Or read our{" "}
+              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Read more{" "}
+              <a href="/about" style={{ textDecoration: "underline" }}>about HideScore</a>, or read our{" "}
               <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
           </div>
         </details>
+          {/* "Contact", not "About": the disclosure above is already labelled
+              About, and a second "About" beside it read as a duplicate. */}
+          <a href="/about#contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
           <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
           <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} />
           <button

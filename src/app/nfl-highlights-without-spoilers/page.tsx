@@ -21,7 +21,7 @@ const FAQ = [
   },
   {
     q: "Can I watch NFL highlights without spoilers?",
-    a: "Yes. Every NFL game on HideScore starts with the score covered. You still see the matchup, the kickoff time, and whether the game has finished, so you can pick what to watch — the scoreline only appears when you tap it, and highlights open straight from the game's card without the result in the video title.",
+    a: "Yes. No NFL game on HideScore shows a score. You still see the matchup, the kickoff time, and whether the game has finished, so you can pick what to watch — there is no scoreline to tap open, and highlights open straight from the game's card without the result in the video title.",
   },
   {
     q: "How do I survive the Sunday 1:00 pm slate without getting spoiled?",
@@ -49,7 +49,7 @@ const FAQ = [
   },
   {
     q: "Where can I see which NFL games were worth watching without the scores?",
-    a: "On HideScore's board. Every finished game shows an excitement rating with the score hidden. Tap a game only when you want the result.",
+    a: "On HideScore's board. No game shows a score, and once you turn ratings on in Settings, each finished game shows how exciting it was without naming the winner. The highlight itself is where you learn the result.",
   },
 ];
 

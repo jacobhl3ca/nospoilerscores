@@ -69,7 +69,7 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
   const faq = [
     {
       q: `Can I follow ${team.name} at the World Cup without seeing the score?`,
-      a: `Yes. HideScore shows ${team.name} World Cup match cards with scores hidden until you choose to reveal them.`,
+      a: `Yes. HideScore shows ${team.name} World Cup match cards with no score printed on them.`,
     },
     {
       q: `Where can I find ${team.name} World Cup highlights without spoilers?`,
@@ -99,7 +99,7 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
 
       <p className="mb-4" style={{ color: "var(--text-muted)" }}>
         Follow {team.name} at the 2026 FIFA World Cup without opening a scoreboard that gives away the result.
-        HideScore keeps scores, winners, and highlight context hidden until you decide to reveal them.
+        HideScore prints no score or winner, and it masks highlight titles that would give the result away.
       </p>
       <p className="mb-4" style={{ color: "var(--text-muted)" }}>
         Use this as a safe starting page for {team.name} match days, delayed viewing, and post-game highlights.
