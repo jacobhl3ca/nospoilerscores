@@ -3681,6 +3681,7 @@ export default function HomeContent({
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
+              showUpcomingRecords: !prefs.hideUpcomingRecords,
               onAbbrevReport,
               namesCompact,
             };
