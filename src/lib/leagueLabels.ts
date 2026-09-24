@@ -30,6 +30,7 @@ export const SHORT_LEAGUE_LABELS: Record<string, string> = {
   "Rugby World Cup": "Rugby WC",  // 141 → 84
   "Super Rugby": "S. Rugby",      // 105 → 71
   "Top events": "Top",            // the cross-league column (lib/topEvents.ts)
+  "Best of yesterday": "Yesterday", // the cross-league column (lib/bestYesterday.ts)
 };
 
 // Below this column width the header falls back to SHORT_LEAGUE_LABELS. The
