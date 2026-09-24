@@ -778,7 +778,13 @@ export default function HomeContent({
       const hLabel = params.get("hl");
       const hHead = params.get("ht");
       const hPoster = params.get("hp");
-      if (sharedVideoId) {
+      // A shared-highlight link cold-loaded with ?demo=1 still on (sessionStorage
+      // sticky, see demoMode.ts) is the same real-content leak openVideoModal/
+      // openEmbedModal guard against — this reopen path sets videoModal state
+      // directly, bypassing both. Same placeholder substitution here.
+      if (isDemoModeActive() && (sharedVideoId || hStream || hEmbed || hImage)) {
+        setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
+      } else if (sharedVideoId) {
         setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster });
       } else if (hStream || hEmbed || hImage) {
         setVideoModal({
