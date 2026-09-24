@@ -291,10 +291,19 @@ check(
     !monitor.includes('ncaabase: "/baseball/college-baseball/scoreboard"') &&
     !monitor.includes('ncaasoft: "/baseball/college-softball/scoreboard"'),
 );
-// NCAA women's hockey (2026-09-14) is dark for the same reason.
+// NCAA women's hockey was lit 2026-09-23 from the ECAC Hockey conference
+// chain, like ncaavb: no fixed channel, a `women` title token (the channel
+// also posts the men's cuts), and RPI queried by the name its titles use. A
+// game with no ECAC school stays dark. Still unmonitored: the monitor models
+// fixed-channel leagues only.
 check(
-  "NCAAWH stays dark and unmonitored",
-  youtube.hasNoTrustedHighlightSource("ncaawh") === true &&
+  "NCAAWH lights from the ECAC Hockey chain behind the women token, unmonitored",
+  youtube.highlightPrimaryFromChain("ncaawh") === true &&
+    JSON.stringify(youtube.getHighlightFallbackChannels("ncaawh", null, { id: "ncaawh-2385" }, { id: "ncaawh-2528" }, []))
+      === JSON.stringify([{ channel: "ECAC Hockey", titleTokens: ["women"] }]) &&
+    youtube.getHighlightFallbackChannels("ncaawh", null, { id: "ncaawh-430" }, { id: "ncaawh-2815" }, []).length === 0 &&
+    JSON.stringify(youtube.getCompetitionTitleTokens("ncaawh")) === JSON.stringify(["women"]) &&
+    youtube.getYouTubeSearchUrl("Rensselaer", "Mercyhurst", "Sep 18, 2026").includes("RPI%20vs%20Mercyhurst") &&
     !monitor.includes('ncaawh: "/hockey/womens-college-hockey/scoreboard"'),
 );
 // NCAA women's volleyball is dark too (2026-09-14): "NCAA Championships" was
@@ -434,6 +443,13 @@ check(
     prebake.includes('ligue1: ["ligue 1"]'),
 );
 check(
+  "prebaker bakes NCAA volleyball from each match's conference chain behind the volleyball token",
+  prebake.includes('{ sport: "ncaavb",') &&
+    prebake.includes('ncaavb: ["volleyball"]') &&
+    prebake.includes("HL_COLLEGE_CHANNELS[lg.sport]?.primaryFromChain") &&
+    JSON.stringify(youtube.getCompetitionTitleTokens("ncaavb")) === JSON.stringify(["volleyball"]),
+);
+check(
   "prebaker revalidates persistent World Cup seed uploader and matchup",
   prebake.includes("HIGHLIGHT-SEED-REJECT") &&
     prebake.includes("hlVideoMatchesChannel(id, channel)") &&
@@ -444,6 +460,13 @@ check(
   prebake.includes("teams: [away, home], matchup, eventDate: item.date") &&
     prebake.includes("all highlight scoreboard requests failed") &&
     prebake.includes('highlightsFailed && ONLY_LIST.includes("highlights")'),
+);
+check(
+  "prebaker bakes NCAA women's hockey from the ECAC chain behind the women token, RPI aliased",
+  prebake.includes('{ sport: "ncaawh", path: "/hockey/womens-college-hockey/scoreboard",') &&
+    prebake.includes('ncaawh: ["women"]') &&
+    prebake.includes('Rensselaer: "RPI"') &&
+    prebake.includes("HL_COLLEGE_CHANNELS[lg.sport]?.primaryFromChain"),
 );
 
 console.log(failures ? `\n${failures} regression check(s) failed` : "\nall highlight regression checks passed");

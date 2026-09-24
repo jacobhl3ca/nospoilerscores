@@ -394,3 +394,44 @@ test("a division elimination closes only the division road, not the wild card", 
   // 20% division beats 5% wild card on the number, but that road is shut.
   assert.deepEqual([...seats.keys()], [6]);
 });
+
+// ── Series results played through the bracket ───────────────────────────────
+
+import { playBracket, worldSeriesOf, type BracketResult } from "../src/lib/playoffPicture.ts";
+
+// Shared-fixture AL seeds: 1 Alpha(1), 2 Golf(7), 3 Delta(4), 4 Bravo(2), 5 Echo(5), 6 Hotel(8).
+const res = (round: number, winner: number, loser: number): BracketResult => ({ round, winner: String(winner), loser: String(loser) });
+const seat = (b: ReturnType<typeof playBracket>, key: string, side: 0 | 1) => b.matchups.find((m) => m.key === key)!.sides[side].team?.name ?? null;
+
+test("a wild-card winner moves into the Division Series seat its pairing feeds", () => {
+  const b = playBracket(buildBracket(al()), [res(0, 8, 4), res(0, 2, 5)]);
+  assert.equal(b.matchups.find((m) => m.key === "wc-a")!.winner, 8);
+  assert.equal(seat(b, "ds-a", 1), "Hotel");  // 6 beat 3, meets the 2 seed
+  assert.equal(seat(b, "ds-b", 1), "Bravo");  // 4 beat 5, meets the 1 seed
+  assert.equal(seat(b, "cs", 0), null);        // nothing further is decided
+});
+
+test("results cascade round by round up to the pennant and the World Series", () => {
+  const alB = playBracket(buildBracket(al()), [res(0, 8, 4), res(0, 2, 5), res(1, 7, 8), res(1, 1, 2), res(2, 1, 7)]);
+  assert.equal(seat(alB, "cs", 0), "Golf");
+  assert.equal(seat(alB, "cs", 1), "Alpha");
+  const nlB = playBracket(buildBracket(nl()), []);
+  const ws = worldSeriesOf(alB, nlB, []);
+  assert.equal(ws.al?.name, "Alpha");
+  assert.equal(ws.nl, null);
+  assert.equal(ws.winner, null);
+});
+
+test("a result only counts for the pairing and round it was played in", () => {
+  // Right clubs, wrong round; a club that is in neither side; a winner with no loser match.
+  const b = playBracket(buildBracket(al()), [res(1, 8, 4), res(0, 3, 8), res(0, 8, 99)]);
+  assert.equal(b.matchups.every((m) => m.winner == null), true);
+  assert.equal(seat(b, "ds-a", 1), null);
+});
+
+test("playing the bracket never touches the unplayed one the Picks tab uses", () => {
+  const base = buildBracket(al());
+  playBracket(base, [res(0, 8, 4)]);
+  assert.equal(base.matchups.find((m) => m.key === "ds-a")!.sides[1].team, null);
+  assert.equal("winner" in base.matchups[0], false);
+});

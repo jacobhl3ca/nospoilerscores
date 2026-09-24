@@ -104,9 +104,12 @@ const ESPN_PATHS = {
   // Deliberately absent: MLB (MLB.com-native); EURO, NCAA
   // men's and women's hockey, women's volleyball, UFL, NCAA baseball, NCAA
   // softball, the Conference League, Copa del Rey, DFB-Pokal, and cricket (no
-  // approved per-match uploader, so no YouTube button). ncaah / ncaawh /
-  // ncaavb / ufl / ncaabase / ncaasoft / uecl / copadelrey / dfbpokal are in
-  // NO_HIGHLIGHT_FALLBACK — see src/lib/youtube.ts.
+  // approved per-match uploader, so no YouTube button). ncaah / ufl /
+  // ncaabase / ncaasoft / uecl / copadelrey / dfbpokal are in
+  // NO_HIGHLIGHT_FALLBACK — see src/lib/youtube.ts. ncaavb and ncaawh (lit
+  // 2026-09-23) have no fixed channel: each game resolves from its schools'
+  // conference chain (collegeHighlightChannels.json), which this monitor does
+  // not model, so they stay out of this table.
 };
 
 // Matches OFFICIAL_CHANNELS in src/lib/youtube.ts. Keep in sync.
@@ -222,6 +225,7 @@ const TEAM_NAME_ALIASES = {
   "Red Bull NY": "New York Red Bulls",
   "Tempo": "Toronto Tempo",
   "Valkyries": "Golden State Valkyries",
+  "Rensselaer": "RPI",
 };
 const aliasTeam = (n) => TEAM_NAME_ALIASES[n] ?? n;
 

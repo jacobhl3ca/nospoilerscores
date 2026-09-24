@@ -247,11 +247,11 @@ try {
       ok("playoff picture is untappable while covered", state.events === "none");
     }
 
-    // Two tabs, and BOTH of them sit behind the one cover — switching views is
-    // not a way around the spoiler gate.
+    // Three tabs since Picks landed (#114), and ALL of them sit behind the one
+    // cover — switching views is not a way around the spoiler gate.
     const tabs = dialog.locator('[role="tab"]');
     const tabNames = await tabs.allInnerTexts();
-    ok("the picture has an Odds and a Bracket tab", tabNames.length === 2 && /odds/i.test(tabNames[0]) && /bracket/i.test(tabNames[1]), tabNames.join(" | "));
+    ok("the picture has Odds, Bracket and Picks tabs", tabNames.length === 3 && /odds/i.test(tabNames[0]) && /bracket/i.test(tabNames[1]) && /picks/i.test(tabNames[2]), tabNames.join(" | "));
     await tabs.nth(1).click();
     await page.waitForTimeout(300);
     const coveredBracket = await coverState(page);
