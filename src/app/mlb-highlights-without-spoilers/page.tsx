@@ -77,7 +77,7 @@ export default function MlbHighlightsWithoutSpoilersPage() {
         },
       ]}
       bullets={[
-        "MLB scores hidden until tap.",
+        "No MLB score printed anywhere on the board.",
         "Spoiler-free ratings for completed baseball games.",
         "Safer path to highlights and condensed games.",
         "Useful for regular season, postseason, and next-morning catch-up.",

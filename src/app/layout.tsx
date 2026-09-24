@@ -18,7 +18,7 @@ const geistSans = Geist({
 // on purpose: its highlights are embed-blocked league-wide, and it keeps its own page.
 const SITE_TITLE = "HideScore: Spoiler-Free NHL, NBA & MLB Highlights and Scores";
 const SITE_DESC =
-  "Watch NHL, NBA, MLB, NFL and soccer highlights without spoilers. HideScore hides every score and winner until you choose to reveal it, and game ratings tell you if a game is worth watching before you hit play.";
+  "Watch NHL, NBA, MLB, NFL and soccer highlights without spoilers. HideScore never prints a score or a winner, and optional game ratings tell you which games are worth watching before you hit play.";
 
 export const metadata: Metadata = {
   title: SITE_TITLE,
@@ -224,6 +224,16 @@ const JSON_LD = {
       // place and matches the <meta name="description"> and OG/Twitter copy.
       description: SITE_DESC,
       logo: "https://hidescore.com/icon-512.png",
+      // The same public inbox /about and /privacy list. A contact route plus a
+      // ContactPoint is what answer engines check to decide the site is run by
+      // someone reachable. Deliberately no founder/Person node (Jacob, 9/24).
+      email: "hi@hidescore.com",
+      contactPoint: {
+        "@type": "ContactPoint",
+        email: "hi@hidescore.com",
+        contactType: "customer support",
+        url: "https://hidescore.com/about#contact",
+      },
       // Both store listings, so the Organization resolves to the same entity
       // whichever storefront a crawler arrives from.
       sameAs: [

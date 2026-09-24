@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { routeLastModified } from "@/lib/routeLastModified";
 
 // Static sitemap for hidescore.com. Works with `output: "export"` — Next emits
 // a static /sitemap.xml at build time. Keep the route list in sync with src/app.
@@ -54,6 +55,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/best-spoiler-free-sports-sites",
     "/redzone-for-every-sport",
     "/faq",
+    // Added 2026-09-24: who runs the site and how to reach it, for the
+    // entity/contact checks answer engines make. No personal details on it.
+    "/about",
     "/privacy",
   ];
   const highIntent = new Set([
@@ -117,27 +121,33 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/mls-highlights-without-spoilers",
   ]);
 
-  // Build timestamp. This file is statically emitted on every Cloudflare deploy,
-  // so it reflects when the site was last regenerated — the one <lastmod> signal
-  // crawlers still use to prioritize re-crawling.
-  const lastModified = new Date();
+  // Build timestamp, for the boards whose rendered content really does change
+  // every day. Everything else carries the date its own source last changed
+  // (routeLastModified) — until 2026-09-24 every URL got the build time, so all
+  // of them claimed "changed today" on every deploy and the signal meant nothing.
+  // The World Cup routes moved to the git date too: the tournament ended July 19.
+  const buildTime = new Date();
+  const dated = (path: string) => {
+    const d = routeLastModified(path);
+    return d ? { lastModified: d } : {};
+  };
 
   return [
     ...daily.map((path) => ({
       url: `${BASE}${path}`,
-      lastModified,
+      ...(path.startsWith("/worldcup") ? dated(path) : { lastModified: buildTime }),
       changeFrequency: "daily" as const,
       priority: path === "" ? 1 : path === "/worldcup" ? 0.9 : path.startsWith("/worldcup/") ? 0.8 : 0.7,
     })),
     ...worldCupTeams.map((path) => ({
       url: `${BASE}${path}`,
-      lastModified,
+      ...dated(path),
       changeFrequency: "daily" as const,
       priority: path === "/worldcup/teams" ? 0.75 : 0.65,
     })),
     ...evergreen.map((path) => ({
       url: `${BASE}${path}`,
-      lastModified,
+      ...dated(path),
       changeFrequency: "weekly" as const,
       priority: highIntent.has(path) ? 0.8 : leagueIntent.has(path) ? 0.7 : 0.5,
     })),
