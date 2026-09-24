@@ -88,6 +88,7 @@ export interface HighlightShareParams {
   sourceLabel?: string | null; // friendly source name ("r/worldcup")
   headline?: string | null; // post title, for the preview/text card
   cardKey?: string | null; // ?c= matchup-card key for the iMessage unfurl
+  path?: string; // "/" (default) or "/watch" — see buildHighlightShareUrl
 }
 
 /**
@@ -117,5 +118,17 @@ export function buildHighlightShareUrl(p: HighlightShareParams): string | null {
   // Image posts already carry their picture in ?hi, so skip ?hp there.
   if (p.posterUrl && !p.imageUrl) sp.set("hp", p.posterUrl);
   if (p.cardKey) sp.set("c", p.cardKey);
-  return `https://hidescore.com/?${sp.toString()}`;
+  // A YouTube clip opened from /watch shares back to /watch, whose preview is
+  // the generic HideScore card. On "/" the worker previews ?v= with the video
+  // thumbnail, and a pasted link's thumbnail is often the result. Everything
+  // else keeps "/": the ?c= matchup card and the h* media previews are built
+  // by the worker there, and /watch cannot reopen an h* clip.
+  const path = p.path === "/watch" && p.videoId && !p.cardKey ? "/watch" : "/";
+  return `https://hidescore.com${path}?${sp.toString()}`;
+}
+
+/** "/watch" while the page is /watch, else "/" — the `path` for buildHighlightShareUrl. */
+export function highlightSharePath(): string {
+  if (typeof window === "undefined") return "/";
+  return /^\/watch\/?$/.test(window.location.pathname) ? "/watch" : "/";
 }

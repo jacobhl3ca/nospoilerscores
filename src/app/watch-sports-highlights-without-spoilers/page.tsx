@@ -92,6 +92,7 @@ export default function WatchSportsHighlightsWithoutSpoilersPage() {
       ctaHref="/yesterday"
       links={[
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },
+        { href: "/watch", label: "Paste a YouTube link" },
         { href: "/mlb-highlights-without-spoilers", label: "MLB" },
         { href: "/nfl-highlights-without-spoilers", label: "NFL" },
         { href: "/nhl-highlights-without-spoilers", label: "NHL" },

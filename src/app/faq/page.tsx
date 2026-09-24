@@ -84,11 +84,6 @@ const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
     q: "What is the best game recap app without spoilers?",
     a: "HideScore, if the thing you want is to open a recap without reading the score on the way in. Recaps open from a covered game card instead of a search page, clips whose titles state the result are filtered out, and the titles of the ones that remain are masked. An excitement rating on each finished game tells you which recap is worth your time without naming the winner.",
   },
-  {
-    q: "Who makes HideScore?",
-    a: "HideScore is built and maintained by Jacob Heifetz-Licht, an independent developer in New York known online as JacobHL. HideScore is one of several tools he builds and runs, which you can see at",
-    link: { href: "https://jacobhl.com", text: "jacobhl.com" },
-  },
 ];
 
 export default function FaqPage() {
