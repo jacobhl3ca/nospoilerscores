@@ -28,7 +28,7 @@ const CANONICAL = "/mlb-wild-card-standings";
 const FAQ = [
   {
     q: "What are the MLB wild card standings right now?",
-    a: "Uncover the panel above. It opens in seed order for both leagues, so seeds 4, 5 and 6 are the three wild-card seats, and every club listed under still alive is chasing them. Each row carries that club's chance of taking a wild card.",
+    a: "The panel above opens in seed order for both leagues, so seeds 4, 5 and 6 are the three wild-card seats, and every club listed under still alive is chasing them. Each row carries that club's chance of taking a wild card.",
   },
   {
     q: "How many wild card teams are there in MLB?",
@@ -89,7 +89,7 @@ export default function MlbWildCardStandingsPage() {
       lead={<PlayoffPictureModal variant="page" initialTab="odds" initialSort="seed" />}
       intro={[
         "These are the 2026 American League and National League wild card standings, laid out in seed order. MLB's standings feed and ESPN's odds load fresh with the page, so the race updates as the last weekend of the season is played.",
-        "Like everything on HideScore, the table is covered until you tap it. A wild-card position is a running tally of results, and a glance at it can give away a game you meant to watch later.",
+        "On HideScore's main board this table sits under a cover, because a wild-card position is a running tally of results and a glance at it can give away a game you meant to watch later. Here it is open, since the race is what you came for.",
       ]}
       sections={[
         {
@@ -118,7 +118,7 @@ export default function MlbWildCardStandingsPage() {
         "Every club still alive, with its chance of the playoffs, the division and a wild card.",
         "Games back of the last seat, one checkbox away.",
         "The Wild Card Series pairings one tab over, with the network for each round.",
-        "A cover over the whole table until you choose to look.",
+        "Games back and series results kept off until you ask for them.",
       ]}
       ctaLabel="Open the spoiler-free board"
       links={[

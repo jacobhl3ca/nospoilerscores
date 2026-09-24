@@ -396,6 +396,8 @@ export interface BracketMatchup {
   round: BracketRound;
   bestOf: number;
   sides: [BracketSlot, BracketSlot];
+  /** MLB id of the club that won the series, once playBracket has read it. */
+  winner?: number | null;
 }
 
 export interface LeagueBracket {
@@ -415,8 +417,9 @@ export const BEST_OF: Record<BracketRound, number> = {
  *
  * Seeds 1 and 2 sit out the wild-card round. The 3 seed hosts the 6 and that
  * winner meets the 2; the 4 hosts the 5 and that winner meets the 1. This is
- * "if the season ended today" — the seeds move until the last day, and no
- * series result is ever read in, so the later seats stay empty on purpose.
+ * "if the season ended today" — the seeds move until the last day. No series
+ * result is read in here, so the later seats stay empty; playBracket below
+ * fills them from MLB's postseason feed once series finish.
  */
 export function buildBracket(league: PlayoffLeague): LeagueBracket {
   const bySeed = (n: number) => league.seeded.find((t) => t.seed === n) ?? null;
@@ -432,6 +435,67 @@ export function buildBracket(league: PlayoffLeague): LeagueBracket {
       { key: "cs", round: "championship", bestOf: BEST_OF.championship, sides: [winner("ds-a"), winner("ds-b")] },
     ],
   };
+}
+
+/**
+ * One finished series, in the shape lib/mlbPicks reads it off MLB's postseason
+ * feed (`seriesResults`): round 0-3 from the wild card to the World Series, MLB
+ * team ids as strings. Declared here rather than imported so this file keeps
+ * its no-imports rule.
+ */
+export interface BracketResult { round: number; winner: string; loser: string }
+
+const ROUND_INDEX: Record<BracketRound, number> = { wildCard: 0, divisionSeries: 1, championship: 2, worldSeries: 3 };
+
+/**
+ * The finished series between these two clubs in this round. Matched on the
+ * round AND both clubs, so a result can only ever move a club out of the one
+ * pairing it was actually played in.
+ */
+function resultFor(results: BracketResult[], round: BracketRound, a: PlayoffTeam | null, b: PlayoffTeam | null): BracketResult | null {
+  if (!a || !b) return null;
+  const ids = [String(a.id), String(b.id)];
+  return results.find((r) => r.round === ROUND_INDEX[round] && r.winner !== r.loser && ids.includes(r.winner) && ids.includes(r.loser)) ?? null;
+}
+
+/**
+ * The bracket with every finished series played through: a decided matchup
+ * names its winner, and the winner takes the seat that matchup feeds. Returns a
+ * new bracket and leaves the input alone, because the Picks tab builds on the
+ * unplayed one. Rounds are walked in order so a Division Series seat is filled
+ * before that series' own result is looked up.
+ */
+export function playBracket(bracket: LeagueBracket, results: BracketResult[]): LeagueBracket {
+  const matchups: BracketMatchup[] = bracket.matchups.map((m) => ({ ...m, sides: [m.sides[0], m.sides[1]], winner: null }));
+  for (const round of ["wildCard", "divisionSeries", "championship"] as BracketRound[]) {
+    for (const m of matchups.filter((x) => x.round === round)) {
+      const r = resultFor(results, round, m.sides[0].team, m.sides[1].team);
+      if (!r) continue;
+      const won = m.sides.find((s) => String(s.team?.id) === r.winner)?.team ?? null;
+      if (!won) continue;
+      m.winner = won.id;
+      for (const next of matchups) {
+        next.sides = next.sides.map((s) => (s.from === m.key ? { ...s, team: won } : s)) as [BracketSlot, BracketSlot];
+      }
+    }
+  }
+  return { league: bracket.league, matchups };
+}
+
+/** Both pennant winners out of two played brackets, and the champion once there is one. */
+export function worldSeriesOf(
+  al: LeagueBracket,
+  nl: LeagueBracket,
+  results: BracketResult[],
+): { al: PlayoffTeam | null; nl: PlayoffTeam | null; winner: number | null } {
+  const pennant = (b: LeagueBracket): PlayoffTeam | null => {
+    const cs = b.matchups.find((m) => m.key === "cs");
+    return cs?.winner != null ? cs.sides.find((s) => s.team?.id === cs.winner)?.team ?? null : null;
+  };
+  const a = pennant(al);
+  const n = pennant(nl);
+  const r = resultFor(results, "worldSeries", a, n);
+  return { al: a, nl: n, winner: r ? Number(r.winner) : null };
 }
 
 /**

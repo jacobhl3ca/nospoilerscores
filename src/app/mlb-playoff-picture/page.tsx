@@ -27,7 +27,7 @@ const CANONICAL = "/mlb-playoff-picture";
 const FAQ = [
   {
     q: "What is the MLB playoff picture right now?",
-    a: "Tap Show the picture on the panel above. It lists every American League and National League club still in contention, sorted by its chance of reaching the postseason, with a status beside each one such as Clinched division or Magic 3. The data loads fresh from MLB and ESPN each time you open the page.",
+    a: "The panel above lists every American League and National League club still in contention, sorted by its chance of reaching the postseason, with a status beside each one such as Clinched division or Magic 3. The data loads fresh from MLB and ESPN each time you open the page.",
   },
   {
     q: "What does the magic number mean in baseball?",
@@ -50,8 +50,8 @@ const FAQ = [
     a: "Sunday, September 27. The field is set that night, and the Wild Card Series begins two days later on Tuesday, September 29.",
   },
   {
-    q: "Why is the playoff picture blurred?",
-    a: "Because standings are a spoiler for anyone watching on delay. A club's odds and seed move with last night's result, so reading them can tell you how a game you saved ended. HideScore keeps the panel covered until you tap it, and then remembers that choice for the season on this device.",
+    q: "Is the playoff picture a spoiler?",
+    a: "It can be for anyone watching on delay. A club's odds and seed move with last night's result, so reading them can tell you how a game you saved ended. That is why HideScore's main board keeps this panel under a cover until you tap it. This page opens it straight away, because you came here to see it.",
   },
 ];
 
@@ -93,7 +93,7 @@ export default function MlbPlayoffPicturePage() {
       lead={<PlayoffPictureModal variant="page" initialTab="odds" />}
       intro={[
         "Here is the 2026 MLB playoff picture for both leagues, with odds in place of won-lost records. It reloads from MLB and ESPN every time you open it, so it moves as the final week of the regular season is played.",
-        "The panel stays blurred until you tap it, because a standings table tells a delayed viewer who won last night. Switch to the Bracket tab for the matchups the seeds produce, or to Picks to call every series before the postseason starts.",
+        "On HideScore's main board this panel sits under a cover, because a standings table tells a delayed viewer who won last night. Here it is open. Switch to the Bracket tab for the matchups the seeds produce, or to Picks to call every series before the postseason starts.",
       ]}
       sections={[
         {
@@ -122,7 +122,7 @@ export default function MlbPlayoffPicturePage() {
         "Magic numbers for each division leader and a plain label for every clinch.",
         "Sorting by seed, playoff odds, division odds or wild-card odds.",
         "The bracket those seeds produce, one tab over, with the TV network per round.",
-        "A cover over all of it until you choose to look.",
+        "Series winners on the Bracket tab kept behind one tap.",
       ]}
       ctaLabel="Open the spoiler-free board"
       links={[
