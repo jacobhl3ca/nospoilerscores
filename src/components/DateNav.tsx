@@ -13,6 +13,9 @@ interface DateNavProps {
   // Used as the pre-hydration fallback so the right pill is highlighted while
   // selectedDate is still "" — otherwise Today flashes before the real date.
   initialOffset?: number;
+  // Route's absolute YYYYMMDD, when it has one (the World Cup hub after the
+  // final). Same pre-hydration role as initialOffset, and wins over it.
+  initialDate?: string;
 }
 
 function toYYYYMMDD(d: Date): string {
@@ -225,7 +228,7 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
 // Exported for use in toolbar
 export { CalendarDropdown };
 
-export default function DateNav({ selectedDate, onDateChange, trailing, initialOffset }: DateNavProps) {
+export default function DateNav({ selectedDate, onDateChange, trailing, initialOffset, initialDate }: DateNavProps) {
   const yesterday = getDateString(-1);
   const today = getDateString(0);
   const tomorrow = getDateString(1);
@@ -238,7 +241,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
   // is highlighted on the very first paint — otherwise Today flashed before
   // settling on the selected date (e.g. /yesterday) once selectedDate loads
   // (Jacob 6/13). Root "/" has no offset → defaults to today as before.
-  const effectiveDate = selectedDate || getDateString(initialOffset ?? 0);
+  const effectiveDate = selectedDate || initialDate || getDateString(initialOffset ?? 0);
 
   const isStandardDate = effectiveDate === yesterday || effectiveDate === today || effectiveDate === tomorrow;
   const isBefore = !isStandardDate && effectiveDate < yesterday;
@@ -302,7 +305,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
         // loading rather than flashing Today and then jumping to yesterday
         // (Jacob 6/13). Explicit /yesterday|/today|/tomorrow routes know their
         // pill from initialOffset and stay highlighted through load.
-        const knowsSelection = initialOffset !== undefined || selectedDate !== "";
+        const knowsSelection = initialOffset !== undefined || initialDate !== undefined || selectedDate !== "";
         const isSelected = knowsSelection && effectiveDate === btn.date;
         return (
           <button
