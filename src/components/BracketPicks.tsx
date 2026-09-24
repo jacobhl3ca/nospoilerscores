@@ -40,8 +40,8 @@ import { getApiBase } from "@/lib/youtube";
 // leaderboard. The leaderboard (/api/picks in public/_worker.js) takes one
 // entry per device and per name, and before the lock hands back names only.
 
-/** Jacob's rule, word for word. */
-export const PRIZE_RULE = "Perfect bracket OR first place: Jacob grants one wish (within reason).";
+/** The prize rule, word for word. */
+export const PRIZE_RULE = "Perfect bracket OR first place: HideScore grants one wish (within reason).";
 
 interface Sent { name: string; picks: Picks; at: string }
 interface Saved { name: string; draft: Picks; sent: Sent | null; posted: boolean }
@@ -420,13 +420,16 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
   const finalMatchup = bracket.matchups.find((m) => m.key === bracket.final);
 
   const scoring = bracket.rounds.map((r) => `${r.label} ${r.weight}`).join(" · ");
+  // The date is the one thing a reader needs off this line, so it is bold.
+  const lockDate = lockAt ? <b data-lock-date style={{ color: "var(--text)" }}>{fmtLock(lockAt)}</b> : null;
+  const firstGame = `first pitch of the first ${bracket.rounds[0]?.label ?? ""} game`;
   const lockLine = !lockAt
     ? "Picks open once the postseason schedule is out."
     : locked
-      ? `Picks locked ${fmtLock(lockAt)}.`
+      ? <>Picks locked {lockDate}.</>
       : lockTbd
-        ? `Picks lock at first pitch of the first ${bracket.rounds[0]?.label ?? ""} game. That time is not set yet, so for now picks lock ${fmtLock(lockAt)}.`
-        : `Picks lock at first pitch of the first ${bracket.rounds[0]?.label ?? ""} game: ${fmtLock(lockAt)}.`;
+        ? <>Picks lock at {firstGame}. That time is not set yet, so for now picks lock {lockDate}.</>
+        : <>Picks lock at {firstGame}: {lockDate}.</>;
   const dropped = !locked && sentClean ? sentClean.dropped.length : 0;
 
   const pill = (v: View, label: string) => {

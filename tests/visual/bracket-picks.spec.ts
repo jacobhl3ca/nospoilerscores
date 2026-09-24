@@ -92,9 +92,12 @@ for (const vp of [
     });
     const dialog = await openPicks(page);
 
-    await expect(dialog.locator("[data-prize]")).toHaveText("🏆 Perfect bracket OR first place: Jacob grants one wish (within reason).");
+    await expect(dialog.locator("[data-prize]")).toHaveText("🏆 Perfect bracket OR first place: HideScore grants one wish (within reason).");
     await expect(dialog.getByText(/Wild Card 1 · Division Series 2 · LCS 4 · World Series 8 \(max 28\)/)).toBeVisible();
     await expect(dialog.locator("[data-lock-line]")).toContainText("Tue, Sep 29");
+    // The lock date is the bold part of the line.
+    await expect(dialog.locator("[data-lock-date]")).toHaveText(/^Tue, Sep 29, /);
+    await expect(dialog.locator("[data-lock-date]")).toHaveCSS("font-weight", "700");
 
     const submit = dialog.getByRole("button", { name: "Submit picks" });
     await expect(submit).toBeDisabled();
