@@ -35,6 +35,7 @@ const {
   formatRecapDuration,
   clubNickname,
   shortRecapHeading,
+  stackedRecapHeadings,
   RECAP_STACK_MAX_PX,
 } = (await jiti.import("../src/lib/recaps.ts")) as {
   RECAP_EXPECTED_CHANNELS: Record<string, Record<string, string>>;
@@ -43,6 +44,7 @@ const {
   formatRecapDuration: (sec: number | null | undefined) => string;
   clubNickname: (channel: string | null | undefined) => string;
   shortRecapHeading: (heading: string) => string;
+  stackedRecapHeadings: (heading: string) => string[];
   RECAP_STACK_MAX_PX: number;
 };
 
@@ -472,6 +474,12 @@ test("narrow-column heading: Week N → WN; other headings change only past the 
       assert.ok(h.length <= 14, `${s.heading} → "${h}" (${h.length} chars) busts the narrow line`);
     }
   }
+  // Stacked candidates, longest first: the NFL week tries the full phrase
+  // before "W2"; everything else has only its short form.
+  assert.deepEqual(stackedRecapHeadings("Week 2"), ["Week 2 highlights", "W2"]);
+  assert.deepEqual(stackedRecapHeadings("Week 18"), ["Week 18 highlights", "W18"]);
+  assert.deepEqual(stackedRecapHeadings("Best of the day"), ["Best of day"]);
+  assert.deepEqual(stackedRecapHeadings("Every goal, Matchweek 36"), ["Matchweek 36"]);
   // The stack gate sits between the sm column (192px) and the md column (225px).
   assert.ok(RECAP_STACK_MAX_PX > 192 && RECAP_STACK_MAX_PX <= 225);
 });
