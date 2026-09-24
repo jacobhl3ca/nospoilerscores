@@ -11,3 +11,7 @@ binding = "AUTH_DB"
 database_name = "hidescore-auth"
 database_id = "473a94af-899e-45d4-ba65-3832888c6ab0"
 migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "PICKS"
+id = "f088e69fd8dc43e5900a70949e6a5f34"
