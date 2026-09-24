@@ -7,7 +7,7 @@ import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { buildKeyLegend } from "@/lib/modalKeyLegend";
 import ModalKeyHints from "@/components/ModalKeyHints";
-import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
+import { shareCardUrl, buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
 import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
 
@@ -863,6 +863,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     sourceLabel,
     headline,
     cardKey: shareCard?.key ?? null,
+    path: highlightSharePath(),
   });
   const shareUrl = highlightLink ?? (shareCard ? shareCardUrl(shareCard, ytId) : sourceShareUrl);
 
@@ -2619,6 +2620,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               {(maskVideoTitle || titleAlwaysMasked) && !titleSafe && (
                 <div
                   aria-hidden
+                  data-testid="yt-title-mask"
                   className="absolute top-0 inset-x-0 z-10 pointer-events-none"
                   style={{
                     height: "clamp(42px, 7%, 50px)",

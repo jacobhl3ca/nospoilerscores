@@ -22,6 +22,7 @@ public class MainActivity extends BridgeActivity {
         installBackHandler();
         reportRendererCrashes();
         loadAppLink(getIntent());
+        loadSharedText(getIntent());
     }
 
     // Capacitor's own Android layer has no back-button handling at all, so what the
@@ -56,6 +57,7 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         loadAppLink(intent);
+        loadSharedText(intent);
     }
 
     // This app is a server.url shell — the WebView loads hidescore.com itself — so
@@ -72,6 +74,27 @@ public class MainActivity extends BridgeActivity {
         if (!"hidescore.com".equals(host) && !"www.hidescore.com".equals(host)) return;
         if (getBridge() == null || getBridge().getWebView() == null) return;
         final String url = uri.toString();
+        runOnUiThread(() -> getBridge().getWebView().loadUrl(url));
+    }
+
+    // Share sheet → /watch. The YouTube app shares "Title https://youtu.be/ID"
+    // as EXTRA_TEXT; the page pulls the link out of it (lib/youtubeLink.ts), so
+    // the text is forwarded whole. Built on the configured server url so a dev
+    // build pointed elsewhere stays there.
+    private void loadSharedText(Intent intent) {
+        if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
+        if (!"text/plain".equals(intent.getType())) return;
+        CharSequence text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+        if (text == null || text.length() == 0) return;
+        if (getBridge() == null || getBridge().getWebView() == null) return;
+        String server = getBridge().getServerUrl();
+        if (server == null) server = "https://hidescore.com";
+        final String url = Uri.parse(server).buildUpon()
+            .path("/watch")
+            .clearQuery()
+            .appendQueryParameter("text", text.toString())
+            .build()
+            .toString();
         runOnUiThread(() -> getBridge().getWebView().loadUrl(url));
     }
 

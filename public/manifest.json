@@ -12,6 +12,11 @@
   "lang": "en-US",
   "dir": "ltr",
   "categories": ["sports", "entertainment", "news"],
+  "share_target": {
+    "action": "/watch",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  },
   "icons": [
     {
       "src": "/icon-192.png",
