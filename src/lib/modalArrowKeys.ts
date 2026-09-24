@@ -2,7 +2,7 @@
 //
 // Three things in that modal want the arrow keys: a multi-picture gallery
 // (walk its pictures), a video (scrub ±5s — YouTube's own arrow keys), and the
-// Prev/Next post pager (the side chevrons). Plain arrows go to the CONTENT
+// Prev/Next post pager (the ‹ › buttons). Plain arrows go to the CONTENT
 // first — gallery, then video — and only page when the content has no use for
 // them, which is how image and text posts have always paged. Shift+←/→ always
 // pages, so a news video keeps both: plain arrows seek, Shift steps posts
@@ -43,7 +43,7 @@ export function routeArrowKey(ctx: ArrowContext): ArrowAction | null {
 // The vertical pair is the headline change: ↓/↑ did nothing but scroll the page
 // behind the modal, so on a video — where plain ←/→ now seek — the only
 // keyboard way to the next post was a chord nobody would guess. ↓/↑ is what a
-// feed reader reaches for, and it is the same walk the side chevrons do.
+// feed reader reaches for, and it is the same walk the ‹ › buttons do.
 //
 // routeArrowKey above still owns the ←/→ decision; this wraps it so one call
 // site decides every key, and so the "should this key be handled at all"
