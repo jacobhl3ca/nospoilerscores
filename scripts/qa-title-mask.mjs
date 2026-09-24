@@ -68,6 +68,17 @@ for (const ch of ['UFC', 'UFC on Paramount+', 'ESPN MMA', 'DAZN Boxing']) {
   const h = await topMaskHeight({ __url: link('MLB', '') });
   check('a non-listed strict channel (MLB): NOT covered', h === 0, `mask=${h}px`);
 }
+{
+  // A FotMob-sourced soccer official: GameHighlights adds nss_mask_title=1
+  // because its uploader (here a league channel that prints the score) is not
+  // one of the listed channels. Covered with the pref untouched and with it OFF.
+  const src = `https://www.youtube.com/watch?v=${VID}&nss_strict=1&nss_channels=${encodeURIComponent('LALIGA EA SPORTS')}&nss_mask_title=1`;
+  const url = `${BASE}/?v=${VID}&hu=${encodeURIComponent(src)}`;
+  const h = await topMaskHeight({ __url: url });
+  check('FotMob clip (nss_mask_title=1): title stays covered with the pref untouched', h >= 40 && h <= 52, `mask=${h}px`);
+  const off = await topMaskHeight({ __url: url, maskVideoTitle: false });
+  check('FotMob clip: stays covered even with the pref explicitly OFF', off >= 40 && off <= 52, `mask=${off}px`);
+}
 
 console.log(pass.join('\n'));
 await b.close();
