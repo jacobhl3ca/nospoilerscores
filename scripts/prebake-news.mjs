@@ -13,6 +13,7 @@ import {
   fillHeading, pickShorterClub, eplSeasonYear, uploadFitsGameDate,
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
+import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 
 const OUT_DIR = "public/news";
 
@@ -2925,7 +2926,7 @@ async function hlVideoMatchesChannel(id, channel) {
 // cut. Measured against the live manifest 2026-09-20: ~105 of 135 soccer
 // `extended` slots held the wrong season, the oldest a 2012 MLS game.
 // The watch page's uploadDate settles it. A failed fetch yields null and the
-// id is KEPT — see uploadFitsGameDate. Cached per id per run, and the club
+// id is KEPT — see uploadFitsGameDate. Good reads persist on disk, and the club
 // slot already pays this fetch, so it is at most one extra request per id.
 // Exported shape kept simple on purpose: PLAN-3 reuses it.
 // Fail-open tally for the gate below. An unreadable upload date returns PASS
@@ -3088,8 +3089,8 @@ async function bakeGameHighlights() {
     // SERVED but is never revisited, so the upload-date gate cannot reach it:
     // on the 2026-09-20 bake that band held 14 wrong-season clips, the oldest a
     // 2019 MLS game. Check those slots here instead. Only out-of-window entries
-    // pay the fetch — in-window ones are gated by the loop below, and the watch
-    // page is cached per id per run either way. An entry from before eventDate
+    // pay the fetch — in-window ones are gated by the loop below, and a good
+    // watch-page read is kept on disk either way. An entry from before eventDate
     // was stamped has nothing to compare against and is left alone.
     const gameAgeDays = v.eventDate ? Math.floor((now - Date.parse(v.eventDate)) / 86400000) : null;
     if (gameAgeDays === null || !Number.isFinite(gameAgeDays) || gameAgeDays < hlDays) {
@@ -3103,6 +3104,13 @@ async function bakeGameHighlights() {
       delete kept[slot];
       delete kept[`${slot}Channel`];
       delete kept[`${slot}DurationSec`];
+    }
+    // The date check above just read this id's watch page, so its length is
+    // free: stamp it, or a game past the per-game window keeps a bare league
+    // badge on its button until it ages out.
+    if (kept.official && !Number.isFinite(kept.officialDurationSec)) {
+      const { durationSec } = await fetchYtWatchMeta(kept.official);
+      if (Number.isFinite(durationSec)) kept.officialDurationSec = durationSec;
     }
     if (populatedSlots.some((slot) => kept[slot])) games[k] = kept;
     else console.warn(`HIGHLIGHT-AGE-DROP ${k} carried (${kept.eventDate})`);
@@ -3403,8 +3411,8 @@ async function bakeGameHighlights() {
         // Every league's official clip carries its length, not just the NFL's:
         // the button reads "9m" and the league name is already the column it
         // sits in. Costs no extra network - hlVideoMatchesDate above already
-        // pulled this id's watch page and fetchYtWatchMeta caches per run - and
-        // an unchanged carried id short-circuits on rawPrev before even that.
+        // read this id's watch page, fetchYtWatchMeta keeps every good read
+        // on disk, and an unchanged carried id short-circuits on rawPrev.
         if (official) {
           officialDurationSec = official === rawPrev.official && Number.isFinite(rawPrev.officialDurationSec)
             ? rawPrev.officialDurationSec
@@ -3523,20 +3531,25 @@ async function loadPriorRecaps() {
   return { byId, liveFailed, localOk: !!local?.recaps };
 }
 
-// "lengthSeconds":"596" + "publishDate" off the watch page. Cached per id for
-// the run; the baked record keeps the values after that, so each id costs one
-// fetch, ever.
-const YT_WATCH_META_CACHE = new Map();
+// "lengthSeconds":"596" + "publishDate" off the watch page. Every good read is
+// kept on disk across runs (see scripts/lib/ytWatchMeta.mjs), so each id costs
+// one successful fetch, ever. The file is a dotfile so the mini's
+// `public/news/*.json` R2 upload loop skips it. HL_WATCH_CAP overrides the
+// per-run live-fetch cap.
+const YT_WATCH_META_PATH = `${OUT_DIR}/.yt-watch-meta.json`;
+const ytWatchMeta = createWatchMetaStore({
+  load: () => JSON.parse(readFileSync(YT_WATCH_META_PATH, "utf8")),
+  save: async (data) => {
+    await mkdir(OUT_DIR, { recursive: true });
+    await writeFile(YT_WATCH_META_PATH, JSON.stringify(data));
+  },
+  fetchHtml: (id) => getText(`https://www.youtube.com/watch?v=${encodeURIComponent(id)}`),
+  parseDuration: parseWatchPageLengthSeconds,
+  parsePublished: parseWatchPagePublishMs,
+  liveCap: Number.parseInt(process.env.HL_WATCH_CAP ?? "", 10) || 250,
+});
 async function fetchYtWatchMeta(id) {
-  if (!id) return { durationSec: null, publishedMs: null };
-  if (YT_WATCH_META_CACHE.has(id)) return YT_WATCH_META_CACHE.get(id);
-  let meta = { durationSec: null, publishedMs: null };
-  try {
-    const html = await getText(`https://www.youtube.com/watch?v=${encodeURIComponent(id)}`);
-    meta = { durationSec: parseWatchPageLengthSeconds(html), publishedMs: parseWatchPagePublishMs(html) };
-  } catch { /* unknown → the button shows no minutes */ }
-  YT_WATCH_META_CACHE.set(id, meta);
-  return meta;
+  return ytWatchMeta.get(id);
 }
 // Per-video embed verdict for a recap (see parseEmbedPlayable). The Referer is
 // the production origin because embed permission is judged against it.
@@ -4056,6 +4069,16 @@ if (runRecaps) {
     console.error("recaps bake FAILED:", e?.message || e);
     recapsFailed = true;
   }
+}
+
+// Persist the watch-page reads both bakes above made, then say how many were
+// served from disk vs fetched live, so a new YouTube block shows up in the log.
+try {
+  await ytWatchMeta.flush();
+  const w = ytWatchMeta.stats();
+  console.log(`YT-WATCH-META stored=${w.stored} disk=${w.disk} live=${w.live} ok=${w.liveOk} fail=${w.liveFail} capped=${w.capped}`);
+} catch (e) {
+  console.warn("YT-WATCH-META save failed:", e?.message || e);
 }
 
 let failed = 0;
