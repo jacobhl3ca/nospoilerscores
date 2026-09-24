@@ -12,6 +12,7 @@ import type { BestYesterdayOptions, TopEventsOptions } from "@/lib/espn";
 import { TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
 import { fromYmd } from "@/lib/etDay";
+import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
@@ -1939,22 +1940,9 @@ export default function HomeContent({
       resolved = SLOT_INDICES.map((i) => selectedSlotLeagues[i]);
       resolved[slotIdx] = undefined;
     } else {
-      // Walk the displayed-league queue: every non-empty slot consumed one
-      // rendered column (a pinned slot's column IS its pref), so unset slots
-      // lock to the league actually on screen at their position — empty slots
-      // consume nothing, keeping later slots aligned.
-      const displayed = sortedLeagues.map((l) => l.sport);
-      let queueIdx = 0;
-      resolved = SLOT_INDICES.map((i) => {
-        const pref = selectedSlotLeagues[i];
-        if (pref === "empty") return "empty";
-        const shown = displayed[queueIdx++];
-        // An Auto column showing Best of yesterday stays Auto: pinning it
-        // would carry the column past days it has nothing for, and Auto
-        // already brings it back tomorrow (fetchAllLeagues' bestAuto).
-        if (pref === undefined && shown === "best") return undefined;
-        return pref ?? shown;
-      });
+      // Unset slots lock to the league actually on screen at their position
+      // (an Auto Best of yesterday column stays Auto) — see lockSlotsToBoard.
+      resolved = lockSlotsToBoard(SLOT_INDICES.map((i) => selectedSlotLeagues[i]), sortedLeagues.map((l) => l.sport));
       resolved[slotIdx] = sport;
     }
     updatePrefs({
@@ -1966,24 +1954,17 @@ export default function HomeContent({
     });
   };
 
-  // Drag-to-swap: dropping column A onto column B trades their positions
-  // (not splice/insertion — that shuffles the middle column too). All-Auto
-  // layouts get pinned to explicit prefs first so the swap actually sticks.
-  // Empty slots swap as "empty" so the gap moves with the drag.
+  // Drag-to-swap: dropping column A onto column B trades their positions. A
+  // drag of two other columns leaves an Auto Best of yesterday column on Auto
+  // — see swapBoardSlots.
   const reorderSlots = (fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
-    const leagueQueue = sortedLeagues.map((l) => l.sport);
-    let queueIdx = 0;
-    const baseline: (Sport | "empty" | undefined)[] = SLOT_INDICES.map((i) => {
-      const pref = selectedSlotLeagues[i];
-      if (pref === "empty") return "empty";
-      // Every non-empty slot consumed one rendered column (a pinned slot's
-      // column IS its pref), so advance the queue for pinned slots too —
-      // otherwise an auto slot after a pinned one reads the wrong column.
-      const shown = leagueQueue[queueIdx++];
-      return pref ?? shown;
-    });
-    [baseline[fromIdx], baseline[toIdx]] = [baseline[toIdx], baseline[fromIdx]];
+    const baseline = swapBoardSlots(
+      SLOT_INDICES.map((i) => selectedSlotLeagues[i]),
+      sortedLeagues.map((l) => l.sport),
+      fromIdx,
+      toIdx,
+    );
     updatePrefs({
       firstLeague: baseline[0],
       secondLeague: baseline[1],

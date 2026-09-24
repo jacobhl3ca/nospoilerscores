@@ -10,12 +10,18 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 //   MLS   1 with a clip, but MLS is hidden    → out
 // = 5 cards. Checked at a phone width and a desktop width, with the card
 // layout for a finished day and not one score anywhere in the column's DOM.
+// The Auto league it replaces (NCAAF on 9/23) has a real game TODAY, so the
+// swap is proven against a column that had something to show.
 
 const NOW = new Date("2026-09-23T16:00:00-04:00"); // Wed 4 pm ET → yesterday = Tue 9/22
+const TODAY = "20260923";
 const YESTERDAY = "20260922";
+// pickAndAssignLeagues' third column on 9/23 (MLB, NFL, NCAAF): the one the
+// board's Auto last column shows when Best of yesterday does not take it.
+const AUTO_LAST = "ncaaf";
 
 type TeamSpec = { id: string; name: string; abbr: string; score: string };
-type Status = "final" | "postponed";
+type Status = "final" | "postponed" | "scheduled";
 
 function event(id: string, away: TeamSpec, home: TeamSpec, iso: string, status: Status = "final") {
   const competitor = (t: TeamSpec, side: "home" | "away") => ({
@@ -33,7 +39,9 @@ function event(id: string, away: TeamSpec, home: TeamSpec, iso: string, status: 
     season: { type: 2, year: 2026 },
     status: status === "final"
       ? { displayClock: "0:00", period: 4, type: { name: "STATUS_FINAL", state: "post", detail: "Final", shortDetail: "Final", completed: true } }
-      : { displayClock: "0:00", period: 0, type: { name: "STATUS_POSTPONED", state: "post", detail: "Postponed", shortDetail: "Postponed", completed: false } },
+      : status === "postponed"
+        ? { displayClock: "0:00", period: 0, type: { name: "STATUS_POSTPONED", state: "post", detail: "Postponed", shortDetail: "Postponed", completed: false } }
+        : { displayClock: "0:00", period: 0, type: { name: "STATUS_SCHEDULED", state: "pre", detail: "Wed, September 23rd at 7:30 PM EDT", shortDetail: "9/23 - 7:30 PM EDT", completed: false } },
     competitions: [{
       competitors: [competitor(home, "home"), competitor(away, "away")],
       broadcasts: [],
@@ -63,6 +71,13 @@ const BOARDS: Record<string, unknown[]> = {
     event("801", T("31", "Galaxy", "LA", "6"), T("32", "Sounders", "SEA", "5"), "2026-09-23T02:30:00Z"),
   ],
 };
+// Today's slate for the Auto last column's league: one game tonight.
+const TODAY_BOARDS: Record<string, unknown[]> = {
+  "football/college-football": [
+    event("901", T("41", "Toledo", "TOL", ""), T("42", "Akron", "AKR", ""), "2026-09-23T23:30:00Z", "scheduled"),
+  ],
+};
+const TODAY_GAME = "Toledo at Akron — game details";
 
 const baked = (matchup: string, channel: string, id: string) => ({
   t: NOW.getTime() - 3_600_000, matchup, official: id, officialChannel: channel, officialDurationSec: 600, sourcePolicy: "official-channel",
@@ -112,7 +127,8 @@ async function seed(page: Page) {
     const url = new URL(route.request().url());
     const m = /\/sports\/(.+)\/scoreboard$/.exec(url.pathname);
     if (!m) return route.fallback();
-    const events = url.searchParams.get("dates") === YESTERDAY ? (BOARDS[m[1]] ?? []) : [];
+    const dates = url.searchParams.get("dates");
+    const events = dates === YESTERDAY ? (BOARDS[m[1]] ?? []) : dates === TODAY ? (TODAY_BOARDS[m[1]] ?? []) : [];
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ events }) });
   });
   await page.route("**/news/highlights.json", (route) =>
@@ -166,7 +182,21 @@ for (const { name, width, height } of [
   });
 }
 
-test("under three qualifying games the Auto column keeps its league", async ({ page }) => {
+test("Best of yesterday replaces the Auto league even when that league has a game today", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page);
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="best"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-league-column="best"] [data-league-tag]')).toHaveCount(5, { timeout: 15_000 });
+  const order = await page.locator("[data-league-column]").evaluateAll((els) => els.map((e) => e.getAttribute("data-league-column")));
+  expect(order).toEqual(["nfl", "wnba", "best"]);
+  // The NCAAF column and its game tonight are gone from the board — replaced,
+  // not pushed to a fourth column.
+  await expect(page.locator(`[data-league-column="${AUTO_LAST}"]`)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: TODAY_GAME })).toHaveCount(0);
+});
+
+test("under three qualifying games the Auto column keeps its league and its game", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page);
   // Only two clips: the NFL pair. Registered after seed(), so it wins.
@@ -175,8 +205,11 @@ test("under three qualifying games the Auto column keeps its league", async ({ p
   await page.route("**/news/highlights.json", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(two) }));
   await page.goto("/");
-  await expect(page.locator('[data-league-column="nfl"]')).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("[data-league-column]")).toHaveCount(3);
+  const autoCol = page.locator(`[data-league-column="${AUTO_LAST}"]`);
+  await expect(autoCol).toBeVisible({ timeout: 30_000 });
+  const order = await page.locator("[data-league-column]").evaluateAll((els) => els.map((e) => e.getAttribute("data-league-column")));
+  expect(order).toEqual(["nfl", "wnba", AUTO_LAST]);
+  await expect(autoCol.getByRole("button", { name: TODAY_GAME })).toHaveCount(1, { timeout: 15_000 });
   await expect(page.locator('[data-league-column="best"]')).toHaveCount(0);
 });
 

@@ -4700,10 +4700,23 @@ async function fetchPreviousGameDayRange(
   return { date: latest, games: games.filter((g) => dayOf(g.date) === latest) };
 }
 
+// A finished day's scoreboard does not change. Best of yesterday reads up to
+// eight of yesterday's scoreboards on the today board, and a tap on Yesterday
+// reads the same ones again; holding a finished day here for a few minutes
+// lets that tap reuse them. Only a PAST day whose every game is over is held
+// (a game still live past the 1 AM rollover keeps updating), in memory only
+// (a new deploy never reads an old shape), and as JSON (callers stamp ranks
+// and videos onto the games they get, so each read gets its own copy).
+const FINISHED_DAY_TTL_MS = 5 * 60_000;
+const finishedDayCache = new Map<string, { at: number; json: string }>();
+
 export async function fetchGames(
   sport: Sport,
   date?: string
 ): Promise<{ games: Game[]; failed: boolean }> {
+  const finishedKey = date && date < toYmd(getEtServiceDate()) ? `${sport}|${date}` : null;
+  const held = finishedKey ? finishedDayCache.get(finishedKey) : undefined;
+  if (held && Date.now() - held.at < FINISHED_DAY_TTL_MS) return { games: JSON.parse(held.json) as Game[], failed: false };
   const url = scoreboardUrl(sport);
   // Soccer fixtures can kick off in the local midnight hour (a western-US World
   // Cup night game is 12 AM ET). ESPN buckets those under their raw calendar
@@ -4898,6 +4911,9 @@ export async function fetchGames(
   }
 
   writeScoreboardCache(sport, date, games);
+  if (finishedKey && games.length && games.every((g) => g.state === "post")) {
+    finishedDayCache.set(finishedKey, { at: Date.now(), json: JSON.stringify(games) });
+  }
   return { games, failed: false };
 }
 
@@ -5594,6 +5610,9 @@ export async function fetchAllLeagues(
     // backfill below already fixed by switching off MAX_LEAGUES. When slotCount
     // is the default 3 this is byte-identical (slotCount-1 === MAX_LEAGUES-1).
     final = [...auto.slice(0, slotCount - 1), slot3Cfg];
+    // The legacy pick takes the last column, so that column is never Auto
+    // here and Best of yesterday does not land on it.
+    autoLast = null;
   } else {
     final = auto;
     if (lastOnAuto) autoLast = auto.length >= slotCount ? "filled" : "open";
