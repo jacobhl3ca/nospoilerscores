@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from "react";
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
-import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
+import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
@@ -601,7 +601,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -779,7 +779,12 @@ export default function HomeContent({
       const hHead = params.get("ht");
       const hPoster = params.get("hp");
       if (sharedVideoId) {
-        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster });
+        // A clip opened on /watch is any link someone pasted: nothing vetted
+        // its title, and there is no blurred headline under the player to fall
+        // back on. So the title cover is on here whatever the Settings toggle
+        // says (it defaults off since 9/8). It still lifts once the title reads clean.
+        const forceTitleMask = /^\/watch\/?$/.test(window.location.pathname);
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster, forceTitleMask });
       } else if (hStream || hEmbed || hImage) {
         setVideoModal({
           videoId: "",
@@ -1048,6 +1053,8 @@ export default function HomeContent({
   // own "Copy link" (see buildHighlightShareUrl). Returned root-relative ("/?…")
   // so (a) pushState is same-origin in every shell (prod / iOS app / localhost)
   // and (b) it lands on "/", where the worker injects the per-share OG preview.
+  // Exception: a YouTube clip on /watch stays on /watch (see highlightSharePath),
+  // so its preview is the generic card, not the thumbnail.
   // Carries NO pref params, so copying the address bar shares the clip cleanly —
   // the recipient keeps their own leagues — exactly like Copy link. Syncing this
   // into the URL bar is why "copy the URL bar" == "Copy link".
@@ -1066,6 +1073,7 @@ export default function HomeContent({
       sourceLabel: m.sourceLabel || null,
       headline: m.headline || null,
       cardKey: m.shareCard?.key ?? null,
+      path: highlightSharePath(),
     });
     return abs ? abs.replace(/^https?:\/\/[^/]+/, "") : null;
   }, []);
@@ -4148,6 +4156,7 @@ export default function HomeContent({
               <a href="/no-spoiler-scores" style={{ textDecoration: "underline" }}>no-spoiler scores</a>,{" "}
               <a href="/how-to-watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>how to watch sports highlights without spoilers</a>,{" "}
               <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
+              <a href="/watch" style={{ textDecoration: "underline" }}>watch any YouTube link without spoilers</a>,{" "}
               <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
               <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>,{" "}
               <a href="/nhl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NHL highlights</a>,{" "}
@@ -4541,7 +4550,7 @@ export default function HomeContent({
           published={videoModal.published}
           body={videoModal.body}
           shareCard={videoModal.shareCard}
-          maskVideoTitle={prefs.maskVideoTitle ?? false}
+          maskVideoTitle={(prefs.maskVideoTitle ?? false) || !!videoModal.forceTitleMask}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}

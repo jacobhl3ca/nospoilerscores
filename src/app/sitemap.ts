@@ -27,6 +27,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/spoiler-free-sports",
     "/how-to-watch-sports-highlights-without-spoilers",
     "/watch-sports-highlights-without-spoilers",
+    // Added 2026-09-24: paste any YouTube link and play it with the title
+    // covered. Only the bare landing is listed; ?v= links are per-clip shares.
+    "/watch",
     "/no-spoiler-scores",
     "/nba-scores-without-spoilers",
     "/nhl-scores-without-spoilers",
@@ -55,6 +58,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   ];
   const highIntent = new Set([
     "/spoiler-free-sports",
+    "/watch",
     "/how-to-watch-sports-highlights-without-spoilers",
     "/watch-sports-highlights-without-spoilers",
     "/no-spoiler-scores",
