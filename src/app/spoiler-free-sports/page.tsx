@@ -14,7 +14,7 @@ const TITLE = "Spoiler-Free Sports Scores and Highlights | HideScore";
 // "results, headlines" restatement and "choose to" — "Scores and highlights
 // stay hidden until you reveal them" already carries the promise.
 const DESC =
-  "HideScore is a spoiler-free sports app for NBA, NFL, NHL, MLB, soccer, golf, and World Cup fans. No score is printed anywhere, and headlines and thumbnails stay blurred until you choose to reveal them.";
+  "HideScore is a spoiler-free sports app for NBA, NFL, NHL, MLB, soccer and World Cup fans. Scores and highlights stay hidden until you reveal them.";
 
 const FAQ: { q: string; a: string }[] = [
   {
