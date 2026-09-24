@@ -224,7 +224,7 @@ async function pillMetrics(page: Page, sport: string) {
   }, sport);
 }
 
-test("phone (390px): three NFL cuts stack under a short heading and stay inside the column; desktop keeps one row", async ({ page }, testInfo) => {
+test("phone (390px): three NFL cuts stack under \"W1\" and stay inside the column; desktop keeps one row", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.clock.setFixedTime(NOW);
   await seed(page);
@@ -251,8 +251,10 @@ test("phone (390px): three NFL cuts stack under a short heading and stay inside 
   const nfl = await pillMetrics(page, "nfl");
   expect(nfl.width, "a phone column").toBeLessThan(200);
   expect(nfl.buttonTexts).toEqual(["6m", "17m", "30m"]);
-  expect(nfl.headingText).toBe("Week 1");
+  expect(nfl.headingText).toBe("W1");
   expect(nfl.headingClipped).toBe(false);
+  // Nothing hidden: every phone heading fits its line, so none is dropped.
+  expect(await page.locator("[data-recap-heading].invisible").count()).toBe(0);
   expect(nfl.overflow).toBe(0);
   expect(nfl.buttonsPastEdge).toBe(0);
   expect(nfl.buttonsClipped).toBe(0);
