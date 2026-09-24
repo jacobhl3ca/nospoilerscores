@@ -124,7 +124,7 @@ const PLAYOFF_START_DATES: Record<string, { date: string; label: string; singula
   nba: { date: "2026-04-18", label: "Playoffs", preDate: "2026-04-14", preEndDate: "2026-04-17", preLabel: "Play-in" },
   wnba: { date: "2026-09-14", label: "Playoffs" },
   nhl: { date: "2026-04-18", label: "Playoffs" },
-  mlb: { date: "2026-10-06", label: "Postseason", singularLabel: true },
+  mlb: { date: "2026-09-29", label: "Postseason", singularLabel: true }, // Wild Card game 1 (StatsAPI postseason/series)
   nfl: { date: "2027-01-09", label: "Playoffs" },
   ncaam: { date: "2026-03-17", label: "March Madness", singularLabel: true },
 };
