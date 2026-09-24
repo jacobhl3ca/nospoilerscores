@@ -2558,6 +2558,12 @@ const HL_LEAGUES = [
   // TSN is the uploader (16/16 strict + week hits on Weeks 12–15); the week
   // gate is load-bearing because TSN's 2024/2025 uploads carry no year.
   { sport: "cfl",    path: "/api/cfl",                                          channel: "TSN", worker: true },
+  // NCAA women's hockey (added 2026-09-23). No fixed uploader, like ncaavb:
+  // `channel: null` plus `primaryFromChain` makes the ECAC Hockey channel the
+  // official one for any game with an ECAC school, behind the `women` token
+  // below. Every other game has an empty chain and costs no lookup. See
+  // src/lib/collegeHighlights.ts for the channel probe.
+  { sport: "ncaawh", path: "/hockey/womens-college-hockey/scoreboard",       channel: null },
 ];
 // Origin for the worker-served leagues above. Overridable so a local
 // `wrangler pages dev` run can be baked against.
@@ -2572,6 +2578,7 @@ const HL_COMPETITION_TOKENS = {
   facup: ["fa cup"],
   laliga: ["laliga", "la liga"],
   ligue1: ["ligue 1"],
+  ncaawh: ["women"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts. Sent per
 // EVENT: TSN titles the postseason by round with no year, and a playoff card
@@ -2630,6 +2637,7 @@ const HL_TEAM_ALIASES = {
   "Red Bull NY": "New York Red Bulls",
   Tempo: "Toronto Tempo",
   Valkyries: "Golden State Valkyries",
+  Rensselaer: "RPI",
 };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
 // The LLWS code->state/country table is the SAME FILE src/lib/youtube.ts reads,
