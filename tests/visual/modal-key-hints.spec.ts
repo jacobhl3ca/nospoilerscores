@@ -240,3 +240,20 @@ test("a phone gets no Keys button and no legend, even on ?", async ({ page }) =>
   await page.keyboard.press("?");
   await expect(panel(page)).toBeHidden();
 });
+
+test("? does nothing in fullscreen, so the legend never shows up unasked on the way out", async ({ page }) => {
+  await setup(page);
+  await openPost(page, "Key video");
+  await expect(page.getByRole("dialog").locator("iframe").first()).toBeVisible();
+
+  // F → fullscreen (native where the browser allows it, the CSS overlay if
+  // not). Either way the Keys button leaves with the legend.
+  await page.keyboard.press("f");
+  await expect(keysBtn(page)).toHaveCount(0);
+
+  await page.keyboard.press("?");
+  await page.keyboard.press("f");
+  await expect(keysBtn(page)).toBeVisible();
+  await expect(keysBtn(page)).toHaveAttribute("aria-expanded", "false");
+  await expect(panel(page)).toHaveCount(0);
+});

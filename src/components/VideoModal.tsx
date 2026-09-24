@@ -1326,7 +1326,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // 1-9 jump to that tenth; 0 restarts. seekToPct already honours the 90%
         // spoiler cap and the warn-past-halfway prompt, so the keys inherit both.
         case "jump-pct": seekToPct(Number(e.key) * 10); break;
-        case "toggle-keys": toggleKeyHints(); break;
+        // No legend in fullscreen (keyHintsAvailable), so "?" does nothing
+        // there — a blind flip would show up unasked on the way out.
+        case "toggle-keys": if (!fakeFs && !nativeFs) toggleKeyHints(); break;
       }
     };
     document.addEventListener("keydown", handler);
