@@ -10,6 +10,7 @@ import ModalKeyHints from "@/components/ModalKeyHints";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
 import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
+import { noteHighlightWatched } from "@/lib/rateApp";
 
 interface VideoModalProps {
   videoId: string;
@@ -745,6 +746,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       source: (sourceLabel || "unknown").slice(0, 40),
     });
   }, [postKey, ytMode, hlsMode, sourceLabel]);
+  // Same reuse trap as trackedPlayRef: postKey dedupes so paging past the
+  // same clip twice (or a stray double ENDED event) only counts as "finished
+  // watching a highlight" once per clip, which is all the in-app rating
+  // prompt (src/lib/rateApp.ts) needs to decide whether to ask.
+  const trackedEndRef = useRef<string | null>(null);
+  const markHighlightWatched = useCallback(() => {
+    if (!postKey || trackedEndRef.current === postKey) return;
+    trackedEndRef.current = postKey;
+    noteHighlightWatched();
+  }, [postKey]);
+  // The progress poll below (near-end auto-pause) is set up once per ytMode
+  // change, not per clip, so it closes over whichever markHighlightWatched
+  // existed at that time. Route it through a ref that's always current so a
+  // clip watched to the end after paging still resolves against the right
+  // postKey.
+  const markHighlightWatchedRef = useRef(markHighlightWatched);
+  useEffect(() => {
+    markHighlightWatchedRef.current = markHighlightWatched;
+  }, [markHighlightWatched]);
   // Same reuse trap as PeekBlur: page to another post and the gallery cursor
   // must go back to picture 1 (post B would otherwise open on post A's 4th).
   useEffect(() => { setGalIdx(0); }, [postKey]);
@@ -1049,6 +1069,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         endLatchRef.current = true;
         setYtAtEnd(true);
         p?.pauseVideo?.();
+        // This near-end pause IS "finished watching" for a YouTube clip —
+        // see the in-app rating prompt note on markHighlightWatchedRef above.
+        markHighlightWatchedRef.current();
       }
     }, 350);
     return () => window.clearInterval(id);
@@ -1863,7 +1886,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // normally gets there first and parks a second early, so this is the
             // belt-and-braces case: a clip short enough that the poll's d > 2
             // guard skipped it, or one that raced past the last sample.
-            if (event.data === 0) setYtAtEnd(true);
+            if (event.data === 0) { setYtAtEnd(true); markHighlightWatched(); }
             // Same two states, published on the dialog root (see
             // data-player-state) so play/pause is observable from outside the
             // cross-origin frame.
@@ -1951,7 +1974,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     // titleAlwaysMasked is derived from fallbackUrl (already a dep), so it can
     // never change on its own — listed to keep exhaustive-deps quiet.
-  }, [currentId, fallbackUrl, titleAlwaysMasked, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked, trackVideoPlay]);
+  }, [currentId, fallbackUrl, titleAlwaysMasked, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked, trackVideoPlay, markHighlightWatched]);
 
   // Shared sizing for the YT video region + control bar so both line up and,
   // in fullscreen, the video is capped to leave room for the bar underneath.
@@ -2955,6 +2978,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 muted
                 playsInline
                 onPlaying={trackVideoPlay}
+                onEnded={markHighlightWatched}
                 onPlay={() => setPlayerState("playing")}
                 onPause={() => setPlayerState("paused")}
                 // A click on the native controls focuses the <video>, and a
