@@ -6,7 +6,7 @@ import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { buildKeyLegend } from "@/lib/modalKeyLegend";
-import ModalKeyHints, { initialKeyHintsState, persistKeyHintsOff, type KeyHintsState } from "@/components/ModalKeyHints";
+import ModalKeyHints from "@/components/ModalKeyHints";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
 import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
@@ -184,6 +184,18 @@ function strictFallbackChannels(fallbackUrl: string): string[] {
       .filter(Boolean);
   } catch {
     return [];
+  }
+}
+
+// Title mask forced on by the caller (`nss_mask_title=1`), for a clip whose
+// uploader is not known up front and may title by result: a FotMob-sourced
+// soccer official (see GameHighlights). Same effect as the channels in
+// channelAlwaysMasksTitle — the title bar never uncovers.
+function fallbackForcesTitleMask(fallbackUrl: string): boolean {
+  try {
+    return new URL(fallbackUrl).searchParams.get("nss_mask_title") === "1";
+  } catch {
+    return false;
   }
 }
 
@@ -608,7 +620,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // …except on the combat channels, where the title bar never uncovers at all —
   // see channelAlwaysMasksTitle. Read from the same strict-channel gate the
   // embed check uses, so it holds for the fallback swaps too.
-  const titleAlwaysMasked = channelAlwaysMasksTitle(strictFallbackChannels(fallbackUrl));
+  const titleAlwaysMasked = channelAlwaysMasksTitle(strictFallbackChannels(fallbackUrl)) || fallbackForcesTitleMask(fallbackUrl);
   // PAUSED (or ENDED) means YouTube draws its own overlay on top of the iframe:
   // the "More videos" grid on pause, the suggested-video endscreen at the end.
   // Both are pure spoiler vectors — rel:0 only narrows them to the SAME channel,
@@ -668,24 +680,22 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [nativeFs, setNativeFs] = useState(false);
   const [fakeFs, setFakeFs] = useState(false);
 
-  // The bottom-right key legend (ModalKeyHints). "gone" straight away for a
-  // browser that already dismissed it once — the ✕ is a permanent answer, not a
-  // per-clip one.
-  const [keyHints, setKeyHints] = useState<KeyHintsState>(initialKeyHintsState);
-  // ✕ — hand the corner to the Undo, and write the dismissal NOW rather than
-  // when the Undo expires: closing the modal mid-window has to count as "yes,
-  // gone", or the ✕ silently un-does itself.
-  const dismissKeyHints = useCallback(() => { setKeyHints("undo"); persistKeyHintsOff(true); }, []);
-  const restoreKeyHints = useCallback(() => { setKeyHints("open"); persistKeyHintsOff(false); }, []);
-  const expireKeyHints = useCallback(() => setKeyHints("gone"), []);
-  // "?" is a plain toggle over the same switch, from either of the two hidden
-  // states — so it's also how you get the panel back weeks after dismissing it.
-  const toggleKeyHints = useCallback(() => {
-    setKeyHints((s) => {
-      const next: KeyHintsState = s === "open" ? "gone" : "open";
-      persistKeyHintsOff(next === "gone");
-      return next;
-    });
+  // The bottom-right key legend (ModalKeyHints). Closed until asked for — the
+  // cluster's "Keys" button or "?" opens it (Jacob 9/23: it used to open by
+  // itself until ✕'d once per browser, which read as "sometimes"). Plain state,
+  // nothing stored: the modal mounts fresh per open, so it starts closed every
+  // time and holds while you page posts inside one open.
+  const [keyHintsOpen, setKeyHintsOpen] = useState(false);
+  const keysBtnRef = useRef<HTMLButtonElement>(null);
+  const toggleKeyHints = useCallback(() => setKeyHintsOpen((v) => !v), []);
+  // The panel's ✕ unmounts with the panel, which would drop focus to <body>.
+  // A keyboard press goes back to the Keys button that opened it; a click goes
+  // to the dialog, so the next Space plays the clip instead of re-pressing a
+  // button.
+  const closeKeyHints = useCallback((byPointer: boolean) => {
+    setKeyHintsOpen(false);
+    if (byPointer) dialogRef.current?.focus();
+    else keysBtnRef.current?.focus();
   }, []);
   const fsActive = nativeFs || fakeFs;
   // Timestamp of the last native-fullscreen exit — some browsers deliver the
@@ -1356,7 +1366,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // 1-9 jump to that tenth; 0 restarts. seekToPct already honours the 90%
         // spoiler cap and the warn-past-halfway prompt, so the keys inherit both.
         case "jump-pct": seekToPct(Number(e.key) * 10); break;
-        case "toggle-keys": toggleKeyHints(); break;
+        // No legend in fullscreen (keyHintsAvailable), so "?" does nothing
+        // there — a blind flip would show up unasked on the way out.
+        case "toggle-keys": if (!fakeFs && !nativeFs) toggleKeyHints(); break;
       }
     };
     document.addEventListener("keydown", handler);
@@ -1391,7 +1403,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         )
       // getClientRects().length, NOT offsetParent: offsetParent is null for
       // BOTH display:none elements AND any position:fixed element, so the earlier
-      // offsetParent test silently dropped the desktop Prev/Next post chevrons
+      // offsetParent test silently dropped the fixed Prev/Next post buttons
       // (rendered inside this dialog, `position:fixed`) from the trap — leaving
       // them visible but Tab-unreachable. getClientRects() is empty only when the
       // element is genuinely unrendered (display:none, incl. the off-breakpoint
@@ -2000,13 +2012,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Not in fullscreen, either kind. The fake one paints over this z-index
   // anyway, and in the native one the corner belongs to YouTube's own
   // fullscreen / settings buttons — the panel would land on top of them.
-  const keyHintsPanel = !fakeFs && !nativeFs ? (
+  // The cluster's Keys button follows the same rule, so it can never open a
+  // panel that isn't drawn.
+  const keyHintsAvailable = !fakeFs && !nativeFs;
+  const keyHintsPanel = keyHintsAvailable ? (
     <ModalKeyHints
-      state={keyHints}
+      open={keyHintsOpen}
+      id="modal-key-legend"
       rows={keyLegendRows}
-      onDismiss={dismissKeyHints}
-      onRestore={restoreKeyHints}
-      onUndoExpire={expireKeyHints}
+      onClose={closeKeyHints}
     />
   ) : null;
   // Cap the media (image / HLS / YouTube alike) so the media + the headline /
@@ -2018,7 +2032,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // imageMode reserves room for the Close row ABOVE the image plus the headline
   // (can wrap to 2+ lines) + byline + Copy-link row BELOW it, so nothing clips
   // the bottom edge (Jacob 7/11–13). imageMode has no bottom pager band anymore
-  // (desktop uses side chevrons, mobile uses swipe), so the reserve is the same
+  // (desktop used side chevrons, mobile used swipe), so the reserve was the same
   // whether or not paging is available.
   // imageMode used to ignore hasPager entirely, because image posts navigated
   // by swipe alone and had no pager band to clear. They show the same Prev/Next
@@ -2086,7 +2100,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // post and on every screen. 44px targets for a thumb. The wrapper's bottom
   // reserve keeps the footer row clear of it, and the media caps (mediaMaxH)
   // leave that band free, so it never sits on a player's scrubber.
-  // Desktop keeps the side chevrons too, as a second way to page.
+  // It is the only pager on screen: desktop had a second pair of chevrons on
+  // the left/right edges, and two sets of arrows read as a mistake (Jacob 9/23:
+  // "arrows are now also on bottom right? i dont undestand"). ↑/↓ and
+  // Shift+←/→ still page from the keyboard.
+  // On desktop a "Keys" button leads the row and opens the key legend
+  // (ModalKeyHints), which then stands directly above the row. A click hands
+  // focus back to the dialog so the next Space plays the clip; a keyboard
+  // press keeps focus on the button.
   // In YouTube fullscreen the fullscreen wrapper covers this (z 10000), so
   // that view keeps its own inline ✕.
   const clusterBtn = "w-11 h-11 flex items-center justify-center rounded-full text-white/85 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors";
@@ -2098,6 +2119,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       style={{ right: "calc(env(safe-area-inset-right) + 1rem)", bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
       onClick={(e) => e.stopPropagation()}
     >
+      {keyHintsAvailable && (
+        <button type="button" ref={keysBtnRef}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleKeyHints();
+            if (e.detail > 0) dialogRef.current?.focus();
+          }}
+          aria-expanded={keyHintsOpen}
+          aria-controls={keyHintsOpen ? "modal-key-legend" : undefined}
+          title="Keyboard shortcuts (?)"
+          className="hidden sm:flex h-11 px-3.5 items-center gap-1.5 rounded-full text-[13px] font-semibold text-white/85 hover:text-white cursor-pointer transition-colors"
+          style={keyHintsOpen ? { ...clusterBtnStyle, background: "rgba(255,255,255,0.18)" } : clusterBtnStyle}>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="6" width="20" height="12" rx="2" />
+            <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+          </svg>
+          Keys
+        </button>
+      )}
       {hasPager && (
         <>
           <button type="button" onClick={(e) => { e.stopPropagation(); goPrev(); }} disabled={!onPrev}
@@ -2122,32 +2162,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       </button>
     </div>
   );
-  const desktopPager = hasPager ? (
-    <>
-      <button type="button"
-        onClick={(e) => { e.stopPropagation(); goPrev(); }}
-        disabled={!onPrev}
-        aria-label="Previous post"
-        title="Previous post (↑)"
-        aria-keyshortcuts="ArrowUp"
-        className="hidden sm:flex fixed left-4 top-1/2 -translate-y-1/2 z-[60] w-11 h-11 items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-default cursor-pointer transition-colors"
-        style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.16)" }}
-      >
-        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-      </button>
-      <button type="button"
-        onClick={(e) => { e.stopPropagation(); goNext(); }}
-        disabled={!onNext}
-        aria-label="Next post"
-        title="Next post (↓)"
-        aria-keyshortcuts="ArrowDown"
-        className="hidden sm:flex fixed right-4 top-1/2 -translate-y-1/2 z-[60] w-11 h-11 items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-default cursor-pointer transition-colors"
-        style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.16)" }}
-      >
-        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-      </button>
-    </>
-  ) : null;
 
   return (
     <div
@@ -2174,12 +2188,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           pager. The bottom reserve keeps that footer clear of the pager band
           (Jacob 7/4). No reservation when there's no pager (e.g. highlights). */}
       <div
-        // Wider side padding on desktop when a pager is present so the fixed
-        // left/right chevrons sit in a gutter beside the media instead of on top
-        // of it (Jacob 7/11–13). The bottom-right control cluster is there on
-        // every post and every width, so the bottom reserve that keeps the
-        // footer clear of it is too.
-        className={`relative flex min-h-full items-center justify-center p-4 pb-[calc(env(safe-area-inset-bottom)+4.5rem)] ${hasPager ? "pt-[calc(env(safe-area-inset-top)+4.5rem)] sm:px-24 sm:pt-8" : "sm:px-8 sm:pt-8"}`}
+        // The bottom-right control cluster is there on every post and every
+        // width, so the bottom reserve that keeps the footer clear of it is
+        // too. Desktop side padding is the same with or without a pager: the
+        // wide sm:px-24 gutter was room for the left/right chevrons (Jacob
+        // 7/11–13), and those went on 9/23, so the media takes the width back.
+        className={`relative flex min-h-full items-center justify-center p-4 pb-[calc(env(safe-area-inset-bottom)+4.5rem)] sm:px-8 sm:pt-8 ${hasPager ? "pt-[calc(env(safe-area-inset-top)+4.5rem)]" : ""}`}
       >
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC
@@ -2238,8 +2252,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         )}
         {imageMode ? (
           // The column hugs the RENDERED image (w-fit). Close and Prev/Next
-          // are in the bottom-right cluster; desktop adds side chevrons in the
-          // gutter, and swipe left/right still navigates on a phone.
+          // are in the bottom-right cluster, and swipe left/right still
+          // navigates on a phone.
           <div
             className="mx-auto w-fit max-w-full"
             onClick={(e) => e.stopPropagation()}
@@ -2293,7 +2307,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   <span role="status" aria-live="polite" className="sr-only">
                     Picture {galAt + 1} of {galLen}
                   </span>
-                  {/* On-image arrows: the fixed side chevrons page POSTS, so the
+                  {/* On-image arrows: the cluster's ‹ › page POSTS, so the
                       within-post controls have to live on the photo itself. */}
                   <button
                     type="button"
@@ -3127,7 +3141,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             say so — an Instagram screenshot filled the phone and looked like a
             dead end. Swipe still works; the buttons just make it visible. */}
         {controlCluster}
-        {desktopPager}
         {keyHintsPanel}
       </div>
       </div>

@@ -5,7 +5,9 @@
 // all at once, no per-card scrape and no stagger. A finished game that isn't
 // baked yet (recap uploaded after the last cron) simply falls back to a live
 // resolve, so nothing regresses when a bake is missing.
-import { getApiBase } from "@/lib/youtube";
+// Relative, not "@/lib/youtube": espn.ts imports this file, and the unit tests
+// load espn.ts through jiti, which does not know the "@/" alias.
+import { getApiBase } from "./youtube";
 
 // Keyed `${sport}:${game.id}` — game.id === the ESPN event id the prebake keys
 // on. `official` = 1st button (channel recap), `extended` = 2nd button (already
@@ -32,6 +34,11 @@ export type BakedHighlight = {
   officialDurationSec?: number;
   mlbOrder?: "official-first";
   sourcePolicy?: "official-channel";
+  // Soccer only: the official id came from the match's FotMob page, not from a
+  // channel lookup, so officialChannel is whatever uploader FotMob linked (a
+  // club, league or broadcaster). The bake gated it through oEmbed, both teams
+  // and the upload date. See scripts/lib/fotmob.mjs.
+  src?: "fotmob";
 };
 
 const BAKED_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000;

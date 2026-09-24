@@ -1,25 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
 import type { KeyLegendRow } from "@/lib/modalKeyLegend";
 
 // The post modal's key legend, bottom-right (Jacob 9/8).
 //
 // The modal has grown a real keyboard — Space, ←/→, J/L, 0-9, M, F, H, ↑/↓,
 // Shift+←/→ — and none of it was written down anywhere you'd find it while
-// watching a clip. This prints the live ones in the corner, and then gets out
-// of the way permanently the first time you say so.
+// watching a clip. This prints the live ones in the corner.
 //
-// Three states, because "dismiss" and "gone" aren't the same thing:
-//   open → the panel
-//   undo → the panel is gone, a small Undo sits where it was
-//   gone → the corner is empty
-// The Undo is the whole reason the ✕ can be a single unconfirmed click. It
-// expires on its own (UNDO_MS) so the corner ends up clear either way: take it
-// back, or don't and the zone clears itself off the video.
-//
-// "?" is the way back after that, which is why the legend lists "?" as one of
-// its own rows — you read how to return it before you ever remove it.
+// Closed until asked for (Jacob 9/23). It used to open by itself on every
+// post until you ✕'d it once, per browser — so it showed "sometimes", and sat
+// on the corner of the player the rest of the time. Now the "Keys" button in
+// VideoModal's ‹ › ✕ cluster, or the "?" key, opens it; its ✕, the button or
+// "?" again closes it. VideoModal owns the open/closed state: it holds while
+// you page posts inside one modal and starts closed on the next open.
 //
 // Desktop only. These are keys; a phone has none.
 //
@@ -27,92 +21,38 @@ import type { KeyLegendRow } from "@/lib/modalKeyLegend";
 // controlCluster: 44px, 1rem off the corner), so the corner reads as one
 // column: keys above, buttons below (Jacob 9/12).
 
-/** How long the Undo sits there before the corner clears itself. */
-export const UNDO_MS = 6000;
-
-const LS_KEY = "hs.keyHintsOff";
-
-export type KeyHintsState = "open" | "undo" | "gone";
-
-/** "gone" when this browser has dismissed the legend before, else "open". */
-export function initialKeyHintsState(): KeyHintsState {
-  if (typeof window === "undefined") return "open";
-  try {
-    return localStorage.getItem(LS_KEY) === "1" ? "gone" : "open";
-  } catch {
-    return "open";
-  }
-}
-
-/** Remember the choice across clips and sessions. Storage may be blocked. */
-export function persistKeyHintsOff(off: boolean): void {
-  try {
-    if (off) localStorage.setItem(LS_KEY, "1");
-    else localStorage.removeItem(LS_KEY);
-  } catch { /* ignore */ }
-}
-
 export default function ModalKeyHints({
-  state,
+  open,
+  id,
   rows,
-  onDismiss,
-  onRestore,
-  onUndoExpire,
+  onClose,
 }: {
-  state: KeyHintsState;
+  open: boolean;
+  /** For the Keys button's aria-controls. */
+  id: string;
   rows: KeyLegendRow[];
-  /** ✕ — hand the corner over to the Undo. */
-  onDismiss: () => void;
-  /** Undo — bring the panel back and forget the dismissal. */
-  onRestore: () => void;
-  /** The Undo timed out; clear the corner for good. */
-  onUndoExpire: () => void;
+  /** ✕ — close the panel. `byPointer` is false for a keyboard press, so the
+   *  modal can seat focus somewhere sensible once the ✕ unmounts. */
+  onClose: (byPointer: boolean) => void;
 }) {
-  // The Undo's own clock. Keyed on `state` so re-opening and re-dismissing
-  // restarts it rather than inheriting the previous run's remainder.
-  useEffect(() => {
-    if (state !== "undo") return;
-    const t = window.setTimeout(onUndoExpire, UNDO_MS);
-    return () => window.clearTimeout(t);
-  }, [state, onUndoExpire]);
+  if (!open) return null;
 
-  if (state === "gone") return null;
-
-  // Click-through except for its own two buttons. The corner lands ON the video
-  // in a normal desktop window — over the last stretch of the scrubber, as it
+  // Click-through except for its own ✕. The corner lands ON the video in a
+  // normal desktop window — over the last stretch of the scrubber, as it
   // happens — and a passive legend that swallowed those clicks would make the
-  // end of the seek bar dead while it was up. So pointer-events stay off all
-  // the way down to the ✕ and the Undo.
-  const wrapper =
-    "hidden sm:block fixed z-[60] pointer-events-none select-none";
-  const wrapperStyle = {
-    right: "calc(env(safe-area-inset-right) + 1rem)",
-    bottom: "calc(env(safe-area-inset-bottom) + 1rem + 44px + 0.5rem)",
-  } as const;
-
-  if (state === "undo") {
-    return (
-      <div className={wrapper} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onRestore(); }}
-          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white/70 hover:text-white transition-colors cursor-pointer"
-          style={{ background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.18)" }}
-          title="Bring the key list back"
-        >
-          <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="9 14 4 9 9 4" />
-            <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
-          </svg>
-          Undo
-        </button>
-      </div>
-    );
-  }
-
+  // end of the seek bar unusable while it was up. So pointer-events stay off
+  // all the way down to the ✕.
   return (
-    <div className={wrapper} style={wrapperStyle} onClick={(e) => e.stopPropagation()}>
+    <div
+      className="hidden sm:block fixed z-[60] pointer-events-none select-none"
+      style={{
+        right: "calc(env(safe-area-inset-right) + 1rem)",
+        bottom: "calc(env(safe-area-inset-bottom) + 1rem + 44px + 0.5rem)",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
       <div
+        id={id}
         // A labelled group, not a dialog: it steals no focus and traps nothing.
         role="group"
         aria-label="Keyboard shortcuts"
@@ -129,11 +69,9 @@ export default function ModalKeyHints({
           <span className="font-semibold tracking-wide text-white/45 text-[10px] uppercase">Keys</span>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+            onClick={(e) => { e.stopPropagation(); onClose(e.detail > 0); }}
             aria-label="Hide keyboard shortcuts"
-            // The tooltip carries the way back, for the moment you're about to
-            // remove the row that says the same thing.
-            title="Hide these — ? brings them back"
+            title="Hide these — Keys or ? opens them again"
             className="pointer-events-auto -mr-0.5 w-5 h-5 flex items-center justify-center rounded-full text-white/40 hover:text-white transition-colors cursor-pointer"
           >
             <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">

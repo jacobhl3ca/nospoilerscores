@@ -4,6 +4,7 @@ import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, u
 import { LeagueData, Sport } from "@/lib/types";
 import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortRank } from "@/lib/espn";
 import { isTopEventsGameSport, TOP_EVENTS_DEFAULT_COUNT, TOP_EVENTS_ENABLED, type TopEventsMode, type TopEventsCount } from "@/lib/topEvents";
+import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
 import {
   Preferences,
   Theme,
@@ -206,6 +207,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   poker: "Poker",
   esports: "Esports",
   top: "Top events",
+  best: "Best of yesterday",
 };
 
 function teamSportFromId(id: string): Sport | null {
@@ -1164,12 +1166,14 @@ export default function SettingsPanel({
               const saved = slotValues[idx];
               // A "top" pin from before the column was switched off reads as
               // Auto here, which is what resolveSlot makes of it on the board.
-              const value = saved === "top" && !TOP_EVENTS_ENABLED ? undefined : saved;
+              const value = (saved === "top" && !TOP_EVENTS_ENABLED) || (saved === "best" && !BEST_YESTERDAY_ENABLED) ? undefined : saved;
               const selectedOption = value && value !== "empty"
                 ? leagueOptions.find((option) => option.sport === value)
                 : undefined;
               const hint = value === "empty"
                 ? "Hidden"
+                : value === "best"
+                  ? "Today's board only · other days show the Auto league"
                 : selectedOption?.offseason
                   ? `Offseason · saved for its return${fallbackLabel !== "—" ? `; showing ${fallbackLabel}` : ""}`
                   : value
@@ -1193,6 +1197,7 @@ export default function SettingsPanel({
                   >
                     <option value="">Auto</option>
                     {TOP_EVENTS_ENABLED && <option value="top">⭐ Top events</option>}
+                    {BEST_YESTERDAY_ENABLED && <option value="best">{BEST_YESTERDAY_LABEL}</option>}
                     {slotDropdownGroups(value).map((group) => (
                       <optgroup key={group.key} label={group.label}>
                         {group.options.map((option) => (

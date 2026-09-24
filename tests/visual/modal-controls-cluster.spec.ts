@@ -6,6 +6,8 @@ import { expect, test, type Page } from "@playwright/test";
 // ‹ › ✕ — fixed bottom-right on every width, for every post type. This checks
 // each control is inside the viewport, 44px, and clear of the media, the
 // footer links, and the bottom 48px of a YouTube player (its scrubber).
+// Since 9/23 it is the ONLY pager (the desktop side chevrons are gone), and on
+// desktop a "Keys" button leads the row (the key legend's switch).
 
 const FAKE_YT_API = `
 (function () {
@@ -133,6 +135,23 @@ for (const size of SIZES) {
       // Right to left: ✕ is the corner, › then ‹.
       expect(boxes[2].x).toBeGreaterThan(boxes[1].x);
       expect(boxes[1].x).toBeGreaterThan(boxes[0].x);
+
+      // One set of arrows: no second Prev/Next pair anywhere in the modal.
+      await expect(page.getByRole("dialog").getByRole("button", { name: "Previous post" })).toHaveCount(1);
+      await expect(page.getByRole("dialog").getByRole("button", { name: "Next post" })).toHaveCount(1);
+
+      // Keys leads the row on desktop, and is not there on a phone.
+      const keys = cluster.getByRole("button", { name: "Keys", exact: true });
+      if (size.width >= 640) {
+        await expect(keys).toBeVisible();
+        const kb = (await keys.boundingBox())!;
+        expect(Math.round(kb.height)).toBe(44);
+        expect(kb.x).toBeGreaterThanOrEqual(0);
+        expect(kb.x + kb.width).toBeLessThanOrEqual(boxes[0].x);
+        boxes.push(kb);
+      } else {
+        await expect(keys).toBeHidden();
+      }
 
       // Only one Close in the modal outside fullscreen.
       await expect(page.getByRole("dialog").getByRole("button", { name: "Close" })).toHaveCount(1);
