@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import HomeContent from "@/components/HomeContent";
+import { worldCup2026Ended, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 
 const TITLE = "Tomorrow's World Cup Schedule - No Spoilers | HideScore";
 const DESC =
@@ -38,7 +39,10 @@ export const metadata: Metadata = {
 export default function WorldCupTomorrowPage() {
   return (
     <>
-      <HomeContent initialOffset={1} worldCupHub worldCupHubMode="tomorrow" />
+      {/* After the final this route opens on the final's board; the reader
+          steps back a day at a time from there. Static export, so the gate is
+          read at build time, and every build since 7/19 is past it. */}
+      <HomeContent initialOffset={1} initialDate={worldCup2026Ended() ? WORLD_CUP_2026_FINAL : undefined} worldCupHub worldCupHubMode="tomorrow" />
       {/* Page graph: a WebPage node linked into the site's shared #website entity
           (declared in layout.tsx) plus its own BreadcrumbList, so Google renders a
           Home › World Cup › Tomorrow trail in the search result AND reads the

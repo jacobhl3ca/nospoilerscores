@@ -34,12 +34,16 @@ const {
   recapCoversDay,
   formatRecapDuration,
   clubNickname,
+  shortRecapHeading,
+  RECAP_STACK_MAX_PX,
 } = (await jiti.import("../src/lib/recaps.ts")) as {
   RECAP_EXPECTED_CHANNELS: Record<string, Record<string, string>>;
   selectRecaps: (all: Record<string, RecapRecord[]> | null | undefined, sport: string, ymd: string, todayYmd?: string) => RecapRecord[];
   recapCoversDay: (rec: RecapRecord, ymd: string) => boolean;
   formatRecapDuration: (sec: number | null | undefined) => string;
   clubNickname: (channel: string | null | undefined) => string;
+  shortRecapHeading: (heading: string) => string;
+  RECAP_STACK_MAX_PX: number;
 };
 
 type Series = {
@@ -451,4 +455,23 @@ test("parseEmbedPlayable reads the /embed/ shell's verdict (escaped or plain JSO
   assert.equal(parseEmbedPlayable('"previewPlayabilityStatus":{"status":"OK","playableInEmbed":false'), false);
   assert.equal(parseEmbedPlayable('\\"previewPlayabilityStatus\\":{\\"status\\":\\"UNPLAYABLE\\",\\"reason\\":\\"Video unavailable\\"'), false);
   assert.equal(parseEmbedPlayable("<html>nothing</html>"), null);
+});
+
+test("narrow-column heading: Week N → WN; other headings change only past the line", () => {
+  assert.equal(shortRecapHeading("Week 2"), "W2");
+  assert.equal(shortRecapHeading("Week 18"), "W18");
+  assert.equal(shortRecapHeading("Best of the day"), "Best of day");
+  assert.equal(shortRecapHeading("Every goal, Matchweek 36"), "Matchweek 36");
+  assert.equal(shortRecapHeading("Every goal, Matchday 31"), "Matchday 31");
+  assert.equal(shortRecapHeading("Top 10 plays of the night"), "Top 10 plays");
+  assert.equal(shortRecapHeading("Top plays of the night"), "Top plays");
+  // Every bake heading, shortened, fits the narrow line (14 chars ≈ 92px).
+  for (const list of Object.values(RECAP_SERIES as Record<string, { heading: string }[]>)) {
+    for (const s of list) {
+      const h = shortRecapHeading(s.heading.replace("{n}", "36"));
+      assert.ok(h.length <= 14, `${s.heading} → "${h}" (${h.length} chars) busts the narrow line`);
+    }
+  }
+  // The stack gate sits between the sm column (192px) and the md column (225px).
+  assert.ok(RECAP_STACK_MAX_PX > 192 && RECAP_STACK_MAX_PX <= 225);
 });

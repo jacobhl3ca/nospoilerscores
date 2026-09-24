@@ -33,6 +33,7 @@ import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/component
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
+import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard from "@/components/LeagueRecapCard";
 import { getRecapsFor } from "@/lib/recaps";
 import Link from "next/link";
@@ -545,10 +546,14 @@ const PICKER_AUTH_GRACE_MS = 1500;
 
 export default function HomeContent({
   initialOffset,
+  initialDate,
   worldCupHub,
   worldCupHubMode = "today",
 }: {
   initialOffset?: number;
+  // Absolute YYYYMMDD to open on; wins over initialOffset. The World Cup hub
+  // routes use it to open on a past match day once the tournament is over.
+  initialDate?: string;
   worldCupHub?: boolean;
   worldCupHubMode?: WorldCupHubMode;
 }) {
@@ -560,12 +565,24 @@ export default function HomeContent({
   // Compute smart default date client-side only to avoid SSG hydration mismatch.
   // Reads the persisted defaultDateMode pref so "always today" / "always yesterday"
   // overrides win over the smart-time logic.
+  // On the World Cup hub, `?d=YYYYMMDD` (a 2026 match day) wins over both: the
+  // hub's team pills and "The final" button link to /worldcup?d=... . Read from
+  // window.location here rather than useSearchParams, which would force a
+  // Suspense boundary around the whole statically exported board.
   useEffect(() => {
     if (selectedDate === "") {
+      const queryDate = worldCupHub
+        ? parseWorldCupDateParam(new URLSearchParams(window.location.search).get("d"))
+        : null;
+      const startDate = queryDate ?? initialDate;
+      if (startDate) {
+        setSelectedDate(startDate);
+        return;
+      }
       const stored = loadPreferences();
       setSelectedDate(getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode, stored.smartCutoffHour)));
     }
-  }, [initialOffset, selectedDate]);
+  }, [initialOffset, initialDate, worldCupHub, selectedDate]);
   // First-time notice for the Ratings tab. Was a blocking confirm dialog until
   // 2026-08-04 — see the inline-bar note on handleViewModeClick.
   const [ratingsNotice, setRatingsNotice] = useState(false);
@@ -1536,7 +1553,36 @@ export default function HomeContent({
   };
 
   const isToday = selectedDate === getDateString(0);
+  // After the 2026 final the hub stops pointing at today's board (which has no
+  // World Cup column) and sends readers to the matches themselves: the final,
+  // or a team's last match, via /worldcup?d=YYYYMMDD. Keyed off today's date,
+  // so before and during the tournament the copy and links below are unchanged.
+  const worldCupEnded = worldCup2026Ended();
   const worldCupHubCopy = useMemo(() => {
+    if (worldCupEnded) {
+      if (worldCupHubMode === "tomorrow") {
+        return {
+          title: "2026 World Cup schedule, spoiler-free",
+          body:
+            "The 2026 World Cup ended July 19. This page opens on the final; step back a day at a time for every match without seeing a score.",
+          note: "Free · no tracking cookies · works in any browser or the iPhone and Android apps.",
+        };
+      }
+      if (worldCupHubMode === "highlights") {
+        return {
+          title: "World Cup highlights, spoiler-free",
+          body:
+            "Catch up on the 2026 World Cup without result thumbnails, scorelines or winner headlines. Start from the final and step back a day at a time; every board keeps the result hidden.",
+          note: "Every match, June 11 to July 19, with no score printed.",
+        };
+      }
+      return {
+        title: "2026 World Cup, spoiler-free",
+        body:
+          "The tournament ran June 11 to July 19 across the US, Canada and Mexico. Every match is still here with no score printed anywhere: open the final, or jump to a team's last match, and the optional competitiveness rating tells you which games were instant classics without naming who won.",
+        note: "Free · no tracking cookies · also on the App Store and Google Play.",
+      };
+    }
     if (worldCupHubMode === "tomorrow") {
       return {
         title: "Tomorrow's World Cup, spoiler-free",
@@ -1559,7 +1605,7 @@ export default function HomeContent({
         "104 matches, June 11 - July 19, across the US, Canada and Mexico - most kicking off at 1, 4 and 7 PM ET on weekdays. Watch every match on your own schedule: no score is printed anywhere, and the optional competitiveness rating tells you which games were instant classics without naming who won.",
       note: "Free · no tracking cookies · also on the App Store and Google Play.",
     };
-  }, [worldCupHubMode]);
+  }, [worldCupHubMode, worldCupEnded]);
 
   // Whether the World Cup is in season for the viewed date — gates the
   // "What matters today" card so it doesn't fetch standings year-round.
@@ -2553,7 +2599,7 @@ export default function HomeContent({
                 Scores/Rated only. Calendar = bare icon after the › arrow. */}
             {!showNews && (
               <div className="sm:hidden flex justify-center">
-                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} trailing={
+                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} initialDate={initialDate} trailing={
                   <span className="relative inline-flex items-center mr-2 shrink-0">
                     <button
                       type="button"
@@ -2789,7 +2835,7 @@ export default function HomeContent({
           centered in max-w-6xl to line up with the middle (MLB) column. */}
       {!showNews && (
         <div className="hidden sm:flex max-w-6xl mx-auto px-4 justify-center pt-2 pb-1">
-          <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} trailing={
+          <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} initialDate={initialDate} trailing={
             <span className="relative inline-flex items-center">
               <button
                 type="button"
@@ -2984,9 +3030,34 @@ export default function HomeContent({
               <span>{worldCupHubCopy.title}</span>
             </h1>
             <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-              {worldCupHubCopy.body} The World Cup column is below.
+              {worldCupHubCopy.body}{worldCupEnded ? "" : " The World Cup column is below."}
             </p>
             <div className="mt-3 grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+              {worldCupEnded ? (
+              <>
+              <a
+                href={`/worldcup?d=${WORLD_CUP_2026_FINAL}`}
+                data-umami-event="wc-hub-final"
+                className="rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-85"
+                style={{ background: "var(--accent)", border: "1px solid var(--accent)", color: "white" }}
+              >
+                The final, July 19
+              </a>
+              <a
+                href="/worldcup/highlights"
+                data-umami-event="wc-hub-highlights"
+                className="rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-85"
+                style={{
+                  background: worldCupHubMode === "highlights" ? "var(--accent)" : "var(--bg-card-hover)",
+                  border: `1px solid ${worldCupHubMode === "highlights" ? "var(--accent)" : "var(--border)"}`,
+                  color: worldCupHubMode === "highlights" ? "white" : "var(--text)",
+                }}
+              >
+                Highlights
+              </a>
+              </>
+              ) : (
+              <>
               <a
                 href="/worldcup"
                 data-umami-event="wc-hub-today"
@@ -3023,6 +3094,8 @@ export default function HomeContent({
               >
                 Spoiler-free highlights
               </a>
+              </>
+              )}
               <a
                 href="/watch-world-cup-without-spoilers"
                 data-umami-event="wc-hub-watch-guide"
@@ -3037,28 +3110,53 @@ export default function HomeContent({
                 Popular teams
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {POPULAR_WORLD_CUP_TEAMS.map((team) => (
-                  <Link
-                    key={team.slug}
-                    href={`/worldcup/teams/${team.slug}`}
-                    data-umami-event={`wc-hub-popular-${team.slug}`}
-                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
-                    style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
-                  >
-                    <span aria-hidden="true">{team.flag}</span>
-                    <span>{team.name}</span>
-                  </Link>
-                ))}
+                {POPULAR_WORLD_CUP_TEAMS.map((team) => {
+                  const pillClass = "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold";
+                  const pillStyle = { background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" };
+                  const lastMatch = worldCupEnded ? worldCupLastMatchYmd(team.slug) : null;
+                  // A plain <a>, not <Link>: /worldcup → /worldcup?d= is the same
+                  // route, so a client-side Link would keep this mounted board
+                  // and never re-read ?d=. A full load opens on that date.
+                  return lastMatch ? (
+                    <a
+                      key={team.slug}
+                      href={`/worldcup?d=${lastMatch}`}
+                      data-umami-event={`wc-hub-popular-${team.slug}`}
+                      className={pillClass}
+                      style={pillStyle}
+                    >
+                      <span aria-hidden="true">{team.flag}</span>
+                      <span>{team.name}</span>
+                    </a>
+                  ) : (
+                    <Link
+                      key={team.slug}
+                      href={`/worldcup/teams/${team.slug}`}
+                      data-umami-event={`wc-hub-popular-${team.slug}`}
+                      className={pillClass}
+                      style={pillStyle}
+                    >
+                      <span aria-hidden="true">{team.flag}</span>
+                      <span>{team.name}</span>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
             <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
               {worldCupHubCopy.note}{" "}
-              <a href="/worldcup/tomorrow" data-umami-event="wc-hub-footer-tomorrow" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
-                Tomorrow&apos;s World Cup schedule
-              </a>{" "}
+              {worldCupEnded ? (
+                <a href={`/worldcup?d=${WORLD_CUP_2026_FINAL}`} data-umami-event="wc-hub-footer-final" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+                  The final
+                </a>
+              ) : (
+                <a href="/worldcup/tomorrow" data-umami-event="wc-hub-footer-tomorrow" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+                  Tomorrow&apos;s World Cup schedule
+                </a>
+              )}{" "}
               -{" "}
               <a href="/worldcup/highlights" data-umami-event="wc-hub-footer-highlights" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
-                Spoiler-free highlights
+                {worldCupEnded ? "Highlights" : "Spoiler-free highlights"}
               </a>{" "}
               -{" "}
               <Link href="/worldcup/teams" data-umami-event="wc-hub-footer-teams" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>

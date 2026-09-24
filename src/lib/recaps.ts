@@ -137,6 +137,30 @@ export function formatRecapDuration(sec: number | null | undefined): string {
   return `${Math.max(1, Math.round(s / 60))}m`;
 }
 
+// Below this column width the recap pill stacks its heading over its buttons
+// (LeagueRecapCard). One row cannot hold both on a phone: a 390px viewport
+// gives a column 114px, the pill 92px inside its padding, and the NFL's three
+// cuts ("6m", "17m", "30m", each ~47px with the play glyph) alone run ~150px —
+// they spilled straight into the next column (Jacob 9/24), and MLB's two cuts
+// (~92px) left "Best of the day" with no room at all, so it read "Best of…".
+// The sm column (192px, 170px inside) loses the same fight: NFL's row wants
+// ~197px, MLB's ~195px. From md up (225px+, 203px inside) both fit, so 200 is
+// the line. Same idea as HEADER_SHORT_LABEL_MAX_PX in leagueLabels.
+export const RECAP_STACK_MAX_PX = 200;
+
+// The heading on that stacked, narrow layout: the line is 100px wide at 390px,
+// about 14 characters of 11.5px semibold. The NFL week goes to "W2" (Jacob
+// 9/24: "w2 flip"); the rest change only where the full form would not fit. A
+// heading that still overflows its line is dropped by the card — buttons only,
+// their aria-labels keep the series name (Jacob: "to nothing if none fit").
+export function shortRecapHeading(heading: string): string {
+  return heading
+    .replace(/^Week (\d+)$/i, "W$1")                         // NFL "Week 2" → "W2"
+    .replace(/^Best of the day$/i, "Best of day")           // MLB, 15 → 11
+    .replace(/^Every goal, /i, "")                           // EPL/MLS: "Matchweek 36" / "Matchday 31"
+    .replace(/ of the night$/i, "");                         // NBA "Top 10 plays", NHL "Top plays"
+}
+
 // "Detroit Lions" → "Lions", bare "Raiders" → "Raiders". The club button's label.
 export function clubNickname(channel: string | null | undefined): string {
   const words = String(channel ?? "").trim().split(/\s+/).filter(Boolean);
