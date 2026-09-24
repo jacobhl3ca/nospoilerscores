@@ -296,14 +296,20 @@ function nowInEt(): { y: number; mo: number; d: number; h: number; m: number } {
 // above rather than on fixed calendar dates so it moves with the schedule.
 const PICTURE_LEAD_DAYS = 45;
 const PICTURE_TRAIL_DAYS = 35; // the postseason runs about four weeks
-function playoffPicturePromo(sport: Sport, selectedDate: string, onOpen?: () => void): SubtitlePromo | null {
-  if (sport !== "mlb" || !onOpen) return null;
+// Also gates the "Playoffs · Bracket" pill HomeContent puts in the recap row of
+// today's MLB column, so the two can never disagree about the window.
+export function playoffPictureInWindow(sport: Sport, selectedDate: string): boolean {
+  if (sport !== "mlb") return false;
   const config = PLAYOFF_START_DATES.mlb;
-  if (!config) return null;
+  if (!config) return false;
   const viewDate = new Date(+selectedDate.slice(0, 4), +selectedDate.slice(4, 6) - 1, +selectedDate.slice(6, 8), 12, 0, 0);
   const start = new Date(config.date + "T12:00:00");
   const days = (viewDate.getTime() - start.getTime()) / 86400_000;
-  if (days < -PICTURE_LEAD_DAYS || days > PICTURE_TRAIL_DAYS) return null;
+  return days >= -PICTURE_LEAD_DAYS && days <= PICTURE_TRAIL_DAYS;
+}
+
+function playoffPicturePromo(sport: Sport, selectedDate: string, onOpen?: () => void): SubtitlePromo | null {
+  if (!onOpen || !playoffPictureInWindow(sport, selectedDate)) return null;
   return { label: "Playoff picture", onClick: onOpen };
 }
 

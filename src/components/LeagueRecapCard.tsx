@@ -28,6 +28,12 @@ import type { ShareCardMeta } from "@/lib/shareCard";
 //     shortRecapHeading here so it fits its 100px line.
 // The reserveSlot spacer mirrors whichever layout is live so sibling columns
 // keep the same top offset.
+//
+// `onShowBracket`: the same row on TODAY's MLB column during the playoff
+// window holds a "Playoffs · Bracket ▸" pill instead (Jacob 9/24: "playoff
+// bracket bubble … where nfl's week highlights are, that row"). Same pill and
+// button box model, so it lines up with a sibling's recap exactly as a recap
+// does. A real recap for the day wins the row.
 
 // Outer pill and button classes per layout (see the header note). Shared by
 // the real pill and the reserveSlot spacer so their heights always agree.
@@ -41,6 +47,7 @@ export default function LeagueRecapCard({
   date,
   lastPlayedDate,
   reserveSlot = false,
+  onShowBracket,
   onPlayHighlight,
   onPlayEmbed,
 }: {
@@ -55,6 +62,9 @@ export default function LeagueRecapCard({
   // first game cards of every column sit at the same y — the same idea as
   // PlayoffSubtitle's transparent header spacer.
   reserveSlot?: boolean;
+  // Opens the playoff picture on its Bracket tab. Set only when the bracket
+  // pill is due (see the header note).
+  onShowBracket?: (() => void) | null;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
 }) {
@@ -111,6 +121,45 @@ export default function LeagueRecapCard({
       alive = false;
     };
   }, [sport, ymd]);
+
+  if (!records.length && onShowBracket) {
+    return (
+      <div
+        ref={setEl}
+        data-league-recap={sport}
+        data-recap-kind="bracket"
+        data-recap-layout={stacked ? "stacked" : "row"}
+        className={`mb-2 rounded-lg flex ${stacked ? STACKED_PILL : ROW_PILL}`}
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <span
+          data-recap-heading
+          className="flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate"
+          style={{ color: "var(--text)" }}
+        >
+          Playoffs
+        </span>
+        <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
+          <button
+            type="button"
+            data-recap-bracket
+            onClick={(e) => {
+              e.stopPropagation();
+              onShowBracket();
+            }}
+            className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? STACKED_BTN : ROW_BTN}`}
+            style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+            aria-label="Playoff bracket"
+            title="Playoff bracket"
+          >
+            {/* Same 24-unit box as the ▶ glyph, so the button keeps its height. */}
+            <svg aria-hidden="true" className="shrink-0" width={glyph} height={glyph} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M3 5h6v14H3M9 12h6M15 8h6M15 16h6M15 8v8" /></svg>
+            <span className={`${minsText} font-medium whitespace-nowrap`}>Bracket</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!records.length) {
     if (!reserveSlot) return null;
