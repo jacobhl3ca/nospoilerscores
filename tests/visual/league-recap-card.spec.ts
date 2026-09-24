@@ -185,6 +185,111 @@ test("the recap pill sits on top of the NFL and MLB columns on /yesterday, and t
   await testInfo.attach("yesterday-nfl-mlb-recap-cards", { body: shot, contentType: "image/png" });
 });
 
+// Three NFL cuts on a week board (the live shape on 9/24: 6m / 17m / 30m),
+// plus MLB's two. At 390px a column is 114px wide; before 9/24 the pill kept
+// one row, so the buttons ran into the next column and MLB's heading truncated
+// to "Best of…". Now: stacked (heading over an equal-width button row), nothing
+// past the pill's own edge, the short heading whole; desktop keeps one row.
+const RECAPS_THREE = JSON.stringify({
+  fetchedAt: "2026-09-14T14:00:00Z",
+  recaps: {
+    nfl: [
+      { sport: "nfl", key: "top15", heading: "Week 1", label: "Top 15 plays", cadence: "weekly", coversWeek: 1, windowStart: "20260909", windowEnd: "20260916", videoId: "XUpaSUiyy5I", pageUrl: "https://www.youtube.com/watch?v=XUpaSUiyy5I", channel: "NFL", durationSec: 342, t: 1, sourcePolicy: "official-channel" },
+      { sport: "nfl", key: "everytd", heading: "Week 1", label: "Every touchdown", cadence: "weekly", coversWeek: 1, windowStart: "20260909", windowEnd: "20260916", videoId: "KC4OW2m3hjs", pageUrl: "https://www.youtube.com/watch?v=KC4OW2m3hjs", channel: "NFL", durationSec: 1047, t: 1, sourcePolicy: "official-channel" },
+      { sport: "nfl", key: "bestsunday", heading: "Week 1", label: "Sunday's best plays", cadence: "weekly", coversWeek: 1, windowStart: "20260909", windowEnd: "20260916", videoId: "AGzdTAjWr7U", pageUrl: "https://www.youtube.com/watch?v=AGzdTAjWr7U", channel: "NFL", durationSec: 1803, t: 1, sourcePolicy: "official-channel" },
+    ],
+    mlb: [
+      { sport: "mlb", key: "fastcast", heading: "Best of the day", label: "Best of the day", cadence: "daily", coversDate: "20260913", playbackUrl: "https://example.invalid/fastcast.m3u8", pageUrl: "https://www.mlb.com/video/fastcast-x8085", channel: "MLB.com", durationSec: 900, t: 1, sourcePolicy: "mlb.com" },
+      { sport: "mlb", key: "realfast", heading: "Best of the day", label: "60 seconds", cadence: "daily", coversDate: "20260913", playbackUrl: "https://example.invalid/realfast.m3u8", pageUrl: "https://www.mlb.com/video/real-fast-x6846", channel: "MLB.com", durationSec: 60, t: 1, sourcePolicy: "mlb.com" },
+    ],
+  },
+});
+
+async function pillMetrics(page: Page, sport: string) {
+  return page.evaluate((s) => {
+    const pill = document.querySelector<HTMLElement>(`[data-league-recap="${s}"]`)!;
+    const pr = pill.getBoundingClientRect();
+    const heading = pill.querySelector<HTMLElement>("span")!;
+    const buttons = [...pill.querySelectorAll<HTMLElement>("button")];
+    return {
+      layout: pill.dataset.recapLayout,
+      width: Math.round(pr.width),
+      overflow: pill.scrollWidth - pill.clientWidth,
+      headingText: heading.textContent?.trim(),
+      headingClipped: heading.scrollWidth > heading.clientWidth,
+      buttonsPastEdge: buttons.filter((b) => b.getBoundingClientRect().right > pr.right + 0.5).length,
+      buttonsClipped: buttons.filter((b) => b.scrollWidth > b.clientWidth).length,
+      buttonTexts: buttons.map((b) => b.textContent?.trim()),
+    };
+  }, sport);
+}
+
+test("phone (390px): three NFL cuts stack under a short heading and stay inside the column; desktop keeps one row", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.setFixedTime(NOW);
+  await seed(page);
+  // A third pinned column (in season on the fixed date) so the board is the
+  // real three-across phone layout with 114px columns, not two wide ones.
+  await page.addInitScript(() => {
+    const p = JSON.parse(localStorage.getItem("nss-preferences") ?? "{}");
+    localStorage.setItem("nss-preferences", JSON.stringify({ ...p, thirdLeague: "mls" }));
+  });
+  await page.route("**/football/nfl/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: NFL_EVENTS }));
+  await page.route("**/baseball/mlb/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: MLB_EVENTS }));
+  await page.route("**/soccer/**/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"events":[]}' }));
+  await page.route("**/news/recaps.json", route => route.fulfill({ status: 200, contentType: "application/json", body: RECAPS_THREE }));
+  await page.route("**/news/highlights.json", route => route.fulfill({ status: 200, contentType: "application/json", body: HIGHLIGHTS }));
+
+  await page.goto("/yesterday");
+  await expect(page.getByRole("heading", { name: "NFL" })).toBeVisible({ timeout: 15_000 });
+  const nflPill = page.locator('[data-league-recap="nfl"]');
+  await expect(nflPill).toBeVisible({ timeout: 15_000 });
+  await expect(nflPill.getByRole("button")).toHaveCount(3);
+  await expect(page.locator('[data-league-recap="mlb"]')).toBeVisible({ timeout: 15_000 });
+  await expect(nflPill).toHaveAttribute("data-recap-layout", "stacked");
+
+  const nfl = await pillMetrics(page, "nfl");
+  expect(nfl.width, "a phone column").toBeLessThan(200);
+  expect(nfl.buttonTexts).toEqual(["6m", "17m", "30m"]);
+  expect(nfl.headingText).toBe("Week 1");
+  expect(nfl.headingClipped).toBe(false);
+  expect(nfl.overflow).toBe(0);
+  expect(nfl.buttonsPastEdge).toBe(0);
+  expect(nfl.buttonsClipped).toBe(0);
+
+  const mlb = await pillMetrics(page, "mlb");
+  expect(mlb.layout).toBe("stacked");
+  expect(mlb.headingText).toBe("Best of day");
+  expect(mlb.headingClipped).toBe(false);
+  expect(mlb.overflow).toBe(0);
+  expect(mlb.buttonsPastEdge).toBe(0);
+
+  // The columns' first game cards line up: the spacer on a column with no
+  // records is the same height as the real pills.
+  const tops = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll<HTMLElement>('[aria-label$="game details"]')];
+    const byCol = new Map<number, number>();
+    for (const c of cards) {
+      const r = c.getBoundingClientRect();
+      const col = Math.round(r.left / 10);
+      byCol.set(col, Math.min(byCol.get(col) ?? Infinity, Math.round(r.top)));
+    }
+    return [...byCol.values()];
+  });
+  expect(tops.length).toBeGreaterThanOrEqual(2);
+  expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(1);
+
+  const shot = await page.locator("main").screenshot();
+  await testInfo.attach("phone-390-recap-pills", { body: shot, contentType: "image/png" });
+
+  // Desktop: one row, the full heading.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(nflPill).toHaveAttribute("data-recap-layout", "row", { timeout: 5_000 });
+  const wide = await pillMetrics(page, "mlb");
+  expect(wide.headingText).toBe("Best of the day");
+  expect(wide.buttonsPastEdge).toBe(0);
+});
+
 test("no record for the day → no pill, no layout change", async ({ page }) => {
   await page.clock.setFixedTime(NOW);
   await seed(page);

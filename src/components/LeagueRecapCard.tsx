@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRecapsFor, formatRecapDuration, type RecapRecord } from "@/lib/recaps";
+import { getRecapsFor, formatRecapDuration, shortRecapHeading, RECAP_STACK_MAX_PX, type RecapRecord } from "@/lib/recaps";
 import { leadChannelBlocksEmbeds } from "@/lib/youtube";
 import type { ShareCardMeta } from "@/lib/shareCard";
 
@@ -18,6 +18,23 @@ import type { ShareCardMeta } from "@/lib/shareCard";
 //
 // ⛔ Not wrapped in .hl-slot: the card-height floor (globals.css) keys on a
 // .highlight-btn INSIDE .hl-slot, and this pill is not a game card.
+//
+// Two layouts, chosen by the pill's own measured width (RECAP_STACK_MAX_PX):
+//   • wide (md+, 225px columns): heading left, buttons right, one row.
+//   • narrow (phone 114px, sm 192px): heading on top, buttons in a row under
+//     it, each button an equal share of the width. One row could not hold the
+//     NFL's three cuts plus a heading — the buttons ran into the next column
+//     and MLB's heading truncated to "Best of…" (Jacob 9/24). The heading uses
+//     shortRecapHeading here so it fits its 100px line.
+// The reserveSlot spacer mirrors whichever layout is live so sibling columns
+// keep the same top offset.
+
+// Outer pill and button classes per layout (see the header note). Shared by
+// the real pill and the reserveSlot spacer so their heights always agree.
+const ROW_PILL = "items-center gap-2 px-2.5 py-1.5";
+const STACKED_PILL = "flex-col gap-1 px-1.5 py-1.5";
+const ROW_BTN = "gap-1 px-2";
+const STACKED_BTN = "flex-1 min-w-0 gap-0.5 px-0";
 
 export default function LeagueRecapCard({
   sport,
@@ -44,6 +61,24 @@ export default function LeagueRecapCard({
   const ymd = lastPlayedDate || date;
   const [records, setRecords] = useState<RecapRecord[]>([]);
   const [prevKey, setPrevKey] = useState(`${sport}|${ymd}`);
+  // Stacked (narrow) until measured — the phone is the case that breaks, so
+  // the first paint must not be the one-row layout. A callback ref rather
+  // than useRef: the pill and its spacer are different elements, and the
+  // observer has to follow whichever one is mounted.
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const [stacked, setStacked] = useState(true);
+  useEffect(() => {
+    if (!el) return;
+    const ro = new ResizeObserver(() => setStacked(el.clientWidth < RECAP_STACK_MAX_PX));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  // Stacked buttons are sized for the phone: a 114px column leaves 100px inside
+  // px-1.5, three buttons at gap-0.5 get 32px each, and "▸ 30m" at 9px with a
+  // 9px glyph measures ~31px (measured 2026-09-24, Geist 500). The row layout
+  // keeps the 10px glyph and text.
+  const glyph = stacked ? 9 : 10;
+  const minsText = stacked ? "text-[9px]" : "text-[10px]";
 
   // Clear on a sport/date change during render (React's reset-on-prop pattern,
   // as WorldCupMattersCard does) so the previous day's buttons never flash.
@@ -73,16 +108,18 @@ export default function LeagueRecapCard({
     // button so nothing here is focusable or read out.
     return (
       <div
+        ref={setEl}
         aria-hidden="true"
         data-league-recap-spacer={sport}
-        className="mb-2 rounded-lg flex items-center gap-2 px-2.5 py-1.5 invisible"
+        data-recap-layout={stacked ? "stacked" : "row"}
+        className={`mb-2 rounded-lg flex invisible ${stacked ? STACKED_PILL : ROW_PILL}`}
         style={{ border: "1px solid transparent" }}
       >
         <span className="flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate">&nbsp;</span>
-        <div className="flex gap-1 shrink-0">
-          <span className="highlight-btn flex items-center justify-center gap-1 px-2 py-1 rounded-md">
-            <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" />
-            <span className="text-[10px] font-medium whitespace-nowrap">0m</span>
+        <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
+          <span className={`highlight-btn flex items-center justify-center rounded-md py-1 ${stacked ? STACKED_BTN : ROW_BTN}`}>
+            <svg aria-hidden="true" className="shrink-0" width={glyph} height={glyph} viewBox="0 0 24 24" />
+            <span className={`${minsText} font-medium whitespace-nowrap`}>0m</span>
           </span>
         </div>
       </div>
@@ -110,14 +147,16 @@ export default function LeagueRecapCard({
 
   return (
     <div
+      ref={setEl}
       data-league-recap={sport}
-      className="mb-2 rounded-lg flex items-center gap-2 px-2.5 py-1.5"
+      data-recap-layout={stacked ? "stacked" : "row"}
+      className={`mb-2 rounded-lg flex ${stacked ? STACKED_PILL : ROW_PILL}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
       <span className="flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate" style={{ color: "var(--text)" }}>
-        {records[0].heading}
+        {stacked ? shortRecapHeading(records[0].heading) : records[0].heading}
       </span>
-      <div className="flex gap-1 shrink-0">
+      <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
         {records.map((rec) => {
           const mins = formatRecapDuration(rec.durationSec);
           return (
@@ -128,13 +167,13 @@ export default function LeagueRecapCard({
                 e.stopPropagation();
                 play(rec);
               }}
-              className="highlight-btn flex items-center justify-center gap-1 px-2 py-1 rounded-md transition-opacity hover:opacity-80 cursor-pointer"
+              className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? STACKED_BTN : ROW_BTN}`}
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label={mins ? `${rec.label} (${mins})` : rec.label}
               title={mins ? `${rec.label} (${mins})` : rec.label}
             >
-              <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              {mins && <span className="text-[10px] font-medium whitespace-nowrap">{mins}</span>}
+              <svg aria-hidden="true" className="shrink-0" width={glyph} height={glyph} viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              {mins && <span className={`${minsText} font-medium whitespace-nowrap`}>{mins}</span>}
             </button>
           );
         })}
