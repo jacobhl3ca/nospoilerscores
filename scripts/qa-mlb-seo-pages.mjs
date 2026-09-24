@@ -3,8 +3,9 @@
 // /mlb-playoff-picture, /mlb-wild-card-standings). What they promise is all
 // runtime DOM state, so it is checked in a real Chromium rather than by grep:
 // the page opens straight onto the playoff panel on the right tab and sort,
-// the board (and so its first-run league picker) never mounts, the panel
-// starts covered and uncovers on a tap, and nothing overflows a phone.
+// the board (and so its first-run league picker) never mounts, the panel opens
+// uncovered without touching the board's own cover, series winners wait behind
+// one tap, and nothing overflows a phone.
 //
 //   npm run build && node scripts/qa-mlb-seo-pages.mjs      # the local build
 //   node scripts/qa-mlb-seo-pages.mjs --url https://hidescore.com
@@ -50,9 +51,15 @@ const SIBLINGS = PAGES.map((p) => p.route);
 
 const browser = await chromium.launch();
 
-async function openFresh(route, viewport, seed = null) {
+async function openFresh(route, viewport, seed = null, postseason = null) {
   const ctx = await browser.newContext({ viewport });
   if (seed) await ctx.addInitScript((kv) => { for (const [k, v] of Object.entries(kv)) localStorage.setItem(k, v); }, seed);
+  // A stand-in for MLB's postseason feed, so a finished series can be tested
+  // before any has been played.
+  if (postseason) {
+    await ctx.route("**/schedule/postseason/series**", (r) =>
+      r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(postseason) }));
+  }
   const page = await ctx.newPage();
   page.on("pageerror", (e) => console.log("  [page error]", e.message));
   await page.goto(urlFor(route), { waitUntil: "domcontentloaded" });
@@ -82,12 +89,11 @@ for (const p of PAGES) {
   ok(`${p.route} opens on the ${p.tab} tab`, selected === `mlb-picture-tab-${p.tab}`, selected ?? "none");
 
   const body = page.locator("[data-picture-body]");
-  const covered = await body.evaluate((el) => getComputedStyle(el).filter.includes("blur") && el.getAttribute("aria-hidden") === "true");
-  ok(`${p.route} starts covered`, covered);
-
-  await page.getByRole("button", { name: /Show the playoff picture/ }).click();
-  await page.waitForFunction(() => !getComputedStyle(document.querySelector("[data-picture-body]")).filter.includes("blur"));
-  ok(`${p.route} uncovers on tap`, true);
+  const open = await body.evaluate((el) => !getComputedStyle(el).filter.includes("blur") && el.getAttribute("aria-hidden") !== "true");
+  ok(`${p.route} opens uncovered`, open);
+  ok(`${p.route} no cover button`, (await page.getByRole("button", { name: /Show the playoff picture/ }).count()) === 0);
+  const wroteReveal = await page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith("mlb-playoff-picture-revealed-")));
+  ok(`${p.route} leaves the board's cover alone`, !wroteReveal);
 
   if (p.tab === "bracket") {
     const seats = await page.locator("[data-bracket-team]").count();
@@ -123,7 +129,6 @@ for (const p of PAGES) {
   const phone = await openFresh(p.route, { width: 390, height: 844 });
   const tabTop = await phone.page.locator('[role="tablist"]').evaluate((el) => el.getBoundingClientRect().top);
   ok(`${p.route} panel above the fold on a phone`, tabTop < 844 * 0.6, `tabs at ${Math.round(tabTop)}px`);
-  await phone.page.getByRole("button", { name: /Show the playoff picture/ }).click();
   await phone.page.waitForTimeout(300);
   const overflow = await phone.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   ok(`${p.route} no sideways page scroll at 390px`, overflow <= 0, `${overflow}px`);
@@ -139,13 +144,42 @@ for (const p of PAGES) {
   await ctx.close();
 }
 {
-  const { ctx, page } = await openFresh("/mlb-wild-card-standings", { width: 1440, height: 1000 }, {
-    "mlb-playoff-picture-sort": "playoff:desc",
-    "mlb-playoff-picture-revealed-2026": "1",
-  });
+  const { ctx, page } = await openFresh("/mlb-wild-card-standings", { width: 1440, height: 1000 }, { "mlb-playoff-picture-sort": "playoff:desc" });
   const caption = (await page.locator("table caption").first().innerText()).toLowerCase();
   ok("stored sort=playoff still opens /mlb-wild-card-standings by seed", caption.includes("sorted by seed"), caption);
-  ok("a stored reveal carries over to the page", !(await page.locator("[data-picture-body]").evaluate((el) => getComputedStyle(el).filter.includes("blur"))));
+  await ctx.close();
+}
+
+// Series results. Read the AL 3 and 6 seeds off the bracket's own logos, then
+// serve a postseason feed in which the 6 seed has swept that wild-card series.
+{
+  const first = await openFresh("/mlb-playoff-bracket", { width: 1440, height: 1000 });
+  const ids = await first.page.locator("[data-bracket-team] img").evaluateAll((imgs) =>
+    imgs.slice(0, 2).map((i) => Number(/team-logos\/(\d+)/.exec(i.getAttribute("src") || "")?.[1])));
+  await first.ctx.close();
+  const [three, six] = ids;
+  const game = (pk) => ({
+    gamePk: pk, gameType: "F", gameDate: "2026-09-29T20:00:00Z", officialDate: "2026-09-29", gamesInSeries: 3,
+    status: { abstractGameState: "Final" },
+    teams: { home: { team: { id: three }, isWinner: false }, away: { team: { id: six }, isWinner: true } },
+  });
+  const feed = { series: [{ series: { id: "F_1" }, games: [game(1), game(2)] }] };
+  const { ctx, page } = await openFresh("/mlb-playoff-bracket", { width: 1440, height: 1000 }, null, feed);
+  const toggle = page.locator("[data-bracket-results-toggle]");
+  await toggle.waitFor({ timeout: 15000 }).catch(() => {});
+  ok("a finished series puts a Show series results button up", (await toggle.count()) === 1, `AL 3/6 ids ${three}/${six}`);
+  ok("its winner stays hidden until then", (await page.locator("[data-bracket-outcome], [data-bracket-advanced]").count()) === 0);
+  await toggle.click();
+  const won = await page.locator('[data-bracket-outcome="won"]').count();
+  const lost = await page.locator('[data-bracket-outcome="lost"]').count();
+  ok("after the tap the series shows one winner and one loser", won === 1 && lost === 1, `${won} won, ${lost} lost`);
+  const moved = await page.locator("[data-bracket-advanced] img").evaluateAll((imgs) => imgs.map((i) => i.getAttribute("src")));
+  ok("the winner moves into the Division Series seat", moved.length === 1 && moved[0].includes(`/${six}.svg`), JSON.stringify(moved));
+  ok("the twelve seeded seats are still twelve", (await page.locator("[data-bracket-team]").count()) === 12);
+  await page.getByRole("tab", { name: "Picks" }).click();
+  await page.waitForFunction(() => !document.body.innerText.includes("Loading picks"), null, { timeout: 15000 }).catch(() => {});
+  const pickButtons = await page.locator('button[aria-label*="to win the"]').count();
+  ok("the Picks tab still opens off the shared feed", pickButtons > 0, `${pickButtons} pick buttons`);
   await ctx.close();
 }
 

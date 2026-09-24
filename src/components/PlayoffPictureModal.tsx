@@ -8,13 +8,16 @@ import {
   contendersBySeed,
   fetchPlayoffOdds,
   fetchPlayoffPicture,
+  playBracket,
   roundLabel,
   shadeFor,
   sortTeams,
   teamLogo,
+  worldSeriesOf,
   type BracketMatchup,
   type BracketRound,
   type BracketMatchupKey,
+  type BracketResult,
   type BracketSlot,
   type ClinchKind,
   type LeagueBracket,
@@ -347,11 +350,16 @@ function feederLabel(bracket: LeagueBracket, from: BracketMatchupKey): string {
 // One club's line in a matchup card: seed, logo, abbreviation, its chance of
 // making the field. Wide and short on purpose — the old layout stacked two
 // near-square tiles, which read as a grid of boxes rather than as a bracket.
-function Seat({ slot, odds, chasers, emptyLabel }: {
+// A seat a series winner has moved into shows that club's seed but no odds
+// pill: by then every club left is in the field, so the pill would only ever
+// say 100%. The loser of a finished series is dimmed rather than removed, so
+// the pairing still reads.
+function Seat({ slot, odds, chasers, emptyLabel, outcome = null }: {
   slot: BracketSlot;
   odds: PlayoffOdds | null;
   chasers: PlayoffTeam[];
   emptyLabel: string;
+  outcome?: "won" | "lost" | null;
 }) {
   const t = slot.team;
   if (!t) {
@@ -367,11 +375,18 @@ function Seat({ slot, odds, chasers, emptyLabel }: {
   const shown = chasers.slice(0, 2);
   const extra = chasers.length - shown.length;
   return (
-    <div>
-      <div data-bracket-team className="flex items-center gap-1.5 px-1.5 h-[30px]" title={t.name}>
-        {slot.seed ? (
+    <div style={outcome === "lost" ? { opacity: 0.4 } : undefined}>
+      <div
+        // Seeded seats and advanced seats are counted apart: QA pins exactly
+        // twelve seeded clubs, however far the postseason has gone.
+        {...(slot.from ? { "data-bracket-advanced": "" } : { "data-bracket-team": "" })}
+        {...(outcome ? { "data-bracket-outcome": outcome } : {})}
+        className="flex items-center gap-1.5 px-1.5 h-[30px]"
+        title={outcome === "won" ? `${t.name} won the series` : outcome === "lost" ? `${t.name} lost the series` : t.name}
+      >
+        {slot.seed ?? t.seed ? (
           <span className="text-[9px] font-bold tabular-nums w-2 shrink-0" style={{ color: "var(--text-muted)" }}>
-            {slot.seed}
+            {slot.seed ?? t.seed}
           </span>
         ) : null}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -390,7 +405,7 @@ function Seat({ slot, odds, chasers, emptyLabel }: {
         {t.clinch || t.clinched ? (
           <span className="text-[9px] leading-none shrink-0" style={{ color: "var(--accent)" }} title={t.clinch ? CLINCH_TEXT[t.clinch] : "Clinched berth"}>✓</span>
         ) : null}
-        <OddsPill odd={playoffOdd(t, odds)} />
+        {slot.from ? null : <OddsPill odd={playoffOdd(t, odds)} />}
       </div>
       {shown.length ? (
         <div className="pl-1.5 pr-1.5 pb-1">
@@ -435,14 +450,16 @@ function MatchupBox({ matchup, bracket, odds, chasers }: {
 }) {
   const seatChasers = (slot: BracketSlot) => (slot.seed ? chasers.get(slot.seed) ?? [] : []);
   const label = (slot: BracketSlot) => (slot.from ? feederLabel(bracket, slot.from) : slot.seed ? `Seed ${slot.seed}` : "Winner");
+  const outcome = (slot: BracketSlot) =>
+    matchup.winner == null || !slot.team ? null : slot.team.id === matchup.winner ? "won" as const : "lost" as const;
   return (
     <div
       className="rounded-lg py-0.5 w-[124px] md:w-[140px]"
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
-      <Seat slot={matchup.sides[0]} odds={odds} chasers={seatChasers(matchup.sides[0])} emptyLabel={label(matchup.sides[0])} />
+      <Seat slot={matchup.sides[0]} odds={odds} chasers={seatChasers(matchup.sides[0])} emptyLabel={label(matchup.sides[0])} outcome={outcome(matchup.sides[0])} />
       <div className="mx-1.5 h-px" style={{ background: "var(--border)", opacity: 0.6 }} />
-      <Seat slot={matchup.sides[1]} odds={odds} chasers={seatChasers(matchup.sides[1])} emptyLabel={label(matchup.sides[1])} />
+      <Seat slot={matchup.sides[1]} odds={odds} chasers={seatChasers(matchup.sides[1])} emptyLabel={label(matchup.sides[1])} outcome={outcome(matchup.sides[1])} />
     </div>
   );
 }
@@ -481,13 +498,13 @@ function RoundColumn({ round, league, season, matchups, bracket, odds, chasers }
   );
 }
 
-function LeagueHalf({ league, season, odds, mirrored }: {
+function LeagueHalf({ league, bracket, season, odds, mirrored }: {
   league: PlayoffLeague;
+  bracket: LeagueBracket;
   season: number;
   odds: PlayoffOdds | null;
   mirrored: boolean;
 }) {
-  const bracket = useMemo(() => buildBracket(league), [league]);
   const chasers = useMemo(() => contendersBySeed(league, odds), [league, odds]);
   const of = (round: BracketRound) => bracket.matchups.filter((m) => m.round === round);
   const col = (round: BracketRound) => (
@@ -506,9 +523,17 @@ function LeagueHalf({ league, season, odds, mirrored }: {
   );
 }
 
-function WorldSeriesColumn({ season }: { season: number }) {
+function WorldSeriesColumn({ season, al, nl, winner }: {
+  season: number;
+  al: PlayoffTeam | null;
+  nl: PlayoffTeam | null;
+  winner: number | null;
+}) {
   const channel = broadcastFor(season, "worldSeries", "AL");
-  const empty = { team: null, seed: null, from: null } as BracketSlot;
+  // `from` marks these as winner seats, so a pennant winner shows its seed and
+  // no odds pill, like every other seat a series winner moves into.
+  const seat = (team: PlayoffTeam | null): BracketSlot => ({ team, seed: null, from: "cs" });
+  const outcome = (team: PlayoffTeam | null) => (winner == null || !team ? null : team.id === winner ? "won" as const : "lost" as const);
   return (
     <div className="flex flex-col shrink-0">
       <div className={`${HEADER_H} text-center`}>
@@ -523,21 +548,55 @@ function WorldSeriesColumn({ season }: { season: number }) {
           className="rounded-lg py-0.5 w-[124px] md:w-[140px]"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
         >
-          <Seat slot={empty} odds={null} chasers={[]} emptyLabel="AL champion" />
+          <Seat slot={seat(al)} odds={null} chasers={[]} emptyLabel="AL champion" outcome={outcome(al)} />
           <div className="mx-1.5 h-px" style={{ background: "var(--border)", opacity: 0.6 }} />
-          <Seat slot={empty} odds={null} chasers={[]} emptyLabel="NL champion" />
+          <Seat slot={seat(nl)} odds={null} chasers={[]} emptyLabel="NL champion" outcome={outcome(nl)} />
         </div>
       </div>
     </div>
   );
 }
 
-function BracketView({ picture, odds }: { picture: PlayoffPicture; odds: PlayoffOdds | null }) {
+// Series winners come from MLB's postseason feed and move up the bracket as
+// each series ends. `coverResults` is for the search pages, which show the
+// panel with no cover: seeds are open there, but a series winner is a result,
+// so it waits behind one tap. The tap lasts for this visit only, so coming back
+// after the next series never shows its winner unasked. On the board the whole
+// panel is already behind its own cover, and results show once that is lifted.
+const NO_RESULTS: BracketResult[] = [];
+
+function BracketView({ picture, odds, results, coverResults, onShowResults }: {
+  picture: PlayoffPicture;
+  odds: PlayoffOdds | null;
+  results: BracketResult[];
+  coverResults: boolean;
+  onShowResults: () => void;
+}) {
+  const hideResults = coverResults && results.length > 0;
+  const played = hideResults ? NO_RESULTS : results;
   const al = picture.leagues.find((l) => l.key === "AL");
   const nl = picture.leagues.find((l) => l.key === "NL");
-  if (!al || !nl) return null;
+  const alB = useMemo(() => (al ? playBracket(buildBracket(al), played) : null), [al, played]);
+  const nlB = useMemo(() => (nl ? playBracket(buildBracket(nl), played) : null), [nl, played]);
+  if (!al || !nl || !alB || !nlB) return null;
+  const ws = worldSeriesOf(alB, nlB, played);
+  // Every seed clinched = the regular season is over and the field is final.
+  const fieldSet = picture.leagues.every((l) => l.seeded.length === 6 && l.seeded.every((t) => t.clinched));
   return (
     <div>
+      {hideResults ? (
+        <div className="flex justify-center mb-2">
+          <button
+            type="button"
+            data-bracket-results-toggle
+            onClick={onShowResults}
+            className="text-xs font-medium px-3 py-1.5 rounded-full cursor-pointer"
+            style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+          >
+            Show series results (spoilers)
+          </button>
+        </div>
+      ) : null}
       {/* One DOM for both widths: the halves sit side by side with the World
           Series between them on desktop, and stack on a phone. The NL half is
           mirrored only when there is room to mirror it. The desktop row scrolls
@@ -549,13 +608,15 @@ function BracketView({ picture, odds }: { picture: PlayoffPicture; odds: Playoff
             phone stacks the halves but each half is still three columns wide,
             so the sideways scroll is needed at every width, not just desktop. */}
         <div className="flex flex-col items-center gap-4 w-max mx-auto md:flex-row md:items-stretch md:gap-2">
-          <LeagueHalf league={al} season={picture.season} odds={odds} mirrored={false} />
-          <WorldSeriesColumn season={picture.season} />
-          <LeagueHalf league={nl} season={picture.season} odds={odds} mirrored />
+          <LeagueHalf league={al} bracket={alB} season={picture.season} odds={odds} mirrored={false} />
+          <WorldSeriesColumn season={picture.season} al={ws.al} nl={ws.nl} winner={ws.winner} />
+          <LeagueHalf league={nl} bracket={nlB} season={picture.season} odds={odds} mirrored />
         </div>
       </div>
-      <p className="text-[10px] text-center mt-3 m-0" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
-        If the season ended today. Seeds change until the last day.
+      <p data-bracket-note className="text-[10px] text-center mt-3 m-0" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
+        {fieldSet
+          ? "The field is set. Winners move on as each series ends."
+          : "If the season ended today. Seeds change until the last day."}
       </p>
     </div>
   );
@@ -566,22 +627,8 @@ function BracketView({ picture, odds }: { picture: PlayoffPicture; odds: Playoff
 // The bracket the Bracket tab draws, made pickable. The lock time and the
 // finished series come from MLB's postseason feed; everything else — seats,
 // scoring, storage, the leaderboard — is the generic BracketPicks.
-function PicksView({ picture }: { picture: PlayoffPicture }) {
-  const [post, setPost] = useState<MlbPostseason | null>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const ctrl = new AbortController();
-    (async () => {
-      try {
-        const p = await fetchMlbPostseason(picture.season, ctrl.signal);
-        if (!ctrl.signal.aborted) setPost(p);
-      } catch {
-        if (!ctrl.signal.aborted) setFailed(true);
-      }
-    })();
-    return () => ctrl.abort();
-  }, [picture.season]);
-
+// The feed is fetched once by the panel, which the Bracket tab reads too.
+function PicksView({ picture, post, failed }: { picture: PlayoffPicture; post: MlbPostseason | null; failed: boolean }) {
   const bracket = useMemo(() => {
     const al = picture.leagues.find((l) => l.key === "AL");
     const nl = picture.leagues.find((l) => l.key === "NL");
@@ -619,7 +666,8 @@ function PicksView({ picture }: { picture: PlayoffPicture }) {
 // ── Modal ────────────────────────────────────────────────────────────────────
 
 // `variant="page"` renders the same panel in the document flow instead of as a
-// dialog: no backdrop, no ✕, no Escape, no focus grab. It exists for the MLB
+// dialog: no backdrop, no ✕, no Escape, no focus grab, and no cover over the
+// seeds and odds (series winners still wait behind one tap). It exists for the MLB
 // search landing pages (/mlb-playoff-bracket and friends), which put the panel
 // straight under their h1 so a visitor from search sees the bracket first and
 // never meets the board's first-run league picker. `initialTab` and
@@ -661,6 +709,26 @@ export default function PlayoffPictureModal({
     })();
     return () => ctrl.abort();
   }, []);
+
+  // MLB's postseason feed: the Picks tab's lock time and results, and the
+  // series winners the Bracket tab plays through. Fetched once per panel.
+  const season = picture?.season ?? null;
+  const [post, setPost] = useState<MlbPostseason | null>(null);
+  const [postFailed, setPostFailed] = useState(false);
+  const [resultsShown, setResultsShown] = useState(false);
+  useEffect(() => {
+    if (season == null) return;
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const p = await fetchMlbPostseason(season, ctrl.signal);
+        if (!ctrl.signal.aborted) setPost(p);
+      } catch {
+        if (!ctrl.signal.aborted) setPostFailed(true);
+      }
+    })();
+    return () => ctrl.abort();
+  }, [season]);
 
   // Odds are a second feed from a second host; if it fails the picture still
   // renders, with the columns showing a dash rather than the whole panel failing.
@@ -763,7 +831,11 @@ export default function PlayoffPictureModal({
     () => (picture ? loadRevealed(picture.season) : false),
     [picture],
   );
-  const revealed = override || savedReveal;
+  // The search pages open uncovered (Jacob, 9/23): a visitor who searched for
+  // the bracket asked to see it. Nothing is written to REVEAL_KEY, so the
+  // board's copy of this panel keeps its cover. Series winners keep a cover of
+  // their own on those pages; see BracketView.
+  const revealed = override || savedReveal || inline;
 
   const reveal = () => {
     setOverride(true);
@@ -894,9 +966,15 @@ export default function PlayoffPictureModal({
                     ))}
                   </div>
                 ) : tab === "bracket" ? (
-                  <BracketView picture={picture} odds={odds} />
+                  <BracketView
+                    picture={picture}
+                    odds={odds}
+                    results={post?.results ?? NO_RESULTS}
+                    coverResults={inline && !resultsShown}
+                    onShowResults={() => setResultsShown(true)}
+                  />
                 ) : (
-                  <PicksView picture={picture} />
+                  <PicksView picture={picture} post={post} failed={postFailed} />
                 )}
               </div>
               {!revealed ? (

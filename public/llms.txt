@@ -94,7 +94,8 @@ button rather than serving a re-upload whose title gives the result away.
 
 ## MLB postseason pages
 
-Each opens straight onto the live MLB playoff panel (behind its cover).
+Each opens straight onto the live MLB playoff panel, uncovered. Series winners
+stay behind a "Show series results" tap.
 
 - https://hidescore.com/mlb-playoff-bracket — the 2026 bracket, seeds, pairings and TV per round, plus a Picks tab
 - https://hidescore.com/mlb-playoff-picture — both leagues' playoff odds, magic numbers and clinch status

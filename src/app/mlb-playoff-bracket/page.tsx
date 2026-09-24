@@ -22,12 +22,12 @@ import PlayoffPictureModal from "@/components/PlayoffPictureModal";
 // last regular-season games are Sunday Sep 27 (/schedule gameType=R). The TV
 // lines are BROADCAST[2026] in lib/playoffPicture.
 //
-// ⚠️ WHAT THE PANEL ACTUALLY DOES. The Bracket tab draws seeds and pairings
-// only. It never reads a series result, so later seats stay "ALDS winner" etc.
-// all postseason (lib/playoffPicture buildBracket). Results show up ONLY as
-// right/wrong marks in the Picks tab, behind its own second cover. Never write
-// that this page shows who advanced. The whole panel starts blurred, and the
-// reveal is remembered per season on the device (REVEAL_KEY).
+// ⚠️ WHAT THE PANEL ACTUALLY DOES (9/23 pm). On these pages the panel opens
+// UNCOVERED (Jacob chose "no cover"): seeds, odds and pairings show at once.
+// Series winners from MLB's postseason feed move up the Bracket tab
+// (playBracket), but on these pages they wait behind a "Show series results"
+// tap that lasts for the visit only. On the board the panel keeps its one
+// cover, remembered per season (REVEAL_KEY), and the pages never write it.
 const TITLE = "MLB Playoff Bracket 2026 (Seeds, Matchups, TV) | HideScore";
 const DESC =
   "The 2026 MLB playoff bracket as it stands right now. All 12 seeds, every series pairing, who is still chasing a spot, and the TV channel for each round.";
@@ -36,7 +36,7 @@ const CANONICAL = "/mlb-playoff-bracket";
 const FAQ = [
   {
     q: "What does the MLB playoff bracket look like right now?",
-    a: "Tap Show the picture on the panel at the top of this page. It draws the bracket from MLB's live standings, six seeds in each league, the two wild-card pairings on each side and the Division Series seats waiting for their winners. Until the last day of the regular season it is the bracket as if the season ended today.",
+    a: "The panel at the top of this page draws it from MLB's live standings, six seeds in each league, the two wild-card pairings on each side and the Division Series seats waiting for their winners. Until the last day of the regular season it is the bracket as if the season ended today. Once a series ends, its winner moves into the next round.",
   },
   {
     q: "When do the 2026 MLB playoffs start?",
@@ -64,7 +64,7 @@ const FAQ = [
   },
   {
     q: "Will looking at the bracket spoil a game I recorded?",
-    a: "Only if you uncover it. The seed order is worked out from every result so far, so HideScore keeps the whole panel blurred until you tap it. After that it stays open on this device for the rest of the season.",
+    a: "The seeds can, because their order is worked out from every result so far. Series winners stay hidden until you tap Show series results, and that tap lasts only for your visit. On HideScore's main board the whole panel sits under a cover.",
   },
 ];
 
@@ -105,7 +105,7 @@ export default function MlbPlayoffBracketPage() {
       lead={<PlayoffPictureModal variant="page" initialTab="bracket" />}
       intro={[
         "This is the 2026 MLB postseason bracket, drawn from MLB's own standings feed each time the page loads. Until the regular season ends on Sunday, September 27, it shows the field as if the season ended today, and the seeds move as the last games are played.",
-        "HideScore is a sports board that never prints a score, so the bracket starts under a cover. Tap it when you want to see it. The Odds tab beside it has each club's chances, and the Picks tab lets you fill out a bracket of your own.",
+        "HideScore is a sports board that never prints a score. Series winners here wait behind one tap, so a finished series is never shown to you unasked. The Odds tab beside the bracket has each club's chances, and the Picks tab lets you fill out a bracket of your own.",
       ]}
       sections={[
         {
@@ -125,8 +125,8 @@ export default function MlbPlayoffBracketPage() {
           p: "While a seat has not been clinched, its card lists the clubs outside the six that can still take it, under a small Chasing this spot label, each with its own chance of making the playoffs. A club chases one seat, the division lead when that is its likelier road and otherwise the last wild card still open. A clinched club carries a check mark, and its seat takes no chasers. Empty seats further on say where they are filled from, such as the winner of a named wild-card pair.",
         },
         {
-          h: "Why the bracket starts covered",
-          p: "A seed looks harmless, but the order of the six is worked out from every game played so far. If your club dropped from the 4 seed to the 5 overnight, the bracket just told you how last night's game ended. So the whole panel stays blurred until you ask for it, the same cover the rest of HideScore puts over results. Nothing in the bracket fills in who won a series. Once the postseason starts it keeps showing the field and its pairings.",
+          h: "Series winners, one tap away",
+          p: "When a series ends, MLB's postseason feed names the winner, and that club moves into the seat its pairing feeds while the loser stays on its card, dimmed. On this page those results wait behind a Show series results button, because a winner is exactly the thing a viewer on delay is avoiding. The tap counts for this visit only, so coming back after the next series never shows it to you unasked. A seed can give something away too. If your club dropped from the 4 seed to the 5 overnight, the bracket just told you how last night's game ended, which is why HideScore's main board keeps this whole panel under a cover."
         },
         {
           h: "Pick the whole bracket before it locks",
@@ -138,7 +138,7 @@ export default function MlbPlayoffBracketPage() {
         "Clubs still chasing an open seat, listed under that seat with their odds.",
         "The network for every round, from NBC's wild-card games to FOX's World Series.",
         "A Picks tab to call every series before the September 29 first pitch.",
-        "One cover over all of it, so a bracket check never gives away last night.",
+        "Series winners behind one tap, so a finished series is never shown unasked.",
       ]}
       ctaLabel="Open the spoiler-free board"
       links={[
