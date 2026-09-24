@@ -434,6 +434,13 @@ check(
     prebake.includes('ligue1: ["ligue 1"]'),
 );
 check(
+  "prebaker bakes NCAA volleyball from each match's conference chain behind the volleyball token",
+  prebake.includes('{ sport: "ncaavb",') &&
+    prebake.includes('ncaavb: ["volleyball"]') &&
+    prebake.includes("HL_COLLEGE_CHANNELS[lg.sport]?.primaryFromChain") &&
+    JSON.stringify(youtube.getCompetitionTitleTokens("ncaavb")) === JSON.stringify(["volleyball"]),
+);
+check(
   "prebaker revalidates persistent World Cup seed uploader and matchup",
   prebake.includes("HIGHLIGHT-SEED-REJECT") &&
     prebake.includes("hlVideoMatchesChannel(id, channel)") &&

@@ -2481,6 +2481,14 @@ const HL_LEAGUES = [
   { sport: "ncaam", path: "/basketball/mens-college-basketball/scoreboard",   channel: "March Madness" },
   { sport: "ncaaw", path: "/basketball/womens-college-basketball/scoreboard", channel: "March Madness" },
   { sport: "ncaaf", path: "/football/college-football/scoreboard",            channel: "ESPN College Football" },
+  // NCAA volleyball (added 2026-09-23). No fixed uploader: `channel: null`
+  // plus `primaryFromChain` in collegeHighlightChannels.json makes the first
+  // channel of each match's conference chain the official one — see
+  // hlFallbackChain and the item builder below. A match outside the four
+  // channel conferences has an empty chain and costs no lookup. Until this
+  // line existed the chain never ran at bake time: 0 of 445 matches baked over
+  // 9/17-9/23, so every P4 card paid a live /api/youtube lookup.
+  { sport: "ncaavb", path: "/volleyball/womens-college-volleyball/scoreboard", channel: null },
   { sport: "fifa",  path: "/soccer/fifa.world/scoreboard",                    channel: "FIFA" },
   { sport: "epl",   path: "/soccer/eng.1/scoreboard",                         channel: "NBC Sports" },
   { sport: "mls",   path: "/soccer/usa.1/scoreboard",                         channel: "Major League Soccer" },
@@ -2559,6 +2567,7 @@ const HL_WORKER_BASE = process.env.HIDESCORE_BASE || "https://hidescore.com";
 // COMPETITION_TITLE_TOKENS in src/lib/youtube.ts — keep the two in sync, or the
 // bake will write clips the client would have refused to resolve live.
 const HL_COMPETITION_TOKENS = {
+  ncaavb: ["volleyball"],
   nationschamp: ["nations championship"],
   facup: ["fa cup"],
   laliga: ["laliga", "la liga"],
@@ -3188,8 +3197,15 @@ async function bakeGameHighlights() {
             const away = hlHighlightTeamName(lg.sport, awayTeam?.shortDisplayName, awayTeam?.location);
             const home = hlHighlightTeamName(lg.sport, homeTeam?.shortDisplayName, homeTeam?.location);
             const broadcasts = (comp?.broadcasts ?? []).flatMap((b) => b?.names ?? []);
-            const fallbacks = hlFallbackChain(lg.sport, lg.channel, homeTeam, awayTeam, broadcasts);
-            if (!event.id || !away || !home) return [];
+            const chain = hlFallbackChain(lg.sport, lg.channel, homeTeam, awayTeam, broadcasts);
+            // ncaavb has no fixed channel, so the chain's first channel IS the
+            // official one and the rest stay fallbacks — mirrors chainIsPrimary
+            // in GameHighlights.tsx. A match with no chain is dark there, so it
+            // is skipped here before any lookup.
+            const chainIsPrimary = !lg.channel && !!HL_COLLEGE_CHANNELS[lg.sport]?.primaryFromChain;
+            const channel = chainIsPrimary ? chain[0]?.channel : lg.channel;
+            const fallbacks = chainIsPrimary ? chain.slice(1) : chain;
+            if (!event.id || !away || !home || (chainIsPrimary && !channel)) return [];
             let series = null;
             for (const note of comp?.notes ?? []) {
               const m = (note?.headline ?? "").match(/Game \d+/i);
@@ -3213,7 +3229,7 @@ async function bakeGameHighlights() {
             const cflPlayoff = lg.sport === "cfl" && event.season?.type === 3
               ? hlCflPlayoffTokens(comp?.notes?.[0]?.headline)
               : null;
-            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks }];
+            return [{ id: event.id, away, home, date: event.date, series, channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks }];
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
