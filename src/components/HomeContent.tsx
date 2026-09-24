@@ -17,7 +17,7 @@ import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
-import LeagueColumn from "@/components/LeagueColumn";
+import LeagueColumn, { playoffPictureInWindow } from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
 import EventDetailModal from "@/components/EventDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
@@ -639,6 +639,9 @@ export default function HomeContent({
   // see SlamBracketModal / PlayoffPictureModal.
   const [slamBracketOpen, setSlamBracketOpen] = useState(false);
   const [playoffPictureOpen, setPlayoffPictureOpen] = useState(false);
+  // The recap-row bracket pill opens straight to the Bracket tab; the subtitle
+  // link leaves it undefined so the modal's stored tab applies.
+  const [playoffPictureTab, setPlayoffPictureTab] = useState<"bracket" | undefined>(undefined);
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
@@ -2447,7 +2450,14 @@ export default function HomeContent({
     };
   }, [recapQueryKey]);
   // A stale set from the previous date/column mix never reserves a row.
-  const anyRecap = recapSports.key === recapQueryKey && recapSports.sports.size > 0;
+  // Today's MLB column puts a "Playoffs · Bracket" pill in the same row during
+  // the playoff-picture window (LeagueRecapCard onShowBracket), so it reserves
+  // the row on sibling columns exactly as a recap does.
+  const bracketPillDue = isToday && playoffPictureInWindow("mlb", selectedDate);
+  const bracketPillShown = bracketPillDue && sortedLeagues
+    .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
+    .some((l) => l.sport === "mlb");
+  const anyRecap = (recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown;
 
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
@@ -3664,7 +3674,7 @@ export default function HomeContent({
               onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
-              onShowPlayoffPicture: () => setPlayoffPictureOpen(true),
+              onShowPlayoffPicture: () => { setPlayoffPictureTab(undefined); setPlayoffPictureOpen(true); },
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
@@ -3706,6 +3716,9 @@ export default function HomeContent({
                   date={selectedDate}
                   lastPlayedDate={league.games.length ? null : league.previousGameDay?.date}
                   reserveSlot={reserveRecapSlot}
+                  onShowBracket={bracketPillDue && league.sport === "mlb"
+                    ? () => { setPlayoffPictureTab("bracket"); setPlayoffPictureOpen(true); }
+                    : null}
                   onPlayHighlight={openVideoModal}
                   onPlayEmbed={openEmbedModal}
                 />
@@ -4598,7 +4611,7 @@ export default function HomeContent({
 
       {slamBracketOpen && <SlamBracketModal onClose={() => setSlamBracketOpen(false)} />}
 
-      {playoffPictureOpen && <PlayoffPictureModal onClose={() => setPlayoffPictureOpen(false)} />}
+      {playoffPictureOpen && <PlayoffPictureModal initialTab={playoffPictureTab} onClose={() => setPlayoffPictureOpen(false)} />}
 
       {/* Bottom-right keyboard guide. Sits outside every modal so it can say
           what the post-modal keys are WHILE that modal is open (Jacob 9/8). */}
