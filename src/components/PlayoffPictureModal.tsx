@@ -9,6 +9,7 @@ import {
   fetchPlayoffOdds,
   fetchPlayoffPicture,
   roundLabel,
+  shadeFor,
   sortTeams,
   teamLogo,
   type BracketMatchup,
@@ -26,13 +27,16 @@ import {
   type SortDir,
   type SortKey,
 } from "@/lib/playoffPicture";
+import { fetchMlbPostseason, mlbPickBracket, mlbRoundHeading, type MlbPostseason } from "@/lib/mlbPicks";
+import BracketPicks from "@/components/BracketPicks";
 
 // The MLB playoff picture, behind one reveal.
 //
 // Unlike the Slam bracket, there is no useful partial gate here: the ORDER of
 // the six seeds is itself derived from every result to date, so revealing "who's
 // in" without the numbers would leak the same thing. One cover, one tap — and
-// both tabs sit behind it.
+// every tab sits behind it, Picks included (its seats are the seeds). Picks
+// adds a second cover of its own for series results; see BracketPicks.
 //
 // The cover is the whole point of the panel existing at all — a W-L record is a
 // second-order spoiler (today's 82-62 encodes whether they won last night), the
@@ -47,10 +51,11 @@ const REVEAL_KEY = (season: number) => `mlb-playoff-picture-revealed-${season}`;
 const SORT_KEY = "mlb-playoff-picture-sort";
 const TAB_KEY = "mlb-playoff-picture-tab";
 
-type TabKey = "odds" | "bracket";
+type TabKey = "odds" | "bracket" | "picks";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "odds", label: "Odds" },
   { key: "bracket", label: "Bracket" },
+  { key: "picks", label: "Picks" },
 ];
 
 interface Sort { key: SortKey; dir: SortDir }
@@ -87,7 +92,7 @@ function readSort(): Sort | null {
 function readTab(): TabKey | null {
   try {
     const t = window.localStorage.getItem(TAB_KEY);
-    return t === "bracket" || t === "odds" ? t : null;
+    return t === "bracket" || t === "odds" || t === "picks" ? t : null;
   } catch {
     return null;
   }
@@ -122,14 +127,6 @@ function statusFor(t: PlayoffTeam, showGamesBack: boolean): { text: string; tone
 function playoffOdd(t: PlayoffTeam, odds: PlayoffOdds | null): Odd | null {
   if (t.clinched) return { value: 100, label: "100%" };
   return odds?.[t.abbrev]?.playoff ?? null;
-}
-
-// ESPN shades its odds cells by the number in them. `color-mix` keeps that tied
-// to the theme's own accent, so the shade follows a theme switch instead of
-// baking in a light-mode blue.
-function shadeFor(odd: Odd | null): string | undefined {
-  if (!odd || !(odd.value > 0)) return undefined;
-  return `color-mix(in srgb, var(--accent) ${(odd.value * 0.35).toFixed(1)}%, transparent)`;
 }
 
 function OddsCell({ odd, className = "" }: { odd: Odd | null; className?: string }) {
@@ -213,8 +210,8 @@ function TeamRow({ team, seed, odds, showGamesBack }: {
         </div>
       </td>
       <OddsCell odd={playoffOdd(team, odds)} className="w-[46px]" />
-      <OddsCell odd={row?.division ?? null} className="w-[46px] hidden md:table-cell" />
-      <OddsCell odd={row?.wildCard ?? null} className="w-[46px] hidden md:table-cell" />
+      <OddsCell odd={row?.division ?? null} className="w-[46px] hidden sm:table-cell" />
+      <OddsCell odd={row?.wildCard ?? null} className="w-[46px] hidden sm:table-cell" />
       <td
         className="text-[10px] tabular-nums text-right px-1 py-1 w-[104px] whitespace-nowrap"
         style={{ color: status?.tone === "good" ? "var(--accent)" : "var(--text-muted)", opacity: !status || status.tone === "good" ? 1 : 0.75 }}
@@ -264,12 +261,16 @@ function LeagueTable({ league, odds, showGamesBack, sort, onSort }: {
     [bySeed, league.seeded, league.hunt, odds, sort.key, sort.dir],
   );
 
+  // Capped at what the widest club name needs: max-w-0 on the name cell hands
+  // it all the table's slack, so an uncapped table left a wide gap between
+  // the name and its odds. The second league sits flush right when the two
+  // are side by side, so the pair spans the panel edge to edge.
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 w-full max-w-[24rem] sm:max-w-[30rem] lg:even:justify-self-end">
       <div className="text-[10px] font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>
         {league.name}
       </div>
-      {/* Auto layout, not table-fixed: below `md` the Division and Wild card
+      {/* Auto layout, not table-fixed: below `sm` the Division and Wild card
           cells are display:none, and a fixed-layout table still treats their
           columns as auto and hands them a third of the row — which left the
           team name one letter wide on a phone. Auto layout drops a hidden
@@ -283,8 +284,8 @@ function LeagueTable({ league, odds, showGamesBack, sort, onSort }: {
             <SortHeader colKey="seed" sort={sort} onSort={onSort} className="w-11" />
             <th scope="col" className="px-1 py-1 font-normal text-left">Team</th>
             <SortHeader colKey="playoff" sort={sort} onSort={onSort} className="w-[46px]" title="Chance of making the playoffs" />
-            <SortHeader colKey="division" sort={sort} onSort={onSort} className="w-[46px] hidden md:table-cell" title="Chance of winning the division" />
-            <SortHeader colKey="wildCard" sort={sort} onSort={onSort} className="w-[46px] hidden md:table-cell" title="Chance of taking a wild card" />
+            <SortHeader colKey="division" sort={sort} onSort={onSort} className="w-[46px] hidden sm:table-cell" title="Chance of winning the division" />
+            <SortHeader colKey="wildCard" sort={sort} onSort={onSort} className="w-[46px] hidden sm:table-cell" title="Chance of taking a wild card" />
             <th scope="col" className="px-1 py-1 font-normal text-right w-[104px]">Status</th>
           </tr>
         </thead>
@@ -560,6 +561,61 @@ function BracketView({ picture, odds }: { picture: PlayoffPicture; odds: Playoff
   );
 }
 
+// ── Picks ──────────────────────────────────────────────────────────────────
+
+// The bracket the Bracket tab draws, made pickable. The lock time and the
+// finished series come from MLB's postseason feed; everything else — seats,
+// scoring, storage, the leaderboard — is the generic BracketPicks.
+function PicksView({ picture }: { picture: PlayoffPicture }) {
+  const [post, setPost] = useState<MlbPostseason | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const p = await fetchMlbPostseason(picture.season, ctrl.signal);
+        if (!ctrl.signal.aborted) setPost(p);
+      } catch {
+        if (!ctrl.signal.aborted) setFailed(true);
+      }
+    })();
+    return () => ctrl.abort();
+  }, [picture.season]);
+
+  const bracket = useMemo(() => {
+    const al = picture.leagues.find((l) => l.key === "AL");
+    const nl = picture.leagues.find((l) => l.key === "NL");
+    if (!al || !nl) return null;
+    return mlbPickBracket(picture.season, buildBracket(al), buildBracket(nl), teamLogo);
+  }, [picture]);
+
+  if (!bracket) return null;
+  if (failed) {
+    return (
+      <p role="status" className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>
+        Couldn&rsquo;t load MLB&rsquo;s postseason schedule right now, so picks can&rsquo;t open.
+      </p>
+    );
+  }
+  if (!post) {
+    return (
+      <p role="status" className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>
+        Loading picks&hellip;
+      </p>
+    );
+  }
+  return (
+    <BracketPicks
+      bracket={bracket}
+      roundHeading={(round, half) => mlbRoundHeading(round, half === "AL" || half === "NL" ? half : null)}
+      lockAt={post.lockAt}
+      lockTbd={post.lockTbd}
+      results={post.results}
+      note="Seeds can still move until the regular season ends. If one moves, the picks it touches clear and you pick again."
+    />
+  );
+}
+
 // ── Modal ────────────────────────────────────────────────────────────────────
 
 export default function PlayoffPictureModal({ onClose }: { onClose: () => void }) {
@@ -728,9 +784,11 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
             ⚾ MLB — Playoff picture
           </h2>
           <div className="flex flex-col items-end gap-1 text-[10px]" style={{ color: "var(--text-muted)" }}>
-            <span title="Any mix of that many wins or losses by the runner-up clinches the division">
-              <span className="font-bold" style={{ color: "var(--accent)" }}>Magic N</span> = wins or rival losses left to clinch the division
-            </span>
+            {tab !== "picks" ? (
+              <span title="Any mix of that many wins or losses by the runner-up clinches the division">
+                <span className="font-bold" style={{ color: "var(--accent)" }}>Magic N</span> = wins or rival losses left to clinch the division
+              </span>
+            ) : null}
             {tab === "odds" ? (
               <label className="flex items-center gap-1.5 cursor-pointer select-none">
                 <input
@@ -803,13 +861,17 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
                 aria-hidden={revealed ? undefined : true}
               >
                 {tab === "odds" ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  // Side by side only from `lg`: at `md` each half was ~355px,
+                  // and six columns in that squeezed every name to one letter.
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {picture.leagues.map((l) => (
                       <LeagueTable key={l.key} league={l} odds={odds} showGamesBack={showGamesBack} sort={sort} onSort={onSort} />
                     ))}
                   </div>
-                ) : (
+                ) : tab === "bracket" ? (
                   <BracketView picture={picture} odds={odds} />
+                ) : (
+                  <PicksView picture={picture} />
                 )}
               </div>
               {!revealed ? (

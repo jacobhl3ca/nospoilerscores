@@ -12,6 +12,9 @@
 // users (prefs stay in localStorage only).
 
 import type { Preferences } from "./preferences";
+// .ts extension: tests/auth-cache.test.mjs loads this file under plain
+// node --experimental-strip-types, which needs the extension on relative imports.
+import { withoutDeviceLocalPrefs } from "./devicePrefs.ts";
 
 export interface AuthState {
   signedIn: boolean;
@@ -209,7 +212,7 @@ export async function fetchRemotePrefs(): Promise<Partial<Preferences> | null> {
 // signed in (registered via setRemoteSync), so rapid toggles coalesce into one
 // PUT.
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingPrefs: Preferences | null = null;
+let pendingPrefs: Partial<Preferences> | null = null;
 let flushHookAttached = false;
 
 function putPrefs(body: string, keepalive: boolean): void {
@@ -242,7 +245,9 @@ function flushPendingPrefs(): void {
 }
 
 export function pushRemotePrefs(prefs: Preferences): void {
-  pendingPrefs = prefs;
+  // Device-only keys (single-column view) never reach the account copy — see
+  // lib/devicePrefs.ts.
+  pendingPrefs = withoutDeviceLocalPrefs(prefs);
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     const body = JSON.stringify(pendingPrefs);

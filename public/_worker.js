@@ -381,6 +381,9 @@ export default {
       });
     }
 
+    // --- Bracket picks leaderboard (MLB postseason). See picksRoute below.
+    if (url.pathname === "/api/picks") return picksRoute(request, env, ctx, url);
+
     // --- Serve a stored share card (rendered server-side by the prebake cron).
     if (url.pathname.startsWith("/cards/") && url.pathname.endsWith(".png")) {
       if (env.DATA) {
@@ -3956,4 +3959,215 @@ async function googleNativeComplete(request, env) {
       "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
     },
   });
+}
+
+// ===========================================================================
+// Bracket picks leaderboard — /api/picks
+//
+// The client (components/BracketPicks) keeps a player's own picks and score in
+// localStorage; this is the shared half. KV binding PICKS, one key per entry:
+//
+//   e:<board>:<name key>  → { name, picks, owner, at }   (metadata: name, picks)
+//   d:<board>:<owner>     → the entry key this device owns
+//   rl:<ip hash>          → POST count, expires after 10 minutes
+//
+// `owner` is the SHA-256 of a random token the device generates and keeps, so
+// a name belongs to the device that took it first and only that device can
+// edit it. One entry per device: submitting under a new name moves the entry.
+//
+// The server stores picks and never scores them. Scoring needs the results,
+// the client already fetches those from StatsAPI, and lib/bracketPicks cleans
+// every entry against the real bracket before scoring it — so a hand-built POST
+// that picks a team into a series it cannot reach scores nothing for it.
+//
+// Picks lock at first pitch of the first wild-card game, read from StatsAPI
+// with the same rule as lib/mlbPicks lockTimeFrom. Before the lock a GET
+// returns names only, so nobody can copy a bracket; after it, everything.
+//
+// Inert until the KV namespace is bound: every call answers 503 {disabled}.
+
+const PICKS_BOARD_RE = /^mlb-(\d{4})$/;
+const PICKS_KEY_RE = /^(?:(?:AL|NL):(?:wc-a|wc-b|ds-a|ds-b|cs)|ws)$/;
+const PICKS_TEAM_RE = /^1\d{2}$/; // MLB club ids run 108–158
+const PICKS_MAX = 11; // 4 wild card + 4 division + 2 LCS + the World Series
+const PICKS_NAME_MAX = 20;
+const PICKS_NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} .'-]*$/u;
+const PICKS_TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
+const PICKS_POST_LIMIT = 10;
+const PICKS_POST_WINDOW = 600; // seconds; KV's own floor is 60
+const PICKS_LOCK_TTL = 10 * 60 * 1000;
+const _picksLockCache = new Map();
+
+function _picksJson(body, status = 200, maxAge = 0) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": maxAge ? `public, max-age=${maxAge}` : "no-store",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+// Same rule as lib/bracketPicks cleanName.
+function _picksCleanName(raw) {
+  if (typeof raw !== "string") return null;
+  const s = raw.normalize("NFKC").replace(/\s+/g, " ").trim();
+  if (!s || s.length > PICKS_NAME_MAX || !PICKS_NAME_RE.test(s)) return null;
+  return s;
+}
+
+function _picksCleanPicks(raw) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const keys = Object.keys(raw);
+  if (keys.length > PICKS_MAX) return null;
+  const out = {};
+  for (const k of keys) {
+    const v = raw[k];
+    if (!PICKS_KEY_RE.test(k) || typeof v !== "string" || !PICKS_TEAM_RE.test(v)) return null;
+    out[k] = v;
+  }
+  return out;
+}
+
+async function _picksSha(text) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Mirror of lib/mlbPicks lockTimeFrom: the earliest wild-card game on the
+// opening day, and noon ET (16:00Z) for any game there still marked TBD.
+function _picksLockFrom(data) {
+  const games = (data?.series || []).flatMap((s) => s.games || []).filter((g) => g.gameType === "F" && g.officialDate);
+  if (!games.length) return null;
+  const first = games.map((g) => g.officialDate).sort()[0];
+  let lock = Infinity;
+  for (const g of games) {
+    if (g.officialDate !== first) continue;
+    const t = g.gameDate ? Date.parse(g.gameDate) : NaN;
+    lock = Math.min(lock, g.status?.startTimeTBD || !Number.isFinite(t) ? Date.parse(`${first}T16:00:00Z`) : t);
+  }
+  return Number.isFinite(lock) ? lock : null;
+}
+
+// undefined = could not ask; null = MLB has no wild-card games listed.
+async function _picksLock(season) {
+  const hit = _picksLockCache.get(season);
+  if (hit && Date.now() - hit.fetched < PICKS_LOCK_TTL) return hit.at;
+  try {
+    const res = await fetch(`https://statsapi.mlb.com/api/v1/schedule/postseason/series?sportId=1&season=${season}`, {
+      headers: { "User-Agent": "HideScore/1.0 (+https://hidescore.com)", Accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    const at = _picksLockFrom(await res.json());
+    _picksLockCache.set(season, { at, fetched: Date.now() });
+    return at;
+  } catch {
+    // A stale answer beats none: the lock time only ever moves by hours.
+    return hit ? hit.at : undefined;
+  }
+}
+
+async function _picksListEntries(env, board) {
+  const out = [];
+  let cursor;
+  for (let page = 0; page < 5; page++) {
+    const res = await env.PICKS.list({ prefix: `e:${board}:`, cursor });
+    for (const k of res.keys) {
+      const m = k.metadata;
+      if (m && typeof m.n === "string" && m.p && typeof m.p === "object") out.push({ name: m.n, picks: m.p });
+    }
+    if (res.list_complete || !res.cursor) break;
+    cursor = res.cursor;
+  }
+  return out;
+}
+
+async function picksRoute(request, env, ctx, url) {
+  try {
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Max-Age": "86400",
+        },
+      });
+    }
+    if (!env.PICKS) return _picksJson({ disabled: true }, 503);
+    const thisYear = new Date().getUTCFullYear();
+
+    if (request.method === "GET") {
+      const board = url.searchParams.get("board") || "";
+      const bm = PICKS_BOARD_RE.exec(board);
+      if (!bm || Number(bm[1]) !== thisYear) return _picksJson({ error: "bad_board" }, 400);
+      const cacheKey = new Request(`https://hidescore.com/api/picks?board=${board}`);
+      const cache = typeof caches !== "undefined" ? caches.default : null;
+      if (cache) {
+        const hit = await cache.match(cacheKey);
+        if (hit) return hit;
+      }
+      const lockAt = await _picksLock(bm[1]);
+      const locked = lockAt != null && Date.now() >= lockAt;
+      const entries = await _picksListEntries(env, board);
+      const body = {
+        board,
+        lockAt: lockAt != null ? new Date(lockAt).toISOString() : null,
+        locked,
+        count: entries.length,
+        ...(locked ? { entries } : { names: entries.map((e) => e.name) }),
+      };
+      const res = _picksJson(body, 200, 60);
+      if (cache && ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, res.clone()));
+      return res;
+    }
+
+    if (request.method !== "POST") return _picksJson({ error: "method" }, 405);
+    if (Number(request.headers.get("Content-Length") || 0) > 2048) return _picksJson({ error: "too_large" }, 413);
+    const raw = await request.text();
+    if (raw.length > 2048) return _picksJson({ error: "too_large" }, 413);
+    let body;
+    try { body = JSON.parse(raw); } catch { return _picksJson({ error: "bad_json" }, 400); }
+    const bm = PICKS_BOARD_RE.exec(typeof body?.board === "string" ? body.board : "");
+    if (!bm || Number(bm[1]) !== thisYear) return _picksJson({ error: "bad_board" }, 400);
+    const board = body.board;
+    const name = _picksCleanName(body.name);
+    if (!name) return _picksJson({ error: "bad_name" }, 400);
+    if (typeof body.token !== "string" || !PICKS_TOKEN_RE.test(body.token)) return _picksJson({ error: "bad_token" }, 400);
+    const picks = _picksCleanPicks(body.picks);
+    if (!picks) return _picksJson({ error: "bad_picks" }, 400);
+
+    // Rate limit before any other KV work. KV is eventually consistent, so this
+    // is a ceiling on a burst, not an exact count — enough to stop a script.
+    const rlKey = `rl:${await _picksSha(`picks|${_hsRequestIp(request)}`)}`;
+    const used = Number(await env.PICKS.get(rlKey)) || 0;
+    if (used >= PICKS_POST_LIMIT) return _picksJson({ error: "throttled" }, 429);
+    await env.PICKS.put(rlKey, String(used + 1), { expirationTtl: PICKS_POST_WINDOW });
+
+    const lockAt = await _picksLock(bm[1]);
+    if (lockAt == null) return _picksJson({ error: "lock_unknown" }, 503);
+    if (Date.now() >= lockAt) return _picksJson({ error: "locked", lockAt: new Date(lockAt).toISOString() }, 423);
+
+    const owner = await _picksSha(body.token);
+    const entryKey = `e:${board}:${encodeURIComponent(name.toLowerCase())}`;
+    const existing = await env.PICKS.get(entryKey, "json");
+    if (existing && existing.owner !== owner) return _picksJson({ error: "name_taken" }, 409);
+
+    const devKey = `d:${board}:${owner}`;
+    const prevKey = await env.PICKS.get(devKey);
+    if (prevKey && prevKey !== entryKey) {
+      const prev = await env.PICKS.get(prevKey, "json");
+      if (prev && prev.owner === owner) await env.PICKS.delete(prevKey);
+    }
+    const at = new Date().toISOString();
+    await env.PICKS.put(entryKey, JSON.stringify({ name, picks, owner, at }), { metadata: { n: name, p: picks } });
+    if (prevKey !== entryKey) await env.PICKS.put(devKey, entryKey);
+    if (typeof caches !== "undefined") {
+      try { await caches.default.delete(new Request(`https://hidescore.com/api/picks?board=${board}`)); } catch { /* best effort */ }
+    }
+    return _picksJson({ ok: true, name, at });
+  } catch {
+    return _picksJson({ error: "unavailable" }, 503);
+  }
 }
