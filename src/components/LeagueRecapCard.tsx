@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRecapsFor, formatRecapDuration, shortRecapHeading, RECAP_STACK_MAX_PX, type RecapRecord } from "@/lib/recaps";
+import { getRecapsFor, formatRecapDuration, stackedRecapHeadings, RECAP_STACK_MAX_PX, type RecapRecord } from "@/lib/recaps";
 import { leadChannelBlocksEmbeds } from "@/lib/youtube";
 import type { ShareCardMeta } from "@/lib/shareCard";
 
@@ -24,8 +24,9 @@ import type { ShareCardMeta } from "@/lib/shareCard";
 //   • narrow (phone 114px, sm 192px): heading on top, buttons in a row under
 //     it, each button an equal share of the width. One row could not hold the
 //     NFL's three cuts plus a heading — the buttons ran into the next column
-//     and MLB's heading truncated to "Best of…" (Jacob 9/24). The heading uses
-//     shortRecapHeading here so it fits its 100px line.
+//     and MLB's heading truncated to "Best of…" (Jacob 9/24). The heading is
+//     the first of stackedRecapHeadings that fits its 100px line ("Week 2
+//     highlights", else "W2"), measured on hidden copies of each candidate.
 // The reserveSlot spacer mirrors whichever layout is live so sibling columns
 // keep the same top offset.
 //
@@ -84,19 +85,30 @@ export default function LeagueRecapCard({
   // line stays so the pill keeps the spacer's height; the buttons' aria-labels
   // still carry the series name.
   const [headingHidden, setHeadingHidden] = useState(false);
+  // Index into stackedRecapHeadings: the first candidate whose hidden copy
+  // fits the heading's line.
+  const [headingPick, setHeadingPick] = useState(0);
   useEffect(() => {
     if (!el) return;
     const measure = () => {
       const narrow = el.clientWidth < RECAP_STACK_MAX_PX;
       setStacked(narrow);
       const heading = el.querySelector<HTMLElement>("[data-recap-heading]");
-      setHeadingHidden(narrow && !!heading && heading.scrollWidth > heading.clientWidth);
+      const copies = [...el.querySelectorAll<HTMLElement>("[data-recap-heading-candidate]")];
+      if (narrow && heading && copies.length) {
+        const fit = copies.findIndex((c) => c.getBoundingClientRect().width <= heading.clientWidth);
+        setHeadingPick(fit < 0 ? copies.length - 1 : fit);
+        setHeadingHidden(fit < 0);
+      } else {
+        setHeadingHidden(narrow && !!heading && heading.scrollWidth > heading.clientWidth);
+      }
     };
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
     // `records` too: a new heading on the same element gets no resize event.
-  }, [el, records]);
+    // `stacked` too: the candidate copies only mount on the stacked layout.
+  }, [el, records, stacked]);
   // Stacked buttons are sized for the phone: a 114px column leaves 100px inside
   // px-1.5, three buttons at gap-0.5 get 32px each, and "▸ 30m" at 9px with a
   // 9px glyph measures ~31px (measured 2026-09-24, Geist 500). The row layout
@@ -213,12 +225,14 @@ export default function LeagueRecapCard({
     onPlayHighlight(rec.videoId, fallbackUrl);
   };
 
+  const candidates = stackedRecapHeadings(records[0].heading);
+
   return (
     <div
       ref={setEl}
       data-league-recap={sport}
       data-recap-layout={stacked ? "stacked" : "row"}
-      className={`mb-2 rounded-lg flex ${stacked ? STACKED_PILL : ROW_PILL}`}
+      className={`relative mb-2 rounded-lg flex ${stacked ? STACKED_PILL : ROW_PILL}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
       <span
@@ -229,8 +243,21 @@ export default function LeagueRecapCard({
         aria-hidden={headingHidden || undefined}
         style={{ color: "var(--text)" }}
       >
-        {stacked ? shortRecapHeading(records[0].heading) : records[0].heading}
+        {stacked ? candidates[Math.min(headingPick, candidates.length - 1)] : records[0].heading}
       </span>
+      {/* Hidden, out-of-flow copies of each candidate at the heading's font,
+          so measure() can pick the longest that fits. After the heading, which
+          stays the pill's first span. */}
+      {stacked && candidates.map((text) => (
+        <span
+          key={text}
+          data-recap-heading-candidate
+          aria-hidden="true"
+          className="absolute left-0 top-0 invisible pointer-events-none whitespace-nowrap text-[11.5px] font-semibold tracking-tight"
+        >
+          {text}
+        </span>
+      ))}
       <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
         {records.map((rec) => {
           const mins = formatRecapDuration(rec.durationSec);
