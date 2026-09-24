@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 type FaqItem = {
   q: string;
@@ -13,6 +14,12 @@ type LinkItem = {
 type SeoLandingPageProps = {
   eyebrow?: string;
   h1: string;
+  // Rendered straight under the h1, above the intro, and wider than the text
+  // column. Added 2026-09-23 for the MLB playoff pages, which lead with the live
+  // playoff panel itself so a visitor from search reaches the bracket before
+  // any copy (and without the board's first-run league picker). A caller that
+  // passes nothing gets byte-identical output to before.
+  lead?: ReactNode;
   intro: string[];
   sections: { h: string; p: string }[];
   bullets: string[];
@@ -42,6 +49,7 @@ type SeoLandingPageProps = {
 export default function SeoLandingPage({
   eyebrow = "HideScore",
   h1,
+  lead,
   intro,
   sections,
   bullets,
@@ -62,6 +70,15 @@ export default function SeoLandingPage({
         {eyebrow}
       </p>
       <h1 className="text-2xl font-bold mb-4">{h1}</h1>
+
+      {lead ? (
+        // Centred on the page and allowed past the 2xl text column: the bracket
+        // needs the room. 100vw minus the page gutters, capped at the modal's
+        // own max-w-6xl.
+        <div className="relative left-1/2 -translate-x-1/2 mb-6" style={{ width: "min(72rem, calc(100vw - 2rem))" }}>
+          {lead}
+        </div>
+      ) : null}
 
       {intro.map((paragraph, i) => (
         <p key={`${paragraph}-${i}`} className="mb-4" style={{ color: "var(--text-muted)" }}>
