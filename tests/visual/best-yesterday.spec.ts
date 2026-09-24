@@ -1,4 +1,9 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { BEST_YESTERDAY_ENABLED } from "../../src/lib/bestYesterday";
+
+// The column is switched off (Jacob 9/24, "take down for now"). Flip the gate
+// back on and these run again.
+test.skip(!BEST_YESTERDAY_ENABLED, "Best of yesterday is switched off");
 
 // B1 "Best of yesterday": the cross-league column of last night's best games,
 // on the TODAY board. The board's last column is on Auto, so the column puts
