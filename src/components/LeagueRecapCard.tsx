@@ -30,10 +30,12 @@ import type { ShareCardMeta } from "@/lib/shareCard";
 // keep the same top offset.
 //
 // `onShowBracket`: the same row on TODAY's MLB column during the playoff
-// window holds a "Playoffs · Bracket ▸" pill instead (Jacob 9/24: "playoff
-// bracket bubble … where nfl's week highlights are, that row"). Same pill and
-// button box model, so it lines up with a sibling's recap exactly as a recap
-// does. A real recap for the day wins the row.
+// window holds a "Playoff bracket" pill with one icon-only button (Jacob 9/24:
+// "playoff bracket bubble … where nfl's week highlights are, that row"; then
+// "make it playoff bracket name and the button is just the icon"). Same pill
+// and button box model, so it lines up with a sibling's recap exactly as a
+// recap does. When the day also has a recap, the recap keeps the heading and
+// the bracket icon joins its buttons, last.
 
 // Outer pill and button classes per layout (see the header note). Shared by
 // the real pill and the reserveSlot spacer so their heights always agree.
@@ -122,6 +124,26 @@ export default function LeagueRecapCard({
     };
   }, [sport, ymd]);
 
+  // Icon only. The zero-width text keeps the button's line box, so it is as
+  // tall as a "▶ 8m" button and the pill as tall as the reserveSlot spacer.
+  const bracketButton = onShowBracket ? (
+    <button
+      type="button"
+      data-recap-bracket
+      onClick={(e) => {
+        e.stopPropagation();
+        onShowBracket();
+      }}
+      className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? STACKED_BTN : ROW_BTN}`}
+      style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+      aria-label="Playoff bracket"
+      title="Playoff bracket"
+    >
+      <svg aria-hidden="true" className="shrink-0" width={glyph + 2} height={glyph + 2} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M3 5h6v14H3M9 12h6M15 8h6M15 16h6M15 8v8" /></svg>
+      <span aria-hidden="true" className={`${minsText} font-medium`}>{"\u200B"}</span>
+    </button>
+  ) : null;
+
   if (!records.length && onShowBracket) {
     return (
       <div
@@ -137,25 +159,10 @@ export default function LeagueRecapCard({
           className="flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate"
           style={{ color: "var(--text)" }}
         >
-          Playoffs
+          Playoff bracket
         </span>
         <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
-          <button
-            type="button"
-            data-recap-bracket
-            onClick={(e) => {
-              e.stopPropagation();
-              onShowBracket();
-            }}
-            className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? STACKED_BTN : ROW_BTN}`}
-            style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
-            aria-label="Playoff bracket"
-            title="Playoff bracket"
-          >
-            {/* Same 24-unit box as the ▶ glyph, so the button keeps its height. */}
-            <svg aria-hidden="true" className="shrink-0" width={glyph} height={glyph} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M3 5h6v14H3M9 12h6M15 8h6M15 16h6M15 8v8" /></svg>
-            <span className={`${minsText} font-medium whitespace-nowrap`}>Bracket</span>
-          </button>
+          {bracketButton}
         </div>
       </div>
     );
@@ -245,6 +252,7 @@ export default function LeagueRecapCard({
             </button>
           );
         })}
+        {bracketButton}
       </div>
     </div>
   );

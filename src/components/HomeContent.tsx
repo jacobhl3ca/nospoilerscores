@@ -3674,7 +3674,10 @@ export default function HomeContent({
               onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
-              onShowPlayoffPicture: () => { setPlayoffPictureTab(undefined); setPlayoffPictureOpen(true); },
+              // The recap-row bracket pill replaces the "Playoff picture ▸"
+              // subtitle link wherever it shows (Jacob 9/24: "dont need
+              // playoff picture wording now").
+              onShowPlayoffPicture: bracketPillDue ? undefined : () => { setPlayoffPictureTab(undefined); setPlayoffPictureOpen(true); },
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
