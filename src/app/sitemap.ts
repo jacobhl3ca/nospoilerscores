@@ -7,7 +7,13 @@ export const dynamic = "force-static";
 const BASE = "https://hidescore.com";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const daily = ["", "/worldcup", "/worldcup/tomorrow", "/worldcup/highlights", "/today", "/tomorrow", "/yesterday"];
+  const daily = [
+    "", "/worldcup", "/worldcup/tomorrow", "/worldcup/highlights", "/today", "/tomorrow", "/yesterday",
+    // Added 2026-09-23. Daily rather than evergreen: each leads with the live
+    // MLB playoff panel, so what a crawler renders changes every game day from
+    // September through the World Series. Demand is in each route's header.
+    "/mlb-playoff-bracket", "/mlb-playoff-picture", "/mlb-wild-card-standings",
+  ];
   // Trimmed to the index page on 2026-09-20. The 48 per-team routes
   // (/worldcup/teams/<slug>) stay LIVE and stay linked from /worldcup/teams —
   // they are simply no longer submitted. Over the 30 days to 2026-09-20 all 48

@@ -618,7 +618,25 @@ function PicksView({ picture }: { picture: PlayoffPicture }) {
 
 // ── Modal ────────────────────────────────────────────────────────────────────
 
-export default function PlayoffPictureModal({ onClose }: { onClose: () => void }) {
+// `variant="page"` renders the same panel in the document flow instead of as a
+// dialog: no backdrop, no ✕, no Escape, no focus grab. It exists for the MLB
+// search landing pages (/mlb-playoff-bracket and friends), which put the panel
+// straight under their h1 so a visitor from search sees the bracket first and
+// never meets the board's first-run league picker. `initialTab` and
+// `initialSort` are the view that page is about; they outrank the stored ones,
+// and a click still wins.
+export default function PlayoffPictureModal({
+  onClose,
+  initialTab,
+  initialSort,
+  variant = "modal",
+}: {
+  onClose?: () => void;
+  initialTab?: TabKey;
+  initialSort?: SortKey;
+  variant?: "modal" | "page";
+}) {
+  const inline = variant === "page";
   const [picture, setPicture] = useState<PlayoffPicture | null>(null);
   const [odds, setOdds] = useState<PlayoffOdds | null>(null);
   const [failed, setFailed] = useState(false);
@@ -665,8 +683,10 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
   // setting state from an effect would cascade a render.
   const storedSort = useMemo(() => (picture ? readSort() : null), [picture]);
   const storedTab = useMemo(() => (picture ? readTab() : null), [picture]);
-  const sort = sortOverride ?? storedSort ?? DEFAULT_SORT;
-  const tab = tabOverride ?? storedTab ?? "odds";
+  // Same direction a first click on that column picks: seeds up, odds down.
+  const pageSort: Sort | null = initialSort ? { key: initialSort, dir: initialSort === "seed" ? "asc" : "desc" } : null;
+  const sort = sortOverride ?? pageSort ?? storedSort ?? DEFAULT_SORT;
+  const tab = tabOverride ?? initialTab ?? storedTab ?? "odds";
 
   const onSort = useCallback((k: SortKey) => {
     // A second click on the live column flips it. A first click on a new one
@@ -698,14 +718,16 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
   };
 
   useEffect(() => {
+    if (inline || !onClose) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, inline]);
 
   // Focus management + Tab trap (WCAG 2.4.3), matching GameDetailModal /
   // WorldCupGroupsModal / SlamBracketModal.
   useEffect(() => {
+    if (inline) return;
     const opener = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
     dialog?.focus({ preventScroll: true });
@@ -732,7 +754,7 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
       document.removeEventListener("keydown", onKeyDown);
       opener?.focus?.();
     };
-  }, []);
+  }, [inline]);
 
   // Derived at render (not synced through an effect) so switching seasons or
   // remounting can't trigger a cascading setState — same shape SlamBracketModal
@@ -757,29 +779,32 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
       })()
     : null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50" />
+  const panel = (
       <div
         ref={dialogRef}
-        tabIndex={-1}
-        className="relative rounded-xl p-4 sm:p-5 w-full max-w-6xl max-h-[85vh] overflow-y-auto shadow-xl"
+        tabIndex={inline ? undefined : -1}
+        className={inline
+          ? "relative rounded-xl p-4 sm:p-5 w-full"
+          : "relative rounded-xl p-4 sm:p-5 w-full max-w-6xl max-h-[85vh] overflow-y-auto shadow-xl"}
         style={{ background: "var(--bg)", border: "1px solid var(--border)", outline: "none" }}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        onClick={inline ? undefined : (e) => e.stopPropagation()}
+        role={inline ? "region" : "dialog"}
+        aria-modal={inline ? undefined : "true"}
         aria-label="MLB playoff picture"
+        data-picture-variant={variant}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute top-3 right-3 text-lg leading-none cursor-pointer"
-          style={{ color: "var(--text-muted)" }}
-        >
-          ✕
-        </button>
-        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 mb-2 pr-6">
+        {inline ? null : (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute top-3 right-3 text-lg leading-none cursor-pointer"
+            style={{ color: "var(--text-muted)" }}
+          >
+            ✕
+          </button>
+        )}
+        <div className={`flex flex-wrap items-start justify-between gap-x-4 gap-y-1 mb-2${inline ? "" : " pr-6"}`}>
           <h2 className="text-base sm:text-lg font-bold" style={{ color: "var(--text)" }}>
             ⚾ MLB — Playoff picture
           </h2>
@@ -897,6 +922,13 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
           </>
         )}
       </div>
+  );
+
+  if (inline) return panel;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      {panel}
     </div>
   );
 }
