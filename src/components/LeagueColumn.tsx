@@ -968,18 +968,24 @@ export default function LeagueColumn({
   // only ever grows — the same no-flash direction the old flag had.
   const [narrowColumn, setNarrowColumn] = useState(true);
   const headerLabel = (narrowColumn && SHORT_LEAGUE_LABELS[league.label]) || league.label;
-  // The Top events column mixes leagues, so each card names ITS league — the
-  // highlight channel and the share card are keyed by that label, and a
-  // "Top events" channel does not exist. Every other column is one league.
+  // The Top events and Best of yesterday columns mix leagues, so each card
+  // names ITS league — the highlight channel and the share card are keyed by
+  // that label, and a "Top events" channel does not exist. Every other column
+  // is one league.
+  const crossLeague = league.sport === "top" || league.sport === "best";
   const cardLeagueLabel = (game: Game): string => {
-    if (league.sport !== "top") return league.label;
-    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    if (!crossLeague) return league.label;
+    // Best of yesterday's games were played on a different day from the board
+    // they sit on, so the league is looked up on the game's own date.
+    const viewDate = league.sport === "best"
+      ? new Date(game.date)
+      : new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
     return sportDisplayLabel(game.sport, viewDate);
   };
-  // The chip on each Top events card ("MLB", "UCL", "Prem"): the short form of
-  // the label above. Undefined everywhere else — see GameCard.leagueTag.
+  // The chip on each cross-league card ("MLB", "UCL", "Prem"): the short form
+  // of the label above. Undefined everywhere else — see GameCard.leagueTag.
   const cardLeagueTag = (game: Game): string | undefined => {
-    if (league.sport !== "top") return undefined;
+    if (!crossLeague) return undefined;
     const label = cardLeagueLabel(game);
     return SHORT_LEAGUE_LABELS[label] || label;
   };
@@ -1411,7 +1417,8 @@ export default function LeagueColumn({
     // Top events arrives already ranked (your teams, then what espn.com is
     // featuring, live, playoffs…) — that order IS the column, in both modes.
     // Array.prototype.sort is stable, so 0 keeps it. See lib/topEvents.ts.
-    if (league.sport === "top") return 0;
+    // Best of yesterday arrives ranked too (lib/bestYesterday.ts).
+    if (crossLeague) return 0;
     const aPri = getFavPriority(a);
     const bPri = getFavPriority(b);
     const aHasFav = aPri !== Infinity;
@@ -1501,7 +1508,8 @@ export default function LeagueColumn({
   // date their feed has nothing for. They keep rendering the column either way
   // — see the eventCard branch of fetchLeague.
   const isEventTileSport = league.sport === "chess" || league.sport === "boxing" || league.sport === "poker";
-  const emptyLabel = isEventTileSport ? "No event" : "No games";
+  // A pinned Best of yesterday column can come up empty (no clips posted yet).
+  const emptyLabel = isEventTileSport ? "No event" : league.sport === "best" ? "No highlights from yesterday yet" : "No games";
   const emptyUpcomingLabel = isEventTileSport ? "No event scheduled" : "Upcoming Schedule TBD";
   // Same reason the empty copy differs: an event-tile column has no "schedule"
   // to be unavailable, it has one card that didn't load.
@@ -1757,6 +1765,7 @@ export default function LeagueColumn({
     <div
       ref={columnRef}
       data-slot-idx={canDrag ? slotIdx : undefined}
+      data-league-column={league.sport}
       className={`${widthClassName} transition-colors`}
       style={isDragging ? { opacity: 0.55 } : undefined}
     >
@@ -1902,8 +1911,9 @@ export default function LeagueColumn({
                         offseason, the one state that actually limits what
                         picking it gets you. */}
                     {[...swappableOptions!].sort((a, b) => {
-                      // The cross-league pill leads the list wherever it appears.
+                      // The cross-league pills lead the list wherever they appear.
                       if ((a.sport === "top") !== (b.sport === "top")) return a.sport === "top" ? -1 : 1;
+                      if ((a.sport === "best") !== (b.sport === "best")) return a.sport === "best" ? -1 : 1;
                       const ae = a.sport !== league.sport && !!shownElsewhere?.some((e) => e.sport === a.sport);
                       const be = b.sport !== league.sport && !!shownElsewhere?.some((e) => e.sport === b.sport);
                       return (ae ? 1 : 0) - (be ? 1 : 0);

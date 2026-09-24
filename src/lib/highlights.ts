@@ -5,7 +5,9 @@
 // all at once, no per-card scrape and no stagger. A finished game that isn't
 // baked yet (recap uploaded after the last cron) simply falls back to a live
 // resolve, so nothing regresses when a bake is missing.
-import { getApiBase } from "@/lib/youtube";
+// Relative, not "@/lib/youtube": espn.ts imports this file, and the unit tests
+// load espn.ts through jiti, which does not know the "@/" alias.
+import { getApiBase } from "./youtube";
 
 // Keyed `${sport}:${game.id}` — game.id === the ESPN event id the prebake keys
 // on. `official` = 1st button (channel recap), `extended` = 2nd button (already

@@ -8,8 +8,10 @@ import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, en
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
-import type { TopEventsOptions } from "@/lib/espn";
+import type { BestYesterdayOptions, TopEventsOptions } from "@/lib/espn";
 import { TOP_EVENTS_ENABLED } from "@/lib/topEvents";
+import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
+import { fromYmd } from "@/lib/etDay";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
@@ -97,6 +99,32 @@ function topEventsOptions(p: Preferences): TopEventsOptions {
     leagues: p.topEventsLeagues,
     count: p.topEventsCount,
   };
+}
+
+// What the Best of yesterday column pulls, in the user's order: the leagues on
+// their board (the pin, else what Auto puts there), then their favorite
+// leagues, then the auto-picker's own ranking, then the opt-in switcher
+// leagues. Opt-ins go last because they are not a signal: the v2 switcher
+// migration opted every legacy user into all of them at once, and ahead of the
+// ranking they filled the source cap with five soccer leagues before MLB.
+// Only leagues in season YESTERDAY — a pinned offseason league has no games to
+// give — and never a hidden one. Pure, for the same reason as topEventsOptions.
+function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): BestYesterdayOptions {
+  const yesterday = fromYmd(prevYmd(date));
+  const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && isLeagueActive(l, yesterday));
+  const auto = pickAndAssignLeagues(fromYmd(date), slotCount).map((l) => l.sport);
+  const board = [p.firstLeague, p.secondLeague, p.thirdLeague, p.fourthLeague, p.fifthLeague]
+    .slice(0, slotCount)
+    .map((pref, i) => (pref === undefined ? auto[i] : pref))
+    .filter((s): s is Sport => !!s && s !== "empty");
+  const { firstPref, rest } = getActiveLeagueCandidates(yesterday);
+  const ordered = [
+    ...board,
+    ...p.favoriteLeagues,
+    ...[...firstPref, ...rest].map((cfg) => cfg.sport),
+    ...(p.shownLeagues ?? []),
+  ];
+  return { sources: bestYesterdaySourceSports(ordered.filter(inSeason), p.hiddenLeagues ?? []) };
 }
 
 function getSmartDefaultOffset(cutoffHour = 13): number {
@@ -1208,7 +1236,11 @@ export default function HomeContent({
       // Slot count reads the live viewport so the initial desktop load fetches
       // all 5 leagues in one pass (isWide state hasn't flipped yet on mount).
       let [data] = await Promise.all([
-        fetchAllLeagues(date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3, topEventsOptions(prefsRef.current)),
+        fetchAllLeagues(
+          date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3,
+          topEventsOptions(prefsRef.current),
+          bestYesterdayOptions(prefsRef.current, date, isWideViewport() ? 5 : 3),
+        ),
         loadBakedHighlights(),
       ]);
       // A newer fetch started while we awaited — discard this now-stale result
@@ -1285,6 +1317,21 @@ export default function HomeContent({
     }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.topEventsMode, prefs.topEventsLeagues, prefs.topEventsCount, prefs.favoriteTeams]);
+
+  // Same for Best of yesterday: its pool is the user's leagues, so hiding one
+  // (or starring / opting into one) re-pulls the column while it is showing.
+  const bestOnBoard = leagues.some((l) => l.sport === "best");
+  useEffect(() => {
+    if (!mountedRef.current || !selectedDate || !bestOnBoard) return;
+    fetchData(selectedDate, prefs.thirdLeague, {
+      first: prefs.firstLeague,
+      second: prefs.secondLeague,
+      third: prefs.thirdLeague,
+      fourth: prefs.fourthLeague,
+      fifth: prefs.fifthLeague,
+    }, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefs.hiddenLeagues, prefs.favoriteLeagues, prefs.shownLeagues]);
 
   // Live-clock polling: while any game on the board is in-progress, silently
   // refetch every 10s so the Q4/period and clock keep advancing (matches
@@ -1592,6 +1639,13 @@ export default function HomeContent({
         defaultInSwitcher: !league.excludeFromAuto,
       });
     }
+    // Best of yesterday: a today-board column (resolveSlot turns it into the
+    // Auto league on any other date), so it is only offered there. Last in
+    // the map so the + button still adds a real league first; the column
+    // switcher floats it to the top itself.
+    if (BEST_YESTERDAY_ENABLED && selectedDate === getDateString(0)) {
+      options.set("best", { sport: "best", label: BEST_YESTERDAY_LABEL, defaultInSwitcher: true });
+    }
     return [...options.values()];
   }, [selectedDate]);
 
@@ -1625,7 +1679,11 @@ export default function HomeContent({
       // ALL_LEAGUES must never silently reorder the top of this screen.
       return i === -1 ? PICKER_RANK.indexOf("epl") - 0.5 : i;
     };
-    return [...thirdLeagueOptions].sort((a, b) => rank(a.sport) - rank(b.sport));
+    // The first-run picker chooses leagues for every day's board; Best of
+    // yesterday is a today-only column that puts itself on the board anyway.
+    return thirdLeagueOptions
+      .filter((o) => o.sport !== "best")
+      .sort((a, b) => rank(a.sport) - rank(b.sport));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- PICKER_RANK is a literal constant
   }, [thirdLeagueOptions]);
 
@@ -1827,8 +1885,8 @@ export default function HomeContent({
     }),
     [thirdLeagueOptions, prefs],
   );
-  // The news board has no cross-league feed, so its switchers skip the pill.
-  const newsSwitcherOptions = useMemo(() => switcherOptions.filter((o) => o.sport !== "top"), [switcherOptions]);
+  // The news board has no cross-league feed, so its switchers skip the pills.
+  const newsSwitcherOptions = useMemo(() => switcherOptions.filter((o) => o.sport !== "top" && o.sport !== "best"), [switcherOptions]);
 
   // Switcher sports in RELEVANCE order — the auto-picker's own ranking
   // (firstPref pins like the World Cup first, then LEAGUE_PRIORITY). Drives
@@ -1891,6 +1949,10 @@ export default function HomeContent({
         const pref = selectedSlotLeagues[i];
         if (pref === "empty") return "empty";
         const shown = displayed[queueIdx++];
+        // An Auto column showing Best of yesterday stays Auto: pinning it
+        // would carry the column past days it has nothing for, and Auto
+        // already brings it back tomorrow (fetchAllLeagues' bestAuto).
+        if (pref === undefined && shown === "best") return undefined;
         return pref ?? shown;
       });
       resolved[slotIdx] = sport;
@@ -3057,10 +3119,11 @@ export default function HomeContent({
             const queued = newsLeagueQueue.shift();
             const sport: Sport | undefined = queued?.sport;
             if (!sport) return null;
-            // A Top events score column has no news feed of its own (it is a
-            // cross-league pick, not a league). The board keeps its other
-            // mirror plus the News column rather than an empty "Top events".
-            if (sport === "top") return null;
+            // A Top events / Best of yesterday score column has no news feed
+            // of its own (it is a cross-league pick, not a league). The board
+            // keeps its other mirror plus the News column rather than an
+            // empty "Top events".
+            if (sport === "top" || sport === "best") return null;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             const orderedCascade = leagueSourceCascade(sport);
             return { slotIdx, sport, id: sport as string, label, orderedCascade };
@@ -3521,6 +3584,11 @@ export default function HomeContent({
               onAbbrevReport,
               namesCompact,
             };
+            // Best of yesterday sits on the today board, but its games are
+            // yesterday's: the finished-day card layout, none of the "today"
+            // treatment.
+            const crossDayProps = (league: LeagueData) =>
+              league.sport === "best" ? { isPastDate: true, isToday: false } : {};
             // Per-slot swap dropdowns: every column lists every in-season
             // league plus the explicitly-labelled offseason NBA option.
             // Leagues already shown in another column come through greyed (via
@@ -3565,7 +3633,12 @@ export default function HomeContent({
                 .filter((e) => e.slotIdx !== idx)
                 .map(({ sport, col }) => ({ sport, col })),
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
-              autoSport: autoSlotSports[idx],
+              // An Auto column that Best of yesterday took over: Auto IS that
+              // column today, so it carries the "· default" mark.
+              autoSport: selectedSlotLeagues[idx] === undefined
+                && slotEntries.some((e) => e.slotIdx === idx && e.league.sport === "best")
+                ? "best" as Sport
+                : autoSlotSports[idx],
               switcherMode: prefs.leagueSwitcherMode ?? ("dropdown" as const),
             });
             // Slot fetched-league queue: fetchAllLeagues skipped empty slots,
@@ -3898,6 +3971,7 @@ export default function HomeContent({
                       slotIdx={entry.slotIdx}
                       onReorderSlots={reorderSlots}
                       {...commonProps}
+                      {...crossDayProps(entry.league)}
                       showFinalSeparator
                       {...swapPropsForSlot(entry.slotIdx)}
                       onCycleLeague={cycleForEntry(entry)}
@@ -3928,6 +4002,7 @@ export default function HomeContent({
                     slotIdx={entry.slotIdx}
                     onReorderSlots={reorderSlots}
                     {...commonProps}
+                    {...crossDayProps(entry.league)}
                     {...swapPropsForSlot(entry.slotIdx)}
                     onCycleLeague={cycleForEntry(entry)}
                     widthClassName={colWidthClass}

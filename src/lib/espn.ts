@@ -3,7 +3,9 @@ import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
 import { parseEspnHeader, rankTopEvents, topEventsSourceSports, TOP_EVENTS_DEFAULT_COUNT, TOP_EVENTS_ENABLED, type EspnHeaderFeature, type TopEventsMode, type TopEventsCount } from "./topEvents";
-import { getApiBase } from "./youtube";
+import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_MIN_GAMES, prevYmd, rankBestYesterday } from "./bestYesterday";
+import { getApiBase, highlightTeamName } from "./youtube";
+import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
@@ -73,8 +75,10 @@ const SPORT_PATHS: Record<Sport, string> = {
   poker: "",
   esports: "",
   // Top events has no scoreboard of its own — fetchTopEvents pulls the real
-  // leagues' boards. Present only so the Record stays total.
+  // leagues' boards. Present only so the Record stays total. Same for Best of
+  // yesterday (fetchBestYesterday).
   top: "",
+  best: "",
   mlb: "/baseball/mlb/scoreboard",
   // Little League World Series (added 2026-08-11). ESPN files it under
   // baseball/llb and it returns the STANDARD scoreboard shape, so parseGame
@@ -1255,6 +1259,7 @@ export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES
 // keyed by this label, so each card names its own league.
 export function sportDisplayLabel(sport: Sport, viewDate: Date): string {
   if (sport === "top") return TOP_EVENTS_CONFIG.label;
+  if (sport === "best") return BEST_YESTERDAY_CONFIG.label;
   const configs = ALL_LEAGUES.filter((l) => l.sport === sport);
   const config = configs.find((l) => isLeagueActive(l, viewDate)) ?? configs[0];
   return config ? effectiveLeagueLabel(config, viewDate) : sport.toUpperCase();
@@ -1363,7 +1368,9 @@ const SPORT_RATING_CONFIG: Record<Sport, {
 }> = {
   // Never consulted: a Top events game keeps its real sport, so the rating
   // engine rates it as that league. Present only so the Record stays total.
+  // Same for a Best of yesterday game.
   top:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 30,  regulationPeriods: 4 },
+  best:   { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 30,  regulationPeriods: 4 },
   mlb:    { multiplier: 14,  overtimeBonus: 15, scoringDivisor: 3,   regulationPeriods: 9 },
   // Little League regulation is SIX innings, not nine — getting this wrong
   // would make `periods > regulationPeriods` false for a real extra-innings
@@ -2842,8 +2849,10 @@ export function espnGameUrl(game: Game): string {
     // PandaScore supplies no public per-match page, so there is no gamecast
     // to link to; this only satisfies the exhaustive switch.
     case "esports": return `https://www.pandascore.co/`;
-    // A Top events card keeps its REAL sport, so this never runs either.
-    case "top": return `https://www.espn.com/`;
+    // A Top events / Best of yesterday card keeps its REAL sport, so this
+    // never runs either.
+    case "top":
+    case "best": return `https://www.espn.com/`;
   }
 }
 
@@ -2960,7 +2969,8 @@ export function sportStreamFallback(sport: Sport): string {
     // Every tier-s/a match streams free on Twitch; the channel varies per
     // league, so the directory is the only destination right for all of them.
     case "esports": return "https://www.twitch.tv/directory/category/league-of-legends";
-    case "top": return "https://www.espn.com/watch";
+    case "top":
+    case "best": return "https://www.espn.com/watch";
   }
 }
 
@@ -5398,6 +5408,81 @@ export async function fetchTopEvents(
   return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false };
 }
 
+// ═══════════════════════════════════════════════════════════════
+// BEST OF YESTERDAY — the cross-league column of yesterday's best (Jacob 9/12)
+// ═══════════════════════════════════════════════════════════════
+// Same pattern as Top events: not in ALL_LEAGUES, handed back by resolveSlot
+// for a "best" slot pref, filled by fetchAllLeagues. It exists on the TODAY
+// board only — "yesterday" means the day before today, and on any other date
+// the slot falls back to its Auto league. See lib/bestYesterday.ts.
+// The label is spelled out, not BEST_YESTERDAY_LABEL, because
+// tests/league-labels.test.ts reads this file as text for `label: "…"` to key
+// the short header forms. tests/best-yesterday.test.ts holds the two equal.
+export const BEST_YESTERDAY_CONFIG: LeagueConfig = { sport: "best", label: "Best of yesterday", excludeFromAuto: true };
+
+export interface BestYesterdayOptions {
+  // Leagues to pull, in the user's order (bestYesterdaySourceSports).
+  sources: Sport[];
+}
+
+// Does the card have something to play? The same sources GameHighlights draws
+// its buttons from: MLB.com videos (MLB's row is MLB.com-only), NHL.com
+// videos, and a baked official-channel clip that matches THIS game. The baked
+// check is getChannelVerifiedBakedId against the record's own uploader — the
+// freshness, matchup and duplicate gates the card applies — so a stale or
+// mismatched record cannot put a card with no button in the column.
+function hasPlayableClip(game: Game, baked: Record<string, BakedHighlight>): boolean {
+  if (game.sport === "mlb") return !!(game.mlbRecapPlaybackUrl || game.mlbCondensedPlaybackUrl);
+  if (game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed)) return true;
+  const rec = baked[`${game.sport}:${game.id}`];
+  if (!rec) return false;
+  const away = highlightTeamName(game.sport, game.awayTeam.shortDisplayName, game.awayTeam.location);
+  const home = highlightTeamName(game.sport, game.homeTeam.shortDisplayName, game.homeTeam.location);
+  return !!(getChannelVerifiedBakedId(rec, "official", rec.officialChannel, away, home)
+    || getChannelVerifiedBakedId(rec, "extended", rec.extendedChannel, away, home));
+}
+
+// Yesterday is finished, so its column does not change between the board's
+// 10 s live polls. Hold each result for a few minutes instead of re-pulling up
+// to eight scoreboards on every poll. Keyed by day + sources, so a new source
+// list or a new day misses. A failed pull is dropped at once so the next call
+// retries.
+const BEST_YESTERDAY_TTL_MS = 5 * 60_000;
+const bestYesterdayCache = new Map<string, { at: number; data: Promise<LeagueData> }>();
+
+export function fetchBestYesterday(todayYmd: string, opts: BestYesterdayOptions | undefined): Promise<LeagueData> {
+  const ymd = prevYmd(todayYmd);
+  const sources = opts?.sources ?? [];
+  const key = `${ymd}|${sources.join(",")}`;
+  const hit = bestYesterdayCache.get(key);
+  if (hit && Date.now() - hit.at < BEST_YESTERDAY_TTL_MS) return hit.data;
+  const data = (async (): Promise<LeagueData> => {
+    const [pools, baked] = await Promise.all([
+      Promise.all(sources.map(async (sport) => {
+        try {
+          const { games } = await fetchGames(sport, ymd);
+          // The same video enrichment the /yesterday board runs for these two.
+          if (sport === "nhl") await enrichNhlVideos(games, ymd);
+          if (sport === "mlb") await enrichMlbVideos(games, ymd);
+          return games;
+        } catch {
+          return [] as Game[];
+        }
+      })),
+      loadBakedHighlights(),
+    ]);
+    const games = rankBestYesterday(pools.flat(), {
+      leagueOrder: sources,
+      hasClip: (game) => hasPlayableClip(game, baked),
+      bakedAt: (game) => baked[`${game.sport}:${game.id}`]?.t,
+    });
+    return { sport: "best", label: BEST_YESTERDAY_CONFIG.label, games, fetchFailed: false };
+  })();
+  bestYesterdayCache.set(key, { at: Date.now(), data });
+  data.catch(() => bestYesterdayCache.delete(key));
+  return data;
+}
+
 export async function fetchAllLeagues(
   date?: string,
   thirdLeagueSport?: Sport | "empty",
@@ -5407,6 +5492,8 @@ export async function fetchAllLeagues(
   slotCount: number = MAX_LEAGUES,
   // Only read when a slot is "top" — see fetchTopEvents.
   topOpts?: TopEventsOptions,
+  // Only read on the today board — see fetchBestYesterday.
+  bestOpts?: BestYesterdayOptions,
 ): Promise<LeagueData[]> {
   // Parse viewed date so league visibility matches the day being viewed, not today
   const viewDate = date
@@ -5420,6 +5507,7 @@ export async function fetchAllLeagues(
   // UI's "today" as past, skip the lookahead, and yield "Upcoming Schedule TBD".
   const todayYmd = toYmd(getEtServiceDate());
   const isPastView = !!date && date < todayYmd;
+  const isTodayView = !date || date === todayYmd;
 
   // Resolved slot order from the layout rules. The first three follow
   // [left, center, right] order — see the "FULL YEAR SCHEDULE" comment up top;
@@ -5436,6 +5524,9 @@ export async function fetchAllLeagues(
     if (!sport) return null;
     // A "top" pin saved while the column was on reads as Auto while it is off.
     if (sport === "top") return TOP_EVENTS_ENABLED ? TOP_EVENTS_CONFIG : null;
+    // "Yesterday" is the day before TODAY, so a "best" pin is a today-board
+    // column. Any other date gets the slot's Auto league instead.
+    if (sport === "best") return BEST_YESTERDAY_ENABLED && isTodayView ? BEST_YESTERDAY_CONFIG : null;
     const configs = ALL_LEAGUES.filter((l) => l.sport === sport);
     if (!configs.length) return null;
     // Several sports have more than one seasonal config (NFL regular season +
@@ -5464,7 +5555,18 @@ export async function fetchAllLeagues(
   const slot4Cfg = resolveSlot(slotOverrides?.fourth);
   const slot5Cfg = resolveSlot(slotOverrides?.fifth);
 
+  // The user's own choice per slot; undefined = Auto. Unset, not merely
+  // unresolved: a pin that resolves to nothing today (an out-of-season league)
+  // is still the user's choice for that column.
+  const slotPrefs = [slotOverrides?.first, slotOverrides?.second, slotOverrides?.third ?? thirdLeagueSport, slotOverrides?.fourth, slotOverrides?.fifth];
+  const lastOnAuto = slotPrefs[slotCount - 1] === undefined;
+
   let final: LeagueConfig[];
+  // The board's LAST column when it is on Auto: "filled" (its Auto league is
+  // the last entry of `final`) or "open" (Auto had no league left for it).
+  // null = the last column is the user's own pick. Best of yesterday only ever
+  // lands in an Auto last column — see bestAuto below.
+  let autoLast: "filled" | "open" | null = null;
   if (slot1Cfg || slot2Cfg || slot4Cfg || slot5Cfg || (slotOverrides?.third && slot3Cfg)) {
     // Any per-slot override → user is in full manual control. Build slot-by-slot:
     // each set slot uses its override; each unset slot falls back to its position
@@ -5483,6 +5585,7 @@ export async function fetchAllLeagues(
       .map((cfg, slotIdx) => resolveFinal(cfg, slotIdx));
     // Drop both empty slots and any null auto-fallback misses.
     final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
+    if (lastOnAuto) autoLast = slots[slotCount - 1] ? "filled" : "open";
   } else if (slot3Cfg && slot3Cfg !== "empty" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
     // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen
     // league. Slice at slotCount, NOT MAX_LEAGUES: `auto` holds up to slotCount
@@ -5493,7 +5596,17 @@ export async function fetchAllLeagues(
     final = [...auto.slice(0, slotCount - 1), slot3Cfg];
   } else {
     final = auto;
+    if (lastOnAuto) autoLast = auto.length >= slotCount ? "filled" : "open";
   }
+  // Best of yesterday takes the board's last column by itself — the today
+  // board only, and only while that column is on Auto (Jacob's default for
+  // B1: auto-add; a pinned or emptied last column is left alone). The LAST
+  // column rather than an extra one: a phone board is three columns wide and
+  // has no room for a fourth. Whether it actually lands waits on the pull —
+  // it needs BEST_YESTERDAY_MIN_GAMES qualifying games, or the Auto league
+  // keeps the column.
+  const pinnedBest = final.some((cfg) => cfg.sport === "best");
+  const bestAuto = BEST_YESTERDAY_ENABLED && isTodayView && autoLast !== null && !pinnedBest;
 
   // Keep duplicate manual slots. Replacing one of them with an unrelated auto
   // league made the grey "already shown" option misleading: the UI said a
@@ -5691,16 +5804,33 @@ export async function fetchAllLeagues(
   // rest still render.
   // Top events runs AFTER the real columns so it can reuse their games —
   // then slots back into its own position(s), duplicates included.
-  const regular = final.filter((cfg) => cfg.sport !== "top");
+  // Best of yesterday reads yesterday's boards, not this one, so it can pull
+  // alongside the real columns instead of after them.
+  const regular = final.filter((cfg) => cfg.sport !== "top" && cfg.sport !== "best");
+  const bestPromise = pinnedBest || bestAuto
+    ? fetchBestYesterday(todayYmd, bestOpts).catch(
+      (): LeagueData => ({ sport: "best", label: BEST_YESTERDAY_CONFIG.label, games: [], fetchFailed: true }),
+    )
+    : null;
   const settled = await Promise.allSettled(regular.map(fetchLeague));
   const results: (LeagueData | null)[] = settled.map((r) => (r.status === "fulfilled" ? r.value : null));
+  let top: LeagueData | null = null;
   if (final.some((cfg) => cfg.sport === "top")) {
     const prefetched = new Map<Sport, Game[]>();
     for (const r of results) if (r && r.games.length) prefetched.set(r.sport, r.games);
-    const top = await fetchTopEvents(date, viewDate, topOpts, prefetched).catch(
+    top = await fetchTopEvents(date, viewDate, topOpts, prefetched).catch(
       (): LeagueData => ({ sport: "top", label: TOP_EVENTS_CONFIG.label, games: [], fetchFailed: true }),
     );
-    final.forEach((cfg, idx) => { if (cfg.sport === "top") results.splice(idx, 0, top); });
+  }
+  const best = bestPromise ? await bestPromise : null;
+  // One pass in slot order, so each synthetic column lands at its own index.
+  final.forEach((cfg, idx) => {
+    if (cfg.sport === "top" && top) results.splice(idx, 0, top);
+    else if (cfg.sport === "best" && best) results.splice(idx, 0, best);
+  });
+  if (bestAuto && best && best.games.length >= BEST_YESTERDAY_MIN_GAMES) {
+    if (autoLast === "filled") results[final.length - 1] = best;
+    else results.push(best);
   }
   return results.filter((r): r is LeagueData => r !== null);
 }
