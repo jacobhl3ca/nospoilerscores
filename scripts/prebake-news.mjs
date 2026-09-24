@@ -3089,8 +3089,8 @@ async function bakeGameHighlights() {
     // SERVED but is never revisited, so the upload-date gate cannot reach it:
     // on the 2026-09-20 bake that band held 14 wrong-season clips, the oldest a
     // 2019 MLS game. Check those slots here instead. Only out-of-window entries
-    // pay the fetch — in-window ones are gated by the loop below, and the watch
-    // page is cached per id per run either way. An entry from before eventDate
+    // pay the fetch — in-window ones are gated by the loop below, and a good
+    // watch-page read is kept on disk either way. An entry from before eventDate
     // was stamped has nothing to compare against and is left alone.
     const gameAgeDays = v.eventDate ? Math.floor((now - Date.parse(v.eventDate)) / 86400000) : null;
     if (gameAgeDays === null || !Number.isFinite(gameAgeDays) || gameAgeDays < hlDays) {
@@ -3104,6 +3104,13 @@ async function bakeGameHighlights() {
       delete kept[slot];
       delete kept[`${slot}Channel`];
       delete kept[`${slot}DurationSec`];
+    }
+    // The date check above just read this id's watch page, so its length is
+    // free: stamp it, or a game past the per-game window keeps a bare league
+    // badge on its button until it ages out.
+    if (kept.official && !Number.isFinite(kept.officialDurationSec)) {
+      const { durationSec } = await fetchYtWatchMeta(kept.official);
+      if (Number.isFinite(durationSec)) kept.officialDurationSec = durationSec;
     }
     if (populatedSlots.some((slot) => kept[slot])) games[k] = kept;
     else console.warn(`HIGHLIGHT-AGE-DROP ${k} carried (${kept.eventDate})`);
