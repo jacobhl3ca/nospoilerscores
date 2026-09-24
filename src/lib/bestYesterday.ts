@@ -29,7 +29,9 @@ import {
 
 // Master switch. Off → the switcher row, the Settings option and the auto-add
 // all go, a saved "best" slot resolves to Auto, and nothing fetches yesterday.
-export const BEST_YESTERDAY_ENABLED = true;
+// Off 2026-09-24 (Jacob: "take down for now") while the ranking is reviewed:
+// a volleyball game ranked near the top with no clear reason.
+export const BEST_YESTERDAY_ENABLED = false;
 
 export const BEST_YESTERDAY_LABEL = "Best of yesterday";
 // Same shape as Top events: 8 cards, at most 3 from one league (MLB plays 15 a
