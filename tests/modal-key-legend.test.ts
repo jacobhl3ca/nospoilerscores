@@ -66,7 +66,7 @@ test("a plain text post with nowhere to go is down to Close and ?", () => {
   );
 });
 
-test("? is on the list in every state — it's the way back after the ✕", () => {
+test("? is on the list in every state — it opens and closes the panel", () => {
   for (const c of EVERY_CONTEXT) {
     const help = buildKeyLegend(c).find((r) => r.id === "help");
     assert.deepEqual(help?.keys, ["?"]);
