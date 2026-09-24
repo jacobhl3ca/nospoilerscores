@@ -457,9 +457,9 @@ test("parseEmbedPlayable reads the /embed/ shell's verdict (escaped or plain JSO
   assert.equal(parseEmbedPlayable("<html>nothing</html>"), null);
 });
 
-test("narrow-column heading: only headings past the 92px line change; Week N stays", () => {
-  assert.equal(shortRecapHeading("Week 2"), "Week 2");
-  assert.equal(shortRecapHeading("Week 18"), "Week 18");
+test("narrow-column heading: Week N → WN; other headings change only past the line", () => {
+  assert.equal(shortRecapHeading("Week 2"), "W2");
+  assert.equal(shortRecapHeading("Week 18"), "W18");
   assert.equal(shortRecapHeading("Best of the day"), "Best of day");
   assert.equal(shortRecapHeading("Every goal, Matchweek 36"), "Matchweek 36");
   assert.equal(shortRecapHeading("Every goal, Matchday 31"), "Matchday 31");

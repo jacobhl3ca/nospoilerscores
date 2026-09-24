@@ -149,11 +149,13 @@ export function formatRecapDuration(sec: number | null | undefined): string {
 export const RECAP_STACK_MAX_PX = 200;
 
 // The heading on that stacked, narrow layout: the line is 100px wide at 390px,
-// about 14 characters of 11.5px semibold, so only headings past that change.
-// "Week 2" fits as it is (Jacob 9/24 floated "W2" — not needed once the
-// heading has its own line; the file's callers can flip to that in one place).
+// about 14 characters of 11.5px semibold. The NFL week goes to "W2" (Jacob
+// 9/24: "w2 flip"); the rest change only where the full form would not fit. A
+// heading that still overflows its line is dropped by the card — buttons only,
+// their aria-labels keep the series name (Jacob: "to nothing if none fit").
 export function shortRecapHeading(heading: string): string {
   return heading
+    .replace(/^Week (\d+)$/i, "W$1")                         // NFL "Week 2" → "W2"
     .replace(/^Best of the day$/i, "Best of day")           // MLB, 15 → 11
     .replace(/^Every goal, /i, "")                           // EPL/MLS: "Matchweek 36" / "Matchday 31"
     .replace(/ of the night$/i, "");                         // NBA "Top 10 plays", NHL "Top plays"

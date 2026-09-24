@@ -67,12 +67,24 @@ export default function LeagueRecapCard({
   // observer has to follow whichever one is mounted.
   const [el, setEl] = useState<HTMLDivElement | null>(null);
   const [stacked, setStacked] = useState(true);
+  // A short heading that still overflows its line on the stacked layout is
+  // dropped rather than ellipsised (Jacob 9/24: "to nothing if none fit"). The
+  // line stays so the pill keeps the spacer's height; the buttons' aria-labels
+  // still carry the series name.
+  const [headingHidden, setHeadingHidden] = useState(false);
   useEffect(() => {
     if (!el) return;
-    const ro = new ResizeObserver(() => setStacked(el.clientWidth < RECAP_STACK_MAX_PX));
+    const measure = () => {
+      const narrow = el.clientWidth < RECAP_STACK_MAX_PX;
+      setStacked(narrow);
+      const heading = el.querySelector<HTMLElement>("[data-recap-heading]");
+      setHeadingHidden(narrow && !!heading && heading.scrollWidth > heading.clientWidth);
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [el]);
+    // `records` too: a new heading on the same element gets no resize event.
+  }, [el, records]);
   // Stacked buttons are sized for the phone: a 114px column leaves 100px inside
   // px-1.5, three buttons at gap-0.5 get 32px each, and "▸ 30m" at 9px with a
   // 9px glyph measures ~31px (measured 2026-09-24, Geist 500). The row layout
@@ -153,7 +165,14 @@ export default function LeagueRecapCard({
       className={`mb-2 rounded-lg flex ${stacked ? STACKED_PILL : ROW_PILL}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
-      <span className="flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate" style={{ color: "var(--text)" }}>
+      <span
+        data-recap-heading
+        // `invisible`, not unmounted: the text must stay measurable, or the
+        // next measure would see an empty span and bring it back (flicker).
+        className={`flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate ${headingHidden ? "invisible" : ""}`}
+        aria-hidden={headingHidden || undefined}
+        style={{ color: "var(--text)" }}
+      >
         {stacked ? shortRecapHeading(records[0].heading) : records[0].heading}
       </span>
       <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
