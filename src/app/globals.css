@@ -60,8 +60,18 @@
      - stale value too SMALL  -> the header itself is taller and paints over it
    Either way there is no transparent band, for any value of --header-h.
    Guarded by tests/visual/sticky-seam.spec.ts, which deliberately corrupts
-   --header-h and asserts nothing bleeds through. */
+   --header-h and asserts nothing bleeds through.
+
+   OVERLAP (Jacob 9/23, fifth report): with the numbers equal, a zoomed page
+   (fractional device-pixel ratio) still snaps the fixed cover's bottom edge and
+   the sticky title's top edge to different device pixels, which leaves a
+   one-device-pixel row where card edges and logos show under the header. The
+   cover now runs --seam-overlap past the pin line, over the title's own top
+   padding (0.5rem at the least, same var(--bg)), so rounding can never open
+   that row. News view sets it to 0: there a source header can pin flush
+   under the toolbar and the overlap would clip its top border. */
 .sticky-seam-cover {
+  --seam-overlap: 2px;
   position: fixed;
   top: 0;
   left: 0;
@@ -69,11 +79,14 @@
   z-index: 35;
   pointer-events: none;
   background: var(--bg);
-  height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-h, 0px));
+  height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-h, 0px) + var(--seam-overlap));
+}
+.sticky-seam-cover[data-news] {
+  --seam-overlap: 0px;
 }
 @media (min-width: 640px) {
   .sticky-seam-cover {
-    height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-h, 0px));
+    height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-h, 0px) + var(--seam-overlap));
   }
 }
 

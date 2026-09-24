@@ -247,11 +247,11 @@ try {
       ok("playoff picture is untappable while covered", state.events === "none");
     }
 
-    // Two tabs, and BOTH of them sit behind the one cover — switching views is
-    // not a way around the spoiler gate.
+    // Three tabs since Picks landed (#114), and ALL of them sit behind the one
+    // cover — switching views is not a way around the spoiler gate.
     const tabs = dialog.locator('[role="tab"]');
     const tabNames = await tabs.allInnerTexts();
-    ok("the picture has an Odds and a Bracket tab", tabNames.length === 2 && /odds/i.test(tabNames[0]) && /bracket/i.test(tabNames[1]), tabNames.join(" | "));
+    ok("the picture has Odds, Bracket and Picks tabs", tabNames.length === 3 && /odds/i.test(tabNames[0]) && /bracket/i.test(tabNames[1]) && /picks/i.test(tabNames[2]), tabNames.join(" | "));
     await tabs.nth(1).click();
     await page.waitForTimeout(300);
     const coveredBracket = await coverState(page);
@@ -443,6 +443,33 @@ try {
     foot = await readFoot();
     ok("odds footer is the seed line only", foot?.text === "Seeds 1\u20133 are the division winners, 4\u20136 the wild cards.", foot?.text);
     ok("odds seed line shares the Updated row", foot?.sameRow === true, JSON.stringify(foot));
+
+    // The name cell takes the table's slack, so an uncapped table opened a wide
+    // gap between each club and its odds, and at `md` two squeezed tables cut
+    // every name to one letter. From `sm` up: whole names, all six columns, and
+    // the name cell no wider than the longest name needs.
+    for (const w of [1440, 1024, 800, 700, 640]) {
+      await page.setViewportSize({ width: w, height: 1000 });
+      await page.waitForTimeout(300);
+      const fit = await dialog.evaluate(() => {
+        const tables = [...document.querySelectorAll('[role="dialog"][aria-label="MLB playoff picture"] table')];
+        return tables.map((t) => {
+          const rows = [...t.querySelectorAll("tbody tr")].filter((r) => r.cells.length === 6);
+          const names = rows.map((r) => r.cells[1].querySelector("span"));
+          const cell = rows[0].cells[1].getBoundingClientRect().width;
+          const need = Math.max(...names.map((n) => n.scrollWidth)) + 18 + 6 + 8;
+          return {
+            cut: names.filter((n) => n.scrollWidth > n.clientWidth + 1).map((n) => n.textContent),
+            slack: Math.round(cell - need),
+            cols: [...rows[0].cells].filter((c) => getComputedStyle(c).display !== "none").length,
+          };
+        });
+      });
+      ok(`no club name is cut off at ${w}px`, fit.every((f) => f.cut.length === 0), fit.flatMap((f) => f.cut).join(", ") || "all whole");
+      ok(`no wide gap after the club name at ${w}px`, fit.every((f) => f.slack <= 64), fit.map((f) => `${f.slack}px`).join(" / "));
+      ok(`all six odds columns show at ${w}px`, fit.every((f) => f.cols === 6), fit.map((f) => f.cols).join(" / "));
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
   }
 } catch (e) {
   ok("run completed without throwing", false, e.message);

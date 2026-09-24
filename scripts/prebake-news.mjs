@@ -17,6 +17,7 @@ import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
 } from "./lib/fotmob.mjs";
+import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 
 const OUT_DIR = "public/news";
 
@@ -2484,6 +2485,14 @@ const HL_LEAGUES = [
   { sport: "ncaam", path: "/basketball/mens-college-basketball/scoreboard",   channel: "March Madness" },
   { sport: "ncaaw", path: "/basketball/womens-college-basketball/scoreboard", channel: "March Madness" },
   { sport: "ncaaf", path: "/football/college-football/scoreboard",            channel: "ESPN College Football" },
+  // NCAA volleyball (added 2026-09-23). No fixed uploader: `channel: null`
+  // plus `primaryFromChain` in collegeHighlightChannels.json makes the first
+  // channel of each match's conference chain the official one — see
+  // hlFallbackChain and the item builder below. A match outside the four
+  // channel conferences has an empty chain and costs no lookup. Until this
+  // line existed the chain never ran at bake time: 0 of 445 matches baked over
+  // 9/17-9/23, so every P4 card paid a live /api/youtube lookup.
+  { sport: "ncaavb", path: "/volleyball/womens-college-volleyball/scoreboard", channel: null },
   { sport: "fifa",  path: "/soccer/fifa.world/scoreboard",                    channel: "FIFA" },
   { sport: "epl",   path: "/soccer/eng.1/scoreboard",                         channel: "NBC Sports" },
   { sport: "mls",   path: "/soccer/usa.1/scoreboard",                         channel: "Major League Soccer" },
@@ -2553,6 +2562,12 @@ const HL_LEAGUES = [
   // TSN is the uploader (16/16 strict + week hits on Weeks 12–15); the week
   // gate is load-bearing because TSN's 2024/2025 uploads carry no year.
   { sport: "cfl",    path: "/api/cfl",                                          channel: "TSN", worker: true },
+  // NCAA women's hockey (added 2026-09-23). No fixed uploader, like ncaavb:
+  // `channel: null` plus `primaryFromChain` makes the ECAC Hockey channel the
+  // official one for any game with an ECAC school, behind the `women` token
+  // below. Every other game has an empty chain and costs no lookup. See
+  // src/lib/collegeHighlights.ts for the channel probe.
+  { sport: "ncaawh", path: "/hockey/womens-college-hockey/scoreboard",       channel: null },
 ];
 // Origin for the worker-served leagues above. Overridable so a local
 // `wrangler pages dev` run can be baked against.
@@ -2562,10 +2577,12 @@ const HL_WORKER_BASE = process.env.HIDESCORE_BASE || "https://hidescore.com";
 // COMPETITION_TITLE_TOKENS in src/lib/youtube.ts — keep the two in sync, or the
 // bake will write clips the client would have refused to resolve live.
 const HL_COMPETITION_TOKENS = {
+  ncaavb: ["volleyball"],
   nationschamp: ["nations championship"],
   facup: ["fa cup"],
   laliga: ["laliga", "la liga"],
   ligue1: ["ligue 1"],
+  ncaawh: ["women"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts. Sent per
 // EVENT: TSN titles the postseason by round with no year, and a playoff card
@@ -2624,6 +2641,7 @@ const HL_TEAM_ALIASES = {
   "Red Bull NY": "New York Red Bulls",
   Tempo: "Toronto Tempo",
   Valkyries: "Golden State Valkyries",
+  Rensselaer: "RPI",
 };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
 // The LLWS code->state/country table is the SAME FILE src/lib/youtube.ts reads,
@@ -2929,7 +2947,7 @@ async function hlVideoMatchesChannel(id, channel) {
 // cut. Measured against the live manifest 2026-09-20: ~105 of 135 soccer
 // `extended` slots held the wrong season, the oldest a 2012 MLS game.
 // The watch page's uploadDate settles it. A failed fetch yields null and the
-// id is KEPT — see uploadFitsGameDate. Cached per id per run, and the club
+// id is KEPT — see uploadFitsGameDate. Good reads persist on disk, and the club
 // slot already pays this fetch, so it is at most one extra request per id.
 // Exported shape kept simple on purpose: PLAN-3 reuses it.
 // Fail-open tally for the gate below. An unreadable upload date returns PASS
@@ -3242,8 +3260,8 @@ async function bakeGameHighlights() {
     // SERVED but is never revisited, so the upload-date gate cannot reach it:
     // on the 2026-09-20 bake that band held 14 wrong-season clips, the oldest a
     // 2019 MLS game. Check those slots here instead. Only out-of-window entries
-    // pay the fetch — in-window ones are gated by the loop below, and the watch
-    // page is cached per id per run either way. An entry from before eventDate
+    // pay the fetch — in-window ones are gated by the loop below, and a good
+    // watch-page read is kept on disk either way. An entry from before eventDate
     // was stamped has nothing to compare against and is left alone.
     const gameAgeDays = v.eventDate ? Math.floor((now - Date.parse(v.eventDate)) / 86400000) : null;
     if (gameAgeDays === null || !Number.isFinite(gameAgeDays) || gameAgeDays < hlDays) {
@@ -3257,6 +3275,13 @@ async function bakeGameHighlights() {
       delete kept[slot];
       delete kept[`${slot}Channel`];
       delete kept[`${slot}DurationSec`];
+    }
+    // The date check above just read this id's watch page, so its length is
+    // free: stamp it, or a game past the per-game window keeps a bare league
+    // badge on its button until it ages out.
+    if (kept.official && !Number.isFinite(kept.officialDurationSec)) {
+      const { durationSec } = await fetchYtWatchMeta(kept.official);
+      if (Number.isFinite(durationSec)) kept.officialDurationSec = durationSec;
     }
     if (populatedSlots.some((slot) => kept[slot])) games[k] = kept;
     else console.warn(`HIGHLIGHT-AGE-DROP ${k} carried (${kept.eventDate})`);
@@ -3334,8 +3359,15 @@ async function bakeGameHighlights() {
             const away = hlHighlightTeamName(lg.sport, awayTeam?.shortDisplayName, awayTeam?.location);
             const home = hlHighlightTeamName(lg.sport, homeTeam?.shortDisplayName, homeTeam?.location);
             const broadcasts = (comp?.broadcasts ?? []).flatMap((b) => b?.names ?? []);
-            const fallbacks = hlFallbackChain(lg.sport, lg.channel, homeTeam, awayTeam, broadcasts);
-            if (!event.id || !away || !home) return [];
+            const chain = hlFallbackChain(lg.sport, lg.channel, homeTeam, awayTeam, broadcasts);
+            // ncaavb has no fixed channel, so the chain's first channel IS the
+            // official one and the rest stay fallbacks — mirrors chainIsPrimary
+            // in GameHighlights.tsx. A match with no chain is dark there, so it
+            // is skipped here before any lookup.
+            const chainIsPrimary = !lg.channel && !!HL_COLLEGE_CHANNELS[lg.sport]?.primaryFromChain;
+            const channel = chainIsPrimary ? chain[0]?.channel : lg.channel;
+            const fallbacks = chainIsPrimary ? chain.slice(1) : chain;
+            if (!event.id || !away || !home || (chainIsPrimary && !channel)) return [];
             let series = null;
             for (const note of comp?.notes ?? []) {
               const m = (note?.headline ?? "").match(/Game \d+/i);
@@ -3359,7 +3391,7 @@ async function bakeGameHighlights() {
             const cflPlayoff = lg.sport === "cfl" && event.season?.type === 3
               ? hlCflPlayoffTokens(comp?.notes?.[0]?.headline)
               : null;
-            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks }];
+            return [{ id: event.id, away, home, date: event.date, series, channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks }];
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
@@ -3569,8 +3601,8 @@ async function bakeGameHighlights() {
         // Every league's official clip carries its length, not just the NFL's:
         // the button reads "9m" and the league name is already the column it
         // sits in. Costs no extra network - hlVideoMatchesDate above already
-        // pulled this id's watch page and fetchYtWatchMeta caches per run - and
-        // an unchanged carried id short-circuits on rawPrev before even that.
+        // read this id's watch page, fetchYtWatchMeta keeps every good read
+        // on disk, and an unchanged carried id short-circuits on rawPrev.
         if (official) {
           officialDurationSec = official === rawPrev.official && Number.isFinite(rawPrev.officialDurationSec)
             ? rawPrev.officialDurationSec
@@ -3692,20 +3724,25 @@ async function loadPriorRecaps() {
   return { byId, liveFailed, localOk: !!local?.recaps };
 }
 
-// "lengthSeconds":"596" + "publishDate" off the watch page. Cached per id for
-// the run; the baked record keeps the values after that, so each id costs one
-// fetch, ever.
-const YT_WATCH_META_CACHE = new Map();
+// "lengthSeconds":"596" + "publishDate" off the watch page. Every good read is
+// kept on disk across runs (see scripts/lib/ytWatchMeta.mjs), so each id costs
+// one successful fetch, ever. The file is a dotfile so the mini's
+// `public/news/*.json` R2 upload loop skips it. HL_WATCH_CAP overrides the
+// per-run live-fetch cap.
+const YT_WATCH_META_PATH = `${OUT_DIR}/.yt-watch-meta.json`;
+const ytWatchMeta = createWatchMetaStore({
+  load: () => JSON.parse(readFileSync(YT_WATCH_META_PATH, "utf8")),
+  save: async (data) => {
+    await mkdir(OUT_DIR, { recursive: true });
+    await writeFile(YT_WATCH_META_PATH, JSON.stringify(data));
+  },
+  fetchHtml: (id) => getText(`https://www.youtube.com/watch?v=${encodeURIComponent(id)}`),
+  parseDuration: parseWatchPageLengthSeconds,
+  parsePublished: parseWatchPagePublishMs,
+  liveCap: Number.parseInt(process.env.HL_WATCH_CAP ?? "", 10) || 250,
+});
 async function fetchYtWatchMeta(id) {
-  if (!id) return { durationSec: null, publishedMs: null };
-  if (YT_WATCH_META_CACHE.has(id)) return YT_WATCH_META_CACHE.get(id);
-  let meta = { durationSec: null, publishedMs: null };
-  try {
-    const html = await getText(`https://www.youtube.com/watch?v=${encodeURIComponent(id)}`);
-    meta = { durationSec: parseWatchPageLengthSeconds(html), publishedMs: parseWatchPagePublishMs(html) };
-  } catch { /* unknown → the button shows no minutes */ }
-  YT_WATCH_META_CACHE.set(id, meta);
-  return meta;
+  return ytWatchMeta.get(id);
 }
 // Per-video embed verdict for a recap (see parseEmbedPlayable). The Referer is
 // the production origin because embed permission is judged against it.
@@ -4225,6 +4262,16 @@ if (runRecaps) {
     console.error("recaps bake FAILED:", e?.message || e);
     recapsFailed = true;
   }
+}
+
+// Persist the watch-page reads both bakes above made, then say how many were
+// served from disk vs fetched live, so a new YouTube block shows up in the log.
+try {
+  await ytWatchMeta.flush();
+  const w = ytWatchMeta.stats();
+  console.log(`YT-WATCH-META stored=${w.stored} disk=${w.disk} live=${w.live} ok=${w.liveOk} fail=${w.liveFail} capped=${w.capped}`);
+} catch (e) {
+  console.warn("YT-WATCH-META save failed:", e?.message || e);
 }
 
 let failed = 0;

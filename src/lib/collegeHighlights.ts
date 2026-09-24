@@ -25,6 +25,39 @@
 // football cut, two ESPN basketball cuts, a Big Ten Network basketball cut).
 // Re-check `teamConferences` after conference realignment.
 //
+// Women's hockey (ncaawh, lit 2026-09-23) works the same way. ESPN's hockey
+// feeds carry no conferenceId and have no groups endpoint, so its conference
+// keys are names ("ecac"), and `teamConferences` was built by hand from each
+// conference's member list. Channels probed 2026-09-23 on the 9/18-9/20
+// opening weekend (oEmbed, title shape, live worker with strict=1):
+//   ECAC Hockey (@ECACHockeyLeague): LIT. One cut per game, titled "RPI at
+//     Mercyhurst | NCAA Women's Ice Hockey | Highlights - September 18, 2026 |
+//     #ECACHockey". No score (spoiler judge: clean), oEmbed 200. 3/3 strict
+//     with `comp=women`. The channel also posts the men's cuts ("NCAA Men's
+//     Ice Hockey"); `women` refused one and `ncaa men` refused a women's cut.
+//     ESPN names RPI "Rensselaer": 0/2 under that name, so TEAM_NAME_ALIASES
+//     in youtube.ts queries "RPI".
+//   Atlantic Hockey America: NOT lit. Every title prints the final score
+//     ("Mercyhurst 3, RPI 0 - Sept. 19, 2026"; spoiler judge: SPOILER).
+//   Hockey East: no per-game cut since ~2016 (weekly plays, podcast clips).
+//   WCHA: no 2026-27 game posted yet (first game 9/25). Its old per-game
+//     format printed the score, so the title mask must cover it before it is
+//     lit. Re-probe once it posts.
+//   NEWHA: channel inactive since 2021. Big Ten Network: no hockey cuts.
+// A game with no ECAC school has an empty chain and stays dark.
+//
+// Men's hockey (ncaah) stays dark. Probed 2026-09-23 on 2025-26 games:
+// ECAC Hockey 5/6 with `comp=ncaa men` (the miss is the RPI name, now
+// aliased), NCHCHockey 5/6 with no token (the miss: "Miami (OH)"), CCHA
+// Hockey 1/3, 0 wrong matches, no scores. The evidence is good, but the
+// chain-primary slot takes ONE token list per sport (COMPETITION_TITLE_TOKENS)
+// and these two channels need different ones: ECAC mixes men's and women's
+// cuts and needs "ncaa men" ("men" alone is inside "women s"), and NCHC
+// titles carry no gender word. To light it after the 10/2 opener: give the
+// chain-primary slot its own channel's titleTokens in GameHighlights and in
+// the bake's item builder, add the ncaah block (ECAC + NCHC), re-probe CCHA
+// (1/3 is too low), and dry-run the first weekend.
+//
 // The table lives in collegeHighlightChannels.json so prebake-news.mjs reads
 // the same bytes (see llwsRegions.json for the same pattern). This module stays
 // pure — it takes the table as an argument — so node's test runner can load it
