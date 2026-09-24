@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getWorldCupTeam, WORLD_CUP_TEAMS } from "@/lib/worldCupTeams";
+import { formatWorldCupDay, worldCup2026Ended, worldCupLastMatchYmd } from "@/lib/worldCup2026";
 
 type PageProps = {
   params: Promise<{ team: string }>;
@@ -61,6 +62,10 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
 
   const canonical = `/worldcup/teams/${team.slug}`;
   const title = `${team.name} World Cup schedule without spoilers`;
+  // After the final: a direct link to the board of this team's last match.
+  // Read at build time (static export). Date only, never a result.
+  const lastMatchYmd = worldCup2026Ended() ? worldCupLastMatchYmd(team.slug) : null;
+  const possessive = team.name.endsWith("s") ? `${team.name}'` : `${team.name}'s`;
   const faq = [
     {
       q: `Can I follow ${team.name} at the World Cup without seeing the score?`,
@@ -106,6 +111,17 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       >
         <h2 className="text-lg font-semibold mb-3">Follow {team.name} spoiler-free</h2>
+        {lastMatchYmd && (
+          // A plain <a> so /worldcup does a full load and reads ?d= on mount.
+          <a
+            href={`/worldcup?d=${lastMatchYmd}`}
+            data-umami-event="wc-team-last-match"
+            className="mb-2 block rounded-lg px-3 py-2 text-sm font-semibold text-center"
+            style={{ background: "var(--accent)", color: "#fff" }}
+          >
+            Open {possessive} last match, {formatWorldCupDay(lastMatchYmd)}
+          </a>
+        )}
         <div className="grid gap-2 sm:grid-cols-2">
           <Link
             href="/worldcup"
