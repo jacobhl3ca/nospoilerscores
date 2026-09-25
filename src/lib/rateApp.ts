@@ -86,8 +86,19 @@ function canAskAgain(state: RatePromptState, now: number): boolean {
 // both firing in the same run.
 let askedThisLoad = false;
 
+// The native shell loads hidescore.com live, so this code also reaches app
+// builds that predate the plugin (iOS 1.0.5, Android versionCode 8). There
+// the call can only fail, and advancing lastAskedMs would lock the user out
+// of the prompt for 120 days after they update. Skip without touching state.
+function reviewPluginAvailable(): boolean {
+  if (typeof window === "undefined") return false;
+  type CapacitorGlobal = { Capacitor?: { isPluginAvailable?: (name: string) => boolean } };
+  return !!(window as unknown as CapacitorGlobal).Capacitor?.isPluginAvailable?.("InAppReview");
+}
+
 async function fireReview(state: RatePromptState, now: number): Promise<void> {
   if (askedThisLoad) return;
+  if (!reviewPluginAvailable()) return;
   askedThisLoad = true;
   writeState({ ...state, lastAskedMs: now });
   try {
