@@ -32,6 +32,8 @@ export type BakedHighlight = {
   clubChannel?: string;
   clubDurationSec?: number;
   officialDurationSec?: number;
+  // Length of the `extended` clip, so the 2nd button reads "9m", not "Alt".
+  extendedDurationSec?: number;
   mlbOrder?: "official-first";
   sourcePolicy?: "official-channel";
   // Soccer only: the official id came from the match's FotMob page, not from a
