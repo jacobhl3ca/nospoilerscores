@@ -28,10 +28,10 @@ import type { NewsItem } from "@/lib/news";
 
 export type SensitiveCategory = "death" | "violence" | "injury" | "medical" | "animal" | "selfharm" | "crash";
 
-// What the main "Hide upsetting news" toggle covers. `crash` is deliberately
-// absent: a racing wreck is the sport, so it gets its own opt-in toggle
-// (Jacob 8/21 — "fights fine if nothing terrible, crashes can have option to
-// hide"). A crash that killed, hurt or hospitalized someone still matches
+// What the hideSensitiveNews pref covers. `crash` is deliberately absent: a
+// racing wreck is the sport, so it has its own pref, hideCrashNews (Jacob 8/21
+// — "fights fine if nothing terrible, crashes can have option to hide"). Since
+// 9/25 one Settings toggle sets both prefs together. A crash that killed, hurt or hospitalized someone still matches
 // `death` / `injury`, so it is caught by the main toggle regardless. That last
 // part used to say "killed or hospitalized" and it was the gap: "injured in a
 // crash" named no mechanism the injury list knew, so it fell through to
