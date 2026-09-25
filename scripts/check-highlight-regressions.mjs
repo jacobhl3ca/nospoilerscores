@@ -188,7 +188,10 @@ check(
 globalThis.fetch = originalFetch;
 
 const highlightsSource = readFileSync("src/lib/highlights.ts", "utf8")
-  .replace(/import \{ getApiBase \} from "(?:@\/lib|\.)\/youtube";/, 'const getApiBase = () => "";');
+  .replace(/import \{ getApiBase \} from "(?:@\/lib|\.)\/youtube";/, 'const getApiBase = () => "";')
+  // highlights.ts imports "./spoilers" for the ESPN clip check; point it at
+  // the real file so the temp copy never resolves it against tmpdir.
+  .replace('import { isScoreSpoiler } from "./spoilers";', `import { isScoreSpoiler } from ${JSON.stringify(pathToFileURL(join(process.cwd(), "src/lib/spoilers.ts")).href)};`);
 const transformedHighlights = await transform(highlightsSource, {
   jsc: { parser: { syntax: "typescript" }, target: "es2022" },
   module: { type: "es6" },
@@ -472,6 +475,16 @@ check(
       gameHighlights.includes("&nss_embed_blocked=1") &&
       videoModal.includes('|| fallbackFlag(fallbackUrl, "nss_embed_blocked")') &&
       videoModal.includes('fallbackFlag(fallbackUrl, "nss_title_score")'),
+  );
+  // 2026-09-25: a La Liga game whose official is missing or embed-blocked
+  // bakes ESPN's spoiler-free "Game Highlights" mp4, which plays in-app; the
+  // YouTube hand-off stays as a labelled link under it.
+  check(
+    "La Liga ESPN clip is baked for a blocked official and plays in-app with the hand-off kept",
+    prebake.includes("entry.espnClipUrl = clip.url;") &&
+      prebake.includes('process.env.HL_ESPN_CLIP === "0"') &&
+      gameHighlights.includes('onPlayEmbed("", espnClip.url, "ESPN", shareCard, espnClip.url, null)') &&
+      gameHighlights.includes("Full highlights (title shows score)"),
   );
 }
 check(
