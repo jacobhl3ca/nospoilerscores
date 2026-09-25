@@ -48,7 +48,7 @@ export default function PrivacyPage() {
 
       <section className="space-y-4">
         <p>
-          HideScore is built to hide sports scores until you choose to see them. We never sell your personal information or share it for advertising. The account data we store is limited to the optional sign-in and sync information described below.
+          HideScore is built to keep sports results off your screen. We never sell your personal information or share it for advertising. The account data we store is limited to the optional sign-in and sync information described below.
         </p>
 
         <h2 className="text-lg font-semibold mt-6">What we collect</h2>

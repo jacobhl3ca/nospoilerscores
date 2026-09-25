@@ -19,7 +19,15 @@ jobs:
       contents: read
       deployments: write
     steps:
+      # Full history, blobs on demand: src/lib/routeLastModified.ts dates each
+      # sitemap URL by the last commit to its route folder. The default depth-1
+      # clone would give every route the same date, so the helper emits none.
+      # blob:none keeps this cheap — path-limited `git log` reads only commits
+      # and trees.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: blob:none
 
       - uses: actions/setup-node@v6
         with:

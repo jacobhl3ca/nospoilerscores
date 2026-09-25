@@ -24,7 +24,7 @@ const SITE_TITLE = "HideScore: Spoiler-Free NHL, NBA & MLB Highlights and Scores
 // rated so you know what's worth watching. SITE_DESC feeds the meta description,
 // OG/Twitter cards, and the JSON-LD nodes, so one edit keeps them all in sync.
 const SITE_DESC =
-  "Watch NHL, NBA, MLB, NFL and soccer highlights without spoilers. HideScore hides every score and winner, and rates which games are worth watching.";
+  "Watch NHL, NBA, MLB, NFL and soccer highlights without spoilers. HideScore never prints a score or a winner, and optional game ratings tell you which games are worth watching before you hit play.";
 
 export const metadata: Metadata = {
   title: SITE_TITLE,
@@ -256,6 +256,16 @@ const JSON_LD = {
       // place and matches the <meta name="description"> and OG/Twitter copy.
       description: SITE_DESC,
       logo: "https://hidescore.com/icon-512.png",
+      // The same public inbox /about and /privacy list. A contact route plus a
+      // ContactPoint is what answer engines check to decide the site is run by
+      // someone reachable. Deliberately no founder/Person node (Jacob, 9/24).
+      email: "hi@hidescore.com",
+      contactPoint: {
+        "@type": "ContactPoint",
+        email: "hi@hidescore.com",
+        contactType: "customer support",
+        url: "https://hidescore.com/about#contact",
+      },
       // Both store listings, so the Organization resolves to the same entity
       // whichever storefront a crawler arrives from.
       sameAs: [
