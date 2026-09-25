@@ -693,6 +693,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 exhibition sitting under a header reading plain "NFL").
                 Rides inside the existing flex-wrap meta row rather than taking a
                 banner row of its own, so it costs no card height. */}
+            {/* Left group: the league chip, the Pre chip and the time cell.
+                Ratings mode makes it ONE flex-1 cell, the twin of the network
+                cell, so the chips count toward the left share and the badge
+                stays at the true row center. Without that, a Best of yesterday
+                or Top events card's "MLB" chip sat outside the pair and pushed
+                GREAT right by half its width (Jacob 9/25). No min-w-0 on
+                purpose: chips + time are this cell's floor, so on a column too
+                narrow for them + a centered badge (a 3-column phone board) the
+                badge moves right just enough to clear them instead of covering
+                the chip or clipping the live clock. Elsewhere it is
+                display:contents — no box of its own, so the three stay direct
+                flex items of the row exactly as before. column-gap: inherit
+                keeps the row's own gap, tight-board override included. */}
+            <span className={hasRating ? "flex-1 flex items-center [column-gap:inherit]" : "contents"}>
             {leagueTag && (
               <span
                 className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
@@ -719,15 +733,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 ("Sun 12:00PM" + "FS1 +2") can't share one line on a narrow mobile
                 column, flex-wrap drops the network to its own line (still pinned
                 right via ml-auto) instead of clipping the time (Jacob 6/9).
-                Ratings mode is the exception: with a badge in the middle cell,
-                this and the network cell switch to equal flex-1 shares (below)
-                so the badge sits at the true row center on every card instead of
-                drifting with each side's text width (Jacob 9/18 phone: "S5" vs
-                "End S2" left, "ESPN+" vs "ACCNX" right, shifted GREAT/GOOD left
-                or right card to card). truncate is a safety net only — these
-                short status/network strings fit their half at 390px and ~230px
-                without ever actually ellipsizing. */}
-            <span className={hasRating ? "flex-1 min-w-0 truncate" : "shrink-0 whitespace-nowrap"}>
+                Ratings mode keeps it that way too: the badge is centered by the
+                left group above and the network cell taking equal flex-1 shares
+                (below), not by this cell, so the badge no longer drifts with each
+                side's text width (Jacob 9/18 phone: "S5" vs "End S2" left, "ESPN+"
+                vs "ACCNX" right, shifted GREAT/GOOD left or right card to card). */}
+            <span className="shrink-0 whitespace-nowrap">
               {teamView ? (
                 <span className="text-[11px] whitespace-nowrap">
                   {(() => {
@@ -819,6 +830,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 )
               ) : null}
             </span>
+            </span>
             {/* Middle cell is rendered ONLY when it has breakpoint-visible content,
                 so an empty middle never eats a flex gap (which was clipping the
                 lead card's date to "T.." on mobile). The series variant is
@@ -830,8 +842,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               // +3") that reaches the card center gets the badge overlaid on it
               // (Jacob 6/15). Keeping it in flow makes it take real space, so a
               // wide network instead wraps to its own line (flex-wrap + ml-auto)
-              // — no overlap. shrink-0 (not flex-1): the time and network cells
-              // on either side are now the flex-1 pair (equal shares, above/below),
+              // — no overlap. shrink-0 (not flex-1): the left group and network
+              // cell on either side are now the flex-1 pair (equal shares, above/below),
               // so this badge naturally lands at the true row center instead of
               // centering in whatever slack those two happened to leave (9/18 fix).
               <span className="shrink-0 flex justify-center"><RatingBadge rating={game.rating!} /></span>
@@ -848,7 +860,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 </span>
               </span>
             ) : null}
-            {/* Ratings mode: flex-1 + min-w-0, mirroring the time cell above, so
+            {/* Ratings mode: flex-1 + min-w-0, mirroring the left group above, so
                 this side gets the same share of the row as that side — the pair
                 is what keeps the badge centered card to card. Elsewhere (no
                 badge) it stays shrink-0 + ml-auto: natural width, pinned right. */}
