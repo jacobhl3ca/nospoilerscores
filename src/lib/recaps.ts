@@ -144,9 +144,15 @@ export function formatRecapDuration(sec: number | null | undefined): string {
 // they spilled straight into the next column (Jacob 9/24), and MLB's two cuts
 // (~92px) left "Best of the day" with no room at all, so it read "Best of…".
 // The sm column (192px, 170px inside) loses the same fight: NFL's row wants
-// ~197px, MLB's ~195px. From md up (225px+, 203px inside) both fit, so 200 is
-// the line. Same idea as HEADER_SHORT_LABEL_MAX_PX in leagueLabels.
-export const RECAP_STACK_MAX_PX = 200;
+// ~197px, MLB's ~195px. The md column (225px) fits on paper but not in
+// practice: it read "Best of the d…" and "W…" (Jacob 9/25: "on medium screens
+// should be two rows too"), so only the xl column (280px) keeps one row.
+// Same idea as HEADER_SHORT_LABEL_MAX_PX in leagueLabels.
+export const RECAP_STACK_MAX_PX = 250;
+
+// Below this width the stacked buttons drop to 9px text and glyph, sized for
+// the phone's 114px column (see LeagueRecapCard). Wider stacked pills keep 10px.
+export const RECAP_COMPACT_MAX_PX = 200;
 
 // The heading on that stacked, narrow layout: the line is 100px wide at 390px,
 // about 14 characters of 11.5px semibold. The NFL week goes to "W2" (Jacob

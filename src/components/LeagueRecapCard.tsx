@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRecapsFor, formatRecapDuration, stackedRecapHeadings, RECAP_STACK_MAX_PX, type RecapRecord } from "@/lib/recaps";
+import { getRecapsFor, formatRecapDuration, stackedRecapHeadings, RECAP_STACK_MAX_PX, RECAP_COMPACT_MAX_PX, type RecapRecord } from "@/lib/recaps";
 import { leadChannelBlocksEmbeds } from "@/lib/youtube";
 import type { ShareCardMeta } from "@/lib/shareCard";
 
@@ -20,8 +20,8 @@ import type { ShareCardMeta } from "@/lib/shareCard";
 // .highlight-btn INSIDE .hl-slot, and this pill is not a game card.
 //
 // Two layouts, chosen by the pill's own measured width (RECAP_STACK_MAX_PX):
-//   • wide (md+, 225px columns): heading left, buttons right, one row.
-//   • narrow (phone 114px, sm 192px): heading on top, buttons in a row under
+//   • wide (xl, 280px columns): heading left, buttons right, one row.
+//   • narrow (phone 114px, sm 192px, md 225px): heading on top, buttons in a row under
 //     it, each button an equal share of the width. One row could not hold the
 //     NFL's three cuts plus a heading — the buttons ran into the next column
 //     and MLB's heading truncated to "Best of…" (Jacob 9/24). The heading is
@@ -88,6 +88,7 @@ export default function LeagueRecapCard({
   // observer has to follow whichever one is mounted.
   const [el, setEl] = useState<HTMLDivElement | null>(null);
   const [stacked, setStacked] = useState(true);
+  const [compact, setCompact] = useState(true);
   // A short heading that still overflows its line on the stacked layout is
   // dropped rather than ellipsised (Jacob 9/24: "to nothing if none fit"). The
   // line stays so the pill keeps the spacer's height; the buttons' aria-labels
@@ -101,6 +102,7 @@ export default function LeagueRecapCard({
     const measure = () => {
       const narrow = el.clientWidth < RECAP_STACK_MAX_PX;
       setStacked(narrow);
+      setCompact(el.clientWidth < RECAP_COMPACT_MAX_PX);
       const heading = el.querySelector<HTMLElement>("[data-recap-heading]");
       const copies = [...el.querySelectorAll<HTMLElement>("[data-recap-heading-candidate]")];
       if (narrow && heading && copies.length) {
@@ -119,10 +121,10 @@ export default function LeagueRecapCard({
   }, [el, records, stacked]);
   // Stacked buttons are sized for the phone: a 114px column leaves 100px inside
   // px-1.5, three buttons at gap-0.5 get 32px each, and "▸ 30m" at 9px with a
-  // 9px glyph measures ~31px (measured 2026-09-24, Geist 500). The row layout
-  // keeps the 10px glyph and text.
-  const glyph = stacked ? 9 : 10;
-  const minsText = stacked ? "text-[9px]" : "text-[10px]";
+  // 9px glyph measures ~31px (measured 2026-09-24, Geist 500). Wider pills,
+  // stacked or not, keep the 10px glyph and text.
+  const glyph = compact ? 9 : 10;
+  const minsText = compact ? "text-[9px]" : "text-[10px]";
 
   // Clear on a sport/date change during render (React's reset-on-prop pattern,
   // as WorldCupMattersCard does) so the previous day's buttons never flash.

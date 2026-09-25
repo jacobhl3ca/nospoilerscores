@@ -295,6 +295,20 @@ test("phone (390px): three NFL cuts stack under \"Week 1 highlights\" and stay i
   expect((await pillMetrics(page, "mlb")).headingClipped).toBe(false);
   expect(await page.locator("[data-recap-heading].invisible").count()).toBe(0);
 
+  // md (225px columns): still two rows, full heading, 10px buttons (Jacob
+  // 9/25: "on medium screens should be two rows too").
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await expect(page.locator('[data-league-recap="mlb"]')).toHaveAttribute("data-recap-layout", "stacked", { timeout: 5_000 });
+  await expect(page.locator('[data-league-recap="mlb"] [data-recap-heading]')).toHaveText("Best of the day", { timeout: 5_000 });
+  for (const s of ["nfl", "mlb"]) {
+    const md = await pillMetrics(page, s);
+    expect(md.layout, s).toBe("stacked");
+    expect(md.headingClipped, s).toBe(false);
+    expect(md.buttonsPastEdge, s).toBe(0);
+    expect(md.buttonsClipped, s).toBe(0);
+  }
+  await testInfo.attach("md-1024-recap-pills", { body: await page.locator("main").screenshot(), contentType: "image/png" });
+
   // Desktop: one row, the full heading.
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(nflPill).toHaveAttribute("data-recap-layout", "row", { timeout: 5_000 });
