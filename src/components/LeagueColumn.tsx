@@ -490,7 +490,14 @@ function getPlayoffSubtitle(
     }
   }
 
-  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  // Count from the reader's REAL today, not the board date being viewed — the
+  // playoffs are 4 days away whether you are looking at Yesterday or Tomorrow
+  // (Jacob 9/25: "the real countdown no matter what day we're on, across all
+  // leagues"). A past date viewed after the start has no countdown left.
+  const now = nowInEt();
+  const today = new Date(now.y, now.mo - 1, now.d, 12, 0, 0);
+  const days = Math.round((playoffDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (days <= 0) return null;
   if (days > 30) return null; // only show within 1 month
   const dd = playoffDate.getDate();
   const monthName = playoffDate.toLocaleDateString("en-US", { month: "short" });
