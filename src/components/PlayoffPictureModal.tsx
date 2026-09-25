@@ -350,9 +350,10 @@ function feederLabel(bracket: LeagueBracket, from: BracketMatchupKey): string {
 // One club's line in a matchup card: seed, logo, abbreviation, its chance of
 // making the field. Wide and short on purpose — the old layout stacked two
 // near-square tiles, which read as a grid of boxes rather than as a bracket.
-// A seat a series winner has moved into shows that club's seed but no odds
-// pill: by then every club left is in the field, so the pill would only ever
-// say 100%. The loser of a finished series is dimmed rather than removed, so
+// A clinched club gets the small tick and no odds pill: the pill would only
+// ever say 100%, and a bright pill pulls the eye off the matchup. A seat a
+// series winner has moved into shows that club's seed but no pill either: by
+// then every club left is in the field. The loser of a finished series is dimmed rather than removed, so
 // the pairing still reads.
 function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false }: {
   slot: BracketSlot;
@@ -385,6 +386,7 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
   }
   const shown = chasers.slice(0, 2);
   const extra = chasers.length - shown.length;
+  const clinched = !!(t.clinch || t.clinched);
   return (
     <div style={outcome === "lost" ? { opacity: 0.4 } : undefined}>
       <div
@@ -413,10 +415,10 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
           onError={(e) => { e.currentTarget.style.display = "none"; }}
         />
         <span className="text-[11px] font-bold leading-none shrink-0" style={{ color: "var(--text)" }}>{t.abbrev}</span>
-        {t.clinch || t.clinched ? (
+        {clinched ? (
           <span className="text-[9px] leading-none shrink-0" style={{ color: "var(--accent)" }} title={t.clinch ? CLINCH_TEXT[t.clinch] : "Clinched berth"}>✓</span>
         ) : null}
-        {slot.from ? null : <OddsPill odd={playoffOdd(t, odds)} />}
+        {slot.from || clinched ? null : <OddsPill odd={playoffOdd(t, odds)} />}
       </div>
       {shown.length ? (
         <div className="pl-1.5 pr-1.5 pb-1">
@@ -534,7 +536,7 @@ function LeagueHalf({ league, bracket, season, odds, mirrored }: {
   // thing WorldCupBracket does, and the only thing that stays aligned now that
   // a card with chasers under it is taller than one without.
   return (
-    <div className={`flex items-stretch gap-1 sm:gap-2 xl:gap-3 ${mirrored ? "flex-row md:flex-row-reverse" : "flex-row"}`}>
+    <div className={`flex items-stretch gap-1 sm:gap-2 xl:gap-3 ${mirrored ? "flex-row lg:flex-row-reverse" : "flex-row"}`}>
       {col("wildCard")}
       {col("divisionSeries")}
       {col("championship")}
@@ -619,7 +621,9 @@ function BracketView({ picture, odds, results, coverResults, onShowResults }: {
         </div>
       ) : null}
       {/* One DOM for both widths: the halves sit side by side with the World
-          Series between them on desktop, and stack on a phone. The NL half is
+          Series between them from lg up, and stack below it. The seven columns
+          need ~760px even with the later rounds compact (more once ALDS winners
+          fill the ALCS cards), so a 768px tablet stacks like a phone. The NL half is
           mirrored only when there is room to mirror it. The desktop row scrolls
           sideways rather than squeezing the cards, since a narrow viewport
           inside the dialog is the only thing the seven columns won't fit. */}
@@ -628,7 +632,7 @@ function BracketView({ picture, odds, results, coverResults, onShowResults }: {
             something to scroll; mx-auto still centres it whenever it fits. A
             phone stacks the halves but each half is still three columns wide,
             so the sideways scroll is needed at every width, not just desktop. */}
-        <div className="flex flex-col items-center gap-4 w-max mx-auto md:flex-row md:items-stretch md:gap-2">
+        <div className="flex flex-col items-center gap-4 w-max mx-auto lg:flex-row lg:items-stretch lg:gap-2">
           <LeagueHalf league={al} bracket={alB} season={picture.season} odds={odds} mirrored={false} />
           <WorldSeriesColumn season={picture.season} al={ws.al} nl={ws.nl} winner={ws.winner} />
           <LeagueHalf league={nl} bracket={nlB} season={picture.season} odds={odds} mirrored />

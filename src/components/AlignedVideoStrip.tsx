@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import { handleExternalClick } from "@/lib/openExternal";
-import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters, itemIsVideo } from "./NewsColumn";
+import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
+import { isDemoModeActive } from "@/lib/demoMode";
 
 interface Props {
   sources: NewsSource[];
@@ -264,7 +265,9 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
         className="rounded-t-lg px-3 py-2.5 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-wide"
         style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
       >
-        {logoUrl && (
+        {logoUrl && !isDemoModeActive() && (
+          // Same drop as NewsColumn.SourceHeader — a real league/broadcaster
+          // mark used as app chrome under ?demo=1.
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={logoUrl}
@@ -442,7 +445,8 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={proxyImage(item.imageUrl)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" draggable={false} onError={(e) => { e.currentTarget.style.display = "none"; }} />
     </div>
-  ) : item.leagueLogo ? (
+  ) : item.leagueLogo && !isDemoModeActive() ? (
+    // Same drop as SourceHeader above — a real per-item league mark.
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
       src={item.leagueLogo}

@@ -1,5 +1,6 @@
 import { Sport } from "./types";
 import type { TopEventsMode, TopEventsCount } from "./topEvents";
+import type { RecordLeague } from "./upcomingRecords";
 import { setServiceTimeZone } from "./etDay";
 
 const STORAGE_KEY = "nss-preferences";
@@ -236,15 +237,19 @@ export interface Preferences {
   // opt-in from 8/4 and not one of the 21 accounts ever turned it on, and the
   // record is a second-order spoiler by nature — today's 63-49 encodes whether
   // the team won last night. Old synced prefs may still carry the key; it is
-  // ignored. The one record that came back (Jacob 9/24) is narrower and lives in
-  // `hideUpcomingRecords` below — NFL, upcoming games only.
+  // ignored. The record that came back (Jacob 9/24) is narrower: upcoming
+  // games only, per league, in `upcomingRecordLeagues` below.
   //
-  // Hide the italic W-L record on UPCOMING NFL cards (today's not-yet-started
-  // games and any future date). Undefined = shown. NFL plays once a week, so a
-  // Sunday record reflects results from days ago, not last night; it never shows
-  // on a live or finished game or on a past date, where it could encode the
-  // result the viewer is avoiding. Jacob asked for it on 9/24, with this toggle
-  // as the off switch.
+  // Which leagues show the italic W-L record on UPCOMING cards (today's
+  // not-yet-started games and any future date). Undefined = the weekly
+  // football leagues; [] = none. It never shows on a live or finished game or
+  // on a past date, where it could encode the result the viewer is avoiding.
+  // See lib/upcomingRecords.ts for the keys and why daily leagues start off.
+  upcomingRecordLeagues?: RecordLeague[];
+  // LEGACY (9/24-9/25): the NFL-only off switch that the list above replaced.
+  // Still read when the list is unset, so a user who turned NFL records off
+  // gets none — see upcomingRecordLeagues() in lib/upcomingRecords.ts. Nothing
+  // writes it any more except a clear on the first league pick.
   hideUpcomingRecords?: boolean;
   // "Add the World Cup column" banner dismissed (only shows during the
   // tournament when no visible column is the World Cup).
@@ -456,11 +461,12 @@ export interface Preferences {
   // being visible again. Roster injury news (IL moves, return timelines) is
   // deliberately NOT matched — only the moment of getting hurt.
   hideSensitiveNews?: boolean;
-  // Separate opt-in for racing wrecks and hard falls (Jacob 8/21: "fights fine
-  // if nothing terrible, crashes can have option to hide"). Independent of
-  // hideSensitiveNews — either toggle works on its own — because a crash
-  // everyone walks away from is the sport, while a fatal one is already covered
-  // by the death/injury categories of the main toggle.
+  // Racing wrecks and hard falls (Jacob 8/21: "fights fine if nothing
+  // terrible, crashes can have option to hide"). Still its own flag so the
+  // filter reads exactly what a user saved, but since 9/25 Settings has ONE
+  // "Hide upsetting news" toggle that sets this and hideSensitiveNews together
+  // (Jacob: "idk if 2 checkboxes needed"). A blob with only one of them set
+  // still filters exactly as before until the user taps the toggle.
   hideCrashNews?: boolean;
 }
 

@@ -7,6 +7,7 @@ const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : use
 import { Game, LeagueData, LeagueEventCard, FightBout, Sport, Team } from "@/lib/types";
 import { SHORT_LEAGUE_LABELS, HEADER_SHORT_LABEL_MAX_PX } from "@/lib/leagueLabels";
 import type { ShareCardMeta } from "@/lib/shareCard";
+import type { RecordLeague } from "@/lib/upcomingRecords";
 import { displayShortName, loadBigInningSchedule, getSeasonOpener, sportDisplayLabel, BigInningSchedule } from "@/lib/espn";
 import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
@@ -69,9 +70,9 @@ interface LeagueColumnProps {
   // Favorite-stars next to team names on the cards (Settings can hide them).
   // Suppressed automatically when the column is a single Finals matchup.
   showTeamStars?: boolean;
-  // Italic W-L on upcoming NFL cards (Settings can hide it) — see
-  // hideUpcomingRecords in preferences.ts.
-  showUpcomingRecords?: boolean;
+  // Leagues whose upcoming cards show the italic W-L (picked in Settings) —
+  // see lib/upcomingRecords.ts.
+  upcomingRecordLeagues?: ReadonlySet<RecordLeague>;
   // Sports shown in the other columns, with the 1-based column number each
   // lives in — dropdown labels these "· col N" (still full-colour, selectable).
   shownElsewhere?: { sport: Sport; col: number }[];
@@ -958,7 +959,7 @@ export default function LeagueColumn({
   switcherMode,
   onCycleLeague,
   showTeamStars,
-  showUpcomingRecords,
+  upcomingRecordLeagues,
   shownElsewhere,
   onRetry,
   slotIdx,
@@ -1004,8 +1005,15 @@ export default function LeagueColumn({
   };
   // The chip on each cross-league card ("MLB", "UCL", "Prem"): the short form
   // of the label above. Undefined everywhere else — see GameCard.leagueTag.
+  // Reads game.sport (applyDemoMode leaves it untouched by design — see
+  // demoMode.ts) directly, so a Top events / Best of yesterday column, the
+  // one place this chip renders, printed the REAL league name right on an
+  // otherwise-anonymized card under ?demo=1. Drop it in demo mode instead of
+  // trying to genericize per-sport — the column header is already anonymized
+  // ("Sports A/B/C"), and this chip only exists to disambiguate a mixed
+  // column's rows, which a screenshot doesn't need to do.
   const cardLeagueTag = (game: Game): string | undefined => {
-    if (!crossLeague) return undefined;
+    if (!crossLeague || isDemoModeActive()) return undefined;
     const label = cardLeagueLabel(game);
     return SHORT_LEAGUE_LABELS[label] || label;
   };
@@ -1575,7 +1583,7 @@ export default function LeagueColumn({
         onSelectTeam={setTeamViewTeam}
         onShowDetails={onShowDetails}
         showStars={cardStars}
-        showUpcomingRecords={showUpcomingRecords}
+        upcomingRecordLeagues={upcomingRecordLeagues}
       />
     );
     return (
@@ -1648,7 +1656,7 @@ export default function LeagueColumn({
           onSelectTeam={setTeamViewTeam}
           onShowDetails={onShowDetails}
           showStars={cardStars}
-          showUpcomingRecords={showUpcomingRecords}
+          upcomingRecordLeagues={upcomingRecordLeagues}
         />
       );
     });
@@ -1692,7 +1700,7 @@ export default function LeagueColumn({
             onSelectTeam={setTeamViewTeam}
             onShowDetails={onShowDetails}
             showStars={cardStars}
-            showUpcomingRecords={showUpcomingRecords}
+            upcomingRecordLeagues={upcomingRecordLeagues}
           />
         ))}
       </div>
@@ -2132,7 +2140,7 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
               showStars={cardStars}
-              showUpcomingRecords={showUpcomingRecords}
+              upcomingRecordLeagues={upcomingRecordLeagues}
             />
           ))}
         </div>
@@ -2154,7 +2162,7 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
               showStars={cardStars}
-              showUpcomingRecords={showUpcomingRecords}
+              upcomingRecordLeagues={upcomingRecordLeagues}
             />
           ))}
           {renderUpcoming && preGames.map((game) => (
@@ -2173,7 +2181,7 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
               showStars={cardStars}
-              showUpcomingRecords={showUpcomingRecords}
+              upcomingRecordLeagues={upcomingRecordLeagues}
             />
           ))}
           {/* Upcoming future-day games shown alongside today's slate (NBA/NHL
@@ -2207,7 +2215,7 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
               showStars={cardStars}
-              showUpcomingRecords={showUpcomingRecords}
+              upcomingRecordLeagues={upcomingRecordLeagues}
             />
           ))}
         </div>

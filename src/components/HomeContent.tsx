@@ -8,6 +8,7 @@ import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, en
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
+import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import type { BestYesterdayOptions, TopEventsOptions } from "@/lib/espn";
 import { TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
@@ -16,7 +17,7 @@ import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
-import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
+import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn, { playoffPictureInWindow } from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
@@ -207,24 +208,28 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         className={inline ? "flex items-stretch w-72 rounded-xl overflow-hidden" : "max-w-md mx-auto flex items-stretch"}
         style={inline ? { background: "var(--bg-card)", border: "1px solid var(--border)" } : undefined}
       >
+        {/* The icons carry real alt text (2026-09-25): AI-visibility scanners
+            count alt="" as missing, and these 3 icons render twice per board
+            page. Screen readers are unaffected — the button's aria-label wins
+            over its contents. */}
         {tab(
           "scores-plain",
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/monkey-see-no-evil.svg" alt="" width={24} height={24} className="w-6 h-6" draggable={false} />,
+          <img src="/monkey-see-no-evil.svg" alt="See-no-evil monkey" width={24} height={24} className="w-6 h-6" draggable={false} />,
           "Scores",
           "Scores (no ratings, no spoilers)",
         )}
         {tab(
           "scores-rated",
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/monkey-hear-no-evil.svg" alt="" width={24} height={24} className="w-6 h-6" draggable={false} />,
+          <img src="/monkey-hear-no-evil.svg" alt="Hear-no-evil monkey" width={24} height={24} className="w-6 h-6" draggable={false} />,
           "Ratings",
           "Scores with ratings (sort by best games)",
         )}
         {tab(
           "news",
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/news-emoji.svg" alt="" width={24} height={24} className="w-6 h-6 news-tab-emoji" draggable={false} />,
+          <img src="/news-emoji.svg" alt="Newspaper" width={24} height={24} className="w-6 h-6 news-tab-emoji" draggable={false} />,
           "News",
           "News (full spoilers)",
         )}
@@ -452,6 +457,18 @@ function kickoffMessage(k: LeagueKickoff): string {
 // the 2026-08-03 league request landed as an anonymous bare sentence and there
 // was nothing in it to file against.
 const FEEDBACK_LEAGUE_PREFILL = "League request: ";
+
+// Build day (YYYY-MM-DD, New York), set in next.config.ts. Unset in tests.
+const BUILT_ON = process.env.NEXT_PUBLIC_BUILT_ON;
+// "September 25, 2026". Noon UTC is the same calendar day in New York, and a
+// fixed timeZone keeps the server and client strings identical.
+const formatBuiltOn = (day: string) =>
+  new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", {
+    timeZone: "America/New_York",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
@@ -786,7 +803,13 @@ export default function HomeContent({
       const hLabel = params.get("hl");
       const hHead = params.get("ht");
       const hPoster = params.get("hp");
-      if (sharedVideoId) {
+      // A shared-highlight link cold-loaded with ?demo=1 still on (sessionStorage
+      // sticky, see demoMode.ts) is the same real-content leak openVideoModal/
+      // openEmbedModal guard against — this reopen path sets videoModal state
+      // directly, bypassing both. Same placeholder substitution here.
+      if (isDemoModeActive() && (sharedVideoId || hStream || hEmbed || hImage)) {
+        setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
+      } else if (sharedVideoId) {
         // A clip opened on /watch is any link someone pasted: nothing vetted
         // its title, and there is no blurred headline under the player to fall
         // back on. So the title cover is on here whatever the Settings toggle
@@ -831,6 +854,13 @@ export default function HomeContent({
       // would silently do nothing before noon ET. Resolved before setPrefs so
       // the first render already has it.
       if (landing === "ratings") p.showRatings = true;
+      // ?demo=1 screenshot overrides — a capture session states exactly what it
+      // wants (ratings on, a theme) via URL flags instead of clicking through
+      // the UI, and skips the ratings explainer bar so the shot is clean. News
+      // is handled below (it wants its bar VISIBLE, the opposite of ratings).
+      if (isDemoRatingsForced()) { p.showRatings = true; p.skipExplainer = true; }
+      const demoTheme = getDemoThemeOverride();
+      if (demoTheme) p.theme = demoTheme;
       setPrefs(p);
       // Stored prefs are now in state. Anything that would otherwise render
       // once against the hardcoded defaults above — and then vanish a frame
@@ -841,9 +871,13 @@ export default function HomeContent({
       // News view to Scores so the user never lands on yesterday's spoilers
       // (Jacob 6/19). Same-day reopens still restore News.
       const newDayPassed = !!p.lastOpenDay && p.lastOpenDay !== getDateString(0);
-      if (landing === "news") setShowNews(true);
+      const demoNews = isDemoNewsRequested();
+      if (demoNews || landing === "news") setShowNews(true);
       else if (landing === "scores" || landing === "ratings") setShowNews(false);
       else if (p.showNews && !newDayPassed) setShowNews(true);
+      // ?demo=1&view=news wants the first-time spoiler-warning bar ON SCREEN
+      // for the shot, not skipped like every other first-time explainer here.
+      if (demoNews) setNewsNotice(true);
       document.documentElement.setAttribute("data-theme", getResolvedTheme(p.theme));
       // Apply the headline reveal state at launch (mirrored in the effect below)
       // so reveal-on users don't see a one-frame blur flash before it runs.
@@ -1092,6 +1126,15 @@ export default function HomeContent({
 
   const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => {
     clearReopen();
+    // See demoHighlightPoster's comment in demoMode.ts: a resolved videoId can
+    // still be a real clip even off an anonymized card, because it's keyed by
+    // the untouched real game.id. Swap it for the placeholder here, at the one
+    // place every highlight button's tap ends up, instead of chasing each
+    // button. No share URL either — a demo tap has nothing real to share.
+    if (isDemoModeActive()) {
+      setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
+      return;
+    }
     setVideoModal({ videoId, fallbackUrl, shareCard, alternates });
     const href = modalShareHref({ videoId, fallbackUrl, shareCard });
     if (href) window.history.pushState({ videoModal: true }, "", href);
@@ -1102,6 +1145,13 @@ export default function HomeContent({
   // Esc dismiss it AND copying the URL bar matches Copy link (the matchup card).
   const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => {
     clearReopen();
+    // Same demo substitution as openVideoModal above — an NHL/MLB Brightcove
+    // recap is exactly as real (and exactly as keyed off the untouched
+    // game.id) as a YouTube one.
+    if (isDemoModeActive()) {
+      setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
+      return;
+    }
     setVideoModal({ videoId: "", fallbackUrl, embedUrl, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard });
     const href = modalShareHref({ embedUrl, fallbackUrl, playbackUrl: playbackUrl || null, sourceLabel, shareCard });
     window.history.pushState({ videoModal: true }, "", href ?? window.location.href);
@@ -1128,8 +1178,16 @@ export default function HomeContent({
     sibIndex: opts.index ?? null,
   }), []);
   const playNewsVideo = useCallback<PlayHandler>((opts) => {
-    const m = optsToModal(opts);
     clearReopen();
+    // News posts embed real third-party photos/clips (Reddit, ESPN) that the
+    // board-side anonymizer never touches — same substitution as the two
+    // highlight modals above, so opening a story from the News tab under
+    // ?demo=1 can't put a real thumbnail or video on screen either.
+    if (isDemoModeActive()) {
+      setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
+      return;
+    }
+    const m = optsToModal(opts);
     setVideoModal(m);
     // Sync the address bar to the share link for EVERY news item (pics, redd.it
     // videos, NHL embeds — not just YouTube), so copying the URL bar previews the
@@ -1754,6 +1812,14 @@ export default function HomeContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- PICKER_RANK is a literal constant
   }, [thirdLeagueOptions]);
 
+  // Display-only anonymization for the ?demo=1&picker=1 sheet — see
+  // anonymizeLeaguePickerOptions in demoMode.ts. null outside that one capture
+  // state, so every other session renders the real catalog exactly as before.
+  const demoPickerLabels = useMemo(
+    () => (isDemoModeActive() && isDemoPickerRequested() ? anonymizeLeaguePickerOptions(pickerOptions) : null),
+    [pickerOptions],
+  );
+
   // Settings is the durable league catalog, so it must not hide a saved pick
   // merely because that league is between seasons. A sport can have several
   // seasonal configs (golf majors, tennis Slams); mark it in-season when ANY
@@ -1800,6 +1866,12 @@ export default function HomeContent({
     return [...options.values()];
   }, [selectedDate]);
 
+  // One Set per real change, so the cards don't see a new object every render.
+  const recordLeagues = useMemo(
+    () => upcomingRecordLeagues({ upcomingRecordLeagues: prefs.upcomingRecordLeagues, hideUpcomingRecords: prefs.hideUpcomingRecords }),
+    [prefs.upcomingRecordLeagues, prefs.hideUpcomingRecords],
+  );
+
   const teamLeagueOptions = useMemo(() => {
     const seen = new Set<Sport>();
     return ALL_LEAGUES.flatMap((league) => {
@@ -1815,9 +1887,20 @@ export default function HomeContent({
   useEffect(() => {
     if (firstRunRef.current && authSettled && !prefs.leaguesOnboarded && thirdLeagueOptions.length > 0) {
       firstRunRef.current = false;
+      // ?demo=1 without &picker=1 must never flash the real, un-anonymized
+      // league picker (MLB/NFL/NBA… with real logos — the original 4.1(a)
+      // rejection) in front of a screenshot session. Skip straight to the
+      // same auto-picked board "Use defaults" produces. ?demo=1&picker=1 is
+      // the one capture state that wants the picker sheet itself on screen
+      // (applyDemoMode has already anonymized its league list — see
+      // demoMode.ts).
+      if (isDemoModeActive() && !isDemoPickerRequested()) {
+        updatePrefs({ leaguesOnboarded: true });
+        return;
+      }
       setShowLeaguePicker(true);
     }
-  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled]);
+  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled, updatePrefs]);
 
   // How many leagues the picker lets you take = how many columns this viewport
   // will actually render (3 phone / 5 wide). It said "up to 3" on a desktop that
@@ -3686,7 +3769,7 @@ export default function HomeContent({
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
-              showUpcomingRecords: !prefs.hideUpcomingRecords,
+              upcomingRecordLeagues: recordLeagues,
               onAbbrevReport,
               namesCompact,
             };
@@ -4157,6 +4240,14 @@ export default function HomeContent({
                 popovers (news source filter, league swap menu); at z-20 the
                 sticky league rows (z-30) painted over the panel as well. */}
             <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(42rem,90vw)] max-h-[60vh] overflow-y-auto text-left text-xs leading-relaxed space-y-2 z-50 rounded-lg p-3 shadow-lg" style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}>
+            {/* Headings, sections, a list and a dated <time> (2026-09-25): the
+                usegrowhero scan reads only /, /today, /tomorrow and /yesterday,
+                all this same shell with the games still loading, and found no
+                H2/H3, no <section>, no FAQ, no list and no date on any of them.
+                They all live inside this collapsed panel, so the board itself
+                looks the same. The answers match /faq. */}
+            <section aria-labelledby="about-hidescore" className="space-y-2">
+            <h2 id="about-hidescore" className="font-semibold" style={{ color: "var(--text)" }}>What is HideScore?</h2>
             <p>
               HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
               MLB, MLS, the Premier League, La Liga, Serie A, the Bundesliga, Ligue 1, the Champions
@@ -4168,6 +4259,26 @@ export default function HomeContent({
               whether a game was a blowout or an instant classic, so you can watch the best sports
               highlights without spoilers and skip the duds — all without learning the final score.
             </p>
+            </section>
+            <section id="faq" aria-labelledby="about-faq" className="space-y-2">
+            <h2 id="about-faq" className="font-semibold" style={{ color: "var(--text)" }}>Frequently asked questions</h2>
+            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Is HideScore free?</h3>
+            <p>
+              Yes. It is free, with no ads, and you do not need an account. It works in any browser and
+              as an iPhone or Android app.
+            </p>
+            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Which sports does HideScore cover?</h3>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>NBA, WNBA, NFL, MLB, NHL, and college football and basketball</li>
+              <li>Soccer: the Premier League, Champions League, La Liga, Serie A, Bundesliga, Ligue 1, MLS and Liga MX</li>
+              <li>Golf, tennis, F1, UFC, cricket, chess and poker</li>
+            </ul>
+            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Can I tell if a game is worth watching?</h3>
+            <p>
+              Yes. Turn on game ratings in Settings. They show how close or exciting a finished game
+              was, without naming the score or the winner.
+            </p>
+            </section>
             <p>
               It&apos;s free, has no tracking cookies, and works in any browser or as an iPhone or Android app. Jump to{" "}
               <a href="/today" style={{ textDecoration: "underline" }}>today&apos;s games</a>,{" "}
@@ -4200,6 +4311,11 @@ export default function HomeContent({
               <a href="/about" style={{ textDecoration: "underline" }}>about HideScore</a>, or read our{" "}
               <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
+            {BUILT_ON && (
+              <p>
+                Updated <time dateTime={BUILT_ON}>{formatBuiltOn(BUILT_ON)}</time>
+              </p>
+            )}
           </div>
         </details>
           {/* "Contact", not "About": the disclosure above is already labelled
@@ -4439,6 +4555,7 @@ export default function HomeContent({
                 const idx = pickerSel.indexOf(o.sport);
                 const on = idx >= 0;
                 const full = pickerSel.length >= pickerMax && !on;
+                const demoOption = demoPickerLabels?.get(o.sport);
                 return (
                   <button
                     key={o.sport}
@@ -4472,7 +4589,7 @@ export default function HomeContent({
                     <span className="inline-flex items-center justify-center w-[20px] h-[20px] rounded-full shrink-0 bg-white">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={LEAGUE_LOGO[o.sport]}
+                        src={demoOption?.logo ?? LEAGUE_LOGO[o.sport]}
                         alt=""
                         width={16}
                         height={16}
@@ -4486,7 +4603,7 @@ export default function HomeContent({
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                       />
                     </span>
-                    <span>{o.label}</span>
+                    <span>{demoOption?.label ?? o.label}</span>
                     {/* Start dates dropped here on purpose (Jacob 8/9): six
                         "· starts Aug 21" tails made the grid unreadable and are
                         noise at signup. The kickoff banner still announces them

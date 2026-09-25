@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import BootBeacon from "./boot-beacon";
+import RatePromptBeacon from "./rate-prompt-beacon";
 import KeyboardNavFlag from "./keyboard-nav";
 
 const geistSans = Geist({
@@ -531,6 +532,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <BootBeacon />
+        <RatePromptBeacon />
         <KeyboardNavFlag />
         {children}
         {/* GoatCounter analytics — live at hidescore.goatcounter.com, privacy-first */}

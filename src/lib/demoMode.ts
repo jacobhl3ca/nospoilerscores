@@ -1,10 +1,93 @@
 import type { LeagueData, Game, Team } from "./types";
 
+// Read once and pinned for the rest of the tab's life. Every highlight/share
+// tap pushes a brand-new URL (?v=..., ?he=..., a game-detail deep link — see
+// modalShareHref in HomeContent) that does not carry ?demo=1 forward, and this
+// function is called fresh on every board refetch (HomeContent's fetchData,
+// which also runs on the score poll and every date-nav tap) — not memoized
+// once at mount the way GameCard/GameHighlights read their own copy. Without
+// a pin, the FIRST tap that pushed one of those URLs silently dropped demo
+// mode for the rest of the session: the very next refetch rendered real team
+// names and logos over the anonymized board — exactly the leak class demo
+// mode exists to prevent, and the hardest kind to notice in a quick check
+// because the board looks right until the next poll. sessionStorage survives
+// every history.pushState/replaceState in the tab, unlike window.location
+// (which is the thing being rewritten).
+const DEMO_SESSION_KEY = "hs_demo_active";
+
 export function isDemoModeActive(): boolean {
   if (typeof window === "undefined") return false;
   const params = new URLSearchParams(window.location.search);
-  return params.get("demo") === "1";
+  if (params.get("demo") === "1") {
+    try { window.sessionStorage.setItem(DEMO_SESSION_KEY, "1"); } catch { /* private mode etc — falls back to per-call URL reads */ }
+    return true;
+  }
+  try {
+    return window.sessionStorage.getItem(DEMO_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
+
+// ?demo=1&picker=1 — capture the anonymized first-run league picker itself
+// (real league names/logos otherwise, the original 4.1(a) rejection). Every
+// other demo session skips the sheet and lands straight on the auto-picked
+// board, same result "Use defaults" produces — see the firstRunRef effect in
+// HomeContent. Read directly off the current URL (not the sticky flag above):
+// this only ever needs to matter on the page's first load, before any tap has
+// had a chance to rewrite the URL.
+export function isDemoPickerRequested(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("demo") === "1" && params.get("picker") === "1";
+}
+
+// ?demo=1&ratings=1 — force ratings on at launch (and skip the first-time
+// explainer bar) so a screenshot session doesn't have to tap the tab by hand.
+export function isDemoRatingsForced(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("demo") === "1" && params.get("ratings") === "1";
+}
+
+// ?demo=1&view=news — land straight on the News tab, WITH the first-time
+// spoiler-warning bar showing (the opposite of the ratings override above,
+// which skips its own bar) since a News screenshot wants that bar visible.
+export function isDemoNewsRequested(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("demo") === "1" && params.get("view") === "news";
+}
+
+// ?demo=1&theme=light|dark — force a theme for the capture session regardless
+// of the device's stored preference or OS setting.
+export function getDemoThemeOverride(): "light" | "dark" | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("demo") !== "1") return null;
+  const t = params.get("theme");
+  return t === "light" || t === "dark" ? t : null;
+}
+
+// Placeholder shown by the in-app highlights/embed player under ?demo=1
+// instead of whatever real clip a button resolved. game.id is left untouched
+// by applyDemoMode below (GameCard's espnUrl comment explains why: several
+// non-identity features build real URLs off it), and it's exactly what keys
+// the server's highlight bake — so a card whose team names ARE anonymized can
+// still resolve and PLAY a real clip (real footage, real jerseys/logos, and
+// the real matchup baked into the YouTube embed's own query params) the
+// instant its highlight button is tapped. Rather than trying to chase every
+// current and future button that can call onPlayHighlight/onPlayEmbed/a news
+// video, HomeContent's three modal-opening functions substitute this
+// placeholder at the single choke point they all share, unconditionally, in
+// demo mode — the same "swap the leaf, not every caller" shape as the rest of
+// this file.
+export function demoHighlightPoster(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><rect width="320" height="180" rx="12" fill="#1c1c1e"/><circle cx="160" cy="90" r="34" fill="#ffffff" fill-opacity="0.92"/><polygon points="148,68 148,112 190,90" fill="#1c1c1e"/></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export const DEMO_HIGHLIGHT_HEADLINE = "Team A1 vs Team A2 highlights";
 
 // ?nhalert=1 — staging-side preview for the MLB No-Hit / Perfect Game badge.
 // Forces 3 MLB games into a live no-hit state (home pitcher + perfect-game
@@ -69,6 +152,28 @@ const PALETTE = ["E45858", "5887E4", "58E490", "E4A058", "A058E4", "58D4E4", "E4
 function placeholderLogo(letter: string, color: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#${color}"/><text x="12" y="16.5" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="700" font-size="13" fill="#ffffff">${letter}</text></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+// The first-run league picker (?demo=1&picker=1) chooses from the real
+// MLB/NFL/NBA/… catalog (ALL_LEAGUES / thirdLeagueOptions) with real ESPN/
+// Wikimedia logos — applyDemoMode above never touches it, since it only
+// transforms the fetched board data, not that static list. This builds a
+// display-only label/logo per sport, in the order the picker renders them, so
+// the sheet itself is safe to screenshot; callers keep using the real Sport
+// value for selection and slot-mapping — only what's ON SCREEN changes.
+export function anonymizeLeaguePickerOptions<T extends { sport: string }>(
+  options: T[],
+): Map<string, { label: string; logo: string }> {
+  const map = new Map<string, { label: string; logo: string }>();
+  options.forEach((o, i) => {
+    const letter = String.fromCharCode(65 + (i % 26));
+    const n = Math.floor(i / 26) + 1;
+    map.set(o.sport, {
+      label: n > 1 ? `League ${letter}${n}` : `League ${letter}`,
+      logo: placeholderLogo(letter, PALETTE[i % PALETTE.length]),
+    });
+  });
+  return map;
 }
 
 export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {

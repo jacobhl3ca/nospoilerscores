@@ -427,7 +427,12 @@ try {
       ok("every seated club carries an odds or a clinch mark",
         bracket.seatLines.length === 12 && bracket.seatLines.every((l) => /%|✓/.test(l)),
         bracket.seatLines.find((l) => !/%|✓/.test(l)) ?? `${bracket.seatLines.length} lines`);
-      ok("the seat percentages are shaded, not flat text", bracket.shaded > 0, `${bracket.shaded} shaded pills`);
+      // A clinched seat shows the tick alone: no "100%" pill next to it.
+      const ticked = bracket.seatLines.filter((l) => /✓/.test(l));
+      ok("a clinched seat shows the tick, not a 100% pill",
+        ticked.every((l) => !/%/.test(l)), ticked.find((l) => /%/.test(l)) ?? `${ticked.length} ticked seats`);
+      const open = bracket.seatLines.length - ticked.length;
+      ok("the seat percentages are shaded, not flat text", bracket.shaded === open, `${bracket.shaded} shaded pills, ${open} open seats`);
       // Chasers are optional by September's end — once every seat is clinched
       // there is nobody left to list, and that is the correct empty state.
       ok("any chaser shown names a club and its odds",
@@ -436,6 +441,15 @@ try {
       ok("a chaser is only ever listed under a seat", !/Chasing this spot/.test(bracket.text) || bracket.chasers.length > 0);
       ok("a seat is a row, not a square tile",
         bracket.seatRatio !== null && bracket.seatRatio > 2.5, `narrowest seat ratio ${bracket.seatRatio?.toFixed(2)}`);
+      // The row only goes side by side where all seven columns fit; a 768px
+      // tablet used to hide the NL Wild Card column behind a sideways scroll.
+      for (const w of [390, 768, 855, 1024, 1440]) {
+        await page.setViewportSize({ width: w, height: 1000 });
+        await page.waitForTimeout(300);
+        const m = await dialog.locator('[aria-label="MLB postseason bracket"]').evaluate((e) => ({ cw: e.clientWidth, sw: e.scrollWidth }));
+        ok(`the bracket needs no sideways scroll at ${w}px`, m.sw <= m.cw + 1, `${m.cw}/${m.sw}`);
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
     }
 
     const updated = dialog.locator("p", { hasText: /^Updated / });
