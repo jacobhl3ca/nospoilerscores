@@ -192,8 +192,17 @@ function strictFallbackChannels(fallbackUrl: string): string[] {
 // soccer official (see GameHighlights). Same effect as the channels in
 // channelAlwaysMasksTitle — the title bar never uncovers.
 function fallbackForcesTitleMask(fallbackUrl: string): boolean {
+  return fallbackFlag(fallbackUrl, "nss_mask_title");
+}
+
+// Per-clip hand-off flags from the caller, for a FotMob soccer official the
+// bake found refusing every embed while it plays on youtube.com (LaLiga,
+// Ligue 1): `nss_embed_blocked=1` opens straight on the "Watch on YouTube"
+// card, the per-video twin of leadChannelBlocksEmbeds; `nss_title_score=1`
+// adds a line on that card saying the YouTube title shows the score.
+function fallbackFlag(fallbackUrl: string, name: string): boolean {
   try {
-    return new URL(fallbackUrl).searchParams.get("nss_mask_title") === "1";
+    return new URL(fallbackUrl).searchParams.get(name) === "1";
   } catch {
     return false;
   }
@@ -1659,7 +1668,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     // mounting a player that will black-screen, error 150, and then walk a
     // fallback chain with nothing in it (Jacob 8/10). See
     // leadChannelBlocksEmbeds for how the list is verified and unwound.
-    if (leadChannelBlocksEmbeds(strictFallbackChannels(fallbackUrl))) {
+    if (leadChannelBlocksEmbeds(strictFallbackChannels(fallbackUrl)) || fallbackFlag(fallbackUrl, "nss_embed_blocked")) {
       setYtFailed(true);
       return;
     }
@@ -2433,6 +2442,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 >
                   <svg aria-hidden="true" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                   <p className="text-white/85 text-sm sm:text-base font-medium max-w-xs leading-snug">This highlight can’t play here — the league blocked embedded playback.</p>
+                  {fallbackFlag(fallbackUrl, "nss_title_score") && (
+                    <p className="text-white/60 text-xs sm:text-sm max-w-xs leading-snug">Heads up: YouTube shows the score in this video’s title.</p>
+                  )}
                   {/* One-tap jump to another version of the same game (e.g. the
                       Telemundo cut) — often embeddable when the FOX/FIFA one isn't.
                       Loading it swaps currentId; the player effect clears ytFailed

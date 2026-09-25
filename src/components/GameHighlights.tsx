@@ -14,6 +14,19 @@ import { nflTeamChannelChain } from "@/lib/nflTeamChannels";
 import type { BakedHighlight } from "@/lib/highlights";
 import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
+// A resolved official id, the uploader it was gated to, and — for a FotMob id —
+// the extra modal params from fotmobHandOffParams.
+type OfficialHit = { id: string; channel: string; fotmob?: boolean; handOff?: string };
+
+// A FotMob clip the uploader will not let play embedded (LaLiga, Ligue 1) opens
+// straight on the modal's "Watch on YouTube" card, the way every NFL clip does,
+// and the card says so when its YouTube title prints the score. Empty for any
+// clip that plays in the modal.
+function fotmobHandOffParams(baked: BakedHighlight | null): string {
+  if (baked?.officialEmbeddable !== false) return "";
+  return `&nss_embed_blocked=1${baked.officialTitleScore ? "&nss_title_score=1" : ""}`;
+}
+
 // OFF 2026-09-20 pending QA: a club posts its cut mostly after a win, so the
 // nickname on the button names the winner, and some cuts were not full-game
 // highlights. The bake keeps writing the slot; flip this back on after QA.
@@ -188,15 +201,16 @@ export default function GameHighlights({
   // its channel is taken from the record itself; the bake confirmed it through
   // oEmbed, both teams and the upload date, and the matchup, age and duplicate
   // checks below still apply. Its titles can print the score, so the modal
-  // keeps the title covered for it (see officialModalFallbackUrl).
-  const bakedOfficialFromChain = useCallback((baked: BakedHighlight | null): { id: string; channel: string; fotmob?: boolean } | null => {
+  // keeps the title covered for it (see officialModalFallbackUrl). `handOff`
+  // carries the modal flags for a FotMob clip that only plays on youtube.com.
+  const bakedOfficialFromChain = useCallback((baked: BakedHighlight | null): OfficialHit | null => {
     for (const channel of [primaryChannel, ...fallbackChannels.map((f) => f.channel)]) {
       const id = getChannelVerifiedBakedId(baked, "official", channel, hlAway, hlHome);
       if (id && channel) return { id, channel };
     }
     if (baked?.src === "fotmob" && baked.officialChannel) {
       const id = getChannelVerifiedBakedId(baked, "official", baked.officialChannel, hlAway, hlHome);
-      if (id) return { id, channel: baked.officialChannel, fotmob: true };
+      if (id) return { id, channel: baked.officialChannel, fotmob: true, handOff: fotmobHandOffParams(baked) };
     }
     return null;
   }, [primaryChannel, fallbackChannels, hlAway, hlHome]);
@@ -209,6 +223,7 @@ export default function GameHighlights({
   // that channel with that channel's title gate.
   const [officialSource, setOfficialSource] = useState<string | null>(initialOfficial?.channel ?? null);
   const [officialFromFotmob, setOfficialFromFotmob] = useState(!!initialOfficial?.fotmob);
+  const [officialFotmobHandOff, setOfficialFotmobHandOff] = useState(initialOfficial?.handOff ?? "");
   const initialSecondaryId = !isMlb
     ? getChannelVerifiedBakedId(initialBaked, "extended", secondaryChannel, hlAway, hlHome)
     : null;
@@ -387,7 +402,7 @@ export default function GameHighlights({
   // the score in the title, and Serie A's print the story.
   const fotmobModalFallbackUrl = officialFromFotmob && officialSource ? modalFallbackUrl([officialSource]) : null;
   const officialModalFallbackUrl = fotmobModalFallbackUrl
-    ? `${fotmobModalFallbackUrl}&nss_mask_title=1`
+    ? `${fotmobModalFallbackUrl}&nss_mask_title=1${officialFotmobHandOff}`
     : officialFallback
     ? modalFallbackUrl([officialFallback.channel], `&nss_comp=${encodeURIComponent((compTokens.length ? compTokens : officialFallback.titleTokens).join("|"))}`)
     : modalFallbackUrl([primaryChannel]);
@@ -450,7 +465,7 @@ export default function GameHighlights({
         // id nothing can display. The `secondP` slot was already safe (MLB's
         // secondaryChannel is undefined → resolveHighlightVideo returns null
         // before any fetch); this closes the same leak on the official slot.
-        const officialP: Promise<{ id: string; channel: string; fotmob?: boolean } | null> = !hasOfficialButton || isMlb
+        const officialP: Promise<OfficialHit | null> = !hasOfficialButton || isMlb
           ? Promise.resolve(null)
           : bakedOfficialHit
           ? Promise.resolve(bakedOfficialHit)
@@ -507,6 +522,7 @@ export default function GameHighlights({
         const officialId = officialHit?.id ?? null;
         setOfficialSource(officialHit?.channel ?? null);
         setOfficialFromFotmob(!!officialHit?.fotmob);
+        setOfficialFotmobHandOff(officialHit?.handOff ?? "");
         prefetchedOfficialId.current = officialId;
         setOfficialStatus(officialId ? "found" : "missing");
         let secondId = await secondP;
@@ -640,6 +656,7 @@ export default function GameHighlights({
                   prefetchedOfficialId.current = hit.id;
                   setOfficialSource(hit.channel);
                   setOfficialFromFotmob(false);
+                  setOfficialFotmobHandOff("");
                   setOfficialStatus("found");
                   const fb = fallbackChannels.find((f) => f.channel === hit.channel);
                   playHl(hit.id, (fb ? modalFallbackUrl([fb.channel], `&nss_comp=${encodeURIComponent((compTokens.length ? compTokens : fb.titleTokens).join("|"))}`) : modalFallbackUrl([primaryChannel]))!, shareCard);

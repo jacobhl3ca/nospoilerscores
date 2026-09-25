@@ -11,7 +11,9 @@ import {
   teamsMatch,
   findFotmobFixture,
   gateFotmobVideo,
+  titlePrintsScore,
 } from "../scripts/lib/fotmob.mjs";
+import { parseWatchPagePlayable } from "../scripts/lib/recaps.mjs";
 
 // Trimmed from the live pages on 2026-09-23 (La Liga matchday 7): same script
 // tag, same paths, only the fields the bake reads.
@@ -96,9 +98,49 @@ test("gate order: oEmbed 401 rejects before any other check", async () => {
   assert.equal(laterChecked, false);
 });
 
-test("gate: oEmbed 200 but not playable embedded is rejected (LALIGA EA SPORTS, 2026-09-23)", async () => {
+test("gate: embed-blocked but playable on youtube.com is kept for the hand-off (LALIGA EA SPORTS, 2026-09-25)", async () => {
   const meta = async () => ({ title: "RESUMEN Y GOLES | GETAFE CF 1-0 MÁLAGA CF", author: "LALIGA EA SPORTS" });
-  assert.deepEqual(await gateFotmobVideo("VLO0aPib4SU", { oembedMeta: meta, embeddable: no, matchesTeams: yes, matchesDate: yes }), { ok: false, reason: "embed" });
+  assert.deepEqual(
+    await gateFotmobVideo("VLO0aPib4SU", { oembedMeta: meta, embeddable: no, watchable: yes, matchesTeams: yes, matchesDate: yes }),
+    { ok: true, channel: "LALIGA EA SPORTS", embedBlocked: true, titleScore: true },
+  );
+  const clean = async () => ({ title: "Highlights | Pompey v Blackburn", author: "Portsmouth FC" });
+  assert.deepEqual(
+    await gateFotmobVideo("x", { oembedMeta: clean, embeddable: no, watchable: yes, matchesTeams: yes, matchesDate: yes }),
+    { ok: true, channel: "Portsmouth FC", embedBlocked: true },
+  );
+  // A blocked clip still has to pass the team and date gates.
+  assert.deepEqual(await gateFotmobVideo("x", { oembedMeta: meta, embeddable: no, watchable: yes, matchesTeams: no, matchesDate: yes }), { ok: false, reason: "teams" });
+});
+
+test("gate: embed-blocked and not playable in the US either is rejected (TUDN Liga MX, 2026-09-25)", async () => {
+  const meta = async () => ({ title: "RESUMEN Y GOLES I América vs Chivas | Liga MX", author: "TUDN México" });
+  assert.deepEqual(await gateFotmobVideo("NxpKQ-JYkvk", { oembedMeta: meta, embeddable: no, watchable: no, matchesTeams: yes, matchesDate: yes }), { ok: false, reason: "embed" });
+  assert.deepEqual(await gateFotmobVideo("NxpKQ-JYkvk", { oembedMeta: meta, embeddable: no, watchable: async () => null, matchesTeams: yes, matchesDate: yes }), { ok: false, reason: "embed" });
+  assert.deepEqual(await gateFotmobVideo("NxpKQ-JYkvk", { oembedMeta: meta, embeddable: no, matchesTeams: yes, matchesDate: yes }), { ok: false, reason: "embed" });
+});
+
+test("gate: an unknown embed verdict is rejected without asking youtube.com", async () => {
+  const meta = async () => ({ title: "Bolton vs Norwich City", author: "Norwich City Football Club" });
+  let asked = false;
+  const watchable = async () => { asked = true; return true; };
+  assert.deepEqual(await gateFotmobVideo("x", { oembedMeta: meta, embeddable: async () => null, watchable, matchesTeams: yes, matchesDate: yes }), { ok: false, reason: "embed" });
+  assert.equal(asked, false);
+});
+
+test("titlePrintsScore: a result between two numbers, not years or matchdays", () => {
+  for (const t of ["GETAFE CF 1 - 0 MÁLAGA CF | RESUMEN LALIGA EA SPORTS", "TOULOUSE FC - HAVRE AC (2-1) | Week 5 - Ligue 1 McDonald's 26/27", "Stoke City 1–2 Sheffield United"]) {
+    assert.equal(titlePrintsScore(t), true, t);
+  }
+  for (const t of ["ROMA-INTER | HIGHLIGHTS | Serie A 2026/27", "HAMBURGER SV - 1. FC KÖLN | Highlights | Matchday 4 – Bundesliga", "Season 2026-27 preview", "Highlights 🔵 | Pompey v Blackburn"]) {
+    assert.equal(titlePrintsScore(t), false, t);
+  }
+});
+
+test("parseWatchPagePlayable: OK plays, UNPLAYABLE (US geo block) does not, no status is unknown", () => {
+  assert.equal(parseWatchPagePlayable('var ytInitialPlayerResponse = {"playabilityStatus":{"status":"OK","playableInEmbed":true}};'), true);
+  assert.equal(parseWatchPagePlayable('{"playabilityStatus":{"status":"UNPLAYABLE","reason":"Video unavailable"}}'), false);
+  assert.equal(parseWatchPagePlayable("<html>google.com/sorry</html>"), null);
 });
 
 test("gate: wrong teams and an old upload are rejected, a clean clip keeps its uploader", async () => {

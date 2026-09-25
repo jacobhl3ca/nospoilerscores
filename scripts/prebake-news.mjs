@@ -9,7 +9,7 @@ import { dirname } from "node:path";
 import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
   parseRelativeTime, isoDurationToSec, etYmd, dailyCoversDate, weekdayCoversDate,
-  weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
+  weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, parseWatchPagePlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
   fillHeading, pickShorterClub, eplSeasonYear, uploadFitsGameDate,
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
@@ -3113,19 +3113,24 @@ async function hlFotmobFixturesFor(sport) {
 const hlTeamVariantsOf = (name) => [hlAlias(name), ...(HL_WORKER_TEAM_VARIANTS[hlNormalizeTeam(name)] ?? [])];
 
 // The official id FotMob links for this game, gated, or null. A carried
-// FotMob id is re-gated without asking FotMob again.
+// FotMob id is re-gated without asking FotMob again. `embedBlocked` /
+// `titleScore` ride along for a clip that only plays on youtube.com (see
+// gateFotmobVideo); the entry stores them as officialEmbeddable: false /
+// officialTitleScore: true.
 async function hlFotmobOfficial(sport, key, item, away, home, prev) {
   if (!HL_FOTMOB_ON || !FOTMOB_LEAGUES[sport]) return null;
   const gate = (id) => gateFotmobVideo(id, {
     oembedMeta: hlOembedMeta,
-    embeddable: async (v) => (await fetchYtEmbeddable(v)) === true,
+    embeddable: fetchYtEmbeddable,
+    watchable: fetchYtWatchPlayable,
     matchesTeams: (v) => hlVideoMatchesTeams(v, away, home),
     matchesDate: (v) => hlVideoMatchesDate(v, item.date),
   });
+  const flags = (verdict) => ({ embedBlocked: !!verdict.embedBlocked, titleScore: !!verdict.titleScore });
   if (prev?.src === "fotmob" && prev.official && prev.officialChannel) {
     const carried = await gate(prev.official);
     if (carried.ok && carried.channel.toLowerCase() === prev.officialChannel.toLowerCase()) {
-      return { id: prev.official, channel: prev.officialChannel };
+      return { id: prev.official, channel: prev.officialChannel, ...flags(carried) };
     }
     console.warn(`HIGHLIGHT-FOTMOB-REJECT ${key} carried ${prev.official} ${carried.ok ? "channel" : carried.reason}`);
   }
@@ -3153,8 +3158,8 @@ async function hlFotmobOfficial(sport, key, item, away, home, prev) {
     console.warn(`HIGHLIGHT-FOTMOB-REJECT ${key} ${videoId} ${verdict.reason} (${away} vs ${home})`);
     return null;
   }
-  console.log(`HIGHLIGHT-FOTMOB ${key} ${videoId} ${verdict.channel}`);
-  return { id: videoId, channel: verdict.channel };
+  console.log(`HIGHLIGHT-FOTMOB ${key} ${videoId} ${verdict.channel}${verdict.embedBlocked ? " embed-blocked" : ""}`);
+  return { id: videoId, channel: verdict.channel, ...flags(verdict) };
 }
 
 // End of bake: request tally, the dark-bake streak and the state file.
@@ -3249,7 +3254,7 @@ async function bakeGameHighlights() {
       console.warn(`HIGHLIGHT-FOTMOB-REJECT ${k} carried ${v.official} switched-off`);
       if (!populatedSlots.some((slot) => slot !== "official")) continue;
       const rest = { ...v };
-      for (const field of ["src", "official", "officialChannel", "officialDurationSec"]) delete rest[field];
+      for (const field of ["src", "official", "officialChannel", "officialDurationSec", "officialEmbeddable", "officialTitleScore"]) delete rest[field];
       games[k] = rest;
       continue;
     }
@@ -3500,12 +3505,14 @@ async function bakeGameHighlights() {
         // hlFotmobOfficial). Its channel is whatever uploader FotMob linked —
         // a club, a league or a broadcaster — confirmed through oEmbed.
         let officialSrc = null;
+        let officialFotmob = null;
         if (!official) {
           const fotmob = await hlFotmobOfficial(lg.sport, key, item, away, home, prev);
           if (fotmob && fotmob.id !== prevExtended) {
             official = fotmob.id;
             officialChannel = fotmob.channel;
             officialSrc = "fotmob";
+            officialFotmob = fotmob;
           }
         }
         let extended = prevExtended ?? null;
@@ -3615,6 +3622,10 @@ async function bakeGameHighlights() {
           entry.officialChannel = officialChannel;
           if (Number.isFinite(officialDurationSec)) entry.officialDurationSec = officialDurationSec;
           if (officialSrc) entry.src = officialSrc;
+          if (officialFotmob?.embedBlocked) {
+            entry.officialEmbeddable = false;
+            if (officialFotmob.titleScore) entry.officialTitleScore = true;
+          }
         }
         if (club) {
           entry.club = club;
@@ -3750,6 +3761,17 @@ async function fetchYtEmbeddable(id) {
   try {
     const res = await fetch(`https://www.youtube.com/embed/${id}`, { headers: { "User-Agent": UA, Referer: "https://hidescore.com/" } });
     return res.ok ? parseEmbedPlayable(await res.text()) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Whether a clip plays on youtube.com from the mini (see parseWatchPagePlayable).
+// Asked only for a FotMob clip that refuses embeds — a handful per bake, so it
+// reads the page directly instead of going through the watch-meta disk cache.
+async function fetchYtWatchPlayable(id) {
+  try {
+    return parseWatchPagePlayable(await getText(`https://www.youtube.com/watch?v=${encodeURIComponent(id)}`));
   } catch {
     return null;
   }
