@@ -427,7 +427,12 @@ try {
       ok("every seated club carries an odds or a clinch mark",
         bracket.seatLines.length === 12 && bracket.seatLines.every((l) => /%|✓/.test(l)),
         bracket.seatLines.find((l) => !/%|✓/.test(l)) ?? `${bracket.seatLines.length} lines`);
-      ok("the seat percentages are shaded, not flat text", bracket.shaded > 0, `${bracket.shaded} shaded pills`);
+      // A clinched seat shows the tick alone: no "100%" pill next to it.
+      const ticked = bracket.seatLines.filter((l) => /✓/.test(l));
+      ok("a clinched seat shows the tick, not a 100% pill",
+        ticked.every((l) => !/%/.test(l)), ticked.find((l) => /%/.test(l)) ?? `${ticked.length} ticked seats`);
+      const open = bracket.seatLines.length - ticked.length;
+      ok("the seat percentages are shaded, not flat text", bracket.shaded === open, `${bracket.shaded} shaded pills, ${open} open seats`);
       // Chasers are optional by September's end — once every seat is clinched
       // there is nobody left to list, and that is the correct empty state.
       ok("any chaser shown names a club and its odds",

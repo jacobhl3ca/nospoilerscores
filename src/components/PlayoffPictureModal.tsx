@@ -350,9 +350,10 @@ function feederLabel(bracket: LeagueBracket, from: BracketMatchupKey): string {
 // One club's line in a matchup card: seed, logo, abbreviation, its chance of
 // making the field. Wide and short on purpose — the old layout stacked two
 // near-square tiles, which read as a grid of boxes rather than as a bracket.
-// A seat a series winner has moved into shows that club's seed but no odds
-// pill: by then every club left is in the field, so the pill would only ever
-// say 100%. The loser of a finished series is dimmed rather than removed, so
+// A clinched club gets the small tick and no odds pill: the pill would only
+// ever say 100%, and a bright pill pulls the eye off the matchup. A seat a
+// series winner has moved into shows that club's seed but no pill either: by
+// then every club left is in the field. The loser of a finished series is dimmed rather than removed, so
 // the pairing still reads.
 function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false }: {
   slot: BracketSlot;
@@ -385,6 +386,7 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
   }
   const shown = chasers.slice(0, 2);
   const extra = chasers.length - shown.length;
+  const clinched = !!(t.clinch || t.clinched);
   return (
     <div style={outcome === "lost" ? { opacity: 0.4 } : undefined}>
       <div
@@ -413,10 +415,10 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
           onError={(e) => { e.currentTarget.style.display = "none"; }}
         />
         <span className="text-[11px] font-bold leading-none shrink-0" style={{ color: "var(--text)" }}>{t.abbrev}</span>
-        {t.clinch || t.clinched ? (
+        {clinched ? (
           <span className="text-[9px] leading-none shrink-0" style={{ color: "var(--accent)" }} title={t.clinch ? CLINCH_TEXT[t.clinch] : "Clinched berth"}>✓</span>
         ) : null}
-        {slot.from ? null : <OddsPill odd={playoffOdd(t, odds)} />}
+        {slot.from || clinched ? null : <OddsPill odd={playoffOdd(t, odds)} />}
       </div>
       {shown.length ? (
         <div className="pl-1.5 pr-1.5 pb-1">
