@@ -59,9 +59,11 @@ interface SettingsPanelProps {
 }
 
 const DATE_MODE_OPTIONS: { value: DefaultDateMode; label: string; hint: string }[] = [
-  { value: "smart", label: "Automatic", hint: "Yesterday before the switch time, today after" },
+  // Yesterday first: it is the fresh-install default since 8/9, so the order
+  // reads as the recommendation. Values are unchanged.
   { value: "yesterday", label: "Yesterday", hint: "Always start on yesterday" },
   { value: "today", label: "Today", hint: "Always start on today" },
+  { value: "smart", label: "Automatic", hint: "Yesterday before the switch time, today after" },
 ];
 
 const LANDING_VIEW_OPTIONS: { value: DefaultLandingView; label: string; hint: string }[] = [
@@ -212,6 +214,34 @@ const SPORT_LABEL: Record<Sport, string> = {
   best: "Best of yesterday",
 };
 
+// Same query as WIDE_BOARD_QUERY in HomeContent.tsx: the board only shows
+// columns 4-5 at this width, so their slot dropdowns only show here too.
+const WIDE_BOARD_QUERY = "(min-width: 1280px)";
+
+// matchMedia as state. False on the server and on the first client render so
+// hydration matches; the effect corrects it right after mount.
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const handler = () => setMatches(mq.matches);
+    handler();
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [query]);
+  return matches;
+}
+
+// Plain-words list of the leagues that show records, for the one-line summary
+// above the (folded) chip picker.
+function recordLeagueSummary(selected: ReadonlySet<RecordLeague>): string {
+  if (selected.size === 0) return "Off";
+  if (ALL_RECORD_LEAGUES.every((k) => selected.has(k))) return "All leagues";
+  return ALL_RECORD_LEAGUES.filter((k) => selected.has(k))
+    .map((k) => (k === "soccer" ? "Soccer" : SPORT_LABEL[k]))
+    .join(", ");
+}
+
 function teamSportFromId(id: string): Sport | null {
   const dash = id.indexOf("-");
   if (dash === -1) return null;
@@ -301,6 +331,14 @@ export default function SettingsPanel({
   // settings a screen down (Jacob 8/31: "it takes up too much space"). Collapsed
   // behind a grey link under Sign out; re-collapses each time the panel opens.
   const [showLinkMore, setShowLinkMore] = useState(false);
+  // Signed out, the email form sat open under the Apple and Google buttons.
+  // Most people use one of those, so the form waits behind a grey link
+  // (Jacob 9/25). Re-collapses each time the panel opens, like showLinkMore.
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  // Records chip picker: folded behind a one-line summary. View state only.
+  const [recordsOpen, setRecordsOpen] = useState(false);
+  // Columns 4-5 exist only on a wide board, so their slots hide elsewhere.
+  const isWideBoard = useMediaQuery(WIDE_BOARD_QUERY);
   // Android shell only — see the Rate link in the legal row below.
   const [isAndroidApp, setIsAndroidApp] = useState(false);
   useEffect(() => {
@@ -308,6 +346,7 @@ export default function SettingsPanel({
     const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
     setCanUseGoogle(!cap?.isNativePlatform?.() || hasNativeGoogleBridge());
     setShowLinkMore(false);
+    setShowEmailForm(false);
     setIsAndroidApp(!!cap?.isNativePlatform?.() && cap?.getPlatform?.() === "android");
     let alive = true;
     getAuthState().then((a) => { if (alive) setAuthState(a); });
@@ -328,6 +367,10 @@ export default function SettingsPanel({
     return out;
   }, [auth.providers, auth.linkedProviders, canUseGoogle]);
   const canLinkEmail = !!auth.providers?.email && !auth.linkedProviders?.includes("email");
+  // Signed out: the email form opens on the link, stays open mid-code, and is
+  // simply open when email is the only way in.
+  const hasButtonSignIn = auth.providers?.apple !== false || (!!auth.providers?.google && canUseGoogle);
+  const signedOutEmailOpen = showEmailForm || emailStep === "code" || !hasButtonSignIn;
 
   // Esc to close
   useEffect(() => {
@@ -540,12 +583,18 @@ export default function SettingsPanel({
   // nothing; untick "Hide offseason" to reach it. The five slot dropdowns
   // follow the same filter (they had kept all 17 "· offseason" entries).
   const hideOffseason = !!prefs.hideOffseasonInCatalog;
+  // The catalog itself (not the slot dropdowns) now starts with offseason rows
+  // hidden when the pref was never set (Jacob 9/25). This is a view default
+  // only: nothing is written until the checkbox is tapped, and an untick
+  // holds for the rest of the session through this local override.
+  const [catalogHideOverride, setCatalogHideOverride] = useState<boolean | null>(null);
+  const catalogHideOffseason = catalogHideOverride ?? prefs.hideOffseasonInCatalog ?? true;
   const offseasonRowCount = leagueOptions.filter((option) => option.offseason).length;
   const keepOffseasonRow = (option: LeagueOption) => slotValues.includes(option.sport);
   const hiddenOffseasonCount = leagueOptions.filter(
     (option) => option.offseason && !keepOffseasonRow(option),
   ).length;
-  const visibleLeagueGroups = hideOffseason
+  const visibleLeagueGroups = catalogHideOffseason
     ? groupedLeagueOptions.flatMap((group) => {
         const options = group.options.filter((option) => !option.offseason || keepOffseasonRow(option));
         return options.length ? [{ ...group, options }] : [];
@@ -559,6 +608,13 @@ export default function SettingsPanel({
     : groupedLeagueOptions;
   // Manual pool for the Top events column: every game-card league, catalog
   // order, offseason ones marked (they contribute nothing until they return).
+  const switcherCheckedCount = leagueOptions.filter(isSwitcherChecked).length;
+  // Team-picker chips show in-season leagues first; the catalog options carry
+  // the season flag (the team list itself does not).
+  const inSeasonSports = useMemo(
+    () => new Set(leagueOptions.filter((option) => !option.offseason).map((option) => option.sport)),
+    [leagueOptions],
+  );
   const topEventsLeagueRows = groupedLeagueOptions.flatMap((group) => group.options.filter((option) => isTopEventsGameSport(option.sport)));
 
   const optionText = (option: LeagueOption) =>
@@ -903,9 +959,19 @@ export default function SettingsPanel({
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                   Sign in to sync your teams, layout, and settings across every browser and device.
                 </p>
+                {canLinkEmail && !signedOutEmailOpen && (
+                  <button type="button"
+                    onClick={() => setShowEmailForm(true)}
+                    aria-expanded={false}
+                    className="w-full text-[11px] underline cursor-pointer"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Use email instead
+                  </button>
+                )}
               </div>
             )}
-            {canLinkEmail && (!auth.signedIn || showLinkMore) && (
+            {canLinkEmail && (auth.signedIn ? showLinkMore : signedOutEmailOpen) && (
               <form
                 id="hs-link-more"
                 className="mt-3 space-y-2"
@@ -1004,24 +1070,13 @@ export default function SettingsPanel({
 
           {/* Favorite teams — second, right under Account (Jacob 9/25): it is
               the setting people come here for (12 of 29 synced accounts have
-              picked teams), and it sat sixth. Picker first so adding a team
-              doesn't push the picker off-screen, then the readout below. */}
+              picked teams), and it sat sixth. Search first, then your picks,
+              then the two display options (Jacob 9/25 shape pass: the 17-chip
+              records picker used to sit above the search box). */}
           <Section title="Favorite teams">
-            <ToggleRow
-              label="Stars on game cards"
-              hint="The ★ next to team names"
-              checked={!prefs.hideTeamStars}
-              onChange={(v) => updatePrefs({ hideTeamStars: !v })}
-            />
-            <Field label="Records on upcoming games" hint="Each team's current record, in italics, on today's and future games. Never on a live or finished game, or on a past date.">
-              <RecordLeaguePicker
-                selected={upcomingRecordLeagues(prefs)}
-                // The first pick retires the old NFL-only switch for good.
-                onChange={(next) => updatePrefs({ upcomingRecordLeagues: next, hideUpcomingRecords: undefined })}
-              />
-            </Field>
             <TeamPicker
               sports={teamLeagueOptions}
+              inSeasonSports={inSeasonSports}
               favorites={prefs.favoriteTeams}
               onToggle={toggleTeamFavorite}
               teamsBySport={teamsBySportCache}
@@ -1093,6 +1148,40 @@ export default function SettingsPanel({
                 </div>
               </>
             )}
+            <ToggleRow
+              label="Stars on game cards"
+              hint="The ★ next to team names"
+              checked={!prefs.hideTeamStars}
+              onChange={(v) => updatePrefs({ hideTeamStars: !v })}
+            />
+            <Field label="Records on upcoming games" hint="Each team's current record, in italics, on today's and future games. Never on a live or finished game, or on a past date.">
+              <>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {recordLeagueSummary(upcomingRecordLeagues(prefs))}
+                  </span>
+                  <button type="button"
+                    onClick={() => setRecordsOpen((v) => !v)}
+                    aria-expanded={recordsOpen}
+                    // Only while the picker exists, so the id always resolves.
+                    aria-controls={recordsOpen ? "hs-record-leagues" : undefined}
+                    className="shrink-0 text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {recordsOpen ? "Done" : "Change"}
+                  </button>
+                </div>
+                {recordsOpen && (
+                  <div id="hs-record-leagues" className="mt-2">
+                    <RecordLeaguePicker
+                      selected={upcomingRecordLeagues(prefs)}
+                      // The first pick retires the old NFL-only switch for good.
+                      onChange={(next) => updatePrefs({ upcomingRecordLeagues: next, hideUpcomingRecords: undefined })}
+                    />
+                  </div>
+                )}
+              </>
+            </Field>
           </Section>
 
           {/* Theme — near the top because the old standalone header toggle
@@ -1101,7 +1190,9 @@ export default function SettingsPanel({
             <RadioGroup
               label="Theme"
               value={prefs.theme}
-              options={THEME_OPTIONS}
+              // System names what it resolves to, in place of the old
+              // "Currently rendering" line under the pills.
+              options={THEME_OPTIONS.map((o) => (o.value === "system" ? { ...o, label: `System (${resolvedTheme} now)` } : o))}
               onChange={(v) => {
                 updatePrefs({ theme: v });
                 if (v === "system") {
@@ -1112,9 +1203,6 @@ export default function SettingsPanel({
                 }
               }}
             />
-            <p className="text-[11px] mt-1.5" style={{ color: "var(--text-muted)" }}>
-              Currently rendering: {resolvedTheme}
-            </p>
           </Section>
 
           {/* Default View */}
@@ -1161,6 +1249,7 @@ export default function SettingsPanel({
                 label="Landing view"
                 value={prefs.defaultLandingView ?? "remember"}
                 options={LANDING_VIEW_OPTIONS}
+                columns={4}
                 onChange={(v) => updatePrefs({ defaultLandingView: v })}
               />
             </Field>
@@ -1172,69 +1261,16 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ defaultRatings: v })}
               />
             </Field>
-            <Field label="Time zone" hint="Used for game times AND which day counts as today">
-              <select
-                value={prefs.timezone ?? ""}
-                onChange={(e) => updatePrefs({ timezone: e.target.value || undefined })}
-                aria-label="Time zone"
-                className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-              >
-                <option value="">Auto — your device{deviceTimeZone ? ` (${deviceTimeZone})` : ""}</option>
-                {TIME_ZONES.map((tz) => (
-                  <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
-                ))}
-              </select>
-              {/* Or just type a US ZIP and we'll pick the zone for you. */}
-              <div className="flex items-center gap-2 mt-2">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="postal-code"
-                  maxLength={5}
-                  value={zip}
-                  onChange={(e) => { setZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setZipMsg(""); }}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); resolveZip(); } }}
-                  placeholder="or enter ZIP"
-                  aria-label="US ZIP code for time zone"
-                  className="w-28 px-3 py-2 rounded-lg text-sm"
-                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                />
-                <button type="button"
-                  onClick={resolveZip}
-                  disabled={zip.length !== 5 || zipBusy}
-                  // Pin a stable, descriptive accessible name. The visible text
-                  // is a terse "Set" (ambiguous out of context next to a ZIP
-                  // field) and flips to a bare "…" while resolving — a meaningless
-                  // accessible name for that transient state. An aria-label
-                  // overrides the text content, so the button reads the same in
-                  // both states, matching the descriptive labels the app already
-                  // gives its other short buttons (the feedback "+", the golf
-                  // highlight buttons). Purely additive — no visual change.
-                  aria-label="Set time zone from ZIP code"
-                  className="px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity disabled:opacity-40 disabled:cursor-default"
-                  style={{ background: "var(--accent)", color: "white" }}
-                >
-                  {zipBusy ? "…" : "Set"}
-                </button>
-              </div>
-              {zipMsg && (
-                <p role="status" aria-live="polite" className="text-[11px] mt-1" style={{ color: zipErr ? "rgb(239,68,68)" : "var(--text-muted)" }}>
-                  {zipMsg}
-                </p>
-              )}
-            </Field>
           </Section>
 
           {/* League columns */}
           <Section title="League columns">
             <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
-              Pick a league for each slot. <em>Auto</em> uses the in-season default.
-              You can also tap a column&rsquo;s header on the main screen to switch its league.
-              Offseason picks stay saved and return automatically.
-              Slots 4&ndash;5 only appear when the window is wide enough for five columns.
+              Pick a league for each column, or tap a column header on the board.
             </p>
-            {[0, 1, 2, 3, 4].map((idx) => {
+            {/* Slots 4-5 only when the board itself is wide enough for five
+                columns. Their saved prefs stay untouched either way. */}
+            {(isWideBoard ? [0, 1, 2, 3, 4] : [0, 1, 2]).map((idx) => {
               const fallbackLabel = displayedLeagues[idx]?.label ?? "—";
               const saved = slotValues[idx];
               // A "top" pin from before the column was switched off reads as
@@ -1294,51 +1330,66 @@ export default function SettingsPanel({
               checked={prefs.singleColumn ?? false}
               onChange={(v) => updatePrefs({ singleColumn: v })}
             />
-            <Field label="Leagues in the switcher" hint="Core leagues start checked; choose any others you want in the header switcher">
-              <div className="space-y-3">
-                {(offseasonRowCount > 0 || hideOffseason) && (
-                  <label
-                    className="flex items-center justify-end gap-2 text-[11px] cursor-pointer select-none"
-                    style={{ color: "var(--text-muted)" }}
-                    title="Leagues you have checked stay listed even when they are between seasons"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={hideOffseason}
-                      onChange={(event) =>
-                        updatePrefs({ hideOffseasonInCatalog: event.target.checked ? true : undefined })
-                      }
-                      className="cursor-pointer accent-[var(--accent)]"
-                    />
-                    <span>
-                      Hide offseason
-                      {hideOffseason && hiddenOffseasonCount > 0 && ` · ${hiddenOffseasonCount} hidden`}
-                    </span>
-                  </label>
-                )}
-                {visibleLeagueGroups.map((group) => (
-                  <div key={group.key}>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>{group.label}</p>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                      {group.options.map(renderSwitcherToggle)}
+            {/* The switcher catalog, folded behind a count (Jacob 9/25): 40-odd
+                checkboxes were a third of the panel on a phone. Core leagues
+                start checked; tick any others for the header switcher. */}
+            <details className="group/catalog">
+              <summary
+                className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-semibold cursor-pointer select-none marker:content-none [&::-webkit-details-marker]:hidden"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open/catalog:rotate-90">
+                  <polyline points="9 6 15 12 9 18" />
+                </svg>
+                {switcherCheckedCount} leagues in the switcher · Edit
+              </summary>
+              <div className="mt-3">
+                <div className="space-y-3">
+                  {(offseasonRowCount > 0 || catalogHideOffseason) && (
+                    <label
+                      className="flex items-center justify-end gap-2 text-[11px] cursor-pointer select-none"
+                      style={{ color: "var(--text-muted)" }}
+                      title="Leagues you have checked stay listed even when they are between seasons"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={catalogHideOffseason}
+                        onChange={(event) => {
+                          setCatalogHideOverride(event.target.checked);
+                          updatePrefs({ hideOffseasonInCatalog: event.target.checked ? true : undefined });
+                        }}
+                        className="cursor-pointer accent-[var(--accent)]"
+                      />
+                      <span>
+                        Hide offseason
+                        {catalogHideOffseason && hiddenOffseasonCount > 0 && ` · ${hiddenOffseasonCount} hidden`}
+                      </span>
+                    </label>
+                  )}
+                  {visibleLeagueGroups.map((group) => (
+                    <div key={group.key}>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>{group.label}</p>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                        {group.options.map(renderSwitcherToggle)}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {onRequestLeague && (
-                  // Last line of the catalog, italic and quiet: the person
-                  // reading it has just scanned every league we carry and not
-                  // found theirs, which is the only moment the ask is useful.
-                  <button
-                    type="button"
-                    onClick={onRequestLeague}
-                    className="text-xs italic underline underline-offset-2 cursor-pointer hover:opacity-80"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Request a league
-                  </button>
-                )}
+                  ))}
+                  {onRequestLeague && (
+                    // Last line of the catalog, italic and quiet: the person
+                    // reading it has just scanned every league we carry and not
+                    // found theirs, which is the only moment the ask is useful.
+                    <button
+                      type="button"
+                      onClick={onRequestLeague}
+                      className="text-xs italic underline underline-offset-2 cursor-pointer hover:opacity-80"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Request a league
+                    </button>
+                  )}
+                </div>
               </div>
-            </Field>
+            </details>
           </Section>
 
           {/* Top events (Jacob 9/4): the cross-league column's knobs. The pill
@@ -1573,6 +1624,60 @@ export default function SettingsPanel({
               More settings
             </summary>
             <div className="space-y-3 mt-3">
+            {/* Time zone moved here from Default view (Jacob 9/25): Auto is
+                right for nearly everyone. Same control, same pref. */}
+            <Field label="Time zone" hint="Used for game times AND which day counts as today">
+              <select
+                value={prefs.timezone ?? ""}
+                onChange={(e) => updatePrefs({ timezone: e.target.value || undefined })}
+                aria-label="Time zone"
+                className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                <option value="">Auto — your device{deviceTimeZone ? ` (${deviceTimeZone})` : ""}</option>
+                {TIME_ZONES.map((tz) => (
+                  <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+              {/* Or just type a US ZIP and we'll pick the zone for you. */}
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  maxLength={5}
+                  value={zip}
+                  onChange={(e) => { setZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setZipMsg(""); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); resolveZip(); } }}
+                  placeholder="or enter ZIP"
+                  aria-label="US ZIP code for time zone"
+                  className="w-28 px-3 py-2 rounded-lg text-sm"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                />
+                <button type="button"
+                  onClick={resolveZip}
+                  disabled={zip.length !== 5 || zipBusy}
+                  // Pin a stable, descriptive accessible name. The visible text
+                  // is a terse "Set" (ambiguous out of context next to a ZIP
+                  // field) and flips to a bare "…" while resolving — a meaningless
+                  // accessible name for that transient state. An aria-label
+                  // overrides the text content, so the button reads the same in
+                  // both states, matching the descriptive labels the app already
+                  // gives its other short buttons (the feedback "+", the golf
+                  // highlight buttons). Purely additive — no visual change.
+                  aria-label="Set time zone from ZIP code"
+                  className="px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity disabled:opacity-40 disabled:cursor-default"
+                  style={{ background: "var(--accent)", color: "white" }}
+                >
+                  {zipBusy ? "…" : "Set"}
+                </button>
+              </div>
+              {zipMsg && (
+                <p role="status" aria-live="polite" className="text-[11px] mt-1" style={{ color: zipErr ? "rgb(239,68,68)" : "var(--text-muted)" }}>
+                  {zipMsg}
+                </p>
+              )}
+            </Field>
             <Field label="Header league switcher" hint="How tapping a column header behaves">
               <RadioGroup
                 label="Header league switcher"
@@ -1777,6 +1882,7 @@ function RadioGroup<T extends string>({
   value,
   options,
   onChange,
+  columns = 3,
 }: {
   // Names the set of options for assistive tech. The visual <Field> label above
   // each group is a bare, unassociated <label>, so without this a screen reader
@@ -1789,9 +1895,12 @@ function RadioGroup<T extends string>({
   value: T;
   options: RadioOption<T>[];
   onChange: (v: T) => void;
+  // 4 = one row on sm+, 2×2 on phones, so a fourth option never sits alone.
+  columns?: 2 | 3 | 4;
 }) {
+  const grid = columns === 4 ? "grid-cols-2 sm:grid-cols-4" : columns === 2 ? "grid-cols-2" : "grid-cols-3";
   return (
-    <div role="group" aria-label={label} className="grid grid-cols-3 gap-1.5">
+    <div role="group" aria-label={label} className={`grid gap-1.5 ${grid}`}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -1827,6 +1936,37 @@ function RadioGroup<T extends string>({
   );
 }
 
+// The one league chip: TeamPicker's league filter and the records picker.
+function LeagueChip({
+  label,
+  on,
+  onClick,
+  ariaPressed,
+  title,
+}: {
+  label: string;
+  on: boolean;
+  onClick: () => void;
+  ariaPressed?: boolean;
+  title?: string;
+}) {
+  return (
+    <button type="button"
+      onClick={onClick}
+      aria-pressed={ariaPressed}
+      className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
+      style={{
+        background: on ? "var(--accent)" : "var(--bg-card)",
+        border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
+        color: on ? "white" : "var(--text)",
+      }}
+      title={title}
+    >
+      {label}
+    </button>
+  );
+}
+
 // Always-visible team picker. Sport tab pills sit directly in the Favorite
 // teams section; the active tab's team list lazy-loads via fetchSportTeams
 // and is cached per-sport in lib/espn.ts so re-selecting a tab is instant.
@@ -1859,6 +1999,7 @@ function PickerTeamLogo({ logo, name }: { logo?: string; name: string }) {
 }
 function TeamPicker({
   sports,
+  inSeasonSports,
   favorites,
   onToggle,
   teamsBySport,
@@ -1867,6 +2008,8 @@ function TeamPicker({
   knownTeams,
 }: {
   sports: LeagueOption[];
+  // Leagues playing now. Only these show as chips until "All leagues" is on.
+  inSeasonSports: ReadonlySet<Sport>;
   favorites: string[];
   onToggle: (teamId: string) => void;
   teamsBySport: Map<Sport, SportTeam[]>;
@@ -1881,6 +2024,7 @@ function TeamPicker({
   // Start with no league selected — search across all leagues until the user
   // picks one to narrow the list.
   const [selectedSport, setSelectedSport] = useState<Sport | null>(null);
+  const [showAllLeagues, setShowAllLeagues] = useState(false);
   const [query, setQuery] = useState("");
   const favSet = useMemo(() => new Set(favorites), [favorites]);
   const trimmedQuery = query.trim().toLowerCase();
@@ -1961,42 +2105,20 @@ function TeamPicker({
     ? loadingSports.has(activeSport) && !teamsBySport.has(activeSport)
     : !!trimmedQuery && !anySportLoaded && loadingSports.size > 0;
 
+  // In-season chips only, plus an "All leagues" chip for the rest. The picked
+  // league always keeps its chip so it can be tapped off. With no season data
+  // (or nothing hidden) every chip shows and the toggle is not needed.
+  const inSeasonTabs = tabSports.filter((s) => inSeasonSports.has(s.sport) || s.sport === activeSport);
+  const hasHiddenTabs = inSeasonTabs.length > 0 && inSeasonTabs.length < tabSports.length;
+  const visibleTabs = showAllLeagues || !hasHiddenTabs ? tabSports : inSeasonTabs;
+
   if (tabSports.length === 0) return null;
 
   return (
-    <div className="pt-3 mt-3 space-y-2" style={{ borderTop: "1px solid var(--border)" }}>
-      <div className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
-        Browse teams
-      </div>
-      {/* Sport tabs — always visible. Clicking the active tab again clears
-          the filter (back to cross-league search). */}
-      <div className="flex flex-wrap gap-1.5">
-        {tabSports.map((s) => {
-          const active = s.sport === activeSport;
-          return (
-            <button type="button"
-              key={s.sport}
-              onClick={() => setSelectedSport(active ? null : s.sport)}
-              // State is otherwise conveyed only by accent color; expose the
-              // active filter to assistive tech (matches the aria-pressed toggle
-              // convention used by RadioGroup and the HomeContent tab buttons).
-              aria-pressed={active}
-              className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
-              style={{
-                background: active ? "var(--accent)" : "var(--bg-card)",
-                border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-                color: active ? "white" : "var(--text)",
-              }}
-              title={active ? "Click to clear filter" : `Show ${s.label} teams`}
-            >
-              {s.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Search box — always visible. With no league picked it queries every
-          loaded sport; first keystroke triggers parallel lazy-loads. */}
+    <div className="space-y-2">
+      {/* Search box first (Jacob 9/25) — always visible. With no league
+          picked it queries every loaded sport; first keystroke triggers
+          parallel lazy-loads. */}
       <input
         type="search"
         value={query}
@@ -2020,6 +2142,34 @@ function TeamPicker({
         className="w-full px-3 py-1.5 rounded-md text-sm"
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
       />
+
+      {/* Sport tabs. Clicking the active tab again clears the filter (back
+          to cross-league search). aria-pressed exposes the active filter,
+          which is otherwise shown only by accent color. */}
+      <div className="flex flex-wrap gap-1.5">
+        {visibleTabs.map((s) => {
+          const active = s.sport === activeSport;
+          return (
+            <LeagueChip
+              key={s.sport}
+              label={s.label}
+              on={active}
+              ariaPressed={active}
+              onClick={() => setSelectedSport(active ? null : s.sport)}
+              title={active ? "Click to clear filter" : `Show ${s.label} teams`}
+            />
+          );
+        })}
+        {hasHiddenTabs && (
+          <LeagueChip
+            label="All leagues"
+            on={showAllLeagues}
+            ariaPressed={showAllLeagues}
+            onClick={() => setShowAllLeagues((v) => !v)}
+            title={showAllLeagues ? "Show only leagues playing now" : "Show every league, including offseason"}
+          />
+        )}
+      </div>
 
       {/* The team grid below conveys its result state purely visually — a
           pulsing skeleton, a "No matches" line, or a grid of team buttons —
@@ -2113,7 +2263,7 @@ function TeamPicker({
 
 // Per-league record picker (Jacob 9/25): tap one league, a few, or All. Two
 // rows, so the spoiler warning sits on exactly the leagues it applies to —
-// see lib/upcomingRecords.ts. Chip styling matches the TeamPicker tabs.
+// see lib/upcomingRecords.ts. Same LeagueChip as the TeamPicker tabs.
 function RecordLeaguePicker({
   selected,
   onChange,
@@ -2122,20 +2272,7 @@ function RecordLeaguePicker({
   onChange: (next: RecordLeague[]) => void;
 }) {
   const chip = (key: string, label: string, on: boolean, onClick: () => void) => (
-    <button
-      type="button"
-      key={key}
-      onClick={onClick}
-      aria-pressed={on}
-      className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
-      style={{
-        background: on ? "var(--accent)" : "var(--bg-card)",
-        border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
-        color: on ? "white" : "var(--text)",
-      }}
-    >
-      {label}
-    </button>
+    <LeagueChip key={key} label={label} on={on} ariaPressed={on} onClick={onClick} />
   );
   const row = (title: string, keys: readonly RecordLeague[]) => (
     <div>
