@@ -7,7 +7,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, hasNoTrustedHighlightSource, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolvedLengthSec, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
-import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId } from "@/lib/highlights";
+import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId, getVerifiedEspnClip } from "@/lib/highlights";
 import { isDuplicateHighlightId } from "@/lib/highlightDedupe";
 import { clubNickname, formatRecapDuration } from "@/lib/recaps";
 import { nflTeamChannelChain } from "@/lib/nflTeamChannels";
@@ -255,6 +255,10 @@ export default function GameHighlights({
   const [secondaryDurationSec, setSecondaryDurationSec] = useState<number | null>(
     initialSecondaryId && Number.isFinite(initialBaked?.extendedDurationSec) ? (initialBaked!.extendedDurationSec as number) : null,
   );
+  // La Liga: ESPN's spoiler-free mp4 when the official YouTube cut cannot play
+  // in our player (see getVerifiedEspnClip). It takes the first button and
+  // plays in-app; the YouTube hand-off moves to a labelled link under the row.
+  const [espnClip, setEspnClip] = useState(() => (!isMlb && hasOfficialButton ? getVerifiedEspnClip(initialBaked, hlAway, hlHome) : null));
   const prefetchedVideoId = useRef<string | null>(initialSecondaryId ?? null);
   const prefetchedOfficialId = useRef<string | null>(initialOfficialId ?? null);
   const prefetchedTelemundoShortId = useRef<string | null>(initialTelemundoShortId);
@@ -463,6 +467,7 @@ export default function GameHighlights({
         const bakedOfficialHit = bakedOfficialFromChain(baked);
         const bakedOfficial = bakedOfficialHit?.id ?? null;
         if (isNfl) setClub(verifiedClub(baked));
+        setEspnClip(!isMlb && hasOfficialButton ? getVerifiedEspnClip(baked, away, home) : null);
         setOfficialDurationSec(bakedOfficial && Number.isFinite(baked?.officialDurationSec) ? (baked!.officialDurationSec as number) : null);
         const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel, away, home);
         setSecondaryDurationSec(bakedSecondary && Number.isFinite(baked?.extendedDurationSec) ? (baked!.extendedDurationSec as number) : null);
@@ -586,7 +591,12 @@ export default function GameHighlights({
   // held back by the slower (often live-scraped) 2nd slot — that wait was what
   // made the whole highlight row "pop in later than MLB" on refresh and on past
   // days (Jacob 7/11). A distinct 2nd clip, when found, simply joins the row.
-  const showYouTube = !!(!isMlb && isFinished && highlightUrl && (effectiveOfficialStatus === "found" || searchStatus === "found" || (isNfl && !!club)));
+  const showYouTube = !!(!isMlb && isFinished && highlightUrl && (effectiveOfficialStatus === "found" || searchStatus === "found" || (isNfl && !!club) || !!espnClip));
+  // An embed-blocked YouTube official gives its button to the ESPN clip and
+  // moves to a labelled link under the row. A live-resolved official that
+  // plays in-app keeps its own button beside the clip.
+  const officialBlocked = officialFromFotmob && !!officialFotmobHandOff;
+  const showEspnHandOff = !!(showYouTube && espnClip && officialBlocked && hasOfficialButton && officialStatus === "found" && officialModalFallbackUrl);
   const showTelemundo = !!(fifaTelemundoEnabled && isFinished && highlightUrl && isFifa && (telemundoShortStatus === "found" || telemundoLongStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
   // MLB row: short MLB.com recap (3m) first, then the condensed game (10m).
@@ -668,7 +678,27 @@ export default function GameHighlights({
           rather than falling back to a YouTube search page. */}
       {showYouTube && (
         <div className={`${wrapMargin} flex gap-1`}>
-          {hasOfficialButton && officialStatus === "found" && (
+          {espnClip && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                // Direct mp4 in the native <video>, like the MLB.com recap.
+                // Poster null: ESPN's thumbnail shows the scorebug.
+                if (onPlayEmbed) onPlayEmbed("", espnClip.url, "ESPN", shareCard, espnClip.url, null);
+                else openExternal(espnClip.url);
+              }}
+              disabled={fetchingOnClick !== null}
+              className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              aria-label="ESPN highlights"
+              title="ESPN highlights"
+            >
+              <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium whitespace-nowrap">{demoActive ? "Watch" : (formatRecapDuration(espnClip.durationSec) || highlightBadgeLabel[game.sport] || game.sport.toUpperCase())}</span>
+            </button>
+          )}
+          {!(espnClip && officialBlocked) && hasOfficialButton && officialStatus === "found" && (
             <button
               type="button"
               onClick={async (e) => {
@@ -779,6 +809,23 @@ export default function GameHighlights({
             </button>
           )}
         </div>
+      )}
+      {showEspnHandOff && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!onPlayHighlight || !prefetchedOfficialId.current) return;
+            // Today's hand-off route: the modal opens on the "Watch on YouTube"
+            // card with its "title shows the score" note.
+            playHl(prefetchedOfficialId.current, officialModalFallbackUrl!, shareCard);
+          }}
+          className="mt-1 block w-full text-center text-[10px] leading-tight underline underline-offset-2 opacity-80 hover:opacity-100 cursor-pointer"
+          style={{ color: "var(--text-secondary)" }}
+          aria-label="Full highlights (title shows score)"
+        >
+          Full highlights (title shows score)
+        </button>
       )}
 
       {/* MLB.com official game videos: short recap + condensed game in one row. */}

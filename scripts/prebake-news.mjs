@@ -19,6 +19,7 @@ import {
 } from "./lib/fotmob.mjs";
 import { channelSearchHandle, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
+import { pickEspnGameClip } from "./lib/espn-clip.mjs";
 
 const OUT_DIR = "public/news";
 
@@ -3192,6 +3193,103 @@ async function hlFotmobFinish() {
   }
 }
 
+// ── ESPN "Game Highlights": in-app clip for a blocked La Liga official ────
+// See scripts/lib/espn-clip.mjs. LALIGA EA SPORTS refuses every embed, so a
+// La Liga game whose official slot is empty or embed-blocked asks ESPN's
+// summary for its ~70 s spoiler-free package, a direct mp4 the modal plays
+// in-app. The YouTube official is left exactly as it is; the client shows it
+// as a second, labelled option.
+//
+// Limits: La Liga only; mini bake only (off under GitHub Actions, which still
+// carries a clip the prior manifest has); HL_ESPN_CLIP=0 turns it off and drops
+// every carried clip; ≤12 summaries per bake, 1 per second; a game ESPN
+// answered without a clip is not re-asked for 6 hours, and a hit is kept.
+const HL_ESPN_CLIP_OFF = process.env.HL_ESPN_CLIP === "0";
+const HL_ESPN_CLIP_ON = !HL_ESPN_CLIP_OFF && process.env.GITHUB_ACTIONS !== "true";
+const HL_ESPN_CLIP_LEAGUES = { laliga: "esp.1" };
+const HL_ESPN_CLIP_MAX_FETCHES = 12;
+const HL_ESPN_CLIP_GAP_MS = 1000;
+const HL_ESPN_CLIP_REASK_MS = 6 * 60 * 60 * 1000;
+// Outside public/news for the same reason as HL_FOTMOB_STATE_PATH.
+const HL_ESPN_CLIP_STATE_PATH = ".bake-state/espn-clip.json";
+const hlEspnClip = { requests: 0, lastAt: 0, state: null, isScoreSpoiler: undefined };
+
+// The client's own score check (src/lib/spoilers.ts), so bake and client agree.
+// Node strips the types itself; jiti covers an older node. Null if neither
+// loads, and then no clip is written or carried.
+async function hlEspnClipScoreCheck() {
+  if (hlEspnClip.isScoreSpoiler !== undefined) return hlEspnClip.isScoreSpoiler;
+  hlEspnClip.isScoreSpoiler = null;
+  try {
+    hlEspnClip.isScoreSpoiler = (await import("../src/lib/spoilers.ts")).isScoreSpoiler ?? null;
+  } catch {
+    try {
+      const { createJiti } = await import("jiti");
+      hlEspnClip.isScoreSpoiler = (await createJiti(import.meta.url).import("../src/lib/spoilers.ts")).isScoreSpoiler ?? null;
+    } catch (e) {
+      console.warn(`HIGHLIGHT-ESPN-CLIP score check not loaded: ${e?.message || e}`);
+    }
+  }
+  return hlEspnClip.isScoreSpoiler;
+}
+
+async function hlEspnClipState() {
+  if (hlEspnClip.state) return hlEspnClip.state;
+  let state = null;
+  try { state = JSON.parse(await readFile(HL_ESPN_CLIP_STATE_PATH, "utf8")); } catch { /* first run */ }
+  hlEspnClip.state = { games: state?.games && typeof state.games === "object" ? state.games : {} };
+  return hlEspnClip.state;
+}
+
+// { url, headline, sec? } for this game, or null. A carried or cached clip is
+// re-checked for a score, never re-fetched.
+async function hlEspnClipFor(sport, key, eventId, prev, label) {
+  const league = HL_ESPN_CLIP_LEAGUES[sport];
+  if (!league || HL_ESPN_CLIP_OFF) return null;
+  const isScoreSpoiler = await hlEspnClipScoreCheck();
+  if (!isScoreSpoiler) return null;
+  const clean = (c) => (c?.url && typeof c.headline === "string" && !isScoreSpoiler(c.headline) ? c : null);
+  const carried = prev?.espnClipUrl
+    ? clean({ url: prev.espnClipUrl, headline: prev.espnClipHeadline, ...(Number.isFinite(prev.espnClipSec) ? { sec: prev.espnClipSec } : {}) })
+    : null;
+  if (carried) return carried;
+  if (!HL_ESPN_CLIP_ON) return null;
+  const state = await hlEspnClipState();
+  const cached = state.games[key];
+  if (cached?.clip) return clean(cached.clip);
+  if (cached && Date.now() - (cached.at ?? 0) < HL_ESPN_CLIP_REASK_MS) return null;
+  if (hlEspnClip.requests >= HL_ESPN_CLIP_MAX_FETCHES) return null;
+  const wait = hlEspnClip.lastAt + HL_ESPN_CLIP_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  hlEspnClip.requests++;
+  let data = null;
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/summary?event=${encodeURIComponent(eventId)}`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+    if (res.ok) data = await res.json();
+  } catch { /* retried next bake */ } finally {
+    hlEspnClip.lastAt = Date.now();
+  }
+  if (!data) return null;
+  const { clip, reason } = pickEspnGameClip(data.videos, isScoreSpoiler);
+  state.games[key] = { at: Date.now(), ...(clip ? { clip } : {}) };
+  console.log(`HIGHLIGHT-ESPN-CLIP ${key} ${reason} (${label})`);
+  return clip;
+}
+
+// End of bake: request tally and the state file, pruned to the entry TTL.
+async function hlEspnClipFinish() {
+  console.log(`HIGHLIGHT-ESPN-CLIP-REQUESTS n=${hlEspnClip.requests}`);
+  if (!hlEspnClip.state) return;
+  const cutoff = Date.now() - HL_ENTRY_TTL_MS;
+  for (const [k, v] of Object.entries(hlEspnClip.state.games)) if (!(v?.at > cutoff)) delete hlEspnClip.state.games[k];
+  try {
+    await mkdir(dirname(HL_ESPN_CLIP_STATE_PATH), { recursive: true });
+    await writeFile(HL_ESPN_CLIP_STATE_PATH, JSON.stringify(hlEspnClip.state));
+  } catch (e) {
+    console.warn(`HIGHLIGHT-ESPN-CLIP state not saved: ${e?.message || e}`);
+  }
+}
+
 // ── Channel search: our own pass for an empty official slot ──────────────
 // See scripts/lib/channel-search.mjs for why. Runs after the /api/youtube
 // lookups miss and BEFORE FotMob, on the primary channel and then each chain
@@ -3334,6 +3432,10 @@ async function bakeGameHighlights() {
   const HL_DEFAULT_DAYS = 7;
   const hlDaysArg = parseInt(process.argv.find((a) => a.startsWith("--hl-days="))?.slice("--hl-days=".length) ?? "", 10);
   const hlDays = Number.isFinite(hlDaysArg) && hlDaysArg > 0 ? Math.min(hlDaysArg, 30) : HL_DEFAULT_DAYS;
+  // --hl-sports=laliga[,…] walks only those leagues' scoreboards, for a
+  // one-off local check of one league. Every other entry is carried as is.
+  const hlSportsArg = process.argv.find((a) => a.startsWith("--hl-sports="))?.slice("--hl-sports=".length);
+  const hlSports = hlSportsArg ? new Set(hlSportsArg.split(",").map((x) => x.trim()).filter(Boolean)) : null;
 
   const games = {};
   const prior = await loadPriorHighlights();
@@ -3396,6 +3498,11 @@ async function bakeGameHighlights() {
     if (populatedSlots.some((slot) => kept[slot])) games[k] = kept;
     else console.warn(`HIGHLIGHT-AGE-DROP ${k} carried (${kept.eventDate})`);
   }
+  // HL_ESPN_CLIP=0 drops every carried ESPN clip, not only the ones the
+  // per-game loop below revisits.
+  if (HL_ESPN_CLIP_OFF) {
+    for (const v of Object.values(games)) for (const field of ["espnClipUrl", "espnClipHeadline", "espnClipSec"]) delete v[field];
+  }
   for (const [k, seed] of Object.entries(HL_WORLD_CUP_SEEDS)) {
     const teams = seed.teams ?? String(seed.matchup ?? "").split("|").filter(Boolean);
     const verified = { teams, matchup: seed.matchup, sourcePolicy: "official-channel", t: now };
@@ -3445,7 +3552,7 @@ async function bakeGameHighlights() {
   const HL_CFL_DAYS = 30;
   const cflDates = Array.from({ length: HL_CFL_DAYS }, (_, i) => hlEtYmd(-i));
   let resolved = 0;
-  for (const lg of HL_LEAGUES) {
+  for (const lg of hlSports ? HL_LEAGUES.filter((l) => hlSports.has(l.sport)) : HL_LEAGUES) {
     const lgDates = lg.sport === "fifa" ? fifaDates : (lg.sport === "cfl" ? cflDates : dates);
     for (const ymd of lgDates) {
       let data;
@@ -3783,7 +3890,17 @@ async function bakeGameHighlights() {
           entry.telemundoExtended = telemundoExtended;
           entry.telemundoExtendedChannel = "Telemundo Deportes";
         }
-        if (entry.official || entry.extended || entry.telemundo || entry.telemundoExtended || entry.club) {
+        // La Liga official missing or embed-blocked: ESPN's spoiler-free clip
+        // plays in-app instead (see hlEspnClipFor). The official stays as is.
+        if (HL_ESPN_CLIP_LEAGUES[lg.sport] && (!entry.official || entry.officialEmbeddable === false)) {
+          const clip = await hlEspnClipFor(lg.sport, key, item.id, prev, `${away} vs ${home}`);
+          if (clip) {
+            entry.espnClipUrl = clip.url;
+            entry.espnClipHeadline = clip.headline;
+            if (Number.isFinite(clip.sec)) entry.espnClipSec = clip.sec;
+          }
+        }
+        if (entry.official || entry.extended || entry.telemundo || entry.telemundoExtended || entry.club || entry.espnClipUrl) {
           games[key] = entry;
           const changedSlots = ["official", "extended", "telemundo", "telemundoExtended", "club"]
             .filter((slot) => entry[slot] && entry[slot] !== rawPrev[slot]);
@@ -3816,6 +3933,7 @@ async function bakeGameHighlights() {
   }
 
   if (HL_FOTMOB_ON) await hlFotmobFinish();
+  if (HL_ESPN_CLIP_ON) await hlEspnClipFinish();
   if (HL_CS_ON) await hlChannelSearchFinish();
 
   const ageLine = `HIGHLIGHT-AGE-UNREADABLE n=${hlAgeUnreadable}/${hlAgeChecks} (upload date unreadable; those ids were KEPT)`;
