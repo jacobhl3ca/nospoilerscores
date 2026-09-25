@@ -186,6 +186,9 @@ html.blur-news-media .news-media-preview > * {
   --text: #111111;
   --text-secondary: #666666;
   --text-muted: #999999;
+  /* Article body copy on the doc pages (2026-09-25). --text-muted is 2.8:1 on
+     white, under the 4.5:1 floor for body text, and read as a draft. */
+  --text-body: #374151;
   --border: rgba(0, 0, 0, 0.1);
   --border-hover: rgba(0, 0, 0, 0.2);
   --menu-hover: rgba(0, 0, 0, 0.12);
@@ -200,6 +203,7 @@ html.blur-news-media .news-media-preview > * {
   --text: #ededed;
   --text-secondary: #9ca3af;
   --text-muted: #6b7280;
+  --text-body: #d1d5db;
   --border: rgba(255, 255, 255, 0.1);
   --border-hover: rgba(255, 255, 255, 0.2);
   --menu-hover: rgba(255, 255, 255, 0.12);
@@ -657,6 +661,15 @@ iframe#yt-player {
 }
 /* An in-page #anchor must land below the pinned bar, not under it. */
 .doc-page [id] { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 4.5rem); }
+
+/* "At a glance" box near the top of each SeoLandingPage article (2026-09-25).
+   color-mix tints the accent in both themes; an engine without it keeps the
+   plain card background from the line before. */
+.doc-glance {
+  background: var(--bg-card);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-left: 3px solid var(--accent);
+}
 
 /* Reading-progress line (DocReadProgress). Fixed to the viewport top, above the
    pinned bar; JS sets scaleX(0..1). */
