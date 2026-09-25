@@ -50,6 +50,19 @@ page.on("pageerror", (e) => console.log("  [page error]", e.message));
 // season-kickoff banner), some of them only after the first fetches land. They
 // swallow every click underneath, so clear them before each board interaction —
 // dismissing once on load is not enough.
+// Today's MLB "Playoffs" pill opens the picture: its Odds button, or the
+// bracket icon on a day that also has a recap. The pill is TODAY's only, and an
+// early-morning visit can land on yesterday, so step over to Today first.
+const PILL_OPENER = '[data-recap-playoffs-tab="odds"], [data-recap-bracket]';
+async function toTodayBoard() {
+  if (await page.locator(PILL_OPENER).count()) return;
+  const todayBtn = page.getByRole("button", { name: "Today", exact: true }).first();
+  if (!(await todayBtn.count())) return;
+  await todayBtn.click();
+  await page.waitForTimeout(6000);
+  await clearOverlays();
+}
+
 async function clearOverlays() {
   for (let i = 0; i < 5; i++) {
     const overlay = page.locator("div.fixed.inset-0.z-50").first();
@@ -229,9 +242,15 @@ try {
 
   // ── MLB playoff picture ───────────────────────────────────────────────────
   await clearOverlays();
-  const promo = page.getByRole("button", { name: "Playoff picture", exact: true }).first();
+  // The picture opens from today's MLB "Playoffs" pill: its Odds button, or the
+  // bracket icon on a day that also has a recap. The "Playoff picture" subtitle
+  // link is gone (9/25), so the header line must not carry it.
+  await toTodayBoard();
+  const promo = page.locator(PILL_OPENER).first();
   const hasPromo = (await promo.count()) > 0;
-  ok("MLB column exposes the playoff-picture promo", hasPromo);
+  ok("MLB column exposes the playoffs pill", hasPromo);
+  ok("no \"Playoff picture\" subtitle link on the board",
+    (await page.getByRole("button", { name: "Playoff picture", exact: true }).count()) === 0);
 
   if (hasPromo) {
     await promo.click();
@@ -343,7 +362,8 @@ try {
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForTimeout(6000);
     await clearOverlays();
-    await page.getByRole("button", { name: "Playoff picture", exact: true }).first().click();
+    await toTodayBoard();
+    await page.locator(PILL_OPENER).first().click();
     await dialog.waitFor({ timeout: 15000 });
     await page.waitForTimeout(5000);
     // The panel's own default is the odds, so finding seed order after a reload

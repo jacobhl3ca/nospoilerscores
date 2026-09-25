@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // The Picks tab of the MLB playoff picture, driven through the real click path:
-// MLB column → "Playoff picture ▸" → the picture's own cover → Picks.
+// today's MLB "Playoffs" pill → Picks (or the bracket icon on a recap day, then
+// the Picks tab) → the picture's own cover.
 //
 // StatsAPI is stubbed so the bracket is fixed: the standings put the 2025 field
 // in its real 2025 seeds, and the postseason feed is either 2026's as it stood
@@ -65,7 +66,10 @@ async function stub(page: Page, postseasonYear: number, picksApi: (method: strin
 // straight onto the tab.
 async function openPicks(page: Page, revealed = false) {
   await page.goto("/?l=m&s=m.0.0&dd=t&dv=s");
-  await page.getByRole("button", { name: /Playoff picture/ }).first().click({ timeout: 20_000 });
+  // The pill is today's only, and the smart default can still land on
+  // yesterday before the cutoff hour.
+  await page.getByRole("button", { name: "Today", exact: true }).click({ timeout: 20_000 });
+  await page.locator('[data-recap-playoffs-tab="picks"], [data-recap-bracket]').first().click({ timeout: 20_000 });
   const dialog = page.getByRole("dialog", { name: "MLB playoff picture" });
   await dialog.getByRole("tab", { name: "Picks" }).click();
   if (!revealed) {

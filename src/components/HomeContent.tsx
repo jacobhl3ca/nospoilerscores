@@ -639,8 +639,7 @@ export default function HomeContent({
   // see SlamBracketModal / PlayoffPictureModal.
   const [slamBracketOpen, setSlamBracketOpen] = useState(false);
   const [playoffPictureOpen, setPlayoffPictureOpen] = useState(false);
-  // The recap-row bracket pill opens straight to the Bracket tab; the subtitle
-  // link leaves it undefined so the modal's stored tab applies.
+  // The recap-row "Playoffs" pill opens the playoff picture on the tab it names.
   const [playoffPictureTab, setPlayoffPictureTab] = useState<PlayoffsTab | undefined>(undefined);
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
@@ -3674,10 +3673,6 @@ export default function HomeContent({
               onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
-              // The recap-row bracket pill replaces the "Playoff picture ▸"
-              // subtitle link wherever it shows (Jacob 9/24: "dont need
-              // playoff picture wording now").
-              onShowPlayoffPicture: bracketPillDue ? undefined : () => { setPlayoffPictureTab(undefined); setPlayoffPictureOpen(true); },
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,

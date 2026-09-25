@@ -42,10 +42,9 @@ interface LeagueColumnProps {
   // Opens the World Cup all-groups overlay (used only by the fifa column's
   // tappable "Group Stage" subtitle).
   onShowGroups?: () => void;
-  // Opens the Grand Slam draw (tennis) / the MLB playoff picture. Both are
-  // spoiler-gated dialogs owned by HomeContent.
+  // Opens the Grand Slam draw (tennis), a spoiler-gated dialog owned by
+  // HomeContent. The MLB playoff picture opens from the recap-row pill instead.
   onShowSlamBracket?: () => void;
-  onShowPlayoffPicture?: () => void;
   selectedDate: string; // YYYYMMDD
   section?: "upcoming" | "finished"; // split rendering for cross-column Final separator
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
@@ -178,13 +177,11 @@ const TRADE_BOARD_BASE_URL = "https://trades.hidescore.com/";
 const TRADE_BOARD_LABEL = "Trades";
 const TRADE_BOARD_UNTIL_YMD = 20260807; // added 2026-08-04, runs 4th-6th
 
-// A second, independent affordance riding on the subtitle line after a "·".
-// Started as the trade-board link; the MLB playoff picture uses the same slot,
-// which is why this is now a union — a promo either navigates somewhere (href)
-// or opens something in-app (onClick), never both.
-type SubtitlePromo =
-  | { label: string; href: string; onClick?: never }
-  | { label: string; onClick: () => void; href?: never };
+// A second, independent affordance riding on the subtitle line after a "·":
+// the trade-board link. The MLB playoff picture used this slot until 9/25
+// (Jacob: "dont need playoff pic italics"); it opens from the recap-row pill
+// now, and the slot goes back to the plain countdown.
+type SubtitlePromo = { label: string; href: string };
 
 function tradeBoardPromo(sport: Sport): SubtitlePromo | null {
   const now = nowInEt();
@@ -299,8 +296,8 @@ function nowInEt(): { y: number; mo: number; d: number; h: number; m: number } {
 // above rather than on fixed calendar dates so it moves with the schedule.
 const PICTURE_LEAD_DAYS = 45;
 const PICTURE_TRAIL_DAYS = 35; // the postseason runs about four weeks
-// Also gates the "Playoffs · Bracket" pill HomeContent puts in the recap row of
-// today's MLB column, so the two can never disagree about the window.
+// Gates the "Playoffs" pill HomeContent puts in the recap row of today's MLB
+// column.
 export function playoffPictureInWindow(sport: Sport, selectedDate: string): boolean {
   if (sport !== "mlb") return false;
   const config = PLAYOFF_START_DATES.mlb;
@@ -311,9 +308,69 @@ export function playoffPictureInWindow(sport: Sport, selectedDate: string): bool
   return days >= -PICTURE_LEAD_DAYS && days <= PICTURE_TRAIL_DAYS;
 }
 
-function playoffPicturePromo(sport: Sport, selectedDate: string, onOpen?: () => void): SubtitlePromo | null {
-  if (!onOpen || !playoffPictureInWindow(sport, selectedDate)) return null;
-  return { label: "Playoff picture", onClick: onOpen };
+// MLB regular season: nod to MLB Network's nightly Big Inning whip-around
+// show. null = no line for this day, and the caller falls through to the
+// postseason countdown (Jacob 9/25: the countdown takes the slot the
+// "Playoff picture" link used to fill on past dates and off nights). Per-night
+// start times come from the schedule scraped daily by scripts/scrape-
+// big-inning.mjs. Only show the subtitle on dates the schedule lists
+// (Big Inning skips some days). LIVE treatment requires both: scheduled
+// start has passed within the last 3h AND ≥2 MLB games are currently in
+// progress — a proxy for "the whip-around actually has games to whip to".
+// 3h matches typical Big Inning runtime; a 2pm Saturday show ends ~5pm.
+// The real MLB Network HLS feed is auth-walled, so this combined
+// window+game-count heuristic is the most accurate signal we can read
+// anonymously.
+function bigInningSubtitle(
+  selectedDate: string,
+  games: Game[] | undefined,
+  schedule: BigInningSchedule,
+): SubtitleResult | null {
+  // selectedDate is YYYYMMDD — schedule is keyed YYYY-MM-DD.
+  const isoDate = `${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}`;
+  const entry = schedule[isoDate];
+  if (!entry) return null;
+
+  const parsed = parseEtTime(entry.timeET);
+  const now = nowInEt();
+  const todayYmd = now.y * 10000 + now.mo * 100 + now.d;
+  const selectedYmd = +selectedDate;
+  // Past day: the show is over, the scheduled time is meaningless. No line.
+  if (selectedYmd < todayYmd) return null;
+  // entry.timeET is a NEW YORK wall clock, so pin it to a real instant before
+  // comparing — the reader can be in any zone. Comparing it against the
+  // reader's own wall clock put the LIVE window three hours late on the west
+  // coast. Same fix, same helper, as the whip-around shows in @/lib/whiparound.
+  const startMs = parsed ? etWallToUtc(selectedDate, parsed.h, parsed.m) : null;
+  const endMs = startMs === null ? null : startMs + 180 * 60_000;
+  const nowMs = Date.now();
+  const withinAirWindow = startMs !== null && endMs !== null && nowMs >= startMs && nowMs <= endMs;
+  const liveGameCount = (games ?? []).filter((g) => g.state === "in").length;
+  const isLive = FORCE_BIG_INNING_LIVE_PREVIEW || (withinAirWindow && liveGameCount >= 2);
+
+  if (isLive) {
+    return {
+      tiers: ["● Big Inning · LIVE", "● Big Inning live", "● Big Inning"],
+      // Link to the MLB.TV hub (or tonight's selection page when the rail
+      // gives us one). The MLB app does NOT claim /tv or /tv/shows/* as
+      // universal links — only /tv/g* (per-game) and /news/* — so in the
+      // native wrapper openExternal remaps these MLB.TV URLs to the app's
+      // `mlbatbat://watch` scheme to open the Watch screen (where Big Inning
+      // lives) instead of the browser, falling back to the web URL if the
+      // MLB app isn't installed. On the web this stays the plain https link.
+      href: entry.selectionUrl ?? "https://www.mlb.com/tv",
+      live: true,
+    };
+  }
+  // Past the 3h air window: show ended, no line.
+  // (A stale "Big Inning · 2:00 PM" at 6pm reads like an upcoming show.)
+  if (endMs !== null && nowMs > endMs) return null;
+  // Show the scheduled time as plain italic (no link until we go live), in the
+  // reader's own zone and unlabelled — matching every kickoff time on a card.
+  const local = startMs === null ? entry.timeET : formatInZone(startMs, getTimeZone());
+  return {
+    tiers: [`Big Inning · ${local}`, "Big Inning"],
+  };
 }
 
 function getPlayoffSubtitle(
@@ -416,63 +473,9 @@ function getPlayoffSubtitle(
     return { tiers };
   }
 
-  // MLB regular season: nod to MLB Network's nightly Big Inning whip-around
-  // show in place of the (still-far-off) postseason countdown. Per-night
-  // start times come from the schedule scraped daily by scripts/scrape-
-  // big-inning.mjs. Only show the subtitle on dates the schedule lists
-  // (Big Inning skips some days). LIVE treatment requires both: scheduled
-  // start has passed within the last 3h AND ≥2 MLB games are currently in
-  // progress — a proxy for "the whip-around actually has games to whip to".
-  // 3h matches typical Big Inning runtime; a 2pm Saturday show ends ~5pm.
-  // The real MLB Network HLS feed is auth-walled, so this combined
-  // window+game-count heuristic is the most accurate signal we can read
-  // anonymously.
   if (sport === "mlb" && bigInningSchedule) {
-    // selectedDate is YYYYMMDD — schedule is keyed YYYY-MM-DD.
-    const isoDate = `${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}`;
-    const entry = bigInningSchedule[isoDate];
-    if (!entry) return null;
-
-    const parsed = parseEtTime(entry.timeET);
-    const now = nowInEt();
-    const todayYmd = now.y * 10000 + now.mo * 100 + now.d;
-    const selectedYmd = +selectedDate;
-    // Past day: the show is over, the scheduled time is meaningless. Hide.
-    if (selectedYmd < todayYmd) return null;
-    // entry.timeET is a NEW YORK wall clock, so pin it to a real instant before
-    // comparing — the reader can be in any zone. Comparing it against the
-    // reader's own wall clock put the LIVE window three hours late on the west
-    // coast. Same fix, same helper, as the whip-around shows in @/lib/whiparound.
-    const startMs = parsed ? etWallToUtc(selectedDate, parsed.h, parsed.m) : null;
-    const endMs = startMs === null ? null : startMs + 180 * 60_000;
-    const nowMs = Date.now();
-    const withinAirWindow = startMs !== null && endMs !== null && nowMs >= startMs && nowMs <= endMs;
-    const liveGameCount = (games ?? []).filter((g) => g.state === "in").length;
-    const isLive = FORCE_BIG_INNING_LIVE_PREVIEW || (withinAirWindow && liveGameCount >= 2);
-
-    if (isLive) {
-      return {
-        tiers: ["● Big Inning · LIVE", "● Big Inning live", "● Big Inning"],
-        // Link to the MLB.TV hub (or tonight's selection page when the rail
-        // gives us one). The MLB app does NOT claim /tv or /tv/shows/* as
-        // universal links — only /tv/g* (per-game) and /news/* — so in the
-        // native wrapper openExternal remaps these MLB.TV URLs to the app's
-        // `mlbatbat://watch` scheme to open the Watch screen (where Big Inning
-        // lives) instead of the browser, falling back to the web URL if the
-        // MLB app isn't installed. On the web this stays the plain https link.
-        href: entry.selectionUrl ?? "https://www.mlb.com/tv",
-        live: true,
-      };
-    }
-    // Past the 3h air window: show ended, hide the subtitle entirely.
-    // (A stale "Big Inning · 2:00 PM" at 6pm reads like an upcoming show.)
-    if (endMs !== null && nowMs > endMs) return null;
-    // Show the scheduled time as plain italic (no link until we go live), in the
-    // reader's own zone and unlabelled — matching every kickoff time on a card.
-    const local = startMs === null ? entry.timeET : formatInZone(startMs, getTimeZone());
-    return {
-      tiers: [`Big Inning · ${local}`, "Big Inning"],
-    };
+    const bigInning = bigInningSubtitle(selectedDate, games, bigInningSchedule);
+    if (bigInning) return bigInning;
   }
 
   // Only flag the pre-playoff window (e.g. NBA play-in) DURING the window itself.
@@ -519,12 +522,12 @@ let cachedBigInningSchedule: BigInningSchedule | null = null;
 // "Starts 10/20 · Trades" on a wide column and shed the promo first on a narrow
 // one. Only consulted when the column has no subtitle of its own — a playoff
 // round or a Big Inning line is live information and outranks a start date.
-function PlayoffSubtitle({ sport, selectedDate, games, onClick, onShowPlayoffPicture, fallbackText, startsLabel }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; onShowPlayoffPicture?: () => void; fallbackText?: string; startsLabel?: string }) {
+function PlayoffSubtitle({ sport, selectedDate, games, onClick, fallbackText, startsLabel }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string; startsLabel?: string }) {
   if (isDemoModeActive()) return null;
-  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} onClick={onClick} onShowPlayoffPicture={onShowPlayoffPicture} fallbackText={fallbackText} startsLabel={startsLabel} />;
+  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} onClick={onClick} fallbackText={fallbackText} startsLabel={startsLabel} />;
 }
 
-function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayoffPicture, fallbackText, startsLabel }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; onShowPlayoffPicture?: () => void; fallbackText?: string; startsLabel?: string }) {
+function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackText, startsLabel }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string; startsLabel?: string }) {
   const ref = useRef<HTMLElement>(null);
   const [bigInningSchedule, setBigInningSchedule] = useState<BigInningSchedule | null>(cachedBigInningSchedule);
 
@@ -583,14 +586,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
   // A real subtitle (playoff round, Big Inning) wins; the start cue only fills an
   // otherwise empty slot, so this can never displace live information.
   const baseTiers = result?.tiers ?? (startsLabel ? [startsLabel] : []);
-  // MLB's own subtitle is usually taken by the Big Inning line, and during the
-  // postseason by the round — so the playoff picture cannot ride on the subtitle
-  // text itself. It gets the promo slot instead, the same one the trade board
-  // uses, which is always available regardless of what the label says. The two
-  // never overlap: the trade board's MLB window closed in early August, well
-  // before the picture's opens.
-  const tradePromo: SubtitlePromo | null =
-    tradeBoardPromo(sport) ?? playoffPicturePromo(sport, selectedDate, onShowPlayoffPicture);
+  const tradePromo: SubtitlePromo | null = tradeBoardPromo(sport);
   // Widest-first: every "<label> · Trades" pairing, then the bare labels. The
   // probe takes the first that fits, so the promo is preferred but is the first
   // thing dropped when the column is too narrow.
@@ -611,10 +607,9 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
         : ""
       : tiers[i];
   // Italic means plain text; a part you can tap sits upright with a trailing
-  // arrow ("\u25B8" opens something in the app, "\u2197" leaves the site).
-  // 9/23: a user did not know "Playoff picture" opened the modal while it
-  // wore the same muted italic as the "8:30 PM" beside it.
-  const promoArrow = tradePromo?.href ? " \u2197" : " \u25B8";
+  // arrow ("\u2197" leaves the site). 9/23: a user did not know an in-app promo
+  // opened a dialog while it wore the same muted italic as the "8:30 PM" beside it.
+  const promoArrow = " \u2197";
   const labelTaps = !!(href || onClick);
   // What tier i really draws, piece by piece. The probe measures these rather
   // than the bare tier string, so the arrows and the upright glyphs count when
@@ -723,7 +718,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
   // inside it; layout is identical because the wrapper carries the same classes
   // the single element used to.
   if (showsTradeBoard && tradePromo) {
-    const tradeLink = tradePromo.href ? (
+    const tradeLink = (
       <a
         href={tradePromo.href}
         target="_blank"
@@ -734,17 +729,6 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, onShowPlayo
       >
         {tradePromo.label}<span aria-hidden="true">{promoArrow}</span>
       </a>
-    ) : (
-      // An in-app promo (the playoff picture) opens a dialog rather than
-      // navigating, so it is a button — same styling, correct semantics.
-      <button
-        type="button"
-        onClick={tradePromo.onClick}
-        className="not-italic hover:underline transition-colors cursor-pointer"
-        style={{ color: tapColor }}
-      >
-        {tradePromo.label}<span aria-hidden="true">{promoArrow}</span>
-      </button>
     );
     let label: React.ReactNode = null;
     if (text && href) {
@@ -937,7 +921,6 @@ export default function LeagueColumn({
   onShowEventDetails,
   onShowGroups,
   onShowSlamBracket,
-  onShowPlayoffPicture,
   selectedDate,
   section,
   showFinalSeparator,
@@ -1994,7 +1977,7 @@ export default function LeagueColumn({
             // instead of riding ~16px higher.
             <span aria-hidden className="text-[9px] sm:text-[10px] mt-0.5 block whitespace-nowrap">{" "}</span>
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : undefined} onShowPlayoffPicture={onShowPlayoffPicture} fallbackText={lastPlayedLabel} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : undefined} fallbackText={lastPlayedLabel} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
           )}
         </div>
       )}
