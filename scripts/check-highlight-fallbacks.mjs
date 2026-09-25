@@ -517,6 +517,15 @@ function matchupFingerprint(away, home) {
   return [normalizeMatchText(away), normalizeMatchText(home)].sort().join("|");
 }
 
+// Every channel a sport's fallback chain can name, from the same JSON the
+// client and the bake read. Empty for a sport without a chain.
+const CHAIN_CONFIG = JSON.parse(fs.readFileSync(new URL("../src/lib/collegeHighlightChannels.json", import.meta.url), "utf8"));
+function chainChannelsFor(sport) {
+  const cfg = CHAIN_CONFIG[sport];
+  if (!cfg) return new Set();
+  return new Set([...(cfg.always ?? []), ...Object.values(cfg.conferences ?? {}), ...(cfg.networks ?? []).map((n) => n.channel)]);
+}
+
 function expectedBakedSlots(sport, bakedHighlight) {
   const primary = OFFICIAL_CHANNELS[sport];
   const secondary = sport === "fifa" ? "FOX Sports" : (SECONDARY_CHANNELS[sport] ?? primary);
@@ -530,7 +539,10 @@ function expectedBakedSlots(sport, bakedHighlight) {
   // A FotMob-sourced official (src "fotmob", see scripts/lib/fotmob.mjs) names
   // the uploader FotMob linked — often a club or league channel — and the
   // client trusts it under that name, so it is checked against that uploader.
-  const official = bakedHighlight?.src === "fotmob" && bakedHighlight.officialChannel ? bakedHighlight.officialChannel : primary;
+  // So is an official from the sport's fallback chain (CBS / club channels for
+  // efl, LIGA BBVA MX for ligamx — collegeHighlightChannels.json).
+  const marker = bakedHighlight?.officialChannel;
+  const official = marker && (bakedHighlight?.src === "fotmob" || chainChannelsFor(sport).has(marker)) ? marker : primary;
   return [
     { slot: "official", marker: "officialChannel", channel: official, visible: sport !== "fifa" },
     { slot: "extended", marker: "extendedChannel", channel: secondary, visible: true },
