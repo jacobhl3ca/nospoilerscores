@@ -68,6 +68,7 @@ export default function WatchSportsHighlightsWithoutSpoilersPage() {
   return (
     <SeoLandingPage
       h1="Watch sports highlights without spoilers"
+      subject="Sports highlights"
       intro={[
         "Most highlight pages spoil the game before you press play: the final score is in the title, the winning team is in the thumbnail, and the recap headline tells you what happened.",
         "HideScore is built for the opposite workflow. Check the game card first — it carries no score — turn on ratings to find what is worth watching, and learn the result from the highlight or the replay itself.",

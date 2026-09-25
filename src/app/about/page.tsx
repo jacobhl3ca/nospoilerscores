@@ -45,7 +45,7 @@ export default function AboutPage() {
   const updated = routeLastModified("/about");
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
-      <DocTopBar route="about" />
+      <DocTopBar route="about" subject="About" />
       <h1 className="text-2xl font-bold mb-2">About HideScore</h1>
       {updated ? (
         <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>

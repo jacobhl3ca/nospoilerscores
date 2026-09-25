@@ -100,6 +100,7 @@ export default function NoSpoilerScoresPage() {
   return (
     <SeoLandingPage
       h1="No spoiler scores for sports fans"
+      subject="No-spoiler scores"
       intro={[
         "No spoiler scores means a scoreboard that never prints the result at all: HideScore does this for NFL, NBA, MLB, NHL and soccer, with an optional excitement rating so you know which games to watch.",
         "Every normal scoreboard is built to tell you the result as fast as it can. That is the right design if you are following live and the wrong one for everybody else — anyone watching on delay, anyone in the wrong time zone, anyone who wants to pick a replay worth an evening without being told how it ends first.",

@@ -90,6 +90,7 @@ export default function MlbPlayoffPicturePage() {
   return (
     <SeoLandingPage
       h1="MLB playoff picture 2026"
+      subject="MLB playoff picture"
       lead={<PlayoffPictureModal variant="page" initialTab="odds" />}
       intro={[
         "Here is the 2026 MLB playoff picture for both leagues, with odds in place of won-lost records. It reloads from MLB and ESPN every time you open it, so it moves as the final week of the regular season is played.",

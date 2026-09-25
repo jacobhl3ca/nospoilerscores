@@ -39,7 +39,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
-      <DocTopBar route="privacy" />
+      <DocTopBar route="privacy" subject="Privacy" />
       <h1 className="text-2xl font-bold mb-2">Privacy Policy</h1>
       <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime="2026-08-06">2026-08-06</time></p>
 
