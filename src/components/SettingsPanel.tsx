@@ -764,10 +764,6 @@ export default function SettingsPanel({
     });
   };
 
-  // News is useful between seasons, so its optional third column uses the same
-  // year-round catalog as Settings' score-slot pickers.
-  const newsCol3Options = leagueOptions;
-
   if (!open) return null;
 
   return (
@@ -1005,8 +1001,101 @@ export default function SettingsPanel({
             )}
           </Section>
 
-          {/* Theme — first because the old standalone header toggle moved
-              in here, and dark/light is the most-frequently-flipped setting. */}
+          {/* Favorite teams — second, right under Account (Jacob 9/25): it is
+              the setting people come here for (12 of 29 synced accounts have
+              picked teams), and it sat sixth. Picker first so adding a team
+              doesn't push the picker off-screen, then the readout below. */}
+          <Section title="Favorite teams">
+            <ToggleRow
+              label="Stars on game cards"
+              hint="The ★ next to team names (auto-hidden in a Finals matchup)"
+              checked={!prefs.hideTeamStars}
+              onChange={(v) => updatePrefs({ hideTeamStars: !v })}
+            />
+            <Field label="Records on upcoming games" hint="Each team's current record, in italics, on today's and future games. Never on a live or finished game, or on a past date.">
+              <RecordLeaguePicker
+                selected={upcomingRecordLeagues(prefs)}
+                // The first pick retires the old NFL-only switch for good.
+                onChange={(next) => updatePrefs({ upcomingRecordLeagues: next, hideUpcomingRecords: undefined })}
+              />
+            </Field>
+            <TeamPicker
+              sports={teamLeagueOptions}
+              favorites={prefs.favoriteTeams}
+              onToggle={toggleTeamFavorite}
+              teamsBySport={teamsBySportCache}
+              loadingSports={loadingTeamSports}
+              loadSport={loadTeamSport}
+              knownTeams={knownTeams}
+            />
+            {prefs.favoriteTeams.length === 0 ? (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Pick a team above, or tap the star next to a team in any game card.
+              </p>
+            ) : (
+              <>
+                {Array.from(teamsBySport.entries()).map(([sport, teams]) => (
+                  <div key={sport} className="mb-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
+                        {SPORT_LABEL[sport] ?? sport}
+                      </span>
+                      <button type="button"
+                        onClick={() => clearTeamsForSport(sport)}
+                        aria-label={`Clear ${SPORT_LABEL[sport] ?? sport} teams`}
+                        className="text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {teams.map((t) => (
+                        <button type="button"
+                          key={t.id}
+                          onClick={() => removeTeam(t.id)}
+                          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-opacity hover:opacity-80"
+                          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                          title="Remove from favorites"
+                          aria-label={`Remove ${t.displayName} from favorites`}
+                        >
+                          {t.logo && (
+                            // onError hides a 404'd/blocked ESPN logo so the chip
+                            // degrades to the team name instead of the browser's
+                            // broken-image glyph — matches the onError guard on
+                            // every other remote team logo (GameCard, GameDetailModal,
+                            // WorldCupGroupsModal, …).
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={t.logo} alt="" loading="lazy" decoding="async" width={14} height={14} className="w-3.5 h-3.5" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                          )}
+                          <span>{t.displayName}</span>
+                          <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {prefs.favoriteTeams.length} total
+                  </span>
+                  <button type="button"
+                    onClick={clearAllTeams}
+                    className="text-xs underline underline-offset-2 cursor-pointer hover:opacity-80"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Clear all
+                  </button>
+                </div>
+              </>
+            )}
+          </Section>
+
+          {/* Theme — near the top because the old standalone header toggle
+              moved in here, and dark/light is a frequently flipped setting. */}
           <Section title="Theme">
             <RadioGroup
               label="Theme"
@@ -1193,14 +1282,17 @@ export default function SettingsPanel({
                 </Field>
               );
             })}
-            <Field label="Header league switcher" hint="How tapping a column header behaves">
-              <RadioGroup
-                label="Header league switcher"
-                value={prefs.leagueSwitcherMode ?? "dropdown"}
-                options={SWITCHER_MODE_OPTIONS}
-                onChange={(v) => updatePrefs({ leagueSwitcherMode: v })}
-              />
-            </Field>
+            {/* Was the only row left in its own "Board layout" section once the
+                keys hint moved to More settings (Jacob 9/25). Same pref, same
+                device-only storage — only where the row sits changed. Was also
+                called just "Single column", same as the old News one — flipping
+                the wrong one looked like a bug (Jacob 8/31). */}
+            <ToggleRow
+              label="One wide column"
+              hint="Stack your leagues in one wide column with bigger cards, instead of side-by-side columns. This device only."
+              checked={prefs.singleColumn ?? false}
+              onChange={(v) => updatePrefs({ singleColumn: v })}
+            />
             <Field label="Leagues in the switcher" hint="Core leagues start checked; choose any others you want in the header switcher">
               <div className="space-y-3">
                 {(offseasonRowCount > 0 || hideOffseason) && (
@@ -1307,173 +1399,31 @@ export default function SettingsPanel({
           </Section>
           )}
 
-          {/* Board layout */}
-          <Section title="Board layout">
-            {/* Was also called just "Single column", same as the News one two
-                sections down — identical labels, different jobs, and flipping
-                the wrong one looked like a bug (Jacob 8/31). */}
-            <ToggleRow
-              label="One wide column — scores"
-              hint="Stack your leagues in one wide column with bigger cards, instead of side-by-side columns. This device only. (The matching setting for news is under News.)"
-              checked={prefs.singleColumn ?? false}
-              onChange={(v) => updatePrefs({ singleColumn: v })}
-            />
-            {/* Stored inverted (hideControlsHint) so a fresh install shows it —
-                see the pref's note. The row reads the way you'd expect. */}
-            <ToggleRow
-              label="Keyboard shortcuts hint"
-              hint="A small “Keys” tag in the bottom-right corner listing what ↓/↑, ←/→ and Space do. Desktop only."
-              checked={!prefs.hideControlsHint}
-              onChange={(v) => updatePrefs({ hideControlsHint: !v })}
-            />
-          </Section>
-
-          {/* Favorite teams — picker first so adding a team doesn't push the
-              picker off-screen, then the favorited-teams readout below. */}
-          <Section title="Favorite teams">
-            <ToggleRow
-              label="Stars on game cards"
-              hint="The ★ next to team names (auto-hidden in a Finals matchup)"
-              checked={!prefs.hideTeamStars}
-              onChange={(v) => updatePrefs({ hideTeamStars: !v })}
-            />
-            <Field label="Records on upcoming games" hint="Each team's current record, in italics, on today's and future games. Never on a live or finished game, or on a past date.">
-              <RecordLeaguePicker
-                selected={upcomingRecordLeagues(prefs)}
-                // The first pick retires the old NFL-only switch for good.
-                onChange={(next) => updatePrefs({ upcomingRecordLeagues: next, hideUpcomingRecords: undefined })}
-              />
-            </Field>
-            <TeamPicker
-              sports={teamLeagueOptions}
-              favorites={prefs.favoriteTeams}
-              onToggle={toggleTeamFavorite}
-              teamsBySport={teamsBySportCache}
-              loadingSports={loadingTeamSports}
-              loadSport={loadTeamSport}
-              knownTeams={knownTeams}
-            />
-            {prefs.favoriteTeams.length === 0 ? (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Pick a team above, or tap the star next to a team in any game card.
-              </p>
-            ) : (
-              <>
-                {Array.from(teamsBySport.entries()).map(([sport, teams]) => (
-                  <div key={sport} className="mb-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
-                        {SPORT_LABEL[sport] ?? sport}
-                      </span>
-                      <button type="button"
-                        onClick={() => clearTeamsForSport(sport)}
-                        aria-label={`Clear ${SPORT_LABEL[sport] ?? sport} teams`}
-                        className="text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {teams.map((t) => (
-                        <button type="button"
-                          key={t.id}
-                          onClick={() => removeTeam(t.id)}
-                          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-opacity hover:opacity-80"
-                          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                          title="Remove from favorites"
-                          aria-label={`Remove ${t.displayName} from favorites`}
-                        >
-                          {t.logo && (
-                            // onError hides a 404'd/blocked ESPN logo so the chip
-                            // degrades to the team name instead of the browser's
-                            // broken-image glyph — matches the onError guard on
-                            // every other remote team logo (GameCard, GameDetailModal,
-                            // WorldCupGroupsModal, …).
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={t.logo} alt="" loading="lazy" decoding="async" width={14} height={14} className="w-3.5 h-3.5" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                          )}
-                          <span>{t.displayName}</span>
-                          <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {prefs.favoriteTeams.length} total
-                  </span>
-                  <button type="button"
-                    onClick={clearAllTeams}
-                    className="text-xs underline underline-offset-2 cursor-pointer hover:opacity-80"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Clear all
-                  </button>
-                </div>
-              </>
-            )}
-          </Section>
-
-          {/* News */}
+          {/* News — one toggle (Jacob 9/25: "idk if 2 checkboxes needed"). It used to
+              have "Also hide wrecks nobody got hurt in" nested under it; now
+              turning it on hides both, and off clears both. Every account that
+              had either on (2 of 29 synced, 9/12) had BOTH on, so nobody's
+              filter changes. It reads as on if either pref is set, so a blob
+              from the two-toggle days never hides posts behind a switch that
+              shows off — and nothing is rewritten until the user taps it.
+              "One wide column — news" and "3rd news column" left this section
+              the same day: 0 of 29 had ever set either, and both still live on
+              the news board itself (the header toggle, the column-3 switcher). */}
           <Section title="News">
             <ToggleRow
-              label="One wide column — news"
-              hint="Stack all news columns into one wide column instead of side-by-side. This device only. (The matching setting for scores is under Board layout.)"
-              checked={prefs.newsSingleColumn ?? false}
-              onChange={(v) => updatePrefs({ newsSingleColumn: v })}
-            />
-            {/* One setting, with the racing carve-out nested under it. These
-                were two peer toggles whose hints each had to explain the other,
-                and that seam is where "injured in a crash" fell through — it
-                read as a crash story, so only the second toggle saw it, and the
-                second toggle is the one nobody turns on (Jacob 8/31). */}
-            <ToggleRow
               label="Hide upsetting news"
-              hint="Filters out deaths, assault and abuse cases, getting hurt (a batter hit in the head, a collision, someone injured in a crash, carted off), serious illness, harm to animals and self-harm. Anything hidden is counted at the bottom of the feed, so you can still show it in one tap. Roster injury news — IL moves, return timelines — still shows."
-              checked={prefs.hideSensitiveNews ?? false}
-              // Turning the parent off also clears the child: the crash filter
-              // has no control of its own any more, so leaving it armed would
-              // keep hiding posts with nothing on screen to explain why.
-              onChange={(v) => updatePrefs(v ? { hideSensitiveNews: true } : { hideSensitiveNews: false, hideCrashNews: false })}
+              hint="Hides deaths, assault, injuries, crashes and wrecks, serious illness, harm to animals and self-harm. The feed counts what it hid, so you can show it in one tap. Roster injury news still shows."
+              checked={!!(prefs.hideSensitiveNews || prefs.hideCrashNews)}
+              onChange={(v) => updatePrefs({ hideSensitiveNews: v, hideCrashNews: v })}
             />
-            {/* Shown when the parent is on — or when the crash filter is already
-                armed, so an account that set it under the old two-toggle UI can
-                always still see and reach it. */}
-            {(prefs.hideSensitiveNews || prefs.hideCrashNews) && (
-              <div className="pl-3.5 ml-1" style={{ borderLeft: "2px solid var(--border)" }}>
-                <ToggleRow
-                  label="Also hide wrecks nobody got hurt in"
-                  hint="Racing crashes, pile-ups, hard falls and bike spills where everyone walked away — those are the sport, so they stay visible unless you ask. A crash that hurt or killed someone is already hidden by the setting above."
-                  checked={prefs.hideCrashNews ?? false}
-                  onChange={(v) => updatePrefs({ hideCrashNews: v })}
-                />
-              </div>
-            )}
-            <Field label="3rd news column" hint="Default league for the third news column">
-              <select
-                value={prefs.newsThirdLeague ?? ""}
-                onChange={(e) => updatePrefs({ newsThirdLeague: e.target.value ? (e.target.value as Sport) : undefined })}
-                aria-label="3rd news column league"
-                className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-              >
-                <option value="">Top headlines</option>
-                {newsCol3Options.map((o) => (
-                  <option key={o.sport} value={o.sport}>{o.label}</option>
-                ))}
-              </select>
-            </Field>
           </Section>
 
-          {/* Player choice leads; the custom-only controls below stay visible
-              but disabled in YouTube mode so the relationship is obvious. */}
+          {/* Player choice leads; the spoiler-safe-only controls below render
+              only when that player is picked. */}
           <Section title="Highlight video player">
-            <Field label="Player" hint="Spoiler-safe is the default; YouTube trades protection for familiar controls">
+            {/* YouTube has been the default since 8/9 (see youtubeNativeControls
+                in preferences.ts); this hint said the opposite until 9/25. */}
+            <Field label="Player" hint="YouTube is the default. Spoiler-safe hides how far into the clip you are.">
               <RadioGroup
                 label="Highlight video player"
                 value={(prefs.youtubeNativeControls ?? true) ? "youtube" : "safe"}
@@ -1604,11 +1554,44 @@ export default function SettingsPanel({
                 Reset to defaults
               </button>
             </div>
+          </Section>
+
+          {/* More settings (Jacob 9/25): rows almost nobody changes, behind one
+              closed fold so the sections above are what you see. Of 29 synced
+              accounts on 9/12: header switcher 1 changed, keys hint 0, reminder
+              link 0; the two explainer rows are an undo, not a setting. Nothing
+              here was removed — every row works exactly as before. */}
+          <details className="group">
+            <summary
+              className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-semibold cursor-pointer select-none marker:content-none [&::-webkit-details-marker]:hidden"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open:rotate-90">
+                <polyline points="9 6 15 12 9 18" />
+              </svg>
+              More settings
+            </summary>
+            <div className="space-y-3 mt-3">
+            <Field label="Header league switcher" hint="How tapping a column header behaves">
+              <RadioGroup
+                label="Header league switcher"
+                value={prefs.leagueSwitcherMode ?? "dropdown"}
+                options={SWITCHER_MODE_OPTIONS}
+                onChange={(v) => updatePrefs({ leagueSwitcherMode: v })}
+              />
+            </Field>
+            {/* Stored inverted (hideControlsHint) so a fresh install shows it —
+                see the pref's note. The row reads the way you'd expect. */}
+            <ToggleRow
+              label="Keyboard shortcuts hint"
+              hint="A small “Keys” tag in the bottom-right corner listing what ↓/↑, ←/→ and Space do. Desktop only."
+              checked={!prefs.hideControlsHint}
+              onChange={(v) => updatePrefs({ hideControlsHint: !v })}
+            />
             {/* Bring back a one-time explainer you dismissed. These had their own
                 "Spoiler explainers" section, which read like two settings to tune
-                — they are an undo, so they live with the other undos now
-                (Jacob 8/31). */}
-            <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+                — they are an undo, not a preference (Jacob 8/31). */}
+            <div className="pt-3" style={{ borderTop: "1px solid var(--border)" }}>
               <p className="text-[11px] mb-2" style={{ color: "var(--text-muted)" }}>
                 Bring back a warning you dismissed
               </p>
@@ -1629,7 +1612,7 @@ export default function SettingsPanel({
                 placeholders that an upcoming game's detail sheet opens on tap
                 (lib/reminderLink.ts). Raycast, Shortcuts, Alfred, Things, … —
                 whatever has a URL scheme on THIS device. Blank = no button. */}
-            <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+            <div className="pt-3" style={{ borderTop: "1px solid var(--border)" }}>
               <Field
                 label="Reminder link"
                 hint="Opens this URL from an upcoming game's details. Placeholders: {minutes} {title} {iso} {time} {date}. Leave blank to hide the button."
@@ -1655,7 +1638,8 @@ export default function SettingsPanel({
                 Example: raycast://script-commands/timer?arguments={"{minutes}"}m%20{"{title}"}
               </p>
             </div>
-          </Section>
+            </div>
+          </details>
 
           {/* Bottom-most, and deliberately quiet. Only rendered when signed in
               — there is no account to delete otherwise. */}

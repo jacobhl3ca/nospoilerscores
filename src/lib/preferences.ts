@@ -459,11 +459,12 @@ export interface Preferences {
   // being visible again. Roster injury news (IL moves, return timelines) is
   // deliberately NOT matched — only the moment of getting hurt.
   hideSensitiveNews?: boolean;
-  // Separate opt-in for racing wrecks and hard falls (Jacob 8/21: "fights fine
-  // if nothing terrible, crashes can have option to hide"). Independent of
-  // hideSensitiveNews — either toggle works on its own — because a crash
-  // everyone walks away from is the sport, while a fatal one is already covered
-  // by the death/injury categories of the main toggle.
+  // Racing wrecks and hard falls (Jacob 8/21: "fights fine if nothing
+  // terrible, crashes can have option to hide"). Still its own flag so the
+  // filter reads exactly what a user saved, but since 9/25 Settings has ONE
+  // "Hide upsetting news" toggle that sets this and hideSensitiveNews together
+  // (Jacob: "idk if 2 checkboxes needed"). A blob with only one of them set
+  // still filters exactly as before until the user taps the toggle.
   hideCrashNews?: boolean;
 }
 
