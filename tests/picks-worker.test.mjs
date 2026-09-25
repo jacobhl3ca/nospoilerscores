@@ -146,3 +146,74 @@ test("an IP gets 10 POSTs per window, then 429", async () => {
     assert.equal((await post(store, { board: "mlb-2026", name: "Other", token: TOKEN_B, picks: PICKS }, "8.8.8.8")).status, 200);
   });
 });
+
+// /api/picks/account — the account holds one token, so every device on it
+// edits the same entry. Sessions are the worker's own HMAC cookie.
+const SECRET = "test-session-secret";
+const b64url = (buf) => Buffer.from(buf).toString("base64url");
+async function session(sub) {
+  const body = b64url(JSON.stringify({ sub, email: null, exp: Math.floor(Date.now() / 1000) + 3600 }));
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  return `hs_session=${body}.${b64url(new Uint8Array(sig))}`;
+}
+const acctEnv = (store) => ({ ...env(store), SESSION_SECRET: SECRET });
+const acct = (store, cookie, method = "GET", body) =>
+  worker.fetch(new Request("https://hidescore.com/api/picks/account", {
+    method,
+    headers: { ...(cookie ? { Cookie: cookie } : {}), "Content-Type": "application/json" },
+    ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) }),
+  }), acctEnv(store), { waitUntil() {} });
+
+const ENTRY = { name: "JH", picks: PICKS, at: "2026-09-24T20:00:00.000Z" };
+
+test("account picks: signed out is 401, signed in starts empty", async () => {
+  const store = kv();
+  assert.equal((await acct(store, null)).status, 401);
+  const r = await acct(store, await session("apple:jacob"));
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { picks: null });
+});
+
+test("account picks: the first token sticks; a second device gets 409 and the stored record", async () => {
+  const store = kv();
+  const me = await session("apple:jacob");
+  const put = await acct(store, me, "PUT", { token: TOKEN_A, boards: { "mlb-2026": ENTRY } });
+  assert.equal(put.status, 200);
+  assert.deepEqual((await (await acct(store, me)).json()).picks, { token: TOKEN_A, boards: { "mlb-2026": ENTRY } });
+
+  const other = await acct(store, me, "PUT", { token: TOKEN_B, boards: {} });
+  assert.equal(other.status, 409);
+  assert.equal((await other.json()).picks.token, TOKEN_A);
+
+  // Another account never sees it.
+  assert.deepEqual(await (await acct(store, await session("apple:someone"))).json(), { picks: null });
+});
+
+test("account picks: boards merge newest-first under the same token", async () => {
+  const store = kv();
+  const me = await session("apple:jacob");
+  await acct(store, me, "PUT", { token: TOKEN_A, boards: { "mlb-2026": ENTRY } });
+  const older = { ...ENTRY, picks: { ws: "119" }, at: "2026-09-23T00:00:00.000Z" };
+  await acct(store, me, "PUT", { token: TOKEN_A, boards: { "mlb-2026": older } });
+  assert.deepEqual((await (await acct(store, me)).json()).picks.boards["mlb-2026"], ENTRY);
+  const newer = { ...ENTRY, picks: { ws: "119" }, at: "2026-09-25T00:00:00.000Z" };
+  await acct(store, me, "PUT", { token: TOKEN_A, boards: { "mlb-2026": newer } });
+  assert.deepEqual((await (await acct(store, me)).json()).picks.boards["mlb-2026"], newer);
+});
+
+test("account picks: shape checks", async () => {
+  const store = kv();
+  const me = await session("apple:jacob");
+  for (const body of [
+    { token: "short", boards: {} },
+    { token: TOKEN_A, boards: { "nba-2026": ENTRY } },
+    { token: TOKEN_A, boards: { "mlb-2026": { ...ENTRY, name: "<b>" } } },
+    { token: TOKEN_A, boards: { "mlb-2026": { ...ENTRY, at: "soon" } } },
+    { token: TOKEN_A, boards: [] },
+    "not json",
+  ]) {
+    assert.equal((await acct(store, me, "PUT", body)).status, 400, JSON.stringify(body));
+  }
+  assert.equal((await acct(store, me, "PUT", { token: TOKEN_A, pad: "x".repeat(5000) })).status, 413);
+});
