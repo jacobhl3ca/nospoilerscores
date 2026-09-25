@@ -8,6 +8,7 @@ import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, en
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
+import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import type { BestYesterdayOptions, TopEventsOptions } from "@/lib/espn";
 import { TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
@@ -1794,6 +1795,12 @@ export default function HomeContent({
     }
     return [...options.values()];
   }, [selectedDate]);
+
+  // One Set per real change, so the cards don't see a new object every render.
+  const recordLeagues = useMemo(
+    () => upcomingRecordLeagues({ upcomingRecordLeagues: prefs.upcomingRecordLeagues, hideUpcomingRecords: prefs.hideUpcomingRecords }),
+    [prefs.upcomingRecordLeagues, prefs.hideUpcomingRecords],
+  );
 
   const teamLeagueOptions = useMemo(() => {
     const seen = new Set<Sport>();
@@ -3681,7 +3688,7 @@ export default function HomeContent({
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
-              showUpcomingRecords: !prefs.hideUpcomingRecords,
+              upcomingRecordLeagues: recordLeagues,
               onAbbrevReport,
               namesCompact,
             };

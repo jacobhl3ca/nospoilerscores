@@ -1,5 +1,6 @@
 import { Sport } from "./types";
 import type { TopEventsMode, TopEventsCount } from "./topEvents";
+import type { RecordLeague } from "./upcomingRecords";
 import { setServiceTimeZone } from "./etDay";
 
 const STORAGE_KEY = "nss-preferences";
@@ -236,15 +237,19 @@ export interface Preferences {
   // opt-in from 8/4 and not one of the 21 accounts ever turned it on, and the
   // record is a second-order spoiler by nature — today's 63-49 encodes whether
   // the team won last night. Old synced prefs may still carry the key; it is
-  // ignored. The one record that came back (Jacob 9/24) is narrower and lives in
-  // `hideUpcomingRecords` below — NFL, upcoming games only.
+  // ignored. The record that came back (Jacob 9/24) is narrower: upcoming
+  // games only, per league, in `upcomingRecordLeagues` below.
   //
-  // Hide the italic W-L record on UPCOMING NFL cards (today's not-yet-started
-  // games and any future date). Undefined = shown. NFL plays once a week, so a
-  // Sunday record reflects results from days ago, not last night; it never shows
-  // on a live or finished game or on a past date, where it could encode the
-  // result the viewer is avoiding. Jacob asked for it on 9/24, with this toggle
-  // as the off switch.
+  // Which leagues show the italic W-L record on UPCOMING cards (today's
+  // not-yet-started games and any future date). Undefined = the weekly
+  // football leagues; [] = none. It never shows on a live or finished game or
+  // on a past date, where it could encode the result the viewer is avoiding.
+  // See lib/upcomingRecords.ts for the keys and why daily leagues start off.
+  upcomingRecordLeagues?: RecordLeague[];
+  // LEGACY (9/24-9/25): the NFL-only off switch that the list above replaced.
+  // Still read when the list is unset, so a user who turned NFL records off
+  // gets none — see upcomingRecordLeagues() in lib/upcomingRecords.ts. Nothing
+  // writes it any more except a clear on the first league pick.
   hideUpcomingRecords?: boolean;
   // "Add the World Cup column" banner dismissed (only shows during the
   // tournament when no visible column is the World Cup).

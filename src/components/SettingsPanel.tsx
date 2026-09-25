@@ -5,6 +5,7 @@ import { LeagueData, Sport } from "@/lib/types";
 import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortRank } from "@/lib/espn";
 import { isTopEventsGameSport, TOP_EVENTS_DEFAULT_COUNT, TOP_EVENTS_ENABLED, type TopEventsMode, type TopEventsCount } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
+import { ALL_RECORD_LEAGUES, FREQUENT_RECORD_LEAGUES, WEEKLY_RECORD_LEAGUES, toggleAllRecordLeagues, toggleRecordLeague, upcomingRecordLeagues, type RecordLeague } from "@/lib/upcomingRecords";
 import {
   Preferences,
   Theme,
@@ -694,6 +695,7 @@ export default function SettingsPanel({
       defaultRatings: "auto",
       hideLeagueChevrons: undefined,
       hideTeamStars: undefined,
+      upcomingRecordLeagues: undefined,
       hideUpcomingRecords: undefined,
       // Reset means "act like a fresh install", and on a fresh install the
       // stars are on for two visits before the app hides them itself. Leaving
@@ -1335,12 +1337,13 @@ export default function SettingsPanel({
               checked={!prefs.hideTeamStars}
               onChange={(v) => updatePrefs({ hideTeamStars: !v })}
             />
-            <ToggleRow
-              label="NFL records on upcoming games"
-              hint="Each team's current W-L, in italics, on today's and future games. Never on a live or finished game, or on a past date."
-              checked={!prefs.hideUpcomingRecords}
-              onChange={(v) => updatePrefs({ hideUpcomingRecords: !v })}
-            />
+            <Field label="Records on upcoming games" hint="Each team's current record, in italics, on today's and future games. Never on a live or finished game, or on a past date.">
+              <RecordLeaguePicker
+                selected={upcomingRecordLeagues(prefs)}
+                // The first pick retires the old NFL-only switch for good.
+                onChange={(next) => updatePrefs({ upcomingRecordLeagues: next, hideUpcomingRecords: undefined })}
+              />
+            </Field>
             <TeamPicker
               sports={teamLeagueOptions}
               favorites={prefs.favoriteTeams}
@@ -2100,6 +2103,51 @@ function TeamPicker({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Per-league record picker (Jacob 9/25): tap one league, a few, or All. Two
+// rows, so the spoiler warning sits on exactly the leagues it applies to —
+// see lib/upcomingRecords.ts. Chip styling matches the TeamPicker tabs.
+function RecordLeaguePicker({
+  selected,
+  onChange,
+}: {
+  selected: ReadonlySet<RecordLeague>;
+  onChange: (next: RecordLeague[]) => void;
+}) {
+  const chip = (key: string, label: string, on: boolean, onClick: () => void) => (
+    <button
+      type="button"
+      key={key}
+      onClick={onClick}
+      aria-pressed={on}
+      className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
+      style={{
+        background: on ? "var(--accent)" : "var(--bg-card)",
+        border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
+        color: on ? "white" : "var(--text)",
+      }}
+    >
+      {label}
+    </button>
+  );
+  const row = (title: string, keys: readonly RecordLeague[]) => (
+    <div>
+      <p className="text-[11px] mb-1" style={{ color: "var(--text-muted)" }}>{title}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {keys.map((k) => chip(k, k === "soccer" ? "Soccer" : SPORT_LABEL[k], selected.has(k), () => onChange(toggleRecordLeague(selected, k))))}
+      </div>
+    </div>
+  );
+  return (
+    <div role="group" aria-label="Records on upcoming games" className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {chip("all", "All", ALL_RECORD_LEAGUES.every((k) => selected.has(k)), () => onChange(toggleAllRecordLeagues(selected)))}
+      </div>
+      {row("Once a week", WEEKLY_RECORD_LEAGUES)}
+      {row("Plays more often: the record can show a result you have not watched yet", FREQUENT_RECORD_LEAGUES)}
     </div>
   );
 }
