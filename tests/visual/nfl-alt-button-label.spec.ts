@@ -2,13 +2,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 // A2: both NFL highlight buttons pull from the SAME "NFL" YouTube channel
 // (GameHighlights.tsx) — button 2 used to render as an icon with no text on
-// every sport except FIFA, so it looked broken. It now always shows "Alt".
+// every sport except FIFA, so it looked broken. It shows the 2nd clip's baked
+// length, "Alt" when it has none, and never "Alt" when it is the only button.
 // The button height is fixed by CSS (`.highlight-btn { height: var(--hl-btn-h) }`,
 // globals.css), so this asserts the two buttons still measure the same,
 // confirming the new label didn't grow the card past the height floor
 // (finished-card floor: reference_hidescore_card_height_floor).
 
-async function setSingleLeague(page: Page, sport: string) {
+async function setSingleLeague(page: Page, sport: string, highlights = '{"games":{}}') {
   await page.addInitScript((selectedSport) => localStorage.setItem("nss-preferences", JSON.stringify({
     favoriteLeagues: [selectedSport],
     favoriteTeams: [],
@@ -29,8 +30,21 @@ async function setSingleLeague(page: Page, sport: string) {
   await page.route("**/news/highlights.json", route => route.fulfill({
     status: 200,
     contentType: "application/json",
-    body: '{"games":{}}',
+    body: highlights,
   }));
+}
+
+// Shape written by bakeGameHighlights for the fixture game below.
+function bakedNfl(slots: Record<string, unknown>) {
+  return JSON.stringify({
+    fetchedAt: "2026-09-15T14:00:00Z",
+    games: {
+      "nfl:401555555": {
+        t: new Date("2026-09-15T11:00:00-04:00").getTime(), teams: ["Giants", "Cowboys"], matchup: "cowboys|giants",
+        eventDate: "2026-09-14T17:00:00Z", sourcePolicy: "official-channel", ...slots,
+      },
+    },
+  });
 }
 
 function finishedNflGame() {
@@ -115,4 +129,39 @@ test("NFL finished card: identical resolved ids collapse to one button, not two"
   const official = page.getByRole("button", { name: "NFL highlights" }).first();
   await expect(official).toBeVisible();
   await expect(page.getByRole("button", { name: "Official alternate highlights" })).toHaveCount(0);
+});
+
+test("NFL finished card: both baked slots show both lengths, no Alt", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-15T12:00:00-04:00"));
+  await setSingleLeague(page, "nfl", bakedNfl({
+    official: "nflOfficial1", officialChannel: "NFL", officialDurationSec: 965,
+    extended: "nflExtended1", extendedChannel: "NFL", extendedDurationSec: 545,
+  }));
+  await page.route("**/football/nfl/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: finishedNflGame() }));
+  await page.route("**/api/youtube?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":null}' }));
+
+  await page.goto("/yesterday");
+  const official = page.getByRole("button", { name: "NFL highlights" });
+  const alt = page.getByRole("button", { name: "Official alternate highlights" });
+  await expect(official).toHaveCount(1, { timeout: 15_000 });
+  await expect(official).toHaveText(/^16m$/);
+  await expect(alt).toHaveText(/^9m$/);
+});
+
+test("NFL finished card: a lone 2nd-slot clip is one button with minutes, never Alt", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-15T12:00:00-04:00"));
+  await setSingleLeague(page, "nfl", bakedNfl({
+    extended: "nflExtended1", extendedChannel: "NFL", extendedDurationSec: 545,
+  }));
+  await page.route("**/football/nfl/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: finishedNflGame() }));
+  // The live slot-1 lookup misses, as it did for Falcons-Packers on 9/25.
+  await page.route("**/api/youtube?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":null}' }));
+
+  await page.goto("/yesterday");
+  const lone = page.getByRole("button", { name: "NFL highlights" });
+  await expect(lone).toHaveCount(1, { timeout: 15_000 });
+  await expect(lone).toHaveText(/^9m$/);
+  await expect(page.locator("button.highlight-btn")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Official alternate highlights" })).toHaveCount(0);
+  await expect(page.locator("button.highlight-btn", { hasText: /^Alt$/ })).toHaveCount(0);
 });

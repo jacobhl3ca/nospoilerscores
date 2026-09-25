@@ -10,7 +10,7 @@ import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
   parseRelativeTime, isoDurationToSec, etYmd, dailyCoversDate, weekdayCoversDate,
   weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, parseWatchPagePlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
-  fillHeading, pickShorterClub, eplSeasonYear, uploadFitsGameDate,
+  fillHeading, pickShorterClub, promoteLoneExtended, eplSeasonYear, uploadFitsGameDate,
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
 import {
@@ -3288,6 +3288,10 @@ async function bakeGameHighlights() {
       const { durationSec } = await fetchYtWatchMeta(kept.official);
       if (Number.isFinite(durationSec)) kept.officialDurationSec = durationSec;
     }
+    if (kept.extended && !Number.isFinite(kept.extendedDurationSec)) {
+      const { durationSec } = await fetchYtWatchMeta(kept.extended);
+      if (Number.isFinite(durationSec)) kept.extendedDurationSec = durationSec;
+    }
     if (populatedSlots.some((slot) => kept[slot])) games[k] = kept;
     else console.warn(`HIGHLIGHT-AGE-DROP ${k} carried (${kept.eventDate})`);
   }
@@ -3531,6 +3535,15 @@ async function bakeGameHighlights() {
             ageRejected++;
           }
         }
+        // Slot 1 missed but slot 2 hit on the same channel: that is the
+        // league's normal cut, so give it the 1st button (no lone "Alt").
+        {
+          const moved = promoteLoneExtended({ official, officialChannel, extended, primaryChannel, secondaryChannel });
+          if (moved.promoted) {
+            ({ official, officialChannel, extended } = moved);
+            console.log(`HIGHLIGHT-PROMOTED ${key} extended→official ${official} (${away} vs ${home})`);
+          }
+        }
         let telemundo = isFifa && sameChannel(prev.telemundoChannel, "Telemundo Deportes") ? (prev.telemundo ?? null) : null;
         if (telemundo && (telemundo === official || telemundo === extended)) telemundo = null;
         if (telemundo && !(await hlIsTelemundoVideo(telemundo))) telemundo = null;
@@ -3563,6 +3576,7 @@ async function bakeGameHighlights() {
         let clubChannel = null;
         let clubDurationSec = null;
         let officialDurationSec = null;
+        let extendedDurationSec = null;
         const clubEligible = lg.sport === "nfl" && !preseason && !!week;
         if (clubEligible) {
           const clubChannels = [...new Set([item.homeAbbr, item.awayAbbr]
@@ -3615,6 +3629,12 @@ async function bakeGameHighlights() {
             ? rawPrev.officialDurationSec
             : await fetchYtDurationSec(official);
         }
+        // Same for the 2nd button, so it reads "9m" instead of "Alt".
+        if (extended) {
+          extendedDurationSec = extended === rawPrev.extended && Number.isFinite(rawPrev.extendedDurationSec)
+            ? rawPrev.extendedDurationSec
+            : await fetchYtDurationSec(extended);
+        }
 
         const entry = { t: now, teams: [away, home], matchup, eventDate: item.date };
         if (official) {
@@ -3635,6 +3655,7 @@ async function bakeGameHighlights() {
         if (extended) {
           entry.extended = extended;
           entry.extendedChannel = secondaryChannel;
+          if (Number.isFinite(extendedDurationSec)) entry.extendedDurationSec = extendedDurationSec;
         }
         if (primaryChannel || secondaryChannel || telemundo || telemundoExtended) entry.sourcePolicy = "official-channel";
         if (telemundo) {

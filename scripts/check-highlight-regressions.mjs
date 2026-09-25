@@ -188,7 +188,7 @@ check(
 globalThis.fetch = originalFetch;
 
 const highlightsSource = readFileSync("src/lib/highlights.ts", "utf8")
-  .replace('import { getApiBase } from "@/lib/youtube";', 'const getApiBase = () => "";');
+  .replace(/import \{ getApiBase \} from "(?:@\/lib|\.)\/youtube";/, 'const getApiBase = () => "";');
 const transformedHighlights = await transform(highlightsSource, {
   jsc: { parser: { syntax: "typescript" }, target: "es2022" },
   module: { type: "es6" },

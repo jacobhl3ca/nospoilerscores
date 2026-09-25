@@ -106,3 +106,43 @@ test("a non-NFL official button reads the clip length, and falls back to the lea
   // No baked duration -> today's league badge, never a blank label.
   await expect(buttons.nth(1)).toHaveText(/^WNBA$/);
 });
+
+// The 2nd button reads its own baked length too. Alone (no 1st clip) it takes
+// the 1st button's rule and name: minutes, else the league badge, never "Alt".
+const HIGHLIGHTS_SECOND = JSON.stringify({
+  fetchedAt: "2026-08-05T14:00:00Z",
+  games: {
+    "wnba:401999901": {
+      t: NOW.getTime() - 60_000, teams: ["Lynx", "Dream"], matchup: "dream|lynx", eventDate: EVENT_ISO,
+      official: "wnbaDurationA", officialChannel: "WNBA", officialDurationSec: 545,
+      extended: "wnbaExtendedA", extendedChannel: "WNBA", extendedDurationSec: 1260,
+      sourcePolicy: "official-channel",
+    },
+    "wnba:401999902": {
+      t: NOW.getTime() - 60_000, teams: ["Aces", "Liberty"], matchup: "aces|liberty", eventDate: EVENT_ISO,
+      extended: "wnbaExtendedB", extendedChannel: "WNBA", extendedDurationSec: 380,
+      sourcePolicy: "official-channel",
+    },
+  },
+});
+
+test("the 2nd button reads its baked length, and a lone 2nd button reads like the 1st", async ({ page }) => {
+  await page.clock.setFixedTime(NOW);
+  await seed(page);
+  await page.route("**/basketball/wnba/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: SCOREBOARD }));
+  await page.route("**/news/highlights.json", route => route.fulfill({ status: 200, contentType: "application/json", body: HIGHLIGHTS_SECOND }));
+  await page.route("**/api/youtube?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":null}' }));
+
+  await page.goto("/yesterday");
+  await expect(page.getByRole("heading", { name: "WNBA" })).toBeVisible({ timeout: 15_000 });
+
+  // Game 1: both slots. 1260s -> "21m" on the 2nd button.
+  await expect(page.getByRole("button", { name: "Official alternate highlights" })).toHaveText(/^21m$/, { timeout: 15_000 });
+
+  // Game 2: 2nd slot only. One button, named for the league, 380s -> "6m".
+  const named = page.getByRole("button", { name: "WNBA highlights" });
+  await expect(named).toHaveCount(2, { timeout: 15_000 });
+  await expect(named.first()).toHaveText(/^9m$/);
+  await expect(named.nth(1)).toHaveText(/^6m$/);
+  await expect(page.locator("button.highlight-btn", { hasText: /^Alt$/ })).toHaveCount(0);
+});
