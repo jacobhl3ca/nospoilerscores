@@ -1008,7 +1008,7 @@ export default function SettingsPanel({
           <Section title="Favorite teams">
             <ToggleRow
               label="Stars on game cards"
-              hint="The ★ next to team names (auto-hidden in a Finals matchup)"
+              hint="The ★ next to team names"
               checked={!prefs.hideTeamStars}
               onChange={(v) => updatePrefs({ hideTeamStars: !v })}
             />

@@ -43,7 +43,7 @@ export type RecapRecord = {
 // RECAP_SERIES in scripts/lib/recaps.mjs — tests/recaps.test.ts diffs the two.
 export const RECAP_EXPECTED_CHANNELS: Record<string, Record<string, string>> = {
   nfl: { top15: "NFL", everytd: "NFL", topplays: "NFL", bestsunday: "NFL" },
-  mlb: { fastcast: "MLB.com", realfast: "MLB.com", morninglineup: "MLB" },
+  mlb: { fastcast: "MLB.com", realfast: "MLB.com", top5: "MLB.com", oddities: "MLB.com", morninglineup: "MLB" },
   nba: { top10: "NBA" },
   epl: { everygoal: "Premier League", everygoalnbc: "NBC Sports" },
   mls: { everygoal: "Major League Soccer" },
@@ -95,7 +95,8 @@ export function loadBakedRecaps(): Promise<Record<string, RecapRecord[]>> {
   return recapsPromise;
 }
 
-// Records for one sport that cover `ymd`, uploader-verified, shortest first.
+// Records for one sport that cover `ymd`, uploader-verified, in button order
+// (see RECAP_BUTTON_TEXT; otherwise shortest first).
 // Weekly windows from different uploaders are approximate and can overlap by a
 // day (EPL: the PL channel's Matchweek 4 and NBC's Matchweek 3 both cover the
 // Monday between them), so when matching weekly records disagree on the week
@@ -120,7 +121,30 @@ export function selectRecaps(
   const latestWeek = weeks.length ? Math.max(...weeks) : null;
   return hits
     .filter((rec) => rec.cadence !== "weekly" || latestWeek === null || rec.coversWeek === latestWeek)
-    .sort((a, b) => (a.durationSec ?? Infinity) - (b.durationSec ?? Infinity));
+    .sort((a, b) => recapButtonRank(a) - recapButtonRank(b) || (a.durationSec ?? Infinity) - (b.durationSec ?? Infinity));
+}
+
+// Cuts whose button shows a word instead of minutes. MLB's Top 5 and Real Fast
+// both run 60s, so two "▶ 1m" buttons would look the same; the oddity
+// round-ups say what they are. `short` is the phone (stacked) word. `rank`
+// places the button: Top 5 first, then the minutes buttons shortest first,
+// then Oddities last (Jacob 9/25).
+const RECAP_BUTTON_TEXT: Record<string, Record<string, { text: string; short: string; rank: number }>> = {
+  mlb: {
+    top5: { text: "Top 5", short: "Top 5", rank: -1 },
+    oddities: { text: "Oddities", short: "Odd", rank: 1 },
+  },
+};
+
+// The button's word (the short one on the stacked phone layout), or null for
+// a minutes button.
+export function recapButtonText(rec: Pick<RecapRecord, "sport" | "key">, stacked = false): string | null {
+  const t = RECAP_BUTTON_TEXT[rec.sport]?.[rec.key];
+  return t ? (stacked ? t.short : t.text) : null;
+}
+
+function recapButtonRank(rec: Pick<RecapRecord, "sport" | "key">): number {
+  return RECAP_BUTTON_TEXT[rec.sport]?.[rec.key]?.rank ?? 0;
 }
 
 export async function getRecapsFor(sport: string, ymd: string): Promise<RecapRecord[]> {
@@ -178,6 +202,15 @@ export function stackedRecapHeadings(heading: string): string[] {
   const short = shortRecapHeading(heading);
   const week = heading.match(/^Week (\d+)$/i);
   if (week) return [`Week ${week[1]} highlights`, short];
+  return short === heading ? [heading] : [heading, short];
+}
+
+// The headings the ONE-ROW layout tries: the heading itself, then its short
+// form. A heading that fits neither is dropped (the stacked rule, Jacob 9/24:
+// "to nothing if none fit") rather than cut to "Best of…" — MLB's Top 5 button
+// left "Best of the day" 39px on a 225px column.
+export function rowRecapHeadings(heading: string): string[] {
+  const short = shortRecapHeading(heading);
   return short === heading ? [heading] : [heading, short];
 }
 

@@ -317,6 +317,77 @@ test("phone (390px): three NFL cuts stack under \"Week 1 highlights\" and stay i
   expect(wide.buttonsPastEdge).toBe(0);
 });
 
+// MLB on an oddity round-up day (the live shape of 9/23): Top 5, Real Fast,
+// FastCast and Oddities. Four buttons ran 24px past a 225px column and left
+// "Best of the day" 39px before the word buttons existed (measured 9/25).
+// Now: words, not a second "▶ 1m"; Top 5 first, Oddities last; nothing past
+// the pill's edge or clipped at any width; the heading whole or dropped.
+const RECAPS_MLB_FOUR = JSON.stringify({
+  fetchedAt: "2026-09-14T14:00:00Z",
+  recaps: {
+    mlb: [
+      { sport: "mlb", key: "oddities", heading: "Best of the day", label: "Oddities", cadence: "daily", coversDate: "20260913", playbackUrl: "https://example.invalid/oddities.m3u8", pageUrl: "https://www.mlb.com/video/oddities-of-the-week-9-13-26", channel: "MLB.com", durationSec: 74, t: 1, sourcePolicy: "mlb.com" },
+      { sport: "mlb", key: "fastcast", heading: "Best of the day", label: "Best of the day", cadence: "daily", coversDate: "20260913", playbackUrl: "https://example.invalid/fastcast.m3u8", pageUrl: "https://www.mlb.com/video/fastcast-x8085", channel: "MLB.com", durationSec: 900, t: 1, sourcePolicy: "mlb.com" },
+      { sport: "mlb", key: "realfast", heading: "Best of the day", label: "60 seconds", cadence: "daily", coversDate: "20260913", playbackUrl: "https://example.invalid/realfast.m3u8", pageUrl: "https://www.mlb.com/video/real-fast-x6846", channel: "MLB.com", durationSec: 60, t: 1, sourcePolicy: "mlb.com" },
+      { sport: "mlb", key: "top5", heading: "Best of the day", label: "Top 5 plays of the day", cadence: "daily", coversDate: "20260913", playbackUrl: "https://example.invalid/top5.m3u8", pageUrl: "https://www.mlb.com/video/9-13-26-top-5-plays-of-the-day", channel: "MLB.com", durationSec: 60, t: 1, sourcePolicy: "mlb.com" },
+    ],
+  },
+});
+
+test("MLB Top 5 + Oddities: word buttons in order, nothing clipped from 340px to desktop", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.setFixedTime(NOW);
+  await seed(page);
+  await page.addInitScript(() => {
+    const p = JSON.parse(localStorage.getItem("nss-preferences") ?? "{}");
+    localStorage.setItem("nss-preferences", JSON.stringify({ ...p, thirdLeague: "mls" }));
+  });
+  await page.route("**/football/nfl/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: NFL_EVENTS }));
+  await page.route("**/baseball/mlb/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: MLB_EVENTS }));
+  await page.route("**/soccer/**/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"events":[]}' }));
+  await page.route("**/news/recaps.json", route => route.fulfill({ status: 200, contentType: "application/json", body: RECAPS_MLB_FOUR }));
+  await page.route("**/news/highlights.json", route => route.fulfill({ status: 200, contentType: "application/json", body: HIGHLIGHTS }));
+
+  await page.goto("/yesterday");
+  const mlbPill = page.locator('[data-league-recap="mlb"]');
+  await expect(mlbPill).toBeVisible({ timeout: 15_000 });
+  await expect(mlbPill.getByRole("button")).toHaveCount(4);
+  // aria-labels keep the series name and minutes, whatever the visible word.
+  await expect(mlbPill.getByRole("button", { name: "Top 5 plays of the day (1m)" })).toBeVisible();
+  await expect(mlbPill.getByRole("button", { name: "Oddities (1m)" })).toBeVisible();
+  const keys = () => mlbPill.locator("button").evaluateAll((bs) => bs.map((b) => b.getAttribute("data-recap-key")));
+  expect(await keys()).toEqual(["top5", "realfast", "fastcast", "oddities"]);
+
+  const phone = await pillMetrics(page, "mlb");
+  expect(phone.layout).toBe("stacked");
+  expect(phone.buttonTexts).toEqual(["Top 5", "1m", "15m", "Odd"]);
+  expect(phone.headingText).toBe("Best of the day");
+  expect(phone.overflow).toBe(0);
+  expect(phone.buttonsPastEdge).toBe(0);
+  expect(phone.buttonsClipped).toBe(0);
+  const shot = await page.locator("main").screenshot();
+  await testInfo.attach("phone-390-mlb-four", { body: shot, contentType: "image/png" });
+
+  for (const width of [340, 855, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.waitForTimeout(300);
+    const m = await pillMetrics(page, "mlb");
+    expect(m.overflow, `${width}px overflow`).toBe(0);
+    expect(m.buttonsPastEdge, `${width}px buttons past the edge`).toBe(0);
+    expect(m.buttonsClipped, `${width}px clipped buttons`).toBe(0);
+    // Whole or dropped (invisible), never cut to "Best of…".
+    const heading = mlbPill.locator("[data-recap-heading]");
+    const hidden = await heading.evaluate((h) => h.classList.contains("invisible"));
+    if (!hidden) expect(m.headingClipped, `${width}px heading`).toBe(false);
+  }
+  // Desktop row: words, the minutes buttons keep their ▶, the word ones carry none.
+  const row = await pillMetrics(page, "mlb");
+  expect(row.layout).toBe("row");
+  expect(row.buttonTexts).toEqual(["Top 5", "1m", "15m", "Odd"]);
+  expect(await mlbPill.locator('[data-recap-key="realfast"] svg').count()).toBe(1);
+  expect(await mlbPill.locator('[data-recap-key="top5"] svg').count()).toBe(0);
+});
+
 test("no record for the day → no pill, no layout change", async ({ page }) => {
   await page.clock.setFixedTime(NOW);
   await seed(page);

@@ -21,6 +21,8 @@ import {
   fillHeading,
   pickShorterClub,
   eplSeasonYear,
+  top5SlugForDate,
+  ODDITIES_ROUNDUP_RX,
 } from "../scripts/lib/recaps.mjs";
 import { createJiti } from "jiti";
 import type { RecapRecord } from "../src/lib/recaps.ts";
@@ -36,6 +38,8 @@ const {
   clubNickname,
   shortRecapHeading,
   stackedRecapHeadings,
+  rowRecapHeadings,
+  recapButtonText,
   RECAP_STACK_MAX_PX,
 } = (await jiti.import("../src/lib/recaps.ts")) as {
   RECAP_EXPECTED_CHANNELS: Record<string, Record<string, string>>;
@@ -45,6 +49,8 @@ const {
   clubNickname: (channel: string | null | undefined) => string;
   shortRecapHeading: (heading: string) => string;
   stackedRecapHeadings: (heading: string) => string[];
+  rowRecapHeadings: (heading: string) => string[];
+  recapButtonText: (rec: Pick<RecapRecord, "sport" | "key">, stacked?: boolean) => string | null;
   RECAP_STACK_MAX_PX: number;
 };
 
@@ -143,6 +149,18 @@ test("MLB slugs name the weekday; per-game MLB slugs never match", () => {
   }
   assert.equal(matchSeriesTitle(series("mlb", "morninglineup"), cand("Morning Lineup: Judge's 3-HR night | MLB Daily Recap", "MLB"))?.videoId, "abcdefghijk");
   assert.equal(matchSeriesTitle(series("mlb", "morninglineup"), cand("Blue Jays hit back-to-back-to-back homers", "MLB")), null);
+});
+
+test("MLB Top 5 slug is the games' date; the oddity regex keeps round-ups only", () => {
+  assert.equal(top5SlugForDate("20260924"), "9-24-26-top-5-plays-of-the-day");
+  assert.equal(top5SlugForDate("20261005"), "10-5-26-top-5-plays-of-the-day");
+  assert.equal(top5SlugForDate("2026-09-24"), "");
+  for (const t of ["Oddities of the Week: 9/23/26", "Oddities of the Month: September", "Oddities of the Wild Card round", "Oddities of the 2025 World Series"]) {
+    assert.ok(ODDITIES_ROUNDUP_RX.test(t), t);
+  }
+  for (const t of ["Christian Yelich loses bat on swing", "Stats & Oddities of 2025: Rays", "The best Stats and Oddities of 2025"]) {
+    assert.ok(!ODDITIES_ROUNDUP_RX.test(t), t);
+  }
 });
 
 test("every enabled series has a client-side expected channel, and they agree", () => {
@@ -384,6 +402,25 @@ test("selectRecaps keeps uploader-verified records that cover the day, shortest 
   assert.deepEqual(selectRecaps(all, "mlb", "20260912").map((r) => r.key), ["realfast"]);
   assert.deepEqual(selectRecaps(all, "nba", "20260913"), []);
 
+  // MLB's word buttons: Top 5 leads, the minutes cuts follow shortest first,
+  // Oddities goes last — whatever order the file lists them in.
+  const words = {
+    mlb: [
+      { sport: "mlb", key: "oddities", heading: "Best of the day", label: "Oddities", cadence: "daily", coversDate: "20260923", playbackUrl: "https://x/o.m3u8", pageUrl: "https://www.mlb.com/video/oddities-of-the-week-9-23-26", channel: "MLB.com", durationSec: 74 } as RecapRecord,
+      { sport: "mlb", key: "fastcast", heading: "Best of the day", label: "Best of the day", cadence: "daily", coversDate: "20260923", playbackUrl: "https://x/f.m3u8", pageUrl: "https://www.mlb.com/video/fastcast-wednesday", channel: "MLB.com", durationSec: 847 } as RecapRecord,
+      { sport: "mlb", key: "realfast", heading: "Best of the day", label: "60 seconds", cadence: "daily", coversDate: "20260923", playbackUrl: "https://x/r.m3u8", pageUrl: "https://www.mlb.com/video/real-fast-wednesday", channel: "MLB.com", durationSec: 60 } as RecapRecord,
+      { sport: "mlb", key: "top5", heading: "Best of the day", label: "Top 5 plays of the day", cadence: "daily", coversDate: "20260923", playbackUrl: "https://x/t.m3u8", pageUrl: "https://www.mlb.com/video/9-23-26-top-5-plays-of-the-day", channel: "MLB.com", durationSec: 60 } as RecapRecord,
+    ],
+  };
+  assert.deepEqual(selectRecaps(words, "mlb", "20260923").map((r) => r.key), ["top5", "realfast", "fastcast", "oddities"]);
+  assert.equal(recapButtonText({ sport: "mlb", key: "top5" }), "Top 5");
+  assert.equal(recapButtonText({ sport: "mlb", key: "oddities" }), "Oddities");
+  assert.equal(recapButtonText({ sport: "mlb", key: "oddities" }, true), "Odd");
+  assert.equal(recapButtonText({ sport: "mlb", key: "realfast" }), null);
+  // A round-up is filed under the ET day it was posted, so it waits for that
+  // day to end like any daily cut.
+  assert.deepEqual(selectRecaps(words, "mlb", "20260923", "20260923").map((r) => r.key), []);
+
   // A day still being played has no "best of the day" cut. MLB's Morning
   // Lineup came through stamped with the bake day on 9/20 and sat on top of
   // the live Sunday board; the today gate holds it back until the day is over.
@@ -481,6 +518,11 @@ test("narrow-column heading: Week N → WN; other headings change only past the 
   assert.deepEqual(stackedRecapHeadings("Best of the day"), ["Best of the day", "Best of day"]);
   assert.deepEqual(stackedRecapHeadings("Every goal, Matchweek 36"), ["Every goal, Matchweek 36", "Matchweek 36"]);
   assert.deepEqual(stackedRecapHeadings("Top plays"), ["Top plays"]);
+  // The one-row layout keeps the heading as written, then its short form —
+  // never "Week 2 highlights" on desktop.
+  assert.deepEqual(rowRecapHeadings("Best of the day"), ["Best of the day", "Best of day"]);
+  assert.deepEqual(rowRecapHeadings("Week 2"), ["Week 2", "W2"]);
+  assert.deepEqual(rowRecapHeadings("Top plays"), ["Top plays"]);
   // The stack gate sits between the md column (225px) and the xl column (280px).
   assert.ok(RECAP_STACK_MAX_PX > 225 && RECAP_STACK_MAX_PX <= 280);
 });
