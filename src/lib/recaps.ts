@@ -165,11 +165,14 @@ export function shortRecapHeading(heading: string): string {
 // first that fits its line. The NFL week leads with "Week 2 highlights" (Jacob
 // 9/24: "since its a new line now can put full description"): 91–99px for
 // weeks 1–18 against the 100px line at 390px (measured 2026-09-24, Geist 600
-// 11.5px tight), so a narrower phone falls back to "W2".
+// 11.5px tight), so a narrower phone falls back to "W2". Every other series
+// tries its full heading first too (Jacob 9/25: "best of the day" on mobile),
+// and drops to the short form only where that does not fit.
 export function stackedRecapHeadings(heading: string): string[] {
   const short = shortRecapHeading(heading);
   const week = heading.match(/^Week (\d+)$/i);
-  return week ? [`Week ${week[1]} highlights`, short] : [short];
+  if (week) return [`Week ${week[1]} highlights`, short];
+  return short === heading ? [heading] : [heading, short];
 }
 
 // "Detroit Lions" → "Lions", bare "Raiders" → "Raiders". The club button's label.

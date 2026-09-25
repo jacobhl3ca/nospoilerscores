@@ -35,7 +35,7 @@ import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
-import LeagueRecapCard from "@/components/LeagueRecapCard";
+import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
 import { getRecapsFor } from "@/lib/recaps";
 import Link from "next/link";
 
@@ -640,9 +640,8 @@ export default function HomeContent({
   // see SlamBracketModal / PlayoffPictureModal.
   const [slamBracketOpen, setSlamBracketOpen] = useState(false);
   const [playoffPictureOpen, setPlayoffPictureOpen] = useState(false);
-  // The recap-row bracket pill opens straight to the Bracket tab; the subtitle
-  // link leaves it undefined so the modal's stored tab applies.
-  const [playoffPictureTab, setPlayoffPictureTab] = useState<"bracket" | undefined>(undefined);
+  // The recap-row "Playoffs" pill opens the playoff picture on the tab it names.
+  const [playoffPictureTab, setPlayoffPictureTab] = useState<PlayoffsTab | undefined>(undefined);
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
@@ -2455,8 +2454,8 @@ export default function HomeContent({
     };
   }, [recapQueryKey]);
   // A stale set from the previous date/column mix never reserves a row.
-  // Today's MLB column puts a "Playoffs · Bracket" pill in the same row during
-  // the playoff-picture window (LeagueRecapCard onShowBracket), so it reserves
+  // Today's MLB column puts a "Playoffs" pill in the same row during
+  // the playoff-picture window (LeagueRecapCard onShowPlayoffs), so it reserves
   // the row on sibling columns exactly as a recap does.
   const bracketPillDue = isToday && playoffPictureInWindow("mlb", selectedDate);
   const bracketPillShown = bracketPillDue && sortedLeagues
@@ -3679,10 +3678,6 @@ export default function HomeContent({
               onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
-              // The recap-row bracket pill replaces the "Playoff picture ▸"
-              // subtitle link wherever it shows (Jacob 9/24: "dont need
-              // playoff picture wording now").
-              onShowPlayoffPicture: bracketPillDue ? undefined : () => { setPlayoffPictureTab(undefined); setPlayoffPictureOpen(true); },
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
@@ -3725,8 +3720,8 @@ export default function HomeContent({
                   date={selectedDate}
                   lastPlayedDate={league.games.length ? null : league.previousGameDay?.date}
                   reserveSlot={reserveRecapSlot}
-                  onShowBracket={bracketPillDue && league.sport === "mlb"
-                    ? () => { setPlayoffPictureTab("bracket"); setPlayoffPictureOpen(true); }
+                  onShowPlayoffs={bracketPillDue && league.sport === "mlb"
+                    ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
                     : null}
                   onPlayHighlight={openVideoModal}
                   onPlayEmbed={openEmbedModal}
