@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocTopBar from "@/components/DocTopBar";
 
 const TITLE = "How to Watch Sports Highlights Without Spoilers | HideScore";
 const DESC =
@@ -82,6 +83,7 @@ export const metadata: Metadata = {
 export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+      <DocTopBar route="how-to-watch-sports-highlights-without-spoilers" />
       <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
         HideScore
       </p>
@@ -147,7 +149,7 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
       </section>
 
       <div className="mt-10 flex flex-wrap gap-x-4 gap-y-2">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-how-to-watch-sports-highlights-without-spoilers">
           Back to HideScore
         </Link>
         <Link href="/spoiler-free-sports" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>

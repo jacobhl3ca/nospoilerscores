@@ -28,6 +28,19 @@ export const RECAP_TTL_DAYS = 21;
 const NFL_WEEK_RX = /\bWeek (\d{1,2})\b/i;
 const NFL_SEASON_RX = /\b(\d{4}) NFL Season\b/i;
 
+// 20260924 → "9-24-26-top-5-plays-of-the-day" (no leading zeros).
+export function top5SlugForDate(ymd) {
+  const m = String(ymd ?? "").match(/^\d{2}(\d{2})(\d{2})(\d{2})$/);
+  if (!m) return "";
+  return `${+m[2]}-${+m[3]}-${m[1]}-top-5-plays-of-the-day`;
+}
+
+// The round-ups only: "Oddities of the Week: 9/23/26", "Oddities of the Month:
+// September", "Oddities of the Wild Card round", "Oddities of the 2025 World
+// Series". Single clips ("Christian Yelich loses bat on swing") and the
+// winter "Stats & Oddities of 2025: Rays" series do not start this way.
+export const ODDITIES_ROUNDUP_RX = /^Oddities of the\b/i;
+
 export const RECAP_SERIES = {
   // The NFL titles the week and the season in either order ("Top 15 Plays From
   // Week 1 | 2025 NFL Season", "Best Plays From Sunday! | 2026 NFL Season Week
@@ -84,6 +97,27 @@ export const RECAP_SERIES = {
       heading: "Best of the day", label: "60 seconds",
       topicUrl: "https://www.mlb.com/video/topic/real-fast",
       slugRx: /^real-fast-(\w+?)-s-best-in-60-seconds/i, weekdayGroup: 1,
+    },
+    // "Top 5 Plays of the Day", 60s, up about 2–3 am ET the next morning. It
+    // runs every game day through the World Series (2025 Film Room archive).
+    // No topic page lists it, but its slug is the games' date, so each recent
+    // day is fetched by name. `extra`: never stands in for FastCast, so it does
+    // not hold back the Morning Lineup fallback.
+    {
+      key: "top5", enabled: true, source: "mlbcom", cadence: "daily", extra: true,
+      heading: "Best of the day", label: "Top 5 plays of the day",
+      slugForDate: top5SlugForDate,
+    },
+    // MLB's oddity round-ups: "Oddities of the Week: 9/23/26" (Wednesdays),
+    // "… of the Month", and in October one per playoff round. Listed by the
+    // Film Room `oddities` tag, which also holds the single clips — the title
+    // regex keeps the round-ups only. A round-up covers no single day, so it
+    // sits on the board of the ET day it was posted, which only shows it once
+    // that day is over (selectRecaps' premature gate).
+    {
+      key: "oddities", enabled: true, source: "mlbcom", cadence: "daily", extra: true,
+      heading: "Best of the day", label: "Oddities",
+      filmRoomTag: "oddities", filmRoomTitleRx: ODDITIES_ROUNDUP_RX,
     },
     // YouTube stand-in for a day mlb.com has no cut for. Only written when no
     // mlb.com record covers the same date (see bakeLeagueRecaps).
@@ -498,6 +532,20 @@ export function recapCoversDay(rec, ymd) {
       && !(rec.skipDays ?? []).includes(ymd);
   }
   return rec.coversDate === ymd;
+}
+
+// ── Lone 2nd-slot promotion ──────────────────────────────────────────────────
+
+// For most leagues both highlight slots run the same query on the same channel,
+// so a flaky lookup can miss slot 1 and hit slot 2 in one run. The card then
+// shows a lone "Alt" button holding the league's normal cut. Move that video up.
+// Only when both slots share a channel: the next bake keeps a carried official
+// only if its channel is the primary one (or a fallback), so a promoted id from
+// a different channel would be thrown away and re-resolved on every run.
+export function promoteLoneExtended({ official, officialChannel, extended, primaryChannel, secondaryChannel }) {
+  const same = !!primaryChannel && !!secondaryChannel && primaryChannel.toLowerCase() === secondaryChannel.toLowerCase();
+  if (official || !extended || !same) return { official, officialChannel, extended, promoted: false };
+  return { official: extended, officialChannel: primaryChannel, extended: null, promoted: true };
 }
 
 // ── NFL club short cut (section 5 of the plan) ───────────────────────────────

@@ -120,8 +120,11 @@ test("NWSL uses CBS Sports W Golazo as its strict alternate", async ({ page }) =
 
   await page.goto("/yesterday");
   await expect(page.getByRole("heading", { name: "NWSL" })).toBeVisible();
-  const alternate = page.getByRole("button", { name: "Official alternate highlights" }).first();
+  // The NWSL slot missed, so the W Golazo clip is the only button. A lone 2nd
+  // button takes the 1st button's rule: named for its channel, never "Alt".
+  const alternate = page.getByRole("button", { name: "CBS Sports W Golazo highlights" }).first();
   await expect(alternate).toBeVisible();
+  await expect(alternate).not.toHaveText(/Alt/);
   expect(requestedChannels).toContain("National Women's Soccer League");
   expect(requestedChannels).toContain("CBS Sports W Golazo");
 

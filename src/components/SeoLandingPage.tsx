@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DocTopBar from "@/components/DocTopBar";
 import type { ReactNode } from "react";
 import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
 
@@ -72,6 +73,7 @@ export default function SeoLandingPage({
   const updated = lead ? null : routeLastModified(canonical);
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+      <DocTopBar route={canonical.replace(/^\//, "")} ctaHref={ctaHref} />
       <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
         {eyebrow}
       </p>
@@ -147,8 +149,13 @@ export default function SeoLandingPage({
         ))}
       </section>
 
-      <nav aria-label="More from HideScore" className="mt-10 flex flex-wrap gap-x-4 gap-y-2">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+      <div className="mt-10 flex flex-wrap gap-x-4 gap-y-2">
+        <Link
+          href="/"
+          className="underline underline-offset-2"
+          style={{ color: "var(--text-muted)" }}
+          data-umami-event={`doc-bottom-open-${canonical.replace(/^\//, "")}`}
+        >
           Back to HideScore
         </Link>
         <Link href="/spoiler-free-sports" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>

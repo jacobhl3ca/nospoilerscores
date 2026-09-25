@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import DocTopBar from "@/components/DocTopBar";
 
 const KEY = "umami.disabled";
 
@@ -35,6 +36,7 @@ export function NoTrackToggle() {
 
   return (
     <main className="mx-auto max-w-xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+      <DocTopBar route="notrack" />
       <h1 className="text-2xl font-bold">Don&rsquo;t count my visits</h1>
       <p className="mt-3" style={{ color: "var(--text-muted)" }}>
         This turns off HideScore&rsquo;s self-hosted traffic measurement in this browser. It stays off across network and VPN changes.

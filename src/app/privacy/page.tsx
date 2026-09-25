@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocTopBar from "@/components/DocTopBar";
+import EmailLink from "@/components/EmailLink";
 
 const PRIVACY_TITLE = "Privacy Policy | HideScore";
 const PRIVACY_DESC = "HideScore never sells or shares your data and collects no personal information unless you choose to create an optional account.";
@@ -43,6 +45,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+      <DocTopBar route="privacy" />
       <h1 className="text-2xl font-bold mb-2">Privacy Policy</h1>
       <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime={PRIVACY_UPDATED}>{PRIVACY_UPDATED}</time></p>
 
@@ -96,7 +99,7 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-semibold mt-6">Contact</h2>
         <p>
-          Questions: <a href="mailto:hi@hidescore.com" className="underline underline-offset-2">hi@hidescore.com</a>
+          Questions: <EmailLink />
         </p>
 
         <h2 className="text-lg font-semibold mt-6">Credits</h2>
@@ -106,7 +109,7 @@ export default function PrivacyPage() {
       </section>
 
       <div className="mt-10">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>← Back to HideScore</Link>
+        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-privacy">← Back to HideScore</Link>
       </div>
 
       {/* Page graph: a WebPage node linked into the site's shared #website entity

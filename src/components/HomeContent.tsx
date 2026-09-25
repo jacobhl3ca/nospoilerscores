@@ -4220,18 +4220,36 @@ export default function HomeContent({
           return <Heading className="sr-only">Catch up on games without spoilers. Spoiler-free sports scores and highlights.</Heading>;
         })()}
 
-        {/* ONE footer row (Jacob 7/14): About is the first inline item, then
-            Feedback / Settings / Privacy / App Store — no second row. `relative`
-            anchors the About panel, which drops BELOW the row (absolute) so
-            opening it never wraps the row. */}
-        <div className="relative flex flex-nowrap items-center justify-center gap-x-2">
-          {/* About = the SEO copy + internal-link graph, rolled up behind a
+        {/* ONE footer row (Jacob 7/14; reordered 9/25): About · FAQ · Contact ·
+            Feedback · Settings · Privacy · Guides. The row is ~340px wide, so on
+            a 320px phone it wraps to two lines rather than dropping an item.
+            `relative` anchors the Guides panel, which opens ABOVE the row
+            (absolute) so opening it never wraps the row. */}
+        <div className="relative flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+          <a href="/about" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</a>
+          <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
+          <a href="/contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
+          <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} />
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="inline-flex items-center gap-1 underline underline-offset-2 cursor-pointer hover:opacity-80"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15 1.65 1.65 0 0 0 3.09 14H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <span>Settings</span>
+          </button>
+          <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
+          {/* Guides = the SEO copy + internal-link graph, rolled up behind a
               disclosure. Google renders and indexes content inside collapsed
               <details>, and plain <a href> (not next/link) is what the crawler
               needs to follow the routes. */}
           <details>
             <summary className="cursor-pointer select-none underline underline-offset-2 marker:content-none [&::-webkit-details-marker]:hidden" style={{ color: "var(--text-muted)" }}>
-              About
+              Guides
             </summary>
             {/* Opaque --bg, not --bg-card: in dark mode --bg-card is
                 rgba(255,255,255,0.05), so this panel was 95% see-through and
@@ -4305,10 +4323,10 @@ export default function HomeContent({
               <a href="/nba-scores-without-spoilers" style={{ textDecoration: "underline" }}>NBA scores</a>,{" "}
               <a href="/nhl-scores-without-spoilers" style={{ textDecoration: "underline" }}>NHL scores</a>,{" "}
               <a href="/f1-without-spoilers" style={{ textDecoration: "underline" }}>F1</a> and{" "}
-              <a href="/ufc-results-without-spoilers" style={{ textDecoration: "underline" }}>UFC</a>. Compare us with the other{" "}
+              <a href="/ufc-results-without-spoilers" style={{ textDecoration: "underline" }}>UFC</a>, or the{" "}
+              <a href="/redzone-for-every-sport" style={{ textDecoration: "underline" }}>RedZone-style view for every sport</a>. Compare us with the other{" "}
               <a href="/best-spoiler-free-sports-sites" style={{ textDecoration: "underline" }}>spoiler-free sports apps</a>, or see the{" "}
-              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Read more{" "}
-              <a href="/about" style={{ textDecoration: "underline" }}>about HideScore</a>, or read our{" "}
+              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Read our{" "}
               <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
             {BUILT_ON && (
@@ -4317,25 +4335,7 @@ export default function HomeContent({
               </p>
             )}
           </div>
-        </details>
-          {/* "Contact", not "About": the disclosure above is already labelled
-              About, and a second "About" beside it read as a duplicate. */}
-          <a href="/contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
-          <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
-          <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} />
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="inline-flex items-center gap-1 underline underline-offset-2 cursor-pointer hover:opacity-80"
-            style={{ color: "var(--text-muted)" }}
-          >
-            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15 1.65 1.65 0 0 0 3.09 14H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            <span>Settings</span>
-          </button>
-          <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
+          </details>
           {/* The "App Store" and "Google Play" text links used to sit here.
               Both are gone (Jacob 8/24): each said exactly what the badge below
               already says, and of the two the badge is the better surface. */}
