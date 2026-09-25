@@ -693,6 +693,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 exhibition sitting under a header reading plain "NFL").
                 Rides inside the existing flex-wrap meta row rather than taking a
                 banner row of its own, so it costs no card height. */}
+            {/* Left group: the league chip, the Pre chip and the time cell.
+                Ratings mode makes it ONE flex-1 cell, the twin of the network
+                cell, so the chips count toward the left share and the badge
+                stays at the true row center. Without that, a Best of yesterday
+                or Top events card's "MLB" chip sat outside the pair and pushed
+                GREAT right by half its width (Jacob 9/25). No min-w-0 on
+                purpose: chips + time are this cell's floor, so on a column too
+                narrow for them + a centered badge (a 3-column phone board) the
+                badge moves right just enough to clear them instead of covering
+                the chip or clipping the live clock. Elsewhere it is
+                display:contents — no box of its own, so the three stay direct
+                flex items of the row exactly as before. column-gap: inherit
+                keeps the row's own gap, tight-board override included. */}
+            <span className={hasRating ? "flex-1 flex items-center [column-gap:inherit]" : "contents"}>
             {leagueTag && (
               <span
                 className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
@@ -718,7 +732,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 shows in full — including the ":00". When it + a wide network
                 ("Sun 12:00PM" + "FS1 +2") can't share one line on a narrow mobile
                 column, flex-wrap drops the network to its own line (still pinned
-                right via ml-auto) instead of clipping the time (Jacob 6/9). */}
+                right via ml-auto) instead of clipping the time (Jacob 6/9).
+                Ratings mode keeps it that way too: the badge is centered by the
+                left group above and the network cell taking equal flex-1 shares
+                (below), not by this cell, so the badge no longer drifts with each
+                side's text width (Jacob 9/18 phone: "S5" vs "End S2" left, "ESPN+"
+                vs "ACCNX" right, shifted GREAT/GOOD left or right card to card). */}
             <span className="shrink-0 whitespace-nowrap">
               {teamView ? (
                 <span className="text-[11px] whitespace-nowrap">
@@ -748,6 +767,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                     ? "text-yellow-500 font-medium hover:text-yellow-400 transition-colors"
                     : `text-green-500 font-medium hover:text-green-400 transition-colors${tickCls}`;
                   const staticCls = gameProgress.delayed ? "text-yellow-500 font-medium" : `text-green-500 font-medium${tickCls}`;
+                  // Full clock ("Q3 - 4:12") when there's no rating badge yet to
+                  // share the row with — mid-game before game.rating is computed.
+                  // Once the badge shows, drop to the bare period ("Q3") so the
+                  // two don't compete for width (Jacob 9/13 phone, 3-column board:
+                  // the bare period showed on mobile even with no badge present —
+                  // that was a screen-width split, not a badge-driven one).
+                  const progressText = hasRating ? gameProgress.short : gameProgress.full;
                   // A live game in active precipitation shows its current
                   // condition emoji right after the clock (🌧️). Spoiler-free
                   // and only when wet, so it never clutters a clear-sky card.
@@ -762,7 +788,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                     <span className="ml-1" role="img" aria-label={`${cardWeather.nowLabel} at the venue`} title={`${cardWeather.nowLabel} at the venue`}>{cardWeather.nowIcon}</span>
                   ) : null;
                   return liveUrl ? (
-                    <><a href={liveUrl} target="_blank" rel="noopener noreferrer" aria-label={gameProgress.label || undefined} className={colorCls} onClick={handleExternalClick(liveUrl)} onAnimationStart={alignLiveClockSweep}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>{wx}</>
+                    <><a href={liveUrl} target="_blank" rel="noopener noreferrer" aria-label={gameProgress.label || undefined} className={colorCls} onClick={handleExternalClick(liveUrl)} onAnimationStart={alignLiveClockSweep}>{progressText}</a>{wx}</>
                   ) : (
                     // No live-stream link, so this is a bare <span> — implicit
                     // role "generic", on which aria-label is prohibited and
@@ -773,7 +799,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                     // authoritative, the same glyph treatment the live-weather
                     // emoji above and the rating badge already use. The <a>
                     // branch needs none of this: link role honors aria-label.
-                    <><span className={staticCls} onAnimationStart={alignLiveClockSweep} role={gameProgress.label ? "img" : undefined} aria-label={gameProgress.label || undefined}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>{wx}</>
+                    <><span className={staticCls} onAnimationStart={alignLiveClockSweep} role={gameProgress.label ? "img" : undefined} aria-label={gameProgress.label || undefined}>{progressText}</span>{wx}</>
                   );
                 })()
               ) : showFinal && !hasRating ? (
@@ -804,6 +830,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 )
               ) : null}
             </span>
+            </span>
             {/* Middle cell is rendered ONLY when it has breakpoint-visible content,
                 so an empty middle never eats a flex gap (which was clipping the
                 lead card's date to "T.." on mobile). The series variant is
@@ -815,9 +842,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               // +3") that reaches the card center gets the badge overlaid on it
               // (Jacob 6/15). Keeping it in flow makes it take real space, so a
               // wide network instead wraps to its own line (flex-wrap + ml-auto)
-              // — no overlap. flex-1 still centers it in the slack; no min-w-0 so
-              // the nowrap badge can't shrink-to-zero and overflow its cell.
-              <span className="flex-1 flex justify-center"><RatingBadge rating={game.rating!} /></span>
+              // — no overlap. shrink-0 (not flex-1): the left group and network
+              // cell on either side are now the flex-1 pair (equal shares, above/below),
+              // so this badge naturally lands at the true row center instead of
+              // centering in whatever slack those two happened to leave (9/18 fix).
+              <span className="shrink-0 flex justify-center"><RatingBadge rating={game.rating!} /></span>
             ) : game.seriesStatus && game.seriesNote && isFuture && showRatings && isToday && !nextGameDate ? (
               // Game number inline ONLY on wide (xl) columns where it fits
               // next to the bare time; narrower columns render it as the banner
@@ -831,7 +860,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 </span>
               </span>
             ) : null}
-            <span className="shrink-0 ml-auto text-right">
+            {/* Ratings mode: flex-1 + min-w-0, mirroring the left group above, so
+                this side gets the same share of the row as that side — the pair
+                is what keeps the badge centered card to card. Elsewhere (no
+                badge) it stays shrink-0 + ml-auto: natural width, pinned right. */}
+            <span className={hasRating ? "flex-1 min-w-0 truncate text-right" : "shrink-0 ml-auto text-right"}>
               {hasBroadcast && (() => {
                 const networkLink = (name: string, key: string | number) => {
                   const isPrime = /\b(amazon|prime)\b/i.test(name);
