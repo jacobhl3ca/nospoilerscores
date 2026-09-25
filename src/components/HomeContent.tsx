@@ -207,24 +207,28 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         className={inline ? "flex items-stretch w-72 rounded-xl overflow-hidden" : "max-w-md mx-auto flex items-stretch"}
         style={inline ? { background: "var(--bg-card)", border: "1px solid var(--border)" } : undefined}
       >
+        {/* The icons carry real alt text (2026-09-25): AI-visibility scanners
+            count alt="" as missing, and these 3 icons render twice per board
+            page. Screen readers are unaffected — the button's aria-label wins
+            over its contents. */}
         {tab(
           "scores-plain",
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/monkey-see-no-evil.svg" alt="" width={24} height={24} className="w-6 h-6" draggable={false} />,
+          <img src="/monkey-see-no-evil.svg" alt="See-no-evil monkey" width={24} height={24} className="w-6 h-6" draggable={false} />,
           "Scores",
           "Scores (no ratings, no spoilers)",
         )}
         {tab(
           "scores-rated",
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/monkey-hear-no-evil.svg" alt="" width={24} height={24} className="w-6 h-6" draggable={false} />,
+          <img src="/monkey-hear-no-evil.svg" alt="Hear-no-evil monkey" width={24} height={24} className="w-6 h-6" draggable={false} />,
           "Ratings",
           "Scores with ratings (sort by best games)",
         )}
         {tab(
           "news",
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/news-emoji.svg" alt="" width={24} height={24} className="w-6 h-6 news-tab-emoji" draggable={false} />,
+          <img src="/news-emoji.svg" alt="Newspaper" width={24} height={24} className="w-6 h-6 news-tab-emoji" draggable={false} />,
           "News",
           "News (full spoilers)",
         )}
@@ -452,6 +456,18 @@ function kickoffMessage(k: LeagueKickoff): string {
 // the 2026-08-03 league request landed as an anonymous bare sentence and there
 // was nothing in it to file against.
 const FEEDBACK_LEAGUE_PREFILL = "League request: ";
+
+// Build day (YYYY-MM-DD, New York), set in next.config.ts. Unset in tests.
+const BUILT_ON = process.env.NEXT_PUBLIC_BUILT_ON;
+// "September 25, 2026". Noon UTC is the same calendar day in New York, and a
+// fixed timeZone keeps the server and client strings identical.
+const formatBuiltOn = (day: string) =>
+  new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", {
+    timeZone: "America/New_York",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
@@ -4212,6 +4228,14 @@ export default function HomeContent({
                 popovers (news source filter, league swap menu); at z-20 the
                 sticky league rows (z-30) painted over the panel as well. */}
             <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(42rem,90vw)] max-h-[60vh] overflow-y-auto text-left text-xs leading-relaxed space-y-2 z-50 rounded-lg p-3 shadow-lg" style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}>
+            {/* Headings, sections, a list and a dated <time> (2026-09-25): the
+                usegrowhero scan reads only /, /today, /tomorrow and /yesterday,
+                all this same shell with the games still loading, and found no
+                H2/H3, no <section>, no FAQ, no list and no date on any of them.
+                They all live inside this collapsed panel, so the board itself
+                looks the same. The answers match /faq. */}
+            <section aria-labelledby="about-hidescore" className="space-y-2">
+            <h2 id="about-hidescore" className="font-semibold" style={{ color: "var(--text)" }}>What is HideScore?</h2>
             <p>
               HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
               MLB, MLS, the Premier League, La Liga, Serie A, the Bundesliga, Ligue 1, the Champions
@@ -4223,6 +4247,26 @@ export default function HomeContent({
               whether a game was a blowout or an instant classic, so you can watch the best sports
               highlights without spoilers and skip the duds — all without learning the final score.
             </p>
+            </section>
+            <section id="faq" aria-labelledby="about-faq" className="space-y-2">
+            <h2 id="about-faq" className="font-semibold" style={{ color: "var(--text)" }}>Frequently asked questions</h2>
+            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Is HideScore free?</h3>
+            <p>
+              Yes. It is free, with no ads, and you do not need an account. It works in any browser and
+              as an iPhone or Android app.
+            </p>
+            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Which sports does HideScore cover?</h3>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>NBA, WNBA, NFL, MLB, NHL, and college football and basketball</li>
+              <li>Soccer: the Premier League, Champions League, La Liga, Serie A, Bundesliga, Ligue 1, MLS and Liga MX</li>
+              <li>Golf, tennis, F1, UFC, cricket, chess and poker</li>
+            </ul>
+            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Can I tell if a game is worth watching?</h3>
+            <p>
+              Yes. Turn on game ratings in Settings. They show how close or exciting a finished game
+              was, without naming the score or the winner.
+            </p>
+            </section>
             <p>
               It&apos;s free, has no tracking cookies, and works in any browser or as an iPhone or Android app. Jump to{" "}
               <a href="/today" style={{ textDecoration: "underline" }}>today&apos;s games</a>,{" "}
@@ -4255,6 +4299,11 @@ export default function HomeContent({
               <a href="/about" style={{ textDecoration: "underline" }}>about HideScore</a>, or read our{" "}
               <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
+            {BUILT_ON && (
+              <p>
+                Updated <time dateTime={BUILT_ON}>{formatBuiltOn(BUILT_ON)}</time>
+              </p>
+            )}
           </div>
         </details>
           {/* "Contact", not "About": the disclosure above is already labelled
