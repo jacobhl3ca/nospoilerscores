@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState, type AnimationEvent, type ReactNo
 import { Game, Sport, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
-import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
+import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName, sportGroup } from "@/lib/espn";
+import { recordLeagueFor, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick } from "@/lib/openExternal";
@@ -53,9 +54,9 @@ interface GameCardProps {
   // column suppresses it for single-matchup Finals views where the favorite
   // sort can't reorder anything.
   showStars?: boolean;
-  // Italic current W-L on upcoming NFL cards — see hideUpcomingRecords in
-  // preferences.ts for why only NFL and only pre-game.
-  showUpcomingRecords?: boolean;
+  // Leagues whose upcoming cards show the italic current W-L (Settings picks
+  // them) — see lib/upcomingRecords.ts for why only pre-game.
+  upcomingRecordLeagues?: ReadonlySet<RecordLeague>;
 }
 
 // Poll name for the rank-chip tooltip, keyed on sport. Anything absent reads
@@ -314,7 +315,7 @@ export function CompactUpcomingCard({
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, showUpcomingRecords }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
   // before this, overlays only closed via the tiny ✕ and piled up across cards.
@@ -366,6 +367,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null && !isDelayed;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
+  // This game's key in the Settings record picker, or null when records are
+  // off for its league (or it has no team record at all).
+  const recordLeague = recordLeagueFor(game.sport, sportGroup(game.sport) === "soccer");
+  const recordKey = recordLeague && upcomingRecordLeagues?.has(recordLeague) ? recordLeague : null;
   const isLive = game.state === "in";
   const liveUrl = game.streamUrl;
   // Team-view treats finished games like past-date cards (hide records, show highlights).
@@ -1078,13 +1083,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 team-schedule view + the Settings team picker. */}
             {showStars ? star(team.id, team.displayName, favoriteTeams.includes(team.id), isTBD) : null}
             <span className="flex-1 min-w-0" />
-            {/* Current W-L on upcoming NFL cards only (Jacob 9/24). Italic
-                marks it as the record going in, not a live number. Gated on
-                isFuture + !effectivePastDate so it never reaches a live,
-                finished or past-date card; 0-0 / 0-0-0 is ESPN's pre-season
-                placeholder and says nothing, so it is skipped. */}
-            {showUpcomingRecords && game.sport === "nfl" && isFuture && !effectivePastDate && !isTBD && team.record && !/^0-0(-0)?$/.test(team.record) ? (
-              <span className="text-[10px] sm:text-xs italic tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }} title="Record going into this game">{team.record}</span>
+            {/* Current W-L on upcoming cards, for the leagues picked in
+                Settings (Jacob 9/24 NFL, 9/25 per league). Italic marks it as
+                the record going in, not a live number. Gated on isFuture +
+                !effectivePastDate so it never reaches a live, finished or
+                past-date card; 0-0 / 0-0-0 is ESPN's pre-season placeholder
+                and says nothing, so it is skipped. */}
+            {recordKey && isFuture && !effectivePastDate && !isTBD && team.record && !/^0-0(-0)?$/.test(team.record) ? (
+              <span className="text-[10px] sm:text-xs italic tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }} title={recordTitle(recordKey)}>{team.record}</span>
             ) : null}
           </div>
         ))}
