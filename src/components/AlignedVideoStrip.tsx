@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import { handleExternalClick } from "@/lib/openExternal";
-import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
+import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters, itemIsVideo } from "./NewsColumn";
 import { isDemoModeActive } from "@/lib/demoMode";
 
 interface Props {
