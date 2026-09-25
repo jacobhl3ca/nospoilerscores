@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
   // /api/youtube rewrite was dead config. The real /api/* routing lives in the
   // Cloudflare worker (public/_worker.js), which the client hits same-origin
   // (getApiBase() returns "" on web, the prod origin under Capacitor).
+  env: {
+    // Build day in New York (YYYY-MM-DD), inlined into the bundle for the
+    // board's "Updated" line. Date only, so the static HTML and the hydrated
+    // client always agree.
+    NEXT_PUBLIC_BUILT_ON: new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
+  },
 };
 
 // Sentry: wraps the build to (optionally) upload source maps. SENTRY_AUTH_TOKEN
