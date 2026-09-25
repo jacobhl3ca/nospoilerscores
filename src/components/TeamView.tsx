@@ -7,6 +7,7 @@ import { Game, Sport, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { fetchTeamSchedule, fetchScheduleRatings } from "@/lib/espn";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
+import { SHORT_LEAGUE_LABELS } from "@/lib/leagueLabels";
 import GameCard from "./GameCard";
 import { getDateString } from "@/components/DateNav";
 
@@ -92,6 +93,11 @@ export default function TeamView({
   // by game id; a value of null means "legitimately unrated on its date too".
   const [ratingOverrides, setRatingOverrides] = useState<Record<string, number | null>>({});
   const [headerAbbrev, setHeaderAbbrev] = useState(false);
+  // Back-button label state — see the collision effect below. Starts as the
+  // full leagueLabel/no cap so a wide column's first paint isn't needlessly
+  // shortened before the first measurement runs.
+  const [backLabelShort, setBackLabelShort] = useState(false);
+  const [backMaxW, setBackMaxW] = useState<number | undefined>(undefined);
   const [headerH, setHeaderH] = useState(80);
   const headerRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
@@ -236,31 +242,73 @@ export default function TeamView({
   }, [past]);
 
   // If the full team name would collide with the left-edge back button (the
-  // centered group visually crosses under it), swap to the 3-char abbrev.
+  // centered group visually crosses under it), swap to the 3-char abbrev. A
+  // long league label ("NCAAW Hockey") eats into the SAME half of the header
+  // as the centered group, so the back label gets its own shrink-to-fit too:
+  // SHORT_LEAGUE_LABELS first (readable), then a hard max-width + ellipsis as
+  // a mathematical backstop so a label with no short form (or a column
+  // narrower than anything anticipated here) still can never physically
+  // reach the centered group.
   useEffect(() => {
     const check = () => {
       const host = headerRef.current;
       const back = backRef.current;
       if (!host || !back) return;
-      // Measure the centered group WITH the full name — do this by temporarily
-      // forcing non-abbrev mode via a probe, or just measure current state and
-      // toggle when needed.
-      const probe = document.createElement("h2");
-      probe.textContent = team.shortDisplayName || team.displayName;
-      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-size:1.125rem;font-weight:700;letter-spacing:0.025em;";
-      document.body.appendChild(probe);
-      const nameFullW = probe.offsetWidth;
-      document.body.removeChild(probe);
+      // Measure text at a fixed size rather than off the live DOM, so the
+      // result only depends on the given strings + column width, never on
+      // whichever abbreviated/truncated state happened to be rendered last.
+      const measure = (text: string, font: string) => {
+        const probe = document.createElement("span");
+        probe.textContent = text;
+        probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;${font}`;
+        document.body.appendChild(probe);
+        const w = probe.offsetWidth;
+        document.body.removeChild(probe);
+        return w;
+      };
+      const NAME_FONT = "font-size:1.125rem;font-weight:700;letter-spacing:0.025em;";
+      const LABEL_FONT = "font-size:0.75rem;";
+      const nameFullW = measure(team.shortDisplayName || team.displayName, NAME_FONT);
+      const nameAbbrevW = measure(team.abbreviation, NAME_FONT);
+      const shortLabel = SHORT_LEAGUE_LABELS[leagueLabel];
+      const labelFullW = measure(leagueLabel, LABEL_FONT);
+      const labelShortW = shortLabel ? measure(shortLabel, LABEL_FONT) : labelFullW;
 
       const hostW = host.clientWidth;
-      const backW = back.getBoundingClientRect().width;
       // Center group = invisible★ (≈14) + logo (≈20) + name + gaps + ★ (≈14) ≈ name + ~60
-      const centerGroupW = nameFullW + 60;
-      // Need: half the center group (from center outward) must not cross back edge
-      const halfGroup = centerGroupW / 2;
-      const backEdge = backW + 8; // 8px gap buffer
-      const tooWide = halfGroup > (hostW / 2) - backEdge;
-      setHeaderAbbrev(tooWide);
+      const CENTER_CHROME = 60;
+      // Back button chrome = chevron (≈10) + gap (≈2)
+      const BACK_CHROME = 12;
+      const BUFFER = 8; // gap the two groups must keep between them
+      // Need: half the center group (from center outward), plus the back
+      // button's own width, must not exceed half the host.
+      const fits = (centerW: number, labelW: number) =>
+        centerW / 2 <= hostW / 2 - (labelW + BACK_CHROME + BUFFER);
+
+      let useAbbrevName = false;
+      let useShortLabel = false;
+      if (fits(nameFullW + CENTER_CHROME, labelFullW)) {
+        // full name + full label both fit — the common case
+      } else if (fits(nameAbbrevW + CENTER_CHROME, labelFullW)) {
+        useAbbrevName = true;
+      } else if (shortLabel && fits(nameFullW + CENTER_CHROME, labelShortW)) {
+        useShortLabel = true;
+      } else {
+        useAbbrevName = true;
+        useShortLabel = !!shortLabel;
+      }
+      setHeaderAbbrev(useAbbrevName);
+      setBackLabelShort(useShortLabel);
+
+      // Hard cap regardless of the branch above: whatever room is left after
+      // the (now decided) center group, reserved for the back label text.
+      // Invisible whenever the chosen text already fits inside it. Floored at
+      // 0, not some readable minimum — on an extremely narrow column the
+      // label can collapse to just the chevron, but it must never cross into
+      // the centered group (the actual bug here), so nothing above zero is
+      // guaranteed.
+      const finalCenterW = (useAbbrevName ? nameAbbrevW : nameFullW) + CENTER_CHROME;
+      setBackMaxW(Math.max(0, hostW / 2 - finalCenterW / 2 - BACK_CHROME - BUFFER));
     };
     check();
     const host = headerRef.current;
@@ -328,7 +376,9 @@ export default function TeamView({
             <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            <span>{leagueLabel}</span>
+            <span className="min-w-0 truncate" style={{ maxWidth: backMaxW }}>
+              {backLabelShort ? SHORT_LEAGUE_LABELS[leagueLabel] || leagueLabel : leagueLabel}
+            </span>
           </button>
           <div className="flex items-center justify-center min-w-0">
             <span className="text-sm invisible mr-1" aria-hidden="true">★</span>
