@@ -393,6 +393,18 @@ export function parseEmbedPlayable(html) {
   return m[1] === "OK" && m[2] === "true";
 }
 
+// Does the clip play on youtube.com itself, from where this runs (the mini, US)?
+// The watch page's own playabilityStatus. Separate from the embed verdict: a
+// LALIGA EA SPORTS cut is OK here yet refuses every embed, while a TUDN Liga MX
+// cut is UNPLAYABLE here too ("Video unavailable", no US in availableCountries,
+// checked 2026-09-25). true / false, or null when the page carries no verdict
+// (a google.com/sorry bounce).
+export function parseWatchPagePlayable(html) {
+  const m = String(html ?? "").match(/"playabilityStatus":\{"status":"([A-Z_]+)"/);
+  if (!m) return null;
+  return m[1] === "OK";
+}
+
 // ── Candidate pick ───────────────────────────────────────────────────────────
 
 // The European season that is running on an ET date: it starts in August, so
