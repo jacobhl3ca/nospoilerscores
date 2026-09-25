@@ -188,6 +188,20 @@ function formatTime(t: string | null | undefined): string {
   return (t ?? "").replace(/(\d)\s+([AP]M)\b/i, "$1$2");
 }
 
+// 1–2 letter fallback for the no-logo tile below. Audited 2026-09-25 across
+// every team-sport league on the board (29-day window either side of today):
+// the ~27 real teams that render with no logo (DFB-Pokal/Copa del Rey early
+// rounds, Dillard + 5 others in NCAA women's volleyball, Maryville (Mo) in
+// NCAA men's hockey — all D2/NAIA/JUCO or amateur-cup hosts) have no logo
+// under ESPN's own field OR any alt CDN path/size/dark-variant probed, so
+// there is nothing to fetch — initials are the only content this tile can
+// ever show. Prefers the abbreviation ESPN already gives every competitor;
+// falls back to the display name for the rare case that's blank too.
+function teamInitials(team: { abbreviation?: string; displayName?: string; shortDisplayName?: string }): string {
+  const source = team.abbreviation || team.shortDisplayName || team.displayName || "";
+  return source.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
+}
+
 // once, on the full lead card, instead of repeating down every row.
 export function CompactUpcomingCard({
   game,
@@ -297,11 +311,18 @@ export function CompactUpcomingCard({
         {/* Decorative: the team name renders right beside this logo, so an alt
             of the abbreviation made screen readers announce the team twice
             ("MIA MIA Heat"). Empty alt matches GameDetailModal's TeamRow logo;
-            title stays for the sighted-hover tooltip. */}
+            title stays for the sighted-hover tooltip. No-logo tile + the
+            onError guard mirror the main logo() fallback below (2026-09-25
+            audit) — visibility, not display, on error, so a 404'd logo keeps
+            its box width instead of collapsing the row. */}
         {home.logo ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={home.logo} alt="" title={home.displayName} loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-        ) : null}
+          <img src={home.logo} alt="" title={home.displayName} loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 object-contain shrink-0" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+        ) : (
+          <span aria-hidden="true" className="flex items-center justify-center w-4 h-4 rounded shrink-0 text-[7px] font-semibold leading-none" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
+            {teamInitials(home)}
+          </span>
+        )}
         {/* Full team name when there's room (desktop, like the lead card above);
             abbreviation on the narrow mobile column. Normal weight to match the
             lead card + every other card's team name — font-medium made the venue
@@ -483,12 +504,19 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     ) : !team.logo ? (
       // No logo on the event at all (ESPN has none for the amateur hosts in the
       // DFB-Pokal / Copa del Rey early rounds — 5 of 11 first-round cards on
-      // 2026-08-22, nor for Maryville (Mo) in NCAA hockey, 2026-09-23). An
-      // <img src=""> never reaches onError, so it rendered as an empty bordered
-      // box; a same-size muted tile keeps the row aligned. `block` is load-
-      // bearing: an inline <span> ignores w-/h-, so without it the tile was
-      // zero-wide and the bare name sat flush-left under a logo'd opponent.
-      <span aria-hidden="true" className="block w-4 h-4 sm:w-6 sm:h-6 rounded shrink-0" style={{ background: "var(--bg-card-hover)" }} />
+      // 2026-08-22, nor for Maryville (Mo) in NCAA hockey, 2026-09-23, nor for
+      // Dillard + 5 others in NCAA women's volleyball). An <img src=""> never
+      // reaches onError, so it rendered as an empty bordered box; a same-size
+      // muted tile keeps the row aligned. `block`/`flex` is load-bearing: an
+      // inline <span> ignores w-/h-, so without it the tile was zero-wide and
+      // the bare name sat flush-left under a logo'd opponent. Initials added
+      // 2026-09-25 after an exhaustive audit of every team-sport league found
+      // none of these teams has a logo under ANY probed ESPN CDN path/size/
+      // dark variant — there's nothing left to fetch, so the tile shows the
+      // team's own abbreviation instead of a bare blank square.
+      <span aria-hidden="true" className="flex items-center justify-center w-4 h-4 sm:w-6 sm:h-6 rounded shrink-0 text-[7px] sm:text-[9px] font-semibold leading-none" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
+        {teamInitials(team)}
+      </span>
     ) : (
       // Decorative: the team name renders beside this logo (see the row at the
       // logo() call site), so alt="" avoids a duplicate screen-reader read of
