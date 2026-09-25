@@ -274,9 +274,18 @@ export interface Preferences {
   // signed-out dismissal would be silently device-only, which is not what
   // "stays removed on their account" is supposed to mean.
   playBadgeDismissed?: boolean;
-  newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
-  // The generic "News" column is independent of scores slot 3. It appears by
-  // default; true means the user explicitly removed it from the news board.
+  // A league picked in news column 3's own switcher. Undefined = Auto: the
+  // column follows scores column 3, the same way news columns 1-2 follow
+  // theirs (Jacob 9/25). Before 9/25, Auto meant the Top news feed.
+  newsThirdLeague?: Sport;
+  // True when the user picked "Top news (ESPN)" from a news switcher, so the
+  // generic feed stays even though a league sits in scores column 3. False
+  // once they pick a league or Auto there. Undefined on blobs from before
+  // 9/25: a set newsGenericSlot then stands in for it, because only that
+  // switcher pick ever wrote newsGenericSlot.
+  newsTopNews?: boolean;
+  // News column 3 is on the board by default, even when scores column 3 is
+  // Empty (it then shows Top news). True means the user removed it.
   newsGenericHidden?: boolean;
   // Which POSITION the generic "Top news" column occupies on the news board
   // (0-2, default 2 = last). Picking "Top news (ESPN)" from any column's
@@ -508,6 +517,12 @@ const defaults: Preferences = {
   // Existing users are unaffected — a saved newsTypeFilter always wins.
   newsTypeFilter: "reddit",
 };
+
+// A fresh copy of the install defaults. The signed-in merge starts from these,
+// not from this device's blob — see mergeRemotePreferences in HomeContent.
+export function defaultPreferences(): Preferences {
+  return { ...defaults };
+}
 
 export function loadPreferences(): Preferences {
   if (typeof window === "undefined") return defaults;

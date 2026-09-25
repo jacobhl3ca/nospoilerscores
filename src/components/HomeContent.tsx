@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
+import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
+import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
@@ -68,13 +69,13 @@ function migrateLegacySwitcherPreferences(prefs: Preferences): Preferences {
 
 function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>): Preferences {
   const merged = {
-    ...local,
-    ...remote,
-    // These arrays use omission to mean the default. Because the account copy
-    // is canonical, an omitted remote array must clear a device-only override
-    // instead of accidentally inheriting it through the object spread.
+    // Defaults + the account copy, NOT this device's blob: a key the account
+    // omits means default, so a stale device must not keep it — see
+    // accountPrefsBase. The arrays below were the first keys fixed this way.
+    ...accountPrefsBase(defaultPreferences(), remote),
     hiddenLeagues: remote.hiddenLeagues,
     shownLeagues: remote.shownLeagues,
+    // Not the defaults' 2: a missing marker is what flags a legacy account.
     switcherDefaultsVersion: remote.switcherDefaultsVersion,
     // Dismissals only ever accumulate, so they merge as a UNION — never a
     // pick. The reconcile lands 1-3 s after first paint; a banner dismissed
@@ -994,7 +995,7 @@ export default function HomeContent({
         if (!remote || !alive || Object.keys(remote).length === 0) return;
         const local = loadPreferences();
         const merged = mergeRemotePreferences(local, remote);
-        if (JSON.stringify(merged) === JSON.stringify(local)) return; // no change → don't disturb
+        if (samePrefs(merged, local)) return; // no change → don't disturb
         savePreferences(merged);
         setPrefs(merged);
         document.documentElement.setAttribute("data-theme", getResolvedTheme(merged.theme));
@@ -1497,12 +1498,16 @@ export default function HomeContent({
     if (!prefs.skipNewsExplainer) setNewsNotice(true);
   };
 
-  const setNewsThirdLeague = (sport: Sport | undefined) => {
+  // A pick in news column 3's own switcher. A league overrides the column;
+  // undefined (Auto) hands it back to scores column 3. `autoId` is the column
+  // Auto lands on, so a one-column Focus view can follow it.
+  const setNewsThirdLeague = (sport: Sport | undefined, autoId: Sport | "espn" = "espn") => {
     updatePrefs({
       newsThirdLeague: sport,
+      newsTopNews: false,
       newsGenericHidden: false,
       // Keep a one-column Focus view pointed at the replacement column.
-      newsFocusLeague: prefs.newsFocusLeague ? (sport ?? "espn") : undefined,
+      newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
     });
   };
 
@@ -3275,8 +3280,8 @@ export default function HomeContent({
                 ? () => fetchLeagueNews(c.sport!, 10)
                 : () => fetchPrebaked(c.key),
             }));
-          // Build visible news entries. The first two mirror scores columns;
-          // the generic News/optional third-news-league column is independent.
+          // Build visible news entries. Each of the three mirrors its scores
+          // column; column 3 can also be set on its own (see thirdColEntry).
           // Type/hidden filters are applied at render-time so the dropdown
           // can still display + re-enable hidden sources.
           // Col-3 fallback = hidescore.com's "News" feed. Use GENERIC_CASCADE,
@@ -3298,36 +3303,46 @@ export default function HomeContent({
           // slot is trailing; an empty slot BEFORE a populated one would shift
           // each later league's index down and drop/mislabel its news column.
           const newsLeagueQueue = [...sortedLeagues];
-          const leagueEntries = [0, 1].map((slotIdx) => {
-            if (selectedSlotLeagues[slotIdx] === "empty") return null;
-            const queued = newsLeagueQueue.shift();
-            const sport: Sport | undefined = queued?.sport;
+          const scoreSlotSports = [0, 1, 2].map((slotIdx): Sport | undefined =>
+            selectedSlotLeagues[slotIdx] === "empty" ? undefined : newsLeagueQueue.shift()?.sport);
+          const mirrorEntryFor = (slotIdx: number) => {
+            const sport = scoreSlotSports[slotIdx];
             if (!sport) return null;
             // A Top events / Best of yesterday score column has no news feed
             // of its own (it is a cross-league pick, not a league). The board
-            // keeps its other mirror plus the News column rather than an
+            // keeps its other mirrors plus the News column rather than an
             // empty "Top events".
             if (sport === "top" || sport === "best") return null;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             const orderedCascade = leagueSourceCascade(sport);
             return { slotIdx, sport, id: sport as string, label, orderedCascade };
-          }).filter((e): e is NonNullable<typeof e> => e !== null);
+          };
+          const leagueEntries = [0, 1].map(mirrorEntryFor)
+            .filter((e): e is NonNullable<typeof e> => e !== null);
+          // Scores column 3's league, when it has one with news. Phones keep
+          // their News-first merged feed (Jacob 5/30), so only the column
+          // board mirrors it.
+          const thirdMirrorEntry = isMobile ? null : mirrorEntryFor(2);
           const thirdLeagueEntry = prefs.newsThirdLeague ? (() => {
             const sport = prefs.newsThirdLeague!;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             return { slotIdx: 2, sport, id: sport as string, label, orderedCascade: leagueSourceCascade(sport) };
           })() : null;
-          // Match hidescore.com's default column order: the two scores leagues
-          // fill cols 1-2, and col 3 is the chosen 3rd news league if set, else
-          // the ESPN/general feed — NOT a forced ESPN first column. (Reverted the
-          // 5/28 ESPN-first default per Jacob 5/29; ESPN stays reachable as the
-          // col-3 fallback and the focus/order controls are unchanged.)
+          // Default column order matches the scores board 1 for 1: news cols
+          // 1-3 follow scores cols 1-3 (Jacob 9/25: "shouldn't it match 1 for 1
+          // with my leagues on homepage unless manually set there"). Col 3
+          // falls back to the ESPN/general feed when scores col 3 has no league
+          // with news (Empty, Top events, Best of yesterday). Before 9/25, col 3
+          // was always that feed unless a 3rd news league was picked.
           const firstTwoEntries = leagueEntries.filter((e) => e.slotIdx === 0 || e.slotIdx === 1);
-          // Col 3 naturally exists even when scores slot 3 is Empty. It can be
-          // swapped to a league or explicitly removed without touching scores.
+          // A pick in col 3's own switcher overrides the mirror: a league, or
+          // Top news. Old blobs have no newsTopNews; a set newsGenericSlot
+          // means they picked Top news (only that pick writes it).
+          const topNewsPicked = prefs.newsTopNews ?? (prefs.newsGenericSlot !== undefined);
           const thirdColEntry = prefs.newsGenericHidden
             ? null
-            : thirdLeagueEntry ?? espnEntry;
+            : thirdLeagueEntry ?? (topNewsPicked ? espnEntry : thirdMirrorEntry ?? espnEntry);
+          const thirdColMirrors = thirdColEntry !== null && thirdColEntry === thirdMirrorEntry;
           // Mobile (single stacked column): lead with News, then the two score
           // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
           // 3-across order: the two leagues, then the News/3rd-league column.
@@ -3336,7 +3351,10 @@ export default function HomeContent({
           // column's switcher (newsGenericSlot). The league columns shift
           // right around it — nothing is dropped. Mobile keeps its fixed
           // news-first stack (Jacob 5/30) regardless.
-          const genericPos = Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length);
+          // A mirrored col 3 stays last, in its scores position.
+          const genericPos = thirdColMirrors
+            ? firstTwoEntries.length
+            : Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length);
           const visibleNewsEntries = isMobile
             ? [...(thirdColEntry ? [thirdColEntry] : []), ...firstTwoEntries]
             : thirdColEntry
@@ -3385,18 +3403,18 @@ export default function HomeContent({
           const renderSourcesFor = (entry: typeof visibleNewsEntries[number]): NewsSource[] =>
             cascadeToSources(orderedColumnSourcesFor(entry));
 
-          // News col 3 is independent; the first two league columns continue to
-          // mirror their matching score slots.
+          // News cols 1-2 ARE their score slots, so a pick there changes the
+          // scores board too. A pick in col 3 changes the news board only.
           const newsSwapFor = (slotIdx: number) =>
             (s: Sport | "empty" | undefined) => {
               if (slotIdx === 2) {
                 if (s === "empty") {
                   updatePrefs({
                     newsGenericHidden: true,
-                    newsFocusLeague: prefs.newsFocusLeague === (prefs.newsThirdLeague ?? "espn") ? undefined : prefs.newsFocusLeague,
+                    newsFocusLeague: prefs.newsFocusLeague === thirdColEntry?.id ? undefined : prefs.newsFocusLeague,
                   });
                 } else {
-                  setNewsThirdLeague(s as Sport | undefined);
+                  setNewsThirdLeague(s as Sport | undefined, thirdMirrorEntry?.sport ?? "espn");
                 }
                 return;
               }
@@ -3411,6 +3429,7 @@ export default function HomeContent({
           const pickEspn = (position?: number) => {
             updatePrefs({
               newsThirdLeague: undefined,
+              newsTopNews: true,
               newsGenericHidden: false,
               newsGenericSlot: position === undefined
                 ? prefs.newsGenericSlot
@@ -3518,15 +3537,16 @@ export default function HomeContent({
 
           const wideCol = "flex-1 min-w-0 max-w-[420px] xl:max-w-[520px]";
           const narrowCol = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
-          // News + button restores the natural News column first when removed;
-          // otherwise it refills one of the two score-linked league columns.
+          // News + button restores column 3 first when removed (with whatever
+          // it showed: the mirror, a picked league, or Top news); otherwise it
+          // refills one of the two score-linked league columns.
           const newsFirstEmptySlot = [0, 1].find((i) => selectedSlotLeagues[i] === "empty");
           const newsAddEligibleSport = switcherOptions.find(
             (o) => !visibleNewsEntries.some((e) => e.sport === o.sport),
           )?.sport;
           const newsOnAddColumn = visibleNewsEntries.length < 3 && (prefs.newsGenericHidden || newsFirstEmptySlot !== undefined)
             ? () => {
-                if (prefs.newsGenericHidden) pickEspn();
+                if (prefs.newsGenericHidden) updatePrefs({ newsGenericHidden: false });
                 else if (newsFirstEmptySlot !== undefined && newsAddEligibleSport) setSlotLeague(newsFirstEmptySlot, newsAddEligibleSport);
               }
             : undefined;
@@ -3587,8 +3607,8 @@ export default function HomeContent({
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
                             onPickEspn={() => pickEspn(idx)}
                             espnActive={isEspn}
-                            autoSport={entry.slotIdx === 2 ? undefined : autoSlotSports[entry.slotIdx]}
-                            autoIsEspn={entry.slotIdx === 2}
+                            autoSport={entry.slotIdx === 2 ? thirdMirrorEntry?.sport : autoSlotSports[entry.slotIdx]}
+                            autoIsEspn={entry.slotIdx === 2 && !thirdMirrorEntry}
                             removable={renderedEntries.length > 1}
                           />
                         </div>
@@ -3650,8 +3670,8 @@ export default function HomeContent({
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
                       onPickEspn={() => pickEspn(idx)}
                       espnActive={isEspn}
-                      autoSport={entry.slotIdx === 2 ? undefined : autoSlotSports[entry.slotIdx]}
-                      autoIsEspn={entry.slotIdx === 2}
+                      autoSport={entry.slotIdx === 2 ? thirdMirrorEntry?.sport : autoSlotSports[entry.slotIdx]}
+                      autoIsEspn={entry.slotIdx === 2 && !thirdMirrorEntry}
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}

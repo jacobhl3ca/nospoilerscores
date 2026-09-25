@@ -739,6 +739,7 @@ export default function SettingsPanel({
       fourthLeague: undefined,
       fifthLeague: undefined,
       newsThirdLeague: undefined,
+      newsTopNews: undefined,
       newsGenericHidden: undefined,
       newsGenericSlot: undefined,
       // Yesterday, not "smart" — this is the documented fresh-install default
