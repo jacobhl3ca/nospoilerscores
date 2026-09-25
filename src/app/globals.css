@@ -170,6 +170,26 @@ html.blur-news-media .news-media-preview > * {
   .news-media-preview > * { transition: none; }
 }
 
+/* Score board chrome (the fixed header/tabs/date-nav, and the whole scores
+   board — league headers, game cards) reads as app UI, not a web page: a
+   long-press there shouldn't select text or pop iOS's Copy/Translate/Speak
+   callout (Jacob 9/16, iPhone screenshot). Applied to <header> (always) and
+   <main> when the scores/rated board is showing (HomeContent.tsx) — never to
+   the news view, article/FAQ/static pages, or form fields, which stay
+   selectable via the override below. */
+.board-noselect {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.board-noselect input,
+.board-noselect textarea,
+.board-noselect [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
 :root {
   /* Tell the browser which theme its native UI (scrollbars, the text-input
      caret + selection highlight, form controls, autofill) should paint in.

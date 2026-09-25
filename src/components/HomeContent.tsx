@@ -2760,7 +2760,7 @@ export default function HomeContent({
           nothing to shove. The overlap is zero by construction, for any value
           of --header-h, however stale. Guarded by tests/visual/sticky-seam.spec.ts
           ("the first card's top edge survives a stale --header-h"). */}
-      <header ref={headerRef} className="px-4 fixed top-0 left-0 right-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
+      <header ref={headerRef} className="board-noselect px-4 fixed top-0 left-0 right-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
         // In the native iOS app the WKWebView reports env(safe-area-inset-top)
         // unreliably — sometimes ~0 (header collides with the status bar),
         // sometimes an inflated stale value from a rotation/resume transition
@@ -3179,7 +3179,7 @@ export default function HomeContent({
           the 1280px breakpoint doesn't widen the still-3-column board while
           the extra leagues load; the layout swaps once, when they arrive
           (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
-      <main id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none`}>
+      <main id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none${!showNews ? " board-noselect" : ""}`}>
         {/* First-run explanations for the Ratings and News tabs. These replaced
             blocking confirm dialogs on 2026-08-04 (see handleViewModeClick):
             the tab now applies instantly and the reason arrives here, in flow,
