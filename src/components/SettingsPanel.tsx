@@ -694,6 +694,7 @@ export default function SettingsPanel({
       defaultRatings: "auto",
       hideLeagueChevrons: undefined,
       hideTeamStars: undefined,
+      hideUpcomingRecords: undefined,
       // Reset means "act like a fresh install", and on a fresh install the
       // stars are on for two visits before the app hides them itself. Leaving
       // the counter at 3 would re-hide them on the very next open, which reads
@@ -1333,6 +1334,12 @@ export default function SettingsPanel({
               hint="The ★ next to team names (auto-hidden in a Finals matchup)"
               checked={!prefs.hideTeamStars}
               onChange={(v) => updatePrefs({ hideTeamStars: !v })}
+            />
+            <ToggleRow
+              label="NFL records on upcoming games"
+              hint="Each team's current W-L, in italics, on today's and future games. Never on a live or finished game, or on a past date."
+              checked={!prefs.hideUpcomingRecords}
+              onChange={(v) => updatePrefs({ hideUpcomingRecords: !v })}
             />
             <TeamPicker
               sports={teamLeagueOptions}
