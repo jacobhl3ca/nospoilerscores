@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRecapsFor, formatRecapDuration, stackedRecapHeadings, RECAP_STACK_MAX_PX, type RecapRecord } from "@/lib/recaps";
+import { getRecapsFor, formatRecapDuration, recapButtonText, rowRecapHeadings, stackedRecapHeadings, RECAP_STACK_MAX_PX, type RecapRecord } from "@/lib/recaps";
 import { leadChannelBlocksEmbeds } from "@/lib/youtube";
 import type { ShareCardMeta } from "@/lib/shareCard";
 
@@ -14,7 +14,8 @@ import type { ShareCardMeta } from "@/lib/shareCard";
 //
 // ⛔ Never prints the video title, thumbnail or channel headline — they spoil
 // ("WALK-OFF WEEKEND in Cleveland…"). Left = the series heading, right = one
-// "▶ 8m" button per cut, shortest first.
+// "▶ 8m" button per cut, shortest first — or a word for the cuts in
+// RECAP_BUTTON_TEXT (MLB's "Top 5" first, "Oddities" last).
 //
 // ⛔ Not wrapped in .hl-slot: the card-height floor (globals.css) keys on a
 // .highlight-btn INSIDE .hl-slot, and this pill is not a game card.
@@ -45,6 +46,9 @@ const ROW_PILL = "items-center gap-2 px-2.5 py-1.5";
 const STACKED_PILL = "flex-col gap-1 px-1.5 py-1.5";
 const ROW_BTN = "gap-1 px-2";
 const STACKED_BTN = "flex-1 min-w-0 gap-0.5 px-0";
+// A phone row with a word button (see fitButtons): each button sized by its
+// text plus an equal share of what is left.
+const STACKED_FIT_BTN = "flex-auto gap-0.5 px-0";
 
 export type PlayoffsTab = "bracket" | "odds" | "picks";
 const PLAYOFFS_TABS: { key: PlayoffsTab; label: string }[] = [
@@ -93,8 +97,9 @@ export default function LeagueRecapCard({
   // line stays so the pill keeps the spacer's height; the buttons' aria-labels
   // still carry the series name.
   const [headingHidden, setHeadingHidden] = useState(false);
-  // Index into stackedRecapHeadings: the first candidate whose hidden copy
-  // fits the heading's line.
+  // Index into the heading candidates (stackedRecapHeadings on the stacked
+  // layout, rowRecapHeadings on the row): the first whose hidden copy fits the
+  // heading's line.
   const [headingPick, setHeadingPick] = useState(0);
   useEffect(() => {
     if (!el) return;
@@ -103,19 +108,21 @@ export default function LeagueRecapCard({
       setStacked(narrow);
       const heading = el.querySelector<HTMLElement>("[data-recap-heading]");
       const copies = [...el.querySelectorAll<HTMLElement>("[data-recap-heading-candidate]")];
-      if (narrow && heading && copies.length) {
+      // The copies on screen belong to the layout of the last render; a flip
+      // re-runs this effect (`stacked` below) and measures the new set.
+      if (heading && copies.length) {
         const fit = copies.findIndex((c) => c.getBoundingClientRect().width <= heading.clientWidth);
         setHeadingPick(fit < 0 ? copies.length - 1 : fit);
         setHeadingHidden(fit < 0);
       } else {
-        setHeadingHidden(narrow && !!heading && heading.scrollWidth > heading.clientWidth);
+        setHeadingHidden(!!heading && heading.scrollWidth > heading.clientWidth);
       }
     };
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
     // `records` too: a new heading on the same element gets no resize event.
-    // `stacked` too: the candidate copies only mount on the stacked layout.
+    // `stacked` too: each layout mounts its own candidate copies.
   }, [el, records, stacked]);
   // Stacked buttons are sized for the phone: a 114px column leaves 100px inside
   // px-1.5, three buttons at gap-0.5 get 32px each, and "▸ 30m" at 9px with a
@@ -251,7 +258,14 @@ export default function LeagueRecapCard({
     onPlayHighlight(rec.videoId, fallbackUrl);
   };
 
-  const candidates = stackedRecapHeadings(records[0].heading);
+  const candidates = stacked ? stackedRecapHeadings(records[0].heading) : rowRecapHeadings(records[0].heading);
+  // Four buttons (MLB on a round-up day: Top 5, 1m, 15m, Oddities) overran a
+  // 225px desktop column by 24px and a phone's 100px row (measured
+  // 2026-09-25), so words take their short form, and on the phone the ▶s go.
+  const crowded = records.length + (bracketButton ? 1 : 0) >= 4;
+  // A phone row with a word in it is sized by content plus an equal share of
+  // what is left: an even third (26px at 340px) cut "▶ 15m" by a pixel.
+  const fitButtons = stacked && (crowded || records.some((r) => recapButtonText(r) !== null));
 
   return (
     <div
@@ -269,12 +283,12 @@ export default function LeagueRecapCard({
         aria-hidden={headingHidden || undefined}
         style={{ color: "var(--text)" }}
       >
-        {stacked ? candidates[Math.min(headingPick, candidates.length - 1)] : records[0].heading}
+        {candidates[Math.min(headingPick, candidates.length - 1)]}
       </span>
       {/* Hidden, out-of-flow copies of each candidate at the heading's font,
           so measure() can pick the longest that fits. After the heading, which
           stays the pill's first span. */}
-      {stacked && candidates.map((text) => (
+      {candidates.map((text) => (
         <span
           key={text}
           data-recap-heading-candidate
@@ -287,21 +301,28 @@ export default function LeagueRecapCard({
       <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
         {records.map((rec) => {
           const mins = formatRecapDuration(rec.durationSec);
+          // A word ("Top 5", "Oddities") instead of minutes for the cuts in
+          // RECAP_BUTTON_TEXT. The word says what it is, so it carries no ▶;
+          // the minutes buttons keep theirs unless a phone row is crowded.
+          const word = recapButtonText(rec, stacked || crowded);
+          const text = word ?? mins;
+          const showGlyph = !word && !(stacked && crowded);
           return (
             <button
               key={`${rec.key}:${rec.videoId ?? rec.pageUrl}`}
               type="button"
+              data-recap-key={rec.key}
               onClick={(e) => {
                 e.stopPropagation();
                 play(rec);
               }}
-              className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? STACKED_BTN : ROW_BTN}`}
+              className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? (fitButtons ? STACKED_FIT_BTN : STACKED_BTN) : ROW_BTN}`}
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label={mins ? `${rec.label} (${mins})` : rec.label}
               title={mins ? `${rec.label} (${mins})` : rec.label}
             >
-              <svg aria-hidden="true" className="shrink-0" width={glyph} height={glyph} viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              {mins && <span className={`${minsText} font-medium whitespace-nowrap`}>{mins}</span>}
+              {showGlyph && <svg aria-hidden="true" className="shrink-0" width={glyph} height={glyph} viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>}
+              {text && <span className={`${minsText} font-medium whitespace-nowrap`}>{text}</span>}
             </button>
           );
         })}

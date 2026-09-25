@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
-  parseRelativeTime, isoDurationToSec, etYmd, dailyCoversDate, weekdayCoversDate,
+  parseRelativeTime, isoDurationToSec, etYmd, shiftYmd, dailyCoversDate, weekdayCoversDate,
   weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, parseWatchPagePlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
   fillHeading, pickShorterClub, eplSeasonYear, uploadFitsGameDate,
 } from "./lib/recaps.mjs";
@@ -3851,6 +3851,58 @@ async function resolveMlbRecapSeries(series, todayYmd) {
   return null;
 }
 
+// MLB Film Room's search (the gateway behind mlb.com/video/search), newest
+// first. ⚠️ The season must be a NUMBER — `["2026"]` 500s the whole query.
+async function fetchFilmRoomTag(tag, season) {
+  const query = `query Search($query: String!, $limit: Int) {
+    search(query: $query, limit: $limit) { plays { mediaPlayback { slug title timestamp } } }
+  }`;
+  const res = await fetch("https://fastball-gateway.mlb.com/graphql", {
+    method: "POST",
+    headers: { "User-Agent": UA, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      query,
+      variables: { query: `Season = [${Number(season)}] AND ContentTags = ["${tag}"] Order By Timestamp DESC`, limit: 30 },
+    }),
+  });
+  if (!res.ok) throw new Error(`film room ${tag} → ${res.status}`);
+  const data = await res.json();
+  return (data?.data?.search?.plays ?? []).flatMap((p) => p?.mediaPlayback ?? []);
+}
+
+// mlb.com series → its recent cuts, minus days already carried (`carried`).
+// A topic-page series (FastCast, Real Fast) yields its newest cut; a dated
+// slug (Top 5) tries the last three days by name; a Film Room tag (the oddity
+// round-ups) yields the newest few matches, one per ET day.
+async function resolveMlbRecapHits(series, todayYmd, carried) {
+  if (series.topicUrl) {
+    const hit = await resolveMlbRecapSeries(series, todayYmd);
+    return hit ? [hit] : [];
+  }
+  const hits = [];
+  if (series.slugForDate) {
+    for (let back = 1; back <= 3; back++) {
+      const ymd = shiftYmd(todayYmd, -back);
+      if (carried(ymd)) continue;
+      const slug = series.slugForDate(ymd);
+      const meta = await fetchMLBVideoMeta(slug);
+      if (meta?.playbackUrl) hits.push({ slug, coversDate: ymd, ...meta });
+    }
+  } else if (series.filmRoomTag) {
+    const seen = new Set();
+    for (const item of await fetchFilmRoomTag(series.filmRoomTag, todayYmd.slice(0, 4))) {
+      if (hits.length >= 3) break;
+      if (!item?.slug || !series.filmRoomTitleRx.test(item.title ?? "")) continue;
+      const ymd = etYmd(item.timestamp);
+      if (!ymd || seen.has(ymd) || carried(ymd)) continue;
+      seen.add(ymd);
+      const meta = await fetchMLBVideoMeta(item.slug);
+      if (meta?.playbackUrl) hits.push({ slug: item.slug, coversDate: ymd, ...meta, uploadDate: meta.uploadDate ?? item.timestamp });
+    }
+  }
+  return hits;
+}
+
 // ESPN's regular-season schedule for one NFL week, cached per run.
 const NFL_WEEK_EVENTS = new Map();
 async function fetchNflWeekEvents(seasonYear, week) {
@@ -3911,16 +3963,17 @@ async function bakeLeagueRecaps() {
       const tag = `recaps ${sport} ${series.key}`;
       try {
         let rec = null;
+        // mlb.com series can yield several days in one run (Top 5 by dated
+        // slug, the oddity round-ups by tag); every other source yields one.
+        let mlbRecs = null;
         if (series.source === "mlbcom") {
-          const hit = await resolveMlbRecapSeries(series, todayYmd);
-          if (hit) {
-            rec = {
-              sport, key: series.key, heading: series.heading, label: series.label, cadence: "daily",
-              coversDate: hit.coversDate, playbackUrl: hit.playbackUrl, poster: hit.poster,
-              pageUrl: `https://www.mlb.com/video/${hit.slug}`, channel: "MLB.com",
-              durationSec: hit.durationSec, published: hit.uploadDate, sourcePolicy: "mlb.com",
-            };
-          }
+          const carried = (ymd) => byId.has(`${sport}:${series.key}:${ymd}`);
+          mlbRecs = (await resolveMlbRecapHits(series, todayYmd, carried)).map((hit) => ({
+            sport, key: series.key, heading: series.heading, label: series.label, cadence: "daily",
+            coversDate: hit.coversDate, playbackUrl: hit.playbackUrl, poster: hit.poster,
+            pageUrl: `https://www.mlb.com/video/${hit.slug}`, channel: "MLB.com",
+            durationSec: hit.durationSec, published: hit.uploadDate, sourcePolicy: "mlb.com",
+          }));
         } else {
           const seasonYear = sport === "nfl" ? nflSeasonYear : sport === "epl" ? eplSeasonYear() : null;
           const hit = await resolveYtRecapSeries(series, seasonYear);
@@ -3960,42 +4013,50 @@ async function bakeLeagueRecaps() {
             }
           }
         }
-        if (!rec) {
+        const recs = mlbRecs ?? (rec ? [rec] : []);
+        if (!recs.length) {
           console.log(`${tag} → none`);
           continue;
         }
-        const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
-        if (!end || end < cutoff) {
-          console.log(`${tag} → stale (${end || "no date"}), skipped`);
-          continue;
+        for (const rec of recs) {
+          const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
+          if (!end || end < cutoff) {
+            console.log(`${tag} → stale (${end || "no date"}), skipped`);
+            continue;
+          }
+          const id = recapIdentity(rec);
+          const prev = byId.get(id);
+          // A carried record keeps its first-seen timestamps and duration; only a
+          // different id for the same coverage replaces it.
+          const sameVideo = prev && (prev.videoId ?? prev.pageUrl) === (rec.videoId ?? rec.pageUrl);
+          // Re-probed every run while the series is current: a rights holder
+          // can flip embedding either way. A failed probe keeps the last verdict.
+          const embeddable = rec.videoId ? (await fetchYtEmbeddable(rec.videoId)) ?? (sameVideo ? prev.embeddable : undefined) : undefined;
+          const merged = stripRecapRecord({
+            ...rec,
+            ...(typeof embeddable === "boolean" ? { embeddable } : {}),
+            t: sameVideo ? prev.t : now,
+            published: sameVideo && prev.published ? prev.published : rec.published,
+            durationSec: Number.isFinite(rec.durationSec) ? rec.durationSec : prev?.durationSec,
+          });
+          found.push(merged);
+          resolved++;
+          const dur = Number.isFinite(merged.durationSec) ? `${Math.floor(merged.durationSec / 60)}:${String(merged.durationSec % 60).padStart(2, "0")}` : "?:??";
+          const cover = merged.cadence === "weekly" ? `week ${merged.coversWeek} (${merged.windowStart}–${merged.windowEnd})` : merged.coversDate;
+          console.log(`${tag} → ${merged.videoId ?? merged.pageUrl} ${dur} ${cover}`);
         }
-        const id = recapIdentity(rec);
-        const prev = byId.get(id);
-        // A carried record keeps its first-seen timestamps and duration; only a
-        // different id for the same coverage replaces it.
-        const sameVideo = prev && (prev.videoId ?? prev.pageUrl) === (rec.videoId ?? rec.pageUrl);
-        // Re-probed every run while the series is current: a rights holder
-        // can flip embedding either way. A failed probe keeps the last verdict.
-        const embeddable = rec.videoId ? (await fetchYtEmbeddable(rec.videoId)) ?? (sameVideo ? prev.embeddable : undefined) : undefined;
-        const merged = stripRecapRecord({
-          ...rec,
-          ...(typeof embeddable === "boolean" ? { embeddable } : {}),
-          t: sameVideo ? prev.t : now,
-          published: sameVideo && prev.published ? prev.published : rec.published,
-          durationSec: Number.isFinite(rec.durationSec) ? rec.durationSec : prev?.durationSec,
-        });
-        found.push(merged);
-        resolved++;
-        const dur = Number.isFinite(merged.durationSec) ? `${Math.floor(merged.durationSec / 60)}:${String(merged.durationSec % 60).padStart(2, "0")}` : "?:??";
-        const cover = merged.cadence === "weekly" ? `week ${merged.coversWeek} (${merged.windowStart}–${merged.windowEnd})` : merged.coversDate;
-        console.log(`${tag} → ${merged.videoId ?? merged.pageUrl} ${dur} ${cover}`);
       } catch (e) {
         console.warn(`${tag} FAILED: ${e?.message ?? e}`);
       }
     }
     // A fallback-only series (MLB's YouTube "Morning Lineup") is written only
     // for a date no primary series covers.
-    const primaryDates = new Set(found.filter((r) => !list.find((s) => s.key === r.key)?.fallbackOnly).map((r) => r.coversDate));
+    // An `extra` series (MLB's Top 5, the oddity round-ups) is not a stand-in
+    // for the daily recap, so it never holds the fallback back.
+    const primaryDates = new Set(found.filter((r) => {
+      const s = list.find((x) => x.key === r.key);
+      return !s?.fallbackOnly && !s?.extra;
+    }).map((r) => r.coversDate));
     for (const rec of found) {
       const series = list.find((s) => s.key === rec.key);
       if (series?.fallbackOnly && primaryDates.has(rec.coversDate)) continue;
