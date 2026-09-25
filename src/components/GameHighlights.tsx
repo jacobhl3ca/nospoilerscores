@@ -760,7 +760,7 @@ export default function GameHighlights({
               ) : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium whitespace-nowrap">{demoActive ? "Watch" : isFifa ? "2m" : (officialMins || highlightBadgeLabel[game.sport] || game.sport.toUpperCase())}</span>
+                  <span className="min-w-0 overflow-hidden text-ellipsis text-[10px] font-medium whitespace-nowrap">{demoActive ? "Watch" : isFifa ? "2m" : (officialMins || highlightBadgeLabel[game.sport] || game.sport.toUpperCase())}</span>
                 </>
               )}
             </button>
@@ -781,7 +781,7 @@ export default function GameHighlights({
               title={`${club.channel} highlights`}
             >
               <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium whitespace-nowrap">{clubNickname(club.channel)}{formatRecapDuration(club.durationSec) ? ` ${formatRecapDuration(club.durationSec)}` : ""}</span>
+              <span className="min-w-0 overflow-hidden text-ellipsis text-[10px] font-medium whitespace-nowrap">{clubNickname(club.channel)}{formatRecapDuration(club.durationSec) ? ` ${formatRecapDuration(club.durationSec)}` : ""}</span>
             </button>
           )}
           {searchStatus === "found" && !isDuplicateHighlightId(prefetchedOfficialId.current, prefetchedVideoId.current) && (
@@ -823,7 +823,7 @@ export default function GameHighlights({
               ) : (
                   <>
                     <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                    <span className="text-[10px] font-medium whitespace-nowrap">{secondaryLabel}</span>
+                    <span className="min-w-0 overflow-hidden text-ellipsis text-[10px] font-medium whitespace-nowrap">{secondaryLabel}</span>
                   </>
               )}
             </button>
@@ -866,7 +866,7 @@ export default function GameHighlights({
               title="MLB.com game recap"
             >
               <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium whitespace-nowrap">3m</span>
+              <span className="min-w-0 overflow-hidden text-ellipsis text-[10px] font-medium whitespace-nowrap">3m</span>
             </button>
           )}
           {showMlbCondensed && (
@@ -897,7 +897,7 @@ export default function GameHighlights({
               {fetchingOnClick === "official" ? <span className="text-[10px]">Loading...</span> : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium whitespace-nowrap">10m</span>
+                  <span className="min-w-0 overflow-hidden text-ellipsis text-[10px] font-medium whitespace-nowrap">10m</span>
                 </>
               )}
             </button>
@@ -938,7 +938,7 @@ export default function GameHighlights({
               {fetchingOnClick === "telemundoShort" ? <span className="text-[10px]">Loading...</span> : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 10m</span>
+                  <span className="min-w-0 overflow-hidden text-ellipsis text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 10m</span>
                 </>
               )}
             </button>
@@ -969,7 +969,7 @@ export default function GameHighlights({
               {fetchingOnClick === "telemundoLong" ? <span className="text-[10px]">Loading...</span> : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
+                  <span className="min-w-0 overflow-hidden text-ellipsis text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
                 </>
               )}
             </button>
@@ -994,13 +994,13 @@ export default function GameHighlights({
                 if (onPlayEmbed) onPlayEmbed(embed, page, "NHL.com", shareCard);
                 else openExternal(page);
               }}
-              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label="NHL.com recap (~5 min)"
               title="NHL.com recap (~5 min)"
             >
               <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">5<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
+              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-medium">5<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
             </button>
           )}
           {game.nhlCondensedEmbed && (
@@ -1013,13 +1013,13 @@ export default function GameHighlights({
                 if (onPlayEmbed) onPlayEmbed(embed, page, "NHL.com", shareCard);
                 else openExternal(page);
               }}
-              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label="NHL.com condensed game (~10 min)"
               title="NHL.com condensed game (~10 min)"
             >
               <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">10<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
+              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-medium">10<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
             </button>
           )}
         </div>

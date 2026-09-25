@@ -338,7 +338,24 @@ body {
 }
 
 
+/* ⛔ overflow: hidden — a highlight-btn's label is `whitespace-nowrap` so it
+   never wraps, and every button here shares its row with a sibling via
+   `flex-1`. `min-w-0` on the button (present on every one) correctly shrinks
+   the BOX to its share of the row, but the browser still PAINTS a nowrap
+   label past that box's edge when the label is wider than the share it got —
+   invisible to a `button.getBoundingClientRect()` check (the box itself never
+   moves) and only visible as painted content overlapping the next button or
+   the card edge (Jacob's 9/16 screenshot: the NFL round-up's 3rd button
+   painting over the next column; GameHighlights' two-slot row painting past
+   itself with a long league badge, e.g. "SERIE A", where no baked duration
+   means the official button falls back to the badge instead of "17m").
+   `text-overflow: ellipsis` on the label span (see GameHighlights.tsx,
+   LeagueRecapCard.tsx) needs this on the ancestor to have anything to clip
+   against; tests/visual/highlight-row-overflow.spec.ts checks
+   `scrollWidth > clientWidth` on the button, which this line is what answers
+   `false`. */
 .highlight-btn {
+  overflow: hidden;
   transition: background 0.15s, color 0.15s;
 }
 .highlight-btn:hover {
