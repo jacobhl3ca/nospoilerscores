@@ -820,6 +820,14 @@ export function getApiBase(): string {
   return "";
 }
 
+// Running time (seconds) the /api/youtube lookup reported for each id it
+// returned. Lets a live-resolved button show minutes like a baked one; ids the
+// worker had no length for are simply absent.
+const resolvedLengths = new Map<string, number>();
+export function resolvedLengthSec(id: string | null | undefined): number | null {
+  return id ? resolvedLengths.get(id) ?? null : null;
+}
+
 export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[], weekNumber?: number | null, compTokens?: string[]): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
@@ -844,6 +852,7 @@ export async function fetchFirstVideoId(query: string, channel?: string, exclude
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
+    if (data.videoId && Number.isFinite(data.lengthSec) && data.lengthSec > 0) resolvedLengths.set(data.videoId, data.lengthSec);
     return data.videoId ?? null;
   } catch {
     return null;
