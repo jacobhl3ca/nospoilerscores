@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocTopBar from "@/components/DocTopBar";
+import EmailLink from "@/components/EmailLink";
 import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
 
 // Added 2026-09-25. The AI-visibility scan still flagged "No Contact page" after
@@ -36,6 +38,7 @@ export default function ContactPage() {
   const updated = routeLastModified("/contact");
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+      <DocTopBar route="contact" />
       <h1 className="text-2xl font-bold mb-2">Contact HideScore</h1>
       {updated ? (
         <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
@@ -52,7 +55,7 @@ export default function ContactPage() {
 
         <h2 className="text-lg font-semibold mt-6">Email</h2>
         <p>
-          <a href="mailto:hi@hidescore.com" className="underline underline-offset-2">hi@hidescore.com</a>. A real
+          <EmailLink />. A real
           person reads every message.
         </p>
 
@@ -83,7 +86,7 @@ export default function ContactPage() {
         <Link href="/about" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
           About HideScore
         </Link>
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-contact">
           ← Back to HideScore
         </Link>
       </div>
