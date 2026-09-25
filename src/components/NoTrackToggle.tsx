@@ -4,13 +4,21 @@ import { useEffect, useState } from "react";
 import DocTopBar from "@/components/DocTopBar";
 
 const KEY = "umami.disabled";
+// GoatCounter's own opt-out flag: its count.js skips the beacon while this is
+// "t". Set it with KEY so the toggle stops both counters, not only Umami.
+const GC_KEY = "skipgc";
 
 export function NoTrackToggle() {
   const [disabled, setDisabled] = useState<boolean | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      try { setDisabled(window.localStorage.getItem(KEY) === "1"); }
+      try {
+        const off = window.localStorage.getItem(KEY) === "1";
+        // Opted out before GC_KEY existed: carry the choice over to GoatCounter.
+        if (off) window.localStorage.setItem(GC_KEY, "t");
+        setDisabled(off);
+      }
       catch { setDisabled(false); }
     }, 0);
     return () => window.clearTimeout(timer);
@@ -18,8 +26,8 @@ export function NoTrackToggle() {
 
   function apply(next: boolean) {
     try {
-      if (next) window.localStorage.setItem(KEY, "1");
-      else window.localStorage.removeItem(KEY);
+      if (next) { window.localStorage.setItem(KEY, "1"); window.localStorage.setItem(GC_KEY, "t"); }
+      else { window.localStorage.removeItem(KEY); window.localStorage.removeItem(GC_KEY); }
       setDisabled(next);
     } catch {
       // The write threw (private-mode / quota / storage disabled). Don't drop
@@ -39,7 +47,7 @@ export function NoTrackToggle() {
       <DocTopBar route="notrack" />
       <h1 className="text-2xl font-bold">Don&rsquo;t count my visits</h1>
       <p className="mt-3" style={{ color: "var(--text-muted)" }}>
-        This turns off HideScore&rsquo;s self-hosted traffic measurement in this browser. It stays off across network and VPN changes.
+        This turns off HideScore&rsquo;s usage stats in this browser. It stays off across network and VPN changes.
       </p>
       {/* The whole page is this one toggle, so its result must be announced:
           role="status" + aria-live make assistive tech read the new state
