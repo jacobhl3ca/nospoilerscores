@@ -977,8 +977,15 @@ export default function LeagueColumn({
   };
   // The chip on each cross-league card ("MLB", "UCL", "Prem"): the short form
   // of the label above. Undefined everywhere else — see GameCard.leagueTag.
+  // Reads game.sport (applyDemoMode leaves it untouched by design — see
+  // demoMode.ts) directly, so a Top events / Best of yesterday column, the
+  // one place this chip renders, printed the REAL league name right on an
+  // otherwise-anonymized card under ?demo=1. Drop it in demo mode instead of
+  // trying to genericize per-sport — the column header is already anonymized
+  // ("Sports A/B/C"), and this chip only exists to disambiguate a mixed
+  // column's rows, which a screenshot doesn't need to do.
   const cardLeagueTag = (game: Game): string | undefined => {
-    if (!crossLeague) return undefined;
+    if (!crossLeague || isDemoModeActive()) return undefined;
     const label = cardLeagueLabel(game);
     return SHORT_LEAGUE_LABELS[label] || label;
   };
