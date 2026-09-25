@@ -23,15 +23,18 @@ const { mlbReviewPillDue, mlbReviewPillEnd, sortTeamsForFavorites, mlbReviewHasC
   mlbReviewHasContent: (review: MlbReview | null | undefined) => boolean;
 };
 
-const kind = (t: string) => classifyMlbReviewTitle(t)?.kind ?? null;
+// The .mjs return is a union with no common `order` / `key`; one shape here.
+type Classified = { kind: string; label: string; year: number | null; order?: number; key?: string };
+const classify = (t: string) => classifyMlbReviewTitle(t) as Classified | null;
+const kind = (t: string) => classify(t)?.kind ?? null;
 
 test("classifyMlbReviewTitle: the 2025 month cuts, both 2026 spellings", () => {
-  assert.deepEqual(classifyMlbReviewTitle("Top 25 Plays of the Month: March/April"), { kind: "monthTop25", order: 4, label: "March/April", year: null });
-  assert.deepEqual(classifyMlbReviewTitle("Top 25 Plays of the Month: March and April"), { kind: "monthTop25", order: 4, label: "March/April", year: null });
-  assert.deepEqual(classifyMlbReviewTitle("Top 25 plays from August 2026"), { kind: "monthTop25", order: 8, label: "August", year: 2026 });
-  assert.equal(classifyMlbReviewTitle("Top 25 Plays of the Month: September")?.order, 9);
+  assert.deepEqual(classify("Top 25 Plays of the Month: March/April"), { kind: "monthTop25", order: 4, label: "March/April", year: null });
+  assert.deepEqual(classify("Top 25 Plays of the Month: March and April"), { kind: "monthTop25", order: 4, label: "March/April", year: null });
+  assert.deepEqual(classify("Top 25 plays from August 2026"), { kind: "monthTop25", order: 8, label: "August", year: 2026 });
+  assert.equal(classify("Top 25 Plays of the Month: September")?.order, 9);
   // Trailing space on MLB's own title; "April" alone shares the March/April row.
-  assert.deepEqual(classifyMlbReviewTitle("Oddities of the Month: April "), { kind: "monthOdd", order: 4, label: "March/April", year: null });
+  assert.deepEqual(classify("Oddities of the Month: April "), { kind: "monthOdd", order: 4, label: "March/April", year: null });
   assert.equal(kind("Oddities of the Month: July"), "monthOdd");
   assert.equal(kind("Top 25 Plays of the Month: Smarch"), null);
 });
@@ -44,11 +47,11 @@ test("classifyMlbReviewTitle: postseason and rounds", () => {
     ["Top 10 Plays of the Championship Series", "championship"],
     ["Top 10 plays of the World Series", "worldseries"],
   ] as const) {
-    assert.deepEqual(classifyMlbReviewTitle(t), { kind: "roundTop10", key, label: classifyMlbReviewTitle(t)!.label, year: null }, t);
+    assert.deepEqual(classify(t), { kind: "roundTop10", key, label: classify(t)!.label, year: null }, t);
   }
-  assert.equal(classifyMlbReviewTitle("Oddities of the 2025 World Series")?.key, "worldseries");
-  assert.equal(classifyMlbReviewTitle("Oddities of the Wild Card Round")?.kind, "roundOdd");
-  assert.equal(classifyMlbReviewTitle("Oddities of the Division Series")?.label, "Division Series");
+  assert.equal(classify("Oddities of the 2025 World Series")?.key, "worldseries");
+  assert.equal(classify("Oddities of the Wild Card Round")?.kind, "roundOdd");
+  assert.equal(classify("Oddities of the Division Series")?.label, "Division Series");
   // Weekly round-ups and one-league cuts are not rounds.
   assert.equal(kind("Oddities of the Week: 9/23/26"), null);
   assert.equal(kind("Top 10 Plays of the Week"), null);
@@ -66,7 +69,7 @@ test("classifyMlbReviewTitle: year-end shows keep the whole show only", () => {
     "Recapping the Top 100 Plays of 2025",
     "The Top Rookies of the 2025 season",
   ]) {
-    assert.deepEqual(classifyMlbReviewTitle(t), { kind: "yearEnd", label: t, year: 2025 }, t);
+    assert.deepEqual(classify(t), { kind: "yearEnd", label: t, year: 2025 }, t);
   }
   // The countdown parts and the spoiler-titled splits.
   for (const t of [
@@ -83,8 +86,8 @@ test("classifyMlbReviewTitle: year-end shows keep the whole show only", () => {
 });
 
 test("classifyMlbReviewTitle: Stats & Oddities per team/player", () => {
-  assert.deepEqual(classifyMlbReviewTitle("Stats & Oddities of 2025: Royals"), { kind: "team", label: "Royals", year: 2025 });
-  assert.equal(classifyMlbReviewTitle("Stats & Oddities of 2025: Steven Kwan, José Ramírez")?.label, "Steven Kwan, José Ramírez");
+  assert.deepEqual(classify("Stats & Oddities of 2025: Royals"), { kind: "team", label: "Royals", year: 2025 });
+  assert.equal(classify("Stats & Oddities of 2025: Steven Kwan, José Ramírez")?.label, "Steven Kwan, José Ramírez");
   assert.equal(kind("Christian Yelich loses bat on swing"), null);
 });
 
