@@ -11,6 +11,7 @@ import {
   parseRelativeTime, isoDurationToSec, etYmd, shiftYmd, dailyCoversDate, weekdayCoversDate,
   weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, parseWatchPagePlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
   fillHeading, pickShorterClub, promoteLoneExtended, eplSeasonYear, uploadFitsGameDate,
+  classifyMlbReviewTitle, mlbReviewSeason, mlbTeamIdsFromKeywords, mlbToEspnTeamIds, ROUND_ORDER,
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
 import {
@@ -4220,6 +4221,249 @@ async function bakeLeagueRecaps() {
   console.log(`wrote ${RECAPS_OUT_PATH} (${byId.size} records, ${resolved} resolved this run)`);
 }
 
+// ── MLB season in review ─────────────────────────────────────────────────────
+//
+// MLB's own round-ups of the season that just ended — the monthly "Top 25
+// Plays" and "Oddities of the Month", each playoff round's "Top 10" and
+// "Oddities", "Top 25 plays of the postseason", MLB Network's year-end
+// countdowns and the per-team/player "Stats & Oddities of 2026: …" — written to
+// /news/mlb-review.json for the "2026 in review" pill on today's MLB column in
+// the offseason (src/lib/mlbReview.ts, MlbSeasonReviewModal). MLB.com HLS only
+// (sourcePolicy "mlb.com"); the record never carries an MLB title except a
+// year-end show's own (result-free by classifyMlbReviewTitle) and the subject
+// after the colon of a Stats & Oddities cut.
+//
+// Cost: five Film Room queries a run, plus one mlb.com page per slug not
+// already resolved in the prior file (carried by slug). Cheap enough to run on
+// the recaps cadence all year, so there is no month gate: the monthly cuts are
+// in the file before the season ends and the pill is gated on the client.
+//
+// Token "recaps" or "mlb-review" for --only / --skip. MLB_REVIEW_SEASON=2025
+// forces the season (a dry run against a finished year).
+const MLB_REVIEW_OUT_PATH = `${OUT_DIR}/mlb-review.json`;
+
+// Film Room search with the keywords a Stats & Oddities cut needs (teamid-…).
+// Limit 200 is the gateway's ceiling (250 errors). ⚠️ Season is a NUMBER.
+async function fetchFilmRoomReview(season, clause) {
+  const query = `query Search($query: String!, $limit: Int) {
+    search(query: $query, limit: $limit) { plays { mediaPlayback { slug title timestamp keywordsDisplay { slug } } } }
+  }`;
+  const res = await fetch("https://fastball-gateway.mlb.com/graphql", {
+    method: "POST",
+    headers: { "User-Agent": UA, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      query,
+      variables: { query: `Season = [${Number(season)}] AND ${clause} Order By Timestamp DESC`, limit: 200 },
+    }),
+  });
+  if (!res.ok) throw new Error(`film room ${season} ${clause} → ${res.status}`);
+  const data = await res.json();
+  if (Array.isArray(data?.errors) && data.errors.length) throw new Error(`film room ${season} ${clause} → ${data.errors[0]?.message ?? "error"}`);
+  return (data?.data?.search?.plays ?? []).flatMap((p) => p?.mediaPlayback ?? []);
+}
+
+async function loadPriorMlbReview() {
+  let local = null;
+  try {
+    local = JSON.parse(await readFile(MLB_REVIEW_OUT_PATH, "utf8"));
+  } catch { /* first run / fresh checkout */ }
+  let live = null;
+  let liveFailed = false;
+  try {
+    const res = await fetch(`https://hidescore.com/news/mlb-review.json?ts=${Date.now()}`, { headers: { "User-Agent": UA } });
+    if (res.ok) live = await res.json();
+    else if (res.status !== 404) liveFailed = true;
+  } catch { liveFailed = true; }
+  return { local, live, liveFailed };
+}
+
+function mlbReviewRecords(file) {
+  const out = [];
+  for (const m of file?.months ?? []) out.push(m?.top25, m?.oddities);
+  for (const r of file?.rounds ?? []) out.push(r?.top10, r?.oddities);
+  out.push(file?.postseasonTop25, ...(file?.yearEnd ?? []), ...(file?.teams ?? []));
+  return out.filter((r) => r?.slug && r.playbackUrl);
+}
+
+// StatsAPI team id → ESPN team id, for "your teams first". null when either
+// list is down (the carried records keep theirs).
+async function fetchMlbToEspnTeamIds() {
+  try {
+    const [mlb, espn] = await Promise.all([
+      getJson("https://statsapi.mlb.com/api/v1/teams?sportId=1"),
+      getJson("https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams"),
+    ]);
+    const espnTeams = (espn?.sports?.[0]?.leagues?.[0]?.teams ?? []).map((t) => t?.team);
+    const map = mlbToEspnTeamIds(mlb?.teams ?? [], espnTeams);
+    return map.size ? map : null;
+  } catch {
+    return null;
+  }
+}
+
+async function bakeMlbSeasonReview() {
+  const todayYmd = hlEtYmd(0);
+  const forced = Number.parseInt(process.env.MLB_REVIEW_SEASON ?? "", 10);
+  const season = Number.isFinite(forced) ? forced : mlbReviewSeason(todayYmd);
+  const prior = await loadPriorMlbReview();
+  if (prior.liveFailed && !prior.local) {
+    console.warn(`${MLB_REVIEW_OUT_PATH}: live prior unreadable and no local copy — skipping this run`);
+    return;
+  }
+  const carried = new Map();
+  for (const file of [prior.live, prior.local]) {
+    if (file?.season !== season) continue;
+    for (const rec of mlbReviewRecords(file)) carried.set(rec.slug, rec);
+  }
+
+  // January's year-end shows are filed under the NEXT Film Room season ("Top
+  // Games of 2025" is Season 2026), so the countdown tag is read for both.
+  const queries = [
+    [season, `ContentTags = ["plays-of-the-month"]`],
+    [season, `ContentTags = ["oddities"]`],
+    [season, `ContentTags = ["plays-of-the-week"] AND ContentTags = ["postseason"]`],
+    [season, `ContentTags = ["mlbn-countdown"]`],
+  ];
+  if (season + 1 <= Number(todayYmd.slice(0, 4))) queries.push([season + 1, `ContentTags = ["mlbn-countdown"]`]);
+  let batches;
+  try {
+    batches = await Promise.all(queries.map(([s, clause]) => fetchFilmRoomReview(s, clause).then((items) => items.map((it) => ({ ...it, querySeason: s })))));
+  } catch (e) {
+    console.warn(`mlb-review: Film Room query failed (${e?.message || e}) — keeping the prior file`);
+    return;
+  }
+
+  // Newest first within each batch, so the first hit per slot is the newest
+  // (a re-upload replaces the original).
+  const months = new Map();
+  const rounds = new Map();
+  let postItem = null;
+  const yearEndItems = new Map();
+  const teamItems = new Map();
+  const seen = new Set();
+  for (const item of batches.flat()) {
+    if (!item?.slug || seen.has(item.slug)) continue;
+    seen.add(item.slug);
+    const cls = classifyMlbReviewTitle(item.title);
+    if (!cls) continue;
+    // A title that names a year must name this season; one that does not is
+    // trusted only from this season's own queries.
+    if (cls.year != null ? cls.year !== season : item.querySeason !== season) continue;
+    if (cls.kind === "monthTop25" || cls.kind === "monthOdd") {
+      const row = months.get(cls.order) ?? { label: cls.label, order: cls.order };
+      const k = cls.kind === "monthTop25" ? "top25" : "oddities";
+      if (!row[k]) row[k] = item;
+      months.set(cls.order, row);
+    } else if (cls.kind === "roundTop10" || cls.kind === "roundOdd") {
+      const row = rounds.get(cls.key) ?? { key: cls.key, label: cls.label };
+      const k = cls.kind === "roundTop10" ? "top10" : "oddities";
+      if (!row[k]) row[k] = item;
+      rounds.set(cls.key, row);
+    } else if (cls.kind === "postTop25") {
+      postItem ??= item;
+    } else if (cls.kind === "yearEnd") {
+      const k = cls.label.toLowerCase();
+      if (!yearEndItems.has(k)) yearEndItems.set(k, { item, title: cls.label });
+    } else if (cls.kind === "team") {
+      const k = cls.label.toLowerCase();
+      if (!teamItems.has(k)) teamItems.set(k, { item, subject: cls.label });
+    }
+  }
+
+  const espnIds = teamItems.size ? await fetchMlbToEspnTeamIds() : null;
+  let fetched = 0;
+  let missed = 0;
+  const resolve = async (item) => {
+    if (!item) return null;
+    const c = carried.get(item.slug);
+    if (c) {
+      const { slug, pageUrl, playbackUrl, poster, durationSec, published } = c;
+      return { slug, pageUrl, playbackUrl, poster: poster ?? null, durationSec: durationSec ?? null, published, sourcePolicy: "mlb.com", channel: "MLB.com" };
+    }
+    fetched++;
+    const meta = await fetchMLBVideoMeta(item.slug);
+    if (!meta?.playbackUrl) {
+      missed++;
+      return null;
+    }
+    return {
+      slug: item.slug,
+      pageUrl: `https://www.mlb.com/video/${item.slug}`,
+      playbackUrl: meta.playbackUrl,
+      poster: meta.poster ?? null,
+      durationSec: meta.durationSec ?? null,
+      published: item.timestamp ?? meta.uploadDate ?? null,
+      sourcePolicy: "mlb.com",
+      channel: "MLB.com",
+    };
+  };
+  // A few mlb.com pages at a time; the first run resolves ~50.
+  const pool = async (list, fn, width = 6) => {
+    const out = new Array(list.length);
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(width, list.length) }, async () => {
+      while (next < list.length) {
+        const i = next++;
+        out[i] = await fn(list[i]);
+      }
+    }));
+    return out;
+  };
+
+  const monthRows = await pool([...months.values()].sort((a, b) => a.order - b.order), async (row) => ({
+    label: row.label, order: row.order, top25: await resolve(row.top25), oddities: await resolve(row.oddities),
+  }));
+  const roundRows = await pool(ROUND_ORDER.filter((k) => rounds.has(k)).map((k) => rounds.get(k)), async (row) => ({
+    key: row.key, label: row.label, top10: await resolve(row.top10), oddities: await resolve(row.oddities),
+  }));
+  const postseasonTop25 = await resolve(postItem);
+  // Oldest first: the order MLB Network aired the countdowns.
+  const yearEnd = (await pool([...yearEndItems.values()], async ({ item, title }) => {
+    const rec = await resolve(item);
+    return rec ? { ...rec, title } : null;
+  })).filter(Boolean).sort((a, b) => String(a.published ?? "").localeCompare(String(b.published ?? "")));
+  const teams = (await pool([...teamItems.values()], async ({ item, subject }) => {
+    const rec = await resolve(item);
+    if (!rec) return null;
+    const mlbTeamIds = mlbTeamIdsFromKeywords(item.keywordsDisplay);
+    const espnTeamIds = espnIds
+      ? mlbTeamIds.map((id) => espnIds.get(id)).filter(Boolean)
+      : (carried.get(item.slug)?.espnTeamIds ?? []);
+    return { ...rec, subject, mlbTeamIds, espnTeamIds };
+  })).filter(Boolean).sort((a, b) => a.subject.localeCompare(b.subject));
+
+  const months2 = monthRows.filter((r) => r.top25 || r.oddities);
+  const rounds2 = roundRows.filter((r) => r.top10 || r.oddities);
+  const total = months2.reduce((n, r) => n + (r.top25 ? 1 : 0) + (r.oddities ? 1 : 0), 0)
+    + rounds2.reduce((n, r) => n + (r.top10 ? 1 : 0) + (r.oddities ? 1 : 0), 0)
+    + (postseasonTop25 ? 1 : 0) + yearEnd.length + teams.length;
+  if (total === 0) {
+    console.warn(`${MLB_REVIEW_OUT_PATH}: nothing resolved for ${season} — skipping write`);
+    return;
+  }
+  // The pill's start gate: a World Series cut exists, dated the ET day it
+  // posted (the round-ups post the day after the last game).
+  const ws = rounds2.find((r) => r.key === "worldseries");
+  const wsDays = [ws?.top10, ws?.oddities].map((r) => (r?.published ? etYmd(r.published) : "")).filter(Boolean).sort();
+  const seasonOver = wsDays.length > 0;
+  const out = {
+    fetchedAt: new Date().toISOString(),
+    season,
+    seasonOver,
+    ...(seasonOver ? { seasonOverSince: wsDays[0] } : {}),
+    months: months2,
+    postseasonTop25,
+    rounds: rounds2,
+    yearEnd,
+    teams,
+  };
+  await mkdir(dirname(MLB_REVIEW_OUT_PATH), { recursive: true });
+  await writeFile(MLB_REVIEW_OUT_PATH, JSON.stringify(out));
+  const monthOdd = months2.filter((r) => r.oddities).length;
+  const roundFull = rounds2.filter((r) => r.top10 && r.oddities).length;
+  console.log(`mlb-review ${season} months=${months2.length} (oddities ${monthOdd}) rounds=${rounds2.length} (both ${roundFull}) post=${postseasonTop25 ? 1 : 0} yearEnd=${yearEnd.length} teams=${teams.length} seasonOver=${seasonOver}${seasonOver ? ` since=${wsDays[0]}` : ""} fetched=${fetched} missed=${missed}`);
+}
+
 // ── Write ─────────────────────────────────────────────────────────
 
 async function writeFeed(name, items) {
@@ -4486,6 +4730,22 @@ if (runRecaps) {
   }
 }
 
+// MLB season in review (see bakeMlbSeasonReview). Rides the recaps token, and
+// has its own ("mlb-review") for a one-off run.
+const tokenSkipped = (tok) => SKIP_LIST.some((s) => (s.endsWith("*") ? tok.startsWith(s.slice(0, -1)) : s === tok));
+const runMlbReview = !ONLY_REDDIT
+  && (ONLY_LIST.length === 0 || ONLY_LIST.includes("recaps") || ONLY_LIST.includes("mlb-review"))
+  && !tokenSkipped("recaps") && !tokenSkipped("mlb-review");
+let mlbReviewFailed = false;
+if (runMlbReview) {
+  try {
+    await bakeMlbSeasonReview();
+  } catch (e) {
+    console.error("mlb-review bake FAILED:", e?.message || e);
+    mlbReviewFailed = true;
+  }
+}
+
 // Persist the watch-page reads both bakes above made, then say how many were
 // served from disk vs fetched live, so a new YouTube block shows up in the log.
 try {
@@ -4509,3 +4769,4 @@ results.forEach((r, i) => {
 if (activeJobs.length > 0 && failed === activeJobs.length) process.exit(1);
 if (highlightsFailed && ONLY_LIST.includes("highlights")) process.exit(1);
 if (recapsFailed && ONLY_LIST.includes("recaps")) process.exit(1);
+if (mlbReviewFailed && ONLY_LIST.includes("mlb-review")) process.exit(1);
