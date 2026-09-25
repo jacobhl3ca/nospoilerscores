@@ -149,7 +149,7 @@ export default function SeoLandingPage({
         ))}
       </section>
 
-      <div className="mt-10 flex flex-wrap gap-x-4 gap-y-2">
+      <nav aria-label="More HideScore pages" className="mt-10 flex flex-wrap gap-x-4 gap-y-2">
         <Link
           href="/"
           className="underline underline-offset-2"
