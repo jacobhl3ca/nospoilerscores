@@ -739,6 +739,15 @@ export default {
           "sheffield utd": ["sheffield utd", "sheffield united", "sheff utd"],
           "portsmouth": ["portsmouth", "pompey"],
           "le havre ac": ["le havre ac", "le havre", "havre ac"],
+          // ESPN short names the EFL / CBS / club and Liga MX titles never
+          // print (2026-09-25, the channel-search pass): "Birmingham City vs.
+          // Middlesbrough", "Blackburn Rovers vs QPR" / "Queens Park Rangers",
+          // "Pumas", "Chivas", "Atlético de San Luis".
+          "boro": ["boro", "middlesbrough"],
+          "qpr": ["qpr", "queens park rangers"],
+          "unam": ["unam", "pumas"],
+          "guadalajara": ["guadalajara", "chivas"],
+          "atl. san luis": ["atl. san luis", "atletico de san luis", "atlético de san luis", "san luis"],
           // World Cup national teams — ESPN shortDisplayName ↔ the full country
           // name official broadcasters (FOX) put in titles. Only the divergent /
           // variant-spelling teams need an entry; the rest (Brazil, France, …)

@@ -473,6 +473,21 @@ check(
       videoModal.includes('|| fallbackFlag(fallbackUrl, "nss_embed_blocked")') &&
       videoModal.includes('fallbackFlag(fallbackUrl, "nss_title_score")'),
   );
+  // 2026-09-25: our own channel-scoped search runs BEFORE FotMob, capped and
+  // switchable; the efl/ligamx chains are bake-only and title-masked.
+  const csAt = prebake.indexOf("const id = await hlChannelSearchOfficial(");
+  const fotmobAt = prebake.indexOf("const fotmob = await hlFotmobOfficial(");
+  check(
+    "channel search runs before FotMob, capped, switchable, and skips the worker for searchOnly chains",
+    csAt > 0 && fotmobAt > csAt &&
+      prebake.includes('process.env.HL_CHANNEL_SEARCH !== "0"') &&
+      prebake.includes("HL_CS_MAX_FETCHES = 30") &&
+      prebake.includes("if (fb.searchOnly) continue;") &&
+      gameHighlights.includes("if (f.searchOnly) continue;") &&
+      youtube.channelAlwaysMasksTitle(["Portsmouth FC"]) &&
+      youtube.channelAlwaysMasksTitle(["LIGA BBVA MX"]) &&
+      !youtube.channelAlwaysMasksTitle(["CBS Sports Golazo - Europe"]),
+  );
 }
 check(
   "prebaker bakes NCAA volleyball from each match's conference chain behind the volleyball token",

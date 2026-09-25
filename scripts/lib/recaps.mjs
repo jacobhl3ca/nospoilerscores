@@ -205,12 +205,23 @@ export function isoDurationToSec(iso) {
 
 // YouTube's "2 days ago" / "3 weeks ago" / "1 hour ago" / "Streamed 4 days ago"
 // → an approximate publish timestamp (ms). null when it does not parse.
+// YouTube also serves the short form ("5d ago", "11d ago", "2w ago", "8mo
+// ago", "1y ago", "Streamed 8mo ago") — measured on the mini's search pages
+// 2026-09-25, where it was the ONLY form served, so the long-form-only regex
+// read every card's age as null. "mo" is months, a bare "m" is minutes.
+const RELATIVE_UNIT_MS = {
+  s: 1000, m: 60e3, h: 3600e3, d: 86400e3, w: 7 * 86400e3, mo: 30 * 86400e3, y: 365 * 86400e3,
+};
 export function parseRelativeTime(text, nowMs = Date.now()) {
-  const m = String(text ?? "").match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i);
-  if (!m) return null;
-  const n = parseInt(m[1], 10);
-  const unit = { second: 1000, minute: 60e3, hour: 3600e3, day: 86400e3, week: 7 * 86400e3, month: 30 * 86400e3, year: 365 * 86400e3 }[m[2].toLowerCase()];
-  return nowMs - n * unit;
+  const str = String(text ?? "");
+  const long = str.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i);
+  if (long) {
+    const unit = { second: "s", minute: "m", hour: "h", day: "d", week: "w", month: "mo", year: "y" }[long[2].toLowerCase()];
+    return nowMs - parseInt(long[1], 10) * RELATIVE_UNIT_MS[unit];
+  }
+  const short = str.match(/(?<![a-z0-9])(\d+)\s*(mo|s|m|h|d|w|y)\s+ago\b/i);
+  if (!short) return null;
+  return nowMs - parseInt(short[1], 10) * RELATIVE_UNIT_MS[short[2].toLowerCase()];
 }
 
 // A YouTube results / channel-search page → the videoRenderer blocks. Same

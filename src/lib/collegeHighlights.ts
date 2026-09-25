@@ -58,6 +58,22 @@
 // the bake's item builder, add the ncaah block (ECAC + NCHC), re-probe CCHA
 // (1/3 is too low), and dry-run the first weekend.
 //
+// Soccer uses the same chain (added 2026-09-25) for the two leagues whose main
+// uploader skips games FotMob could still fill:
+//   efl: CBS Sports Golazo - Europe and CBS Sports Golazo cut most EFL
+//     Championship games for the US ("Cardiff City vs. Charlton Athletic:
+//     Extended Highlights | EFL Championship | CBS Sports"), clean titles, so
+//     they go first for every game (`always`), gated on "efl championship".
+//     Then the home club's own channel, then the away club's (`teamConferences`
+//     maps each ESPN team id to its club). Club titles print the result
+//     ("Birmingham 2 Boro 2"), so every club channel is in `maskTitle`.
+//   ligamx: LIGA BBVA MX, the league's own channel, behind TUDN USA. Its
+//     titles print the result too ("JUÁREZ 2-0 TIGRES J9 AP26").
+// Both set `searchOnly`: their channels are found only by the bake's
+// channel-scoped search (scripts/lib/channel-search.mjs), which drops women's
+// and youth fixtures a club channel posts under the same two names. The card
+// never walks them live — it trusts a baked id from them, nothing more.
+//
 // The table lives in collegeHighlightChannels.json so prebake-news.mjs reads
 // the same bytes (see llwsRegions.json for the same pattern). This module stays
 // pure — it takes the table as an argument — so node's test runner can load it
@@ -66,13 +82,19 @@
 export type CollegeHighlightConfig = {
   primaryFromChain?: boolean;
   titleTokens: string[];
+  // Channels tried for EVERY game, before the conference/club channels.
+  always?: string[];
   conferences: Record<string, string>;
   teamConferences?: Record<string, string>;
   networks: { names: string[]; channel: string }[];
   channelTitleTokens?: Record<string, string[]>;
+  // Bake-only chain: see the soccer note above.
+  searchOnly?: boolean;
+  // Channels whose titles print the result: the modal keeps the title covered.
+  maskTitle?: string[];
 };
 
-export type FallbackChannel = { channel: string; titleTokens: string[] };
+export type FallbackChannel = { channel: string; titleTokens: string[]; searchOnly?: boolean };
 
 // The parts of a team the chain needs. `id` may carry the app's sport prefix
 // ("ncaavb-158"); only the trailing ESPN id is used.
@@ -99,6 +121,7 @@ export function buildCollegeFallbackChain(
     if (!channel || channel === primaryChannel || channels.includes(channel)) return;
     channels.push(channel);
   };
+  for (const channel of config.always ?? []) add(channel);
   add(homeConferenceId ? config.conferences[homeConferenceId] : undefined);
   add(awayConferenceId ? config.conferences[awayConferenceId] : undefined);
   for (const name of broadcasts ?? []) {
@@ -107,5 +130,11 @@ export function buildCollegeFallbackChain(
   return channels.map((channel) => ({
     channel,
     titleTokens: config.channelTitleTokens?.[channel] ?? config.titleTokens,
+    ...(config.searchOnly ? { searchOnly: true } : {}),
   }));
+}
+
+// Every channel any chain lists as printing the result in its titles.
+export function titleMaskedChainChannels(configs: Record<string, CollegeHighlightConfig>): Set<string> {
+  return new Set(Object.values(configs).flatMap((c) => c.maskTitle ?? []));
 }
