@@ -441,6 +441,15 @@ try {
       ok("a chaser is only ever listed under a seat", !/Chasing this spot/.test(bracket.text) || bracket.chasers.length > 0);
       ok("a seat is a row, not a square tile",
         bracket.seatRatio !== null && bracket.seatRatio > 2.5, `narrowest seat ratio ${bracket.seatRatio?.toFixed(2)}`);
+      // The row only goes side by side where all seven columns fit; a 768px
+      // tablet used to hide the NL Wild Card column behind a sideways scroll.
+      for (const w of [390, 768, 855, 1024, 1440]) {
+        await page.setViewportSize({ width: w, height: 1000 });
+        await page.waitForTimeout(300);
+        const m = await dialog.locator('[aria-label="MLB postseason bracket"]').evaluate((e) => ({ cw: e.clientWidth, sw: e.scrollWidth }));
+        ok(`the bracket needs no sideways scroll at ${w}px`, m.sw <= m.cw + 1, `${m.cw}/${m.sw}`);
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
     }
 
     const updated = dialog.locator("p", { hasText: /^Updated / });

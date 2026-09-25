@@ -536,7 +536,7 @@ function LeagueHalf({ league, bracket, season, odds, mirrored }: {
   // thing WorldCupBracket does, and the only thing that stays aligned now that
   // a card with chasers under it is taller than one without.
   return (
-    <div className={`flex items-stretch gap-1 sm:gap-2 xl:gap-3 ${mirrored ? "flex-row md:flex-row-reverse" : "flex-row"}`}>
+    <div className={`flex items-stretch gap-1 sm:gap-2 xl:gap-3 ${mirrored ? "flex-row lg:flex-row-reverse" : "flex-row"}`}>
       {col("wildCard")}
       {col("divisionSeries")}
       {col("championship")}
@@ -621,7 +621,9 @@ function BracketView({ picture, odds, results, coverResults, onShowResults }: {
         </div>
       ) : null}
       {/* One DOM for both widths: the halves sit side by side with the World
-          Series between them on desktop, and stack on a phone. The NL half is
+          Series between them from lg up, and stack below it. The seven columns
+          need ~760px even with the later rounds compact (more once ALDS winners
+          fill the ALCS cards), so a 768px tablet stacks like a phone. The NL half is
           mirrored only when there is room to mirror it. The desktop row scrolls
           sideways rather than squeezing the cards, since a narrow viewport
           inside the dialog is the only thing the seven columns won't fit. */}
@@ -630,7 +632,7 @@ function BracketView({ picture, odds, results, coverResults, onShowResults }: {
             something to scroll; mx-auto still centres it whenever it fits. A
             phone stacks the halves but each half is still three columns wide,
             so the sideways scroll is needed at every width, not just desktop. */}
-        <div className="flex flex-col items-center gap-4 w-max mx-auto md:flex-row md:items-stretch md:gap-2">
+        <div className="flex flex-col items-center gap-4 w-max mx-auto lg:flex-row lg:items-stretch lg:gap-2">
           <LeagueHalf league={al} bracket={alB} season={picture.season} odds={odds} mirrored={false} />
           <WorldSeriesColumn season={picture.season} al={ws.al} nl={ws.nl} winner={ws.winner} />
           <LeagueHalf league={nl} bracket={nlB} season={picture.season} odds={odds} mirrored />
