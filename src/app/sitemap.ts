@@ -58,6 +58,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // Added 2026-09-24: who runs the site and how to reach it, for the
     // entity/contact checks answer engines make. No personal details on it.
     "/about",
+    "/contact",
     "/privacy",
   ];
   const highIntent = new Set([
