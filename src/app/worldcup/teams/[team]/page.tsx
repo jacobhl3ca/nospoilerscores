@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocTopBar from "@/components/DocTopBar";
 import { notFound } from "next/navigation";
 import { getWorldCupTeam, WORLD_CUP_TEAMS } from "@/lib/worldCupTeams";
 import { formatWorldCupDay, worldCup2026Ended, worldCupLastMatchYmd } from "@/lib/worldCup2026";
@@ -87,6 +88,7 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+      <DocTopBar route={canonical.replace(/^\//, "")} />
       <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
         HideScore
       </p>

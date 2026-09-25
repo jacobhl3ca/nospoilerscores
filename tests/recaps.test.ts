@@ -531,6 +531,6 @@ test("narrow-column heading: Week N → WN; other headings change only past the 
   assert.deepEqual(rowRecapHeadings("Best of the day"), ["Best of the day", "Best of day"]);
   assert.deepEqual(rowRecapHeadings("Week 2"), ["Week 2", "W2"]);
   assert.deepEqual(rowRecapHeadings("Top plays"), ["Top plays"]);
-  // The stack gate sits between the sm column (192px) and the md column (225px).
-  assert.ok(RECAP_STACK_MAX_PX > 192 && RECAP_STACK_MAX_PX <= 225);
+  // The stack gate sits between the md column (225px) and the xl column (280px).
+  assert.ok(RECAP_STACK_MAX_PX > 225 && RECAP_STACK_MAX_PX <= 280);
 });

@@ -252,6 +252,9 @@ export default function GameHighlights({
   const [officialDurationSec, setOfficialDurationSec] = useState<number | null>(
     initialOfficialId && Number.isFinite(initialBaked?.officialDurationSec) ? (initialBaked!.officialDurationSec as number) : null,
   );
+  const [secondaryDurationSec, setSecondaryDurationSec] = useState<number | null>(
+    initialSecondaryId && Number.isFinite(initialBaked?.extendedDurationSec) ? (initialBaked!.extendedDurationSec as number) : null,
+  );
   const prefetchedVideoId = useRef<string | null>(initialSecondaryId ?? null);
   const prefetchedOfficialId = useRef<string | null>(initialOfficialId ?? null);
   const prefetchedTelemundoShortId = useRef<string | null>(initialTelemundoShortId);
@@ -425,6 +428,7 @@ export default function GameHighlights({
   // every club name, so VideoModal opens on the hand-off card at once.
   const clubModalFallbackUrl = club ? modalFallbackUrl([club.channel]) : null;
   const officialMins = formatRecapDuration(officialDurationSec);
+  const secondaryMins = formatRecapDuration(secondaryDurationSec);
   const telemundoModalFallbackUrl = isFifa && highlightUrl ? `${highlightUrl}&nss_no_fallback=1` : highlightUrl;
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
@@ -461,6 +465,7 @@ export default function GameHighlights({
         if (isNfl) setClub(verifiedClub(baked));
         setOfficialDurationSec(bakedOfficial && Number.isFinite(baked?.officialDurationSec) ? (baked!.officialDurationSec as number) : null);
         const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel, away, home);
+        setSecondaryDurationSec(bakedSecondary && Number.isFinite(baked?.extendedDurationSec) ? (baked!.extendedDurationSec as number) : null);
         // MLB's official slot is never rendered (showYouTube requires !isMlb —
         // its visible row is MLB.com-native, per the initialOfficialId guard
         // above), so skip its live resolve: without the isMlb guard every
@@ -632,6 +637,23 @@ export default function GameHighlights({
     }
     return alts;
   };
+  // The 2nd button's label. Beside the 1st it reads its length, else "Alt".
+  // ALONE (the 1st slot missed) it is the only clip, so it takes the 1st
+  // button's label and name — a lone "Alt" reads as an alternate to nothing.
+  // While the 1st slot is still resolving, show a placeholder rather than a
+  // label that could flip after paint; a known length is the same either way.
+  const officialShown = hasOfficialButton && officialStatus === "found";
+  const secondaryAlone = !officialShown && !(hasOfficialButton && officialStatus === "loading");
+  const secondaryLabel = isFifa
+    ? "FOX 15m"
+    : demoActive
+      ? "Watch"
+      : officialShown
+        ? (secondaryMins || "Alt")
+        : secondaryAlone
+          ? (secondaryMins || highlightBadgeLabel[game.sport] || game.sport.toUpperCase())
+          : (secondaryMins || "…");
+  const secondaryName = isFifa ? "FOX full highlights" : secondaryAlone ? `${secondaryChannel} highlights` : "Official alternate highlights";
   const playHl = (videoId: string, fallbackUrl: string, share?: ShareCardMeta | null) =>
     onPlayHighlight?.(videoId, fallbackUrl, share, buildAlternates(videoId));
 
@@ -733,19 +755,19 @@ export default function GameHighlights({
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
-              aria-label={isFifa ? "FOX full highlights" : "Official alternate highlights"}
+              aria-label={secondaryName}
               // aria-busy conveys the in-flight fetch that the visible "Loading..."
               // swap shows sighted users; the aria-label above stays pinned so the
               // name never collapses to "Loading...". Matches EventCard's buttons.
               aria-busy={fetchingOnClick === "search"}
-              title={isFifa ? "FOX full highlights" : "Official alternate highlights"}
+              title={secondaryName}
             >
               {fetchingOnClick === "search" ? (
                 <span className="text-[10px]">Loading...</span>
               ) : (
                   <>
                     <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                    <span className="text-[10px] font-medium whitespace-nowrap">{isFifa ? "FOX 15m" : "Alt"}</span>
+                    <span className="text-[10px] font-medium whitespace-nowrap">{secondaryLabel}</span>
                   </>
               )}
             </button>

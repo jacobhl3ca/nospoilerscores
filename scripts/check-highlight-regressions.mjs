@@ -188,9 +188,6 @@ check(
 globalThis.fetch = originalFetch;
 
 const highlightsSource = readFileSync("src/lib/highlights.ts", "utf8")
-  // highlights.ts moved from "@/lib/youtube" to "./youtube"; stub either, or
-  // the temp copy imports a ./youtube that does not exist in tmpdir
-  // (ERR_MODULE_NOT_FOUND — the whole check was unrunnable until 2026-09-25).
   .replace(/import \{ getApiBase \} from "(?:@\/lib|\.)\/youtube";/, 'const getApiBase = () => "";');
 const transformedHighlights = await transform(highlightsSource, {
   jsc: { parser: { syntax: "typescript" }, target: "es2022" },

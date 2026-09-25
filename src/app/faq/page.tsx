@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocTopBar from "@/components/DocTopBar";
 
 const FAQ_TITLE = "FAQ — Spoiler-Free Sports Scores | HideScore";
 const FAQ_DESC =
@@ -89,6 +90,7 @@ const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
 export default function FaqPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+      <DocTopBar route="faq" />
       <h1 className="text-2xl font-bold mb-6">Frequently asked questions</h1>
 
       <section className="space-y-6">
@@ -130,7 +132,7 @@ export default function FaqPage() {
       </p>
 
       <div className="mt-10">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>← Back to HideScore</Link>
+        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-faq">← Back to HideScore</Link>
       </div>
 
       <script

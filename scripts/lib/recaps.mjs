@@ -545,6 +545,20 @@ export function recapCoversDay(rec, ymd) {
   return rec.coversDate === ymd;
 }
 
+// ── Lone 2nd-slot promotion ──────────────────────────────────────────────────
+
+// For most leagues both highlight slots run the same query on the same channel,
+// so a flaky lookup can miss slot 1 and hit slot 2 in one run. The card then
+// shows a lone "Alt" button holding the league's normal cut. Move that video up.
+// Only when both slots share a channel: the next bake keeps a carried official
+// only if its channel is the primary one (or a fallback), so a promoted id from
+// a different channel would be thrown away and re-resolved on every run.
+export function promoteLoneExtended({ official, officialChannel, extended, primaryChannel, secondaryChannel }) {
+  const same = !!primaryChannel && !!secondaryChannel && primaryChannel.toLowerCase() === secondaryChannel.toLowerCase();
+  if (official || !extended || !same) return { official, officialChannel, extended, promoted: false };
+  return { official: extended, officialChannel: primaryChannel, extended: null, promoted: true };
+}
+
 // ── NFL club short cut (section 5 of the plan) ───────────────────────────────
 
 // Two clubs can each post a package for the same game; keep the shorter one.
