@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getRecapsFor, formatRecapDuration, recapButtonText, rowRecapHeadings, stackedRecapHeadings, RECAP_STACK_MAX_PX, RECAP_COMPACT_MAX_PX, type RecapRecord } from "@/lib/recaps";
 import { leadChannelBlocksEmbeds } from "@/lib/youtube";
 import type { ShareCardMeta } from "@/lib/shareCard";
+import type { MlbReviewSection } from "@/lib/mlbReview";
 
 // The league-wide recap — the NFL's "Week 1", MLB's "Best of the day", NBA's
 // "Top 10 plays of the night", EPL / MLS "Every goal" — as one compact pill on
@@ -57,12 +58,30 @@ const PLAYOFFS_TABS: { key: PlayoffsTab; label: string }[] = [
   { key: "picks", label: "Picks" },
 ];
 
+// `onShowReview`: from the day after the World Series until spring training the
+// same row holds "2026 in review" instead (src/lib/mlbReview.ts): three text
+// buttons that open MlbSeasonReviewModal at that section. Same box model as the
+// Playoffs pill; when both are due the review wins (the bracket is over).
+const REVIEW_TABS: { key: MlbReviewSection; label: string; aria: string }[] = [
+  { key: "months", label: "Months", aria: "Best plays by month" },
+  { key: "playoffs", label: "Playoffs", aria: "Best plays of the playoffs" },
+  { key: "teams", label: "Teams", aria: "Stats and oddities by team" },
+];
+
+// "2026 in review", then "'26 review" where the phone line cannot hold it.
+export function reviewHeadings(season: number): string[] {
+  return [`${season} in review`, `\u2019${String(season).slice(-2)} review`];
+}
+
 export default function LeagueRecapCard({
   sport,
   date,
   lastPlayedDate,
   reserveSlot = false,
   onShowPlayoffs,
+  onShowReview,
+  reviewSeason,
+  reviewSections,
   onPlayHighlight,
   onPlayEmbed,
 }: {
@@ -80,6 +99,12 @@ export default function LeagueRecapCard({
   // Opens the playoff picture on the given tab. Set only when the playoffs
   // pill is due (see the header note).
   onShowPlayoffs?: ((tab: PlayoffsTab) => void) | null;
+  // Opens the season review at a section. Set only when the review pill is
+  // due; outranks onShowPlayoffs. `reviewSections` = the buttons with
+  // something behind them, in REVIEW_TABS order.
+  onShowReview?: ((section: MlbReviewSection) => void) | null;
+  reviewSeason?: number | null;
+  reviewSections?: MlbReviewSection[] | null;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
 }) {
@@ -172,6 +197,59 @@ export default function LeagueRecapCard({
       <span aria-hidden="true" className={`${minsText} font-medium`}>{"\u200B"}</span>
     </button>
   ) : null;
+
+  if (!records.length && onShowReview && reviewSeason) {
+    const headings = reviewHeadings(reviewSeason);
+    const tabs = REVIEW_TABS.filter((t) => !reviewSections || reviewSections.includes(t.key));
+    return (
+      <div
+        ref={setEl}
+        data-league-recap={sport}
+        data-recap-kind="review"
+        data-recap-layout={stacked ? "stacked" : "row"}
+        className={`relative mb-2 rounded-lg flex ${stacked ? STACKED_PILL : ROW_PILL}`}
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <span
+          data-recap-heading
+          className={`flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate ${headingHidden ? "invisible" : ""}`}
+          aria-hidden={headingHidden || undefined}
+          style={{ color: "var(--text)" }}
+        >
+          {headings[Math.min(headingPick, headings.length - 1)]}
+        </span>
+        {headings.map((text) => (
+          <span
+            key={text}
+            data-recap-heading-candidate
+            aria-hidden="true"
+            className="absolute left-0 top-0 invisible pointer-events-none whitespace-nowrap text-[11.5px] font-semibold tracking-tight"
+          >
+            {text}
+          </span>
+        ))}
+        <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              data-recap-review-section={t.key}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowReview(t.key);
+              }}
+              className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? "flex-auto gap-0.5 px-0" : ROW_BTN}`}
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              aria-label={`${reviewSeason} in review: ${t.aria}`}
+              title={`${reviewSeason} in review: ${t.aria}`}
+            >
+              <span className={`${minsText} font-medium whitespace-nowrap`}>{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (!records.length && onShowPlayoffs) {
     return (

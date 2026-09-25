@@ -573,3 +573,131 @@ export function pickShorterClub(candidates) {
     return b < a ? c : best;
   }, null);
 }
+
+// ── MLB "2026 in review" (bakeMlbSeasonReview → /news/mlb-review.json) ───────
+
+// MLB's own round-ups of a finished season, found by Film Room title. The
+// titles are not uniform from year to year (2025 "Top 25 Plays of the Month:
+// March/April", 2026 "… March and April" and "Top 25 plays from August 2026";
+// year-end shows run from December into late January, and January's are filed
+// under the NEXT Film Room season), so each kind accepts the variants seen so
+// far. ⛔ Slugs are not keyed by year (bare "oddities-of-the-month-september"
+// is the 2019 cut) — resolve by title, never build a slug.
+
+// Month → its order in the season. March is a handful of games, so MLB folds
+// it into April; an "April" oddities cut lands on the same row as the
+// "March/April" Top 25.
+export const MONTH_ORDER = {
+  "march/april": 4, march: 4, april: 4, may: 5, june: 6, july: 7, august: 8,
+  september: 9, "september/october": 9,
+};
+export const MONTH_LABEL = { 4: "March/April", 5: "May", 6: "June", 7: "July", 8: "August", 9: "September" };
+
+export const ROUND_ORDER = ["wildcard", "division", "championship", "worldseries"];
+export const ROUND_LABEL = {
+  wildcard: "Wild Card", division: "Division Series", championship: "Championship Series", worldseries: "World Series",
+};
+
+// "March and April" / "March/April" / "August 2026" → { order, label, year }.
+// null when it is not a month of the regular season.
+export function normalizeReviewMonth(text) {
+  const m = String(text ?? "").trim().match(/^([A-Za-z]+(?:\s*(?:\/|and|&)\s*[A-Za-z]+)?)(?:,?\s+(\d{4}))?$/);
+  if (!m) return null;
+  const key = m[1].toLowerCase().replace(/\s*(?:\/|and|&)\s*/, "/");
+  const order = MONTH_ORDER[key];
+  if (!order) return null;
+  return { order, label: MONTH_LABEL[order], year: m[2] ? parseInt(m[2], 10) : null };
+}
+
+// "Wild Card Round" / "2025 World Series" → a ROUND_ORDER key, or null. The
+// whole-round cuts only: "AL Division Series" (one league) is not one.
+function reviewRoundKey(text) {
+  const t = String(text ?? "").trim().replace(/^(?:the\s+)?(?:\d{4}\s+)?/i, "").replace(/\s+\d{4}$/, "");
+  if (/^Wild Card(?: Round| Series)?$/i.test(t)) return "wildcard";
+  if (/^Division Series$/i.test(t)) return "division";
+  if (/^Championship Series$/i.test(t)) return "championship";
+  if (/^World Series$/i.test(t)) return "worldseries";
+  return null;
+}
+
+// One Film Room title → what it is, or null for anything else (single clips,
+// the "#1" / "#25-21" countdown parts, and the spoiler-titled splits like "Top
+// Finishes of 2025: Dodgers capture Game 7" — a year-end title may carry no
+// "#" and no ":"). `year` is set only when the title names one.
+//   monthTop25 / monthOdd → { order, label }
+//   postTop25             → {}
+//   roundTop10 / roundOdd → { key, label }
+//   yearEnd               → { label: the MLB title, year }
+//   team                  → { label: the team or player after the colon, year }
+export function classifyMlbReviewTitle(title) {
+  const t = String(title ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  let m;
+  if (/^Top 25 plays (?:of|from) the (?:\d{4} )?postseason(?: \d{4})?$/i.test(t)) return { kind: "postTop25", label: "Postseason", year: null };
+  if ((m = t.match(/^Top 25 Plays of the Month:\s*(.+)$/i) || t.match(/^Top 25 plays from (.+)$/i))) {
+    const mo = normalizeReviewMonth(m[1]);
+    return mo ? { kind: "monthTop25", ...mo } : null;
+  }
+  if ((m = t.match(/^Oddities of the Month:\s*(.+)$/i))) {
+    const mo = normalizeReviewMonth(m[1]);
+    return mo ? { kind: "monthOdd", ...mo } : null;
+  }
+  if ((m = t.match(/^Top 10 plays (?:of|from) (?:the )?(.+)$/i))) {
+    const key = reviewRoundKey(m[1]);
+    return key ? { kind: "roundTop10", key, label: ROUND_LABEL[key], year: null } : null;
+  }
+  if ((m = t.match(/^Oddities of (?:the )?(.+)$/i))) {
+    const key = reviewRoundKey(m[1]);
+    return key ? { kind: "roundOdd", key, label: ROUND_LABEL[key], year: null } : null;
+  }
+  if ((m = t.match(/^Stats (?:&|and) Oddities of (\d{4}):\s*(.+)$/i))) {
+    return { kind: "team", label: m[2].trim(), year: parseInt(m[1], 10) };
+  }
+  // MLB Network's year-end countdowns, whole show only. "Recapping the Top
+  // 100 Plays of 2025" and "The Top Rookies of the 2025 season" are the same
+  // kind of show; "Top 100 Prospects for 2026 Season" looks ahead, not back.
+  if (!/[#:]/.test(t) && !/\bNo\.\s*\d/i.test(t)
+    && (m = t.match(/^(?:The |Recapping the )?(?:(?:Top|Best|Electrifying)\b.*?) (?:of|in) (?:the )?(\d{4})(?: season)?$/i))) {
+    return { kind: "yearEnd", label: t, year: parseInt(m[1], 10) };
+  }
+  return null;
+}
+
+// The season a finished-season review is about on an ET date: the regular
+// season ends in late September and the review runs through the winter, so
+// January and February still belong to last year's season.
+export function mlbReviewSeason(ymd) {
+  const m = String(ymd ?? "").match(/^(\d{4})(\d{2})\d{2}$/);
+  if (!m) return null;
+  const y = parseInt(m[1], 10);
+  return parseInt(m[2], 10) <= 2 ? y - 1 : y;
+}
+
+// "teamid-118" / "playerid-…" keywords → the MLB StatsAPI team ids.
+export function mlbTeamIdsFromKeywords(keywords) {
+  const out = [];
+  for (const k of Array.isArray(keywords) ? keywords : []) {
+    const m = String(k?.slug ?? k ?? "").match(/^teamid-(\d+)$/);
+    if (m && !out.includes(m[1])) out.push(m[1]);
+  }
+  return out;
+}
+
+// ESPN → MLB StatsAPI abbreviation, where they differ (same table as
+// ESPN_TO_MLB_ABBREV in src/lib/espn.ts).
+export const ESPN_TO_MLB_ABBREV = { ARI: "AZ", CHW: "CWS" };
+
+// StatsAPI teams + ESPN teams → Map(mlbId → espnId), joined on abbreviation.
+export function mlbToEspnTeamIds(mlbTeams, espnTeams) {
+  const byAbbrev = new Map();
+  for (const t of espnTeams ?? []) {
+    if (!t?.id || !t.abbreviation) continue;
+    byAbbrev.set(ESPN_TO_MLB_ABBREV[t.abbreviation] ?? t.abbreviation, String(t.id));
+  }
+  const out = new Map();
+  for (const t of mlbTeams ?? []) {
+    const espn = t?.abbreviation ? byAbbrev.get(t.abbreviation) : null;
+    if (t?.id && espn) out.set(String(t.id), espn);
+  }
+  return out;
+}
