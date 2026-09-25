@@ -383,6 +383,7 @@ export default {
 
     // --- Bracket picks leaderboard (MLB postseason). See picksRoute below.
     if (url.pathname === "/api/picks") return picksRoute(request, env, ctx, url);
+    if (url.pathname === "/api/picks/account") return picksAccountRoute(request, env, ctx);
 
     // --- Serve a stored share card (rendered server-side by the prebake cron).
     if (url.pathname.startsWith("/cards/") && url.pathname.endsWith(".png")) {
@@ -3568,6 +3569,11 @@ async function accountDelete(request, env) {
     }
     try { await env.DATA.delete(`accounts/${u.uid}.json`); } catch { /* already gone */ }
   }
+  // The account's bracket token (see picksAccountRoute). The leaderboard entry
+  // itself stays: it holds a name and picks, never the account.
+  if (env.PICKS && u.uid) {
+    try { await env.PICKS.delete(`a:${u.uid}`); } catch { /* already gone */ }
+  }
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
     headers: {
@@ -4169,5 +4175,76 @@ async function picksRoute(request, env, ctx, url) {
     return _picksJson({ ok: true, name, at });
   } catch {
     return _picksJson({ error: "unavailable" }, 503);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// /api/picks/account — one bracket across a signed-in account's devices.
+//
+// The leaderboard knows devices, not people: a name belongs to the SHA of the
+// device token that took it. A signed-in player who submitted on the PC saw an
+// empty bracket on the phone (Jacob 9/24). The phone must not mint a token of
+// its own, because that token cannot edit the name (409 name_taken). So the
+// account keeps the token itself, plus what was submitted under it:
+//
+//   a:<account uid>  → { token, boards: { <board>: { name, picks, at } } }
+//
+// Every device on the account adopts that token (components/BracketPicks via
+// lib/picksAccount). A PUT with a DIFFERENT token is refused with 409 and the
+// stored record, so no device can take the name away from the others. Boards
+// merge by `at`, newest wins. The record is the account's own data: GET and
+// PUT need the session, and DELETE /api/account removes it.
+
+const PICKS_ACCOUNT_BOARDS = 6;
+
+function _picksCleanAccount(raw) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  if (typeof raw.token !== "string" || !PICKS_TOKEN_RE.test(raw.token)) return null;
+  const boards = {};
+  const src = raw.boards;
+  if (src != null && (typeof src !== "object" || Array.isArray(src))) return null;
+  const keys = Object.keys(src || {});
+  if (keys.length > PICKS_ACCOUNT_BOARDS) return null;
+  for (const k of keys) {
+    const e = src[k];
+    if (!PICKS_BOARD_RE.test(k) || typeof e !== "object" || e === null) return null;
+    const name = _picksCleanName(e.name);
+    const picks = _picksCleanPicks(e.picks);
+    if (!name || !picks || typeof e.at !== "string" || !Number.isFinite(Date.parse(e.at)) || e.at.length > 40) return null;
+    boards[k] = { name, picks, at: e.at };
+  }
+  return { token: raw.token, boards };
+}
+
+async function picksAccountRoute(request, env, ctx) {
+  try {
+    const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+    if (!sessionUser) return _siwaJson({ error: "unauthorized" }, 401);
+    if (!env.PICKS) return _siwaJson({ disabled: true }, 503);
+    const u = await _hsResolveAccount(env, sessionUser);
+    if (!u.uid) return _siwaJson({ error: "no_account" }, 503);
+    const key = `a:${u.uid}`;
+    const stored = _picksCleanAccount(await env.PICKS.get(key, "json"));
+
+    if (request.method === "GET") return _siwaJson({ picks: stored });
+    if (request.method !== "PUT") return _siwaJson({ error: "method" }, 405);
+
+    const raw = await request.text();
+    if (raw.length > 4096) return _siwaJson({ error: "too_large" }, 413);
+    let body;
+    try { body = _picksCleanAccount(JSON.parse(raw)); } catch { body = null; }
+    if (!body) return _siwaJson({ error: "bad_picks" }, 400);
+    if (stored && stored.token !== body.token) return _siwaJson({ error: "token_mismatch", picks: stored }, 409);
+
+    const boards = { ...(stored?.boards || {}) };
+    for (const [k, e] of Object.entries(body.boards)) {
+      if (!boards[k] || Date.parse(e.at) >= Date.parse(boards[k].at)) boards[k] = e;
+    }
+    const keep = Object.keys(boards).sort().slice(-PICKS_ACCOUNT_BOARDS);
+    const next = { token: body.token, boards: Object.fromEntries(keep.map((k) => [k, boards[k]])) };
+    await env.PICKS.put(key, JSON.stringify(next));
+    return _siwaJson({ ok: true, picks: next });
+  } catch {
+    return _siwaJson({ error: "unavailable" }, 503);
   }
 }
