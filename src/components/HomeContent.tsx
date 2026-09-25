@@ -4883,8 +4883,17 @@ export default function HomeContent({
             style={{ color: "var(--text)" }}
             aria-label="Reopen what you just closed"
           >
-            {/* \uFE0E forces text presentation — bare U+21A9 renders as a boxed emoji arrow on macOS/iOS. */}
-            <span aria-hidden="true" style={{ color: "var(--accent)" }}>{"\u21A9\uFE0E"}</span>
+            {/* Glyph, not text: at the button’s own text-xs the Unicode
+                arrow’s internal padding makes it read as barely-there next to
+                the label (Jacob 9/17), so it gets its own explicit size — a
+                hair over the label’s cap-height — via an inline SVG rather
+                than a bigger Unicode character, matching the app’s other
+                24-viewBox icon buttons. The button/pill’s own size (padding,
+                min-h) is unchanged. */}
+            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <path d="M9 14L4 9l5-5" />
+              <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+            </svg>
             Reopen
           </button>
           <button
