@@ -114,7 +114,7 @@ export default function WatchWorldCupWithoutSpoilersPage() {
       className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed"
       style={{ color: "var(--text)" }}
     >
-      <DocTopBar route="watch-world-cup-without-spoilers" />
+      <DocTopBar route="watch-world-cup-without-spoilers" subject="World Cup 2026" />
       <h1 className="text-2xl font-bold mb-4">How to watch the 2026 World Cup without spoilers</h1>
 
       <p className="mb-4" style={{ color: "var(--text-muted)" }}>

@@ -16,6 +16,11 @@ type LinkItem = {
 type SeoLandingPageProps = {
   eyebrow?: string;
   h1: string;
+  // Short label beside the logo in the pinned top bar ("HideScore | NFL
+  // highlights"), 2026-09-25. Defaults to the h1 minus a trailing "without
+  // spoilers", which fits every "<X> without spoilers" page; the few h1s that
+  // are full sentences pass their own.
+  subject?: string;
   // Rendered straight under the h1, above the intro, and wider than the text
   // column. Added 2026-09-23 for the MLB playoff pages, which lead with the live
   // playoff panel itself so a visitor from search reaches the bracket before
@@ -51,6 +56,7 @@ type SeoLandingPageProps = {
 export default function SeoLandingPage({
   eyebrow = "HideScore",
   h1,
+  subject,
   lead,
   intro,
   sections,
@@ -73,7 +79,11 @@ export default function SeoLandingPage({
   const updated = lead ? null : routeLastModified(canonical);
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
-      <DocTopBar route={canonical.replace(/^\//, "")} ctaHref={ctaHref} />
+      <DocTopBar
+        route={canonical.replace(/^\//, "")}
+        ctaHref={ctaHref}
+        subject={subject ?? h1.replace(/\s+without spoilers$/i, "")}
+      />
       <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
         {eyebrow}
       </p>

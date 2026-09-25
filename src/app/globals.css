@@ -637,6 +637,42 @@ iframe#yt-player {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem);
 }
 
+/* Doc-page top bar (DocTopBar), pinned on scroll 2026-09-25.
+   - Pinned at top:0 it would sit under the iOS status bar, so it carries the
+     inset as padding and takes the same amount back as a negative margin: the
+     unpinned layout is unchanged, the pinned bar fills behind the clock.
+   - The page column is max-w-2xl, but the MLB pages' live panel runs up to
+     72rem wide and would scroll visibly past a column-wide bar. The
+     border-image draws the background and the bottom hairline 100vmax out to
+     each side. Border-image outset is ink overflow, so it adds no horizontal
+     scroll the way a 100vw pseudo-element would. */
+.doc-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+  margin-top: calc(-1 * (env(safe-area-inset-top, 0px) + 0.75rem));
+  padding-bottom: 0.75rem;
+  border-image: linear-gradient(to top, var(--border) 1px, var(--bg) 1px) fill 0 / 0 / 0 100vmax;
+}
+/* An in-page #anchor must land below the pinned bar, not under it. */
+.doc-page [id] { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 4.5rem); }
+
+/* Reading-progress line (DocReadProgress). Fixed to the viewport top, above the
+   pinned bar; JS sets scaleX(0..1). */
+.doc-progress {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 41;
+  height: 3px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+
 /* ── Descenders are not clipping ──────────────────────────────────────────────
    `leading-none` + `truncate` makes these spans flex items with overflow:hidden
    and a line box exactly font-size tall, so the tail of a j/g/p is painted
