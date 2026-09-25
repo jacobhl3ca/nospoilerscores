@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocTopBar from "@/components/DocTopBar";
+import EmailLink from "@/components/EmailLink";
 import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
 
 // Added 2026-09-24. An AI-visibility scan flagged the site for having no About
@@ -43,6 +45,7 @@ export default function AboutPage() {
   const updated = routeLastModified("/about");
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+      <DocTopBar route="about" />
       <h1 className="text-2xl font-bold mb-2">About HideScore</h1>
       {updated ? (
         <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
@@ -112,7 +115,7 @@ export default function AboutPage() {
           Contact
         </h2>
         <p>
-          Email <a href="mailto:hi@hidescore.com" className="underline underline-offset-2">hi@hidescore.com</a>, or use
+          Email <EmailLink />, or use
           the Feedback button at the bottom of the board. Bug reports, missing leagues and spoilers that got through are
           all welcome. The <Link href="/contact" className="underline underline-offset-2">contact page</Link> has more.
         </p>
@@ -123,7 +126,7 @@ export default function AboutPage() {
       </section>
 
       <div className="mt-10">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-about">
           ← Back to HideScore
         </Link>
       </div>

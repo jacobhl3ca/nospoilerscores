@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocTopBar from "@/components/DocTopBar";
 import { WORLD_CUP_TEAMS } from "@/lib/worldCupTeams";
 
 const TITLE = "2026 World Cup Teams - Spoiler-Free Schedules | HideScore";
@@ -32,6 +33,7 @@ export const metadata: Metadata = {
 export default function WorldCupTeamsPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+      <DocTopBar route="worldcup/teams" />
       <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
         HideScore
       </p>
