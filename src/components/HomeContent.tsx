@@ -4204,7 +4204,7 @@ export default function HomeContent({
         </details>
           {/* "Contact", not "About": the disclosure above is already labelled
               About, and a second "About" beside it read as a duplicate. */}
-          <a href="/about#contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
+          <a href="/contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
           <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
           <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} />
           <button

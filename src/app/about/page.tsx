@@ -114,7 +114,7 @@ export default function AboutPage() {
         <p>
           Email <a href="mailto:hi@hidescore.com" className="underline underline-offset-2">hi@hidescore.com</a>, or use
           the Feedback button at the bottom of the board. Bug reports, missing leagues and spoilers that got through are
-          all welcome.
+          all welcome. The <Link href="/contact" className="underline underline-offset-2">contact page</Link> has more.
         </p>
 
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
