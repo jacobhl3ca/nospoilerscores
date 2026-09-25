@@ -236,3 +236,51 @@ export function enabledCategories(hideSensitive?: boolean, hideCrashes?: boolean
 export function isSensitiveNews(item: NewsItem, enabled: SensitiveCategory[] = BASE_CATEGORIES): boolean {
   return newsItemSensitiveCategory(item, enabled) !== null;
 }
+
+// ── Spoiler-safe generic description (Jacob 9/25) ──────────────────────────
+// The hidden-posts modal (SensitiveHiddenModal) lists what the filter took out
+// without leaking the thing it exists to hide. Tapping "N posts hidden" used
+// to just dump everything back into the feed with no way to tell what was
+// added or where; now each row leads with a description built ONLY from
+// source + media type + which category tripped ("Reddit text post · hidden
+// because it mentions an on-field injury") — never the headline, description,
+// or the matched words. "Peek" (in the modal) is what reveals the real title.
+
+export type HiddenMediaKind = "video" | "image" | "link" | "text";
+
+// Mirrors itemIsVideo/itemIsTextPost in components/NewsColumn.tsx, duplicated
+// (not imported) so this lib module doesn't reach into a "use client" React
+// component file. Keep the two in sync if the media-detection rules change.
+export function hiddenMediaKind(item: NewsItem): HiddenMediaKind {
+  if (item.youtubeVideoId || item.playbackUrl || item.videoUrl || item.embedUrl) return "video";
+  if (item.imageFullUrl || (item.images && item.images.length > 0) || (item.imageUrl && !item.thumbOnly)) return "image";
+  // thumbOnly = Reddit's 140px link-preview crop on an external-link post —
+  // there's a picture, but it isn't the post's own, so this reads as a link.
+  if (item.imageUrl && item.thumbOnly) return "link";
+  return "text";
+}
+
+const HIDDEN_MEDIA_NOUN: Record<HiddenMediaKind, string> = {
+  video: "video post",
+  image: "photo post",
+  link: "link post",
+  text: "text post",
+};
+
+// "r/nba" → "Reddit" (the subreddit name itself can be a spoiler-adjacent
+// clue on a small subreddit, and it's noise either way); everything else
+// (ESPN, MLB.com, NBA.com, …) uses its section label as-is.
+export function hiddenPostSource(item: NewsItem): string {
+  const section = item.section || "";
+  return section.startsWith("r/") ? "Reddit" : section || "News";
+}
+
+// The one line a hidden-post row shows before it's peeked. Deterministic and
+// safe to unit test: for a given item + enabled-categories list, it can never
+// contain a word from item.headline/description.
+export function describeHiddenPost(item: NewsItem, enabled: SensitiveCategory[] = BASE_CATEGORIES): string {
+  const category = newsItemSensitiveCategory(item, enabled);
+  const noun = HIDDEN_MEDIA_NOUN[hiddenMediaKind(item)];
+  const reason = category ? CATEGORY_LABELS[category] : "your news filter";
+  return `${hiddenPostSource(item)} ${noun} · hidden because it mentions ${reason}`;
+}

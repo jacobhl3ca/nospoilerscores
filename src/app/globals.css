@@ -661,6 +661,27 @@ iframe#yt-player {
   .hs-seek-flash { animation: none; opacity: 1; transform: translateY(-50%); }
 }
 
+/* News: "Restore to feed" from SensitiveHiddenModal — the row a restored post
+   lands in gets this so it's obvious WHAT was added and WHERE (Jacob 9/13:
+   "the Show just puts them into the feed and I don't know what was added and
+   where"). JS (NewsColumn/NewsFeed) adds the class via data-news-key, scrolls
+   the first restored row into view, then removes it after ~1.8s — this is
+   purely the visual, not the timing. */
+.news-restore-flash {
+  animation: newsRestoreFlash 1800ms ease-out;
+  border-radius: 0.5rem;
+}
+@keyframes newsRestoreFlash {
+  0% { box-shadow: 0 0 0 2px var(--accent); background-color: color-mix(in srgb, var(--accent) 18%, transparent); }
+  70% { box-shadow: 0 0 0 2px var(--accent); background-color: color-mix(in srgb, var(--accent) 18%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; background-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Hold the highlight steady instead of animating it; JS still clears the
+     class at the same ~1.8s. */
+  .news-restore-flash { animation: none; box-shadow: 0 0 0 2px var(--accent); background-color: color-mix(in srgb, var(--accent) 18%, transparent); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Tailwind's built-in looping utilities (loading skeletons use animate-pulse)
      don't honor reduced-motion on their own — silence them so the rest of the

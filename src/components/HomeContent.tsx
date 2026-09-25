@@ -2380,24 +2380,18 @@ export default function HomeContent({
   // new key and remount, which re-runs their fetch effects). Cleaner than
   // wiring imperative refresh signals through every news component.
   const [newsRefreshKey, setNewsRefreshKey] = useState(0);
-  // Settings → "Hide upsetting news" has a per-session escape hatch: the
-  // "N hidden — Show" line under the feed flips this on, which un-hides the
-  // filtered posts until the app is reopened. Deliberately NOT persisted — the
-  // stored preference stays true, so the filter is back on next launch and the
-  // Settings toggle remains the one durable control.
-  const [showSensitiveNews, setShowSensitiveNews] = useState(false);
-  // The two toggles resolve to one category list the news surfaces filter on.
-  // Memoized so it is a stable dependency for their filter memos.
+  // Settings → "Hide upsetting news". The two toggles resolve to one category
+  // list every news surface filters on. Memoized so it's a stable dependency
+  // for their filter memos. The per-session "show what got hidden" escape
+  // hatch is now per-POST (peek + restore) and lives inside NewsColumn /
+  // NewsFeed themselves via SensitiveHiddenModal — see those files — rather
+  // than a single all-or-nothing override up here (Jacob 9/25: the old
+  // one-tap "Show" dropped everything into the feed with no way to tell what
+  // was added or where).
   const hiddenNewsCategories = useMemo(
-    () => (showSensitiveNews ? [] : enabledCategories(prefs.hideSensitiveNews, prefs.hideCrashNews)),
-    [showSensitiveNews, prefs.hideSensitiveNews, prefs.hideCrashNews],
+    () => enabledCategories(prefs.hideSensitiveNews, prefs.hideCrashNews),
+    [prefs.hideSensitiveNews, prefs.hideCrashNews],
   );
-  const showSensitive = useCallback(() => setShowSensitiveNews(true), []);
-  // Re-arm the escape hatch whenever the preference is turned back on in
-  // Settings, so a session override can't silently defeat a fresh opt-in.
-  useEffect(() => {
-    if (prefs.hideSensitiveNews || prefs.hideCrashNews) setShowSensitiveNews(false);
-  }, [prefs.hideSensitiveNews, prefs.hideCrashNews]);
   const [pullDelta, setPullDelta] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const pullStartYRef = useRef<number | null>(null);
@@ -3743,7 +3737,6 @@ export default function HomeContent({
                 videosOnly={!!prefs.newsVideosOnly}
                 oldestFirst={!!prefs.newsOldestFirst}
                 hiddenCategories={hiddenNewsCategories}
-                onShowSensitive={showSensitive}
               />
             );
           }
@@ -3823,7 +3816,6 @@ export default function HomeContent({
                     showTextPosts={!!prefs.showTextPosts}
                     oldestFirst={!!prefs.newsOldestFirst}
                     hiddenCategories={hiddenNewsCategories}
-                    onShowSensitive={showSensitive}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -3851,7 +3843,6 @@ export default function HomeContent({
                       showTextPosts={!!prefs.showTextPosts}
                       oldestFirst={!!prefs.newsOldestFirst}
                       hiddenCategories={hiddenNewsCategories}
-                      onShowSensitive={showSensitive}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).
                       removable={renderedEntries.length > 1}

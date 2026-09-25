@@ -4,6 +4,7 @@ import { MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef,
 import { Sport } from "@/lib/types";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
+import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
 import { isDemoModeActive } from "@/lib/demoMode";
@@ -140,11 +141,11 @@ interface NewsColumnProps {
   // (highlights + Reddit clips) and video-less sources render nothing.
   videosOnly?: boolean;
   // Settings → "Hide upsetting news" (see lib/sensitiveNews). The column totals
-  // what its sources dropped and prints one footer line; onShowSensitive lifts
-  // the filter for this session (the preference itself is untouched).
-  // Categories switched on by the two Settings toggles; empty = filter off.
+  // what its sources dropped into one footer line; tapping it opens
+  // SensitiveHiddenModal (peek + restore, per-item, session-only — the
+  // preference itself is untouched). Categories switched on by the two
+  // Settings toggles; empty = filter off.
   hiddenCategories?: SensitiveCategory[];
-  onShowSensitive?: () => void;
   // Headline-only rows are independently hidden unless this is true.
   showTextPosts?: boolean;
   // Reverse each source's rendered order (oldest first) — the ⇅ news-header
@@ -684,6 +685,10 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       <div
         className={`${rowCls} w-full text-left`}
         style={rowStyle}
+        // Lets SensitiveHiddenModal's restore flash find this exact row after
+        // it re-enters the feed (see NewsColumn's flashRestored) — otherwise a
+        // restored post reappears with no signal of what changed or where.
+        data-news-key={item.articleUrl || item.id}
       >
         {/* The thumbnail always opens the post — that's the escape hatch for a
             row whose headline is still blurred (and the same split the Feed
@@ -752,7 +757,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
     );
   }
   return (
-    <div className={rowCls} style={rowStyle}>
+    <div className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
       {thumbIsTile ? (
         <a
           href={item.articleUrl || undefined}
@@ -916,6 +921,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                   aria-label={`Play highlight: ${item.headline}`}
                   className={commonCls}
                   style={commonStyle}
+                  data-news-key={item.articleUrl || item.id}
                 >
                   {body}
                 </button>
@@ -930,6 +936,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                 onClick={handleExternalClick(item.articleUrl)}
                 className={commonCls}
                 style={commonStyle}
+                data-news-key={item.articleUrl || item.id}
               >
                 {body}
               </a>
@@ -941,7 +948,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, onSensitiveHidden }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; onSensitiveHidden?: (label: string, count: number) => void }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys, onHiddenItems }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; restoredKeys?: Set<string>; onHiddenItems?: (label: string, items: NewsItem[]) => void }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -974,24 +981,36 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   // 🎥 Videos filter: keep only clip-bearing items (includes Reddit v.redd.it
   // posts). Once loaded, a source with no videos renders nothing so the board
   // isn't full of empty cards.
-  // [rendered items, how many the sensitive filter removed]. The count is kept
-  // per source so the column can total it up in one footer line instead of
-  // repeating a note on every card.
-  const [shown, sensitiveHidden] = useMemo<[NewsItem[], number]>(
+  // [rendered items, the sensitive-filtered-out items]. The hidden LIST (not
+  // just a count) is kept per source so the column can total it into one
+  // footer line and hand the actual posts to SensitiveHiddenModal — Jacob
+  // 9/25: tapping "Show" used to just dump everything into the feed with no
+  // way to tell what was added or where.
+  const [shown, hiddenItems] = useMemo<[NewsItem[], NewsItem[]]>(
     // Videos only wins over Text posts (Jacob 9/14) — see passesNewsFilters.
     // (The 7/16 rule let Text posts re-admit headline-only rows under Videos
     // only; once Text posts defaulted ON on 8/9 that made Videos only a no-op.)
     () => {
       const preFilter = items.filter((item) => passesNewsFilters(item, !!videosOnly, !!showTextPosts));
-      const kept = hiddenCategories?.length ? preFilter.filter((item) => !isSensitiveNews(item, hiddenCategories)) : preFilter;
+      // A post the sensitive filter caught, but the user explicitly restored
+      // from the modal, counts as kept from here on — restoredKeys persists
+      // per-column for the session (see NewsColumn), same lifetime the old
+      // "Show" session override had.
+      const isRestored = (item: NewsItem) => !!restoredKeys?.has(item.articleUrl || item.id);
+      const hidden = hiddenCategories?.length
+        ? preFilter.filter((item) => isSensitiveNews(item, hiddenCategories) && !isRestored(item))
+        : [];
+      const kept = hiddenCategories?.length
+        ? preFilter.filter((item) => !isSensitiveNews(item, hiddenCategories) || isRestored(item))
+        : preFilter;
       // Bottom-to-top reading order (the ⇅ control next to the funnel). Reverse
       // AFTER filtering so the flip is over what's actually on screen, and copy
       // first — items is the fetched array other memos also read.
-      return [oldestFirst ? [...kept].reverse() : kept, preFilter.length - kept.length];
+      return [oldestFirst ? [...kept].reverse() : kept, hidden];
     },
-    [items, videosOnly, showTextPosts, oldestFirst, hiddenCategories],
+    [items, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys],
   );
-  useEffect(() => { onSensitiveHidden?.(source.label, sensitiveHidden); }, [sensitiveHidden, source.label, onSensitiveHidden]);
+  useEffect(() => { onHiddenItems?.(source.label, hiddenItems); }, [hiddenItems, source.label, onHiddenItems]);
   // Publish exactly what is rendered so modal prev/next never pages into a row
   // that the active Videos filter hid.
   useEffect(() => { onItemsLoaded?.(source.label, shown); }, [shown, source.label, onItemsLoaded]);
@@ -1043,7 +1062,6 @@ export default function NewsColumn({
   oldestFirst,
   removable,
   hiddenCategories,
-  onShowSensitive,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
 
@@ -1065,15 +1083,66 @@ export default function NewsColumn({
   // own "No headlines" card, must not show this.
   const allFiltered = sources.length > 0 && sources.every((s) => stateBySource[s.label] === "hidden");
 
-  // How many items the "Hide upsetting news" filter removed, per source, so the
-  // column prints ONE footer line rather than a note on every card.
-  const [sensitiveBySource, setSensitiveBySource] = useState<Record<string, number>>({});
-  const handleSensitiveHidden = useCallback((label: string, count: number) => {
-    setSensitiveBySource((prev) => (prev[label] === count ? prev : { ...prev, [label]: count }));
+  // What the "Hide upsetting news" filter removed, per source, so the column
+  // prints ONE footer line and SensitiveHiddenModal can list the real posts
+  // rather than just a count (Jacob 9/25).
+  const [hiddenItemsBySource, setHiddenItemsBySource] = useState<Record<string, NewsItem[]>>({});
+  const handleHiddenItems = useCallback((label: string, items: NewsItem[]) => {
+    setHiddenItemsBySource((prev) => (prev[label] === items ? prev : { ...prev, [label]: items }));
   }, []);
-  // Only count sources still mounted in this column — a swapped-out league must
-  // not leave its tally behind.
-  const sensitiveHidden = sources.reduce((n, s) => n + (sensitiveBySource[s.label] ?? 0), 0);
+  // Only sources still mounted in this column — a swapped-out league must not
+  // leave its hidden posts behind.
+  const hiddenItems = useMemo(
+    () => sources.flatMap((s) => hiddenItemsBySource[s.label] ?? []),
+    [sources, hiddenItemsBySource],
+  );
+  const sensitiveHidden = hiddenItems.length;
+
+  // Session-only restore set — mirrors the old showSensitiveNews escape hatch's
+  // lifetime (gone on next app open, the Settings toggle is the durable
+  // control), but per-POST instead of all-at-once, and it lives here (per
+  // column instance) rather than lifted to HomeContent: nothing outside this
+  // column needs to know which of ITS hidden posts got restored.
+  const [restoredKeys, setRestoredKeys] = useState<Set<string>>(new Set());
+  const [hiddenModalOpen, setHiddenModalOpen] = useState(false);
+  const keyOf = (item: NewsItem) => item.articleUrl || item.id;
+
+  // Flash + scroll the row(s) that just came back so it's obvious what was
+  // added and where (Jacob 9/13) — imperative DOM lookup by data-news-key
+  // rather than plumbing highlight state through every card/row component.
+  // Double rAF: the first lets React commit the item leaving hiddenItems
+  // (modal list) and re-entering `shown` (the actual feed row) before we go
+  // looking for its element.
+  const flashRestored = useCallback((keys: string[]) => {
+    if (keys.length === 0) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const els = keys
+          .map((k) => document.querySelector<HTMLElement>(`[data-news-key="${CSS.escape(k)}"]`))
+          .filter((el): el is HTMLElement => !!el);
+        els.forEach((el) => {
+          el.classList.add("news-restore-flash");
+          window.setTimeout(() => el.classList.remove("news-restore-flash"), 1800);
+        });
+        els[0]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    });
+  }, []);
+  const handleRestoreOne = useCallback((item: NewsItem) => {
+    const k = keyOf(item);
+    setRestoredKeys((prev) => (prev.has(k) ? prev : new Set(prev).add(k)));
+    flashRestored([k]);
+  }, [flashRestored]);
+  const handleRestoreAll = useCallback(() => {
+    const keys = hiddenItems.map(keyOf);
+    if (keys.length === 0) return;
+    setRestoredKeys((prev) => {
+      const next = new Set(prev);
+      keys.forEach((k) => next.add(k));
+      return next;
+    });
+    flashRestored(keys);
+  }, [hiddenItems, flashRestored]);
 
   // Walk sections in render order, append every post, and record where each
   // source starts in the shared modal list.
@@ -1121,7 +1190,8 @@ export default function NewsColumn({
             showTextPosts={showTextPosts}
             oldestFirst={oldestFirst}
             hiddenCategories={hiddenCategories}
-            onSensitiveHidden={handleSensitiveHidden}
+            restoredKeys={restoredKeys}
+            onHiddenItems={handleHiddenItems}
           />
         ))}
         {allFiltered && (
@@ -1143,10 +1213,19 @@ export default function NewsColumn({
         )}
         {sensitiveHidden > 0 && (
           <div className="pt-1 pb-2 text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-            <SensitiveHiddenNote count={sensitiveHidden} onShow={onShowSensitive} />
+            <SensitiveHiddenNote count={sensitiveHidden} onShow={() => setHiddenModalOpen(true)} />
           </div>
         )}
       </div>
+      {hiddenModalOpen && (
+        <SensitiveHiddenModal
+          items={hiddenItems}
+          enabledCategories={hiddenCategories ?? []}
+          onRestoreOne={handleRestoreOne}
+          onRestoreAll={handleRestoreAll}
+          onClose={() => setHiddenModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
