@@ -10,6 +10,7 @@ import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } fr
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { fetchCuratedBoxingEvent } from "./boxing";
+import { logoForTeam, ncaaSchoolLogo, isPlaceholderTeam } from "./teamLogos";
 import {
   chessEventState,
   buildChessEventUrl,
@@ -5058,7 +5059,10 @@ export async function fetchScheduleRatings(
 // which is fully CORS-open. Its response shape is flat (`items[]`) instead of
 // the nested `sports[0].leagues[0].teams[]` of the site host, and items lack
 // the `logos` array — we synthesize logo URLs from ESPN's CDN conventions
-// (or from the item's `guid`, for the college diamond sports).
+// (or from the item's `guid`, for the college diamond sports) — see
+// lib/teamLogos.ts. The core host has no cricket teams at all ("Invalid
+// sport/league combination"), so IPL reads its ten clubs off the standings
+// table instead, which is CORS-open and carries each club's logo.
 export interface SportTeam {
   id: string;           // "${sport}-${rawId}" — same shape as Team.id elsewhere
   rawId: string;        // ESPN's numeric id, useful for schedule fetches
@@ -5066,104 +5070,86 @@ export interface SportTeam {
   shortDisplayName: string;
   abbreviation: string;
   logo?: string;
+  slug?: string;        // "temple-owls" — how a diamond team finds its school logo
 }
 
-function logoForTeam(sport: Sport, rawId: string, abbreviation: string, guid?: string): string | undefined {
-  const abbr = abbreviation.toLowerCase();
-  // ESPN CDN team-logo path conventions, verified empirically. The major US
-  // leagues use abbreviation; NCAAM uses team id; soccer uses team id under
-  // a shared /soccer/ path.
-  switch (sport) {
-    case "mlb":
-    case "nba":
-    case "wnba":
-    case "nhl":
-    case "nfl":
-    // UFL follows the abbreviation convention (lou.png / bham.png answer 200,
-    // checked 2026-09-14).
-    case "ufl":
-      return abbr ? `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbr}.png` : undefined;
-    // NCAAM / NCAAW / NCAAF share ESPN's single college institution namespace:
-    // one `/i/teamlogos/ncaa/500/{id}.png` directory keyed by the school's id,
-    // regardless of which college sport's teams endpoint returned it. Only ncaam
-    // was wired here, so the NCAAF/NCAAW team-picker tabs (fetchSportTeams uses
-    // logoForTeam as its ONLY logo source — the core-API payload carries none)
-    // rendered every school logo-less while the sibling NCAAM tab showed them.
-    case "ncaam":
-    case "ncaah":
-    case "ncaawh":
-    case "ncaavb":
-      return `https://a.espncdn.com/i/teamlogos/ncaa/500/${rawId}.png`;
-    // College baseball/softball team ids are sport-specific (softball OU is 524,
-    // baseball UCLA is 66), NOT the ncaa/500 school ids — that path 404s for
-    // most of them (checked 2026-09-14: 5 of 6 softball ids, 2 of 8 baseball).
-    // The scoreboard event and the core teams payload both carry a `guid`, and
-    // a.espncdn.com/guid/<guid>/logos/default.png is the logo ESPN itself uses
-    // on the event (342 of 400 baseball teams have one). No guid → no logo,
-    // never a broken image.
-    case "ncaabase":
-    case "ncaasoft":
-      return guid ? `https://a.espncdn.com/guid/${guid}/logos/default.png` : undefined;
-    // Cricket follows the soccer convention (team id under its own sport path).
-    case "cricket":
-      return `https://a.espncdn.com/i/teamlogos/cricket/500/${rawId}.png`;
-    case "epl":
-    case "mls":
-    case "fifa":
-    case "ucl":
-    case "uel":
-    case "laliga":
-    case "seriea":
-    case "bundesliga":
-    case "ligue1":
-    case "ligamx":
-    case "nwsl":
-    case "efl":
-    case "libertadores":
-    case "euro":
-    case "afcon":
-    case "saudi":
-    case "uecl":
-    case "facup":
-    case "copadelrey":
-    case "dfbpokal":
-      return `https://a.espncdn.com/i/teamlogos/soccer/500/${rawId}.png`;
-    default:
-      return undefined;
-  }
+const STANDINGS_TEAM_SPORTS = new Set<Sport>(["cricket"]);
+
+type RawTeamItem = {
+  id?: string | number;
+  displayName?: string;
+  shortDisplayName?: string;
+  abbreviation?: string;
+  slug?: string;
+  guid?: unknown;
+  active?: boolean;
+  isActive?: boolean;
+  logos?: { href?: string }[];
+};
+
+function standingsTeamItems(data: unknown): RawTeamItem[] {
+  const d = data as { children?: { standings?: { entries?: { team?: RawTeamItem }[] } }[]; standings?: { entries?: { team?: RawTeamItem }[] } };
+  const groups = d?.children?.length ? d.children.map((c) => c.standings?.entries ?? []) : [d?.standings?.entries ?? []];
+  return groups.flat().map((e) => e.team).filter((t): t is RawTeamItem => !!t);
+}
+
+// slug → school id, from the basketball lists (whose ids ARE the ncaa/500
+// school ids). Matched 2026-09-25: this gives 56 of the 94 logo-less baseball
+// teams and 60 of the 112 softball teams their school logo, and also covers
+// teams whose guid logo 404s. What is left is mostly D2 / NAIA / JUCO.
+async function ncaaSchoolIdsBySlug(): Promise<Map<string, string>> {
+  const lists = await Promise.all([fetchSportTeams("ncaam"), fetchSportTeams("ncaaw")]);
+  const bySlug = new Map<string, string>();
+  for (const t of lists.flat()) if (t.slug && !bySlug.has(t.slug)) bySlug.set(t.slug, t.rawId);
+  return bySlug;
 }
 
 const sportTeamsCache = new Map<Sport, Promise<SportTeam[]>>();
 export function fetchSportTeams(sport: Sport): Promise<SportTeam[]> {
   const cached = sportTeamsCache.get(sport);
   if (cached) return cached;
+  const fromStandings = STANDINGS_TEAM_SPORTS.has(sport);
   const url = WORKER_SCOREBOARD_SPORTS.has(sport)
     ? `${workerOrigin()}${SPORT_PATHS[sport]}/teams`
-    // 500, not 400: college baseball lists 437 teams and softball 446 (read
-    // 2026-09-14), so the old cap silently dropped the tail of the alphabet.
-    : `https://sports.core.api.espn.com/v3/sports${SPORT_PATHS[sport].replace(/\/scoreboard$/, "")}/teams?limit=500`;
+    : fromStandings
+      ? standingsUrl(sport)
+      // 1000, not 500: college football lists 762 teams (read 2026-09-25) in
+      // ESPN's own order, not A-Z, so a 500 cap dropped a random third of them.
+      : `https://sports.core.api.espn.com/v3/sports${SPORT_PATHS[sport].replace(/\/scoreboard$/, "")}/teams?limit=1000`;
   const p = (async (): Promise<SportTeam[]> => {
     try {
       const res = await fetchWithRetry(url, 1, 8000);
       if (!res.ok) return [];
       const data = await res.json();
-      const items = Array.isArray(data?.items) ? data.items : [];
+      const items: RawTeamItem[] = fromStandings ? standingsTeamItems(data) : Array.isArray(data?.items) ? data.items : [];
       const out: SportTeam[] = [];
       for (const t of items) {
         if (!t?.id || !t?.displayName) continue;
-        if (t.active === false) continue;
+        if (t.active === false || t.isActive === false) continue;
         const rawId = String(t.id);
+        if (isPlaceholderTeam(rawId, t.displayName)) continue;
         const abbreviation = String(t.abbreviation || "");
+        // IPL's standings short name IS the abbreviation ("MI", "DC", "GT");
+        // the full club name reads better in the picker grid.
+        const short = t.shortDisplayName && !(fromStandings && t.shortDisplayName === abbreviation) ? t.shortDisplayName : t.displayName;
         out.push({
           id: `${sport}-${rawId}`,
           rawId,
           displayName: t.displayName,
-          shortDisplayName: t.shortDisplayName || t.displayName,
+          shortDisplayName: short,
           abbreviation,
-          // The worker leagues ship the logo on the item (theScore's CDN);
-          // ESPN's core items don't, hence the CDN-convention synthesis.
+          // The worker leagues and the standings rows ship the logo on the
+          // item; ESPN's core items don't, hence the CDN-convention synthesis.
           logo: t.logos?.[0]?.href || logoForTeam(sport, rawId, abbreviation, typeof t.guid === "string" ? t.guid : undefined),
+          slug: t.slug,
         });
+      }
+      if (sport === "ncaabase" || sport === "ncaasoft") {
+        const schools = await ncaaSchoolIdsBySlug();
+        for (const team of out) {
+          const schoolId = team.slug ? schools.get(team.slug) : undefined;
+          if (schoolId) team.logo = ncaaSchoolLogo(schoolId);
+        }
       }
       out.sort((a, b) => a.displayName.localeCompare(b.displayName));
       return out;

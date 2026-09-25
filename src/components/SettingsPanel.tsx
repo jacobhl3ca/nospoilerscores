@@ -3,6 +3,7 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LeagueData, Sport } from "@/lib/types";
 import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortRank } from "@/lib/espn";
+import { TEAM_PICKER_SKIP } from "@/lib/teamLogos";
 import { isTopEventsGameSport, TOP_EVENTS_DEFAULT_COUNT, TOP_EVENTS_ENABLED, type TopEventsMode, type TopEventsCount } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
 import { ALL_RECORD_LEAGUES, FREQUENT_RECORD_LEAGUES, WEEKLY_RECORD_LEAGUES, toggleAllRecordLeagues, toggleRecordLeague, upcomingRecordLeagues, type RecordLeague } from "@/lib/upcomingRecords";
@@ -1849,11 +1850,33 @@ function RadioGroup<T extends string>({
 // Always-visible team picker. Sport tab pills sit directly in the Favorite
 // teams section; the active tab's team list lazy-loads via fetchSportTeams
 // and is cached per-sport in lib/espn.ts so re-selecting a tab is instant.
-// Sports without a per-team concept (golf, tennis) are filtered out.
+// Sports without a per-team concept (golf, tennis, UFC, racing, …) are
+// filtered out — TEAM_PICKER_SKIP in lib/teamLogos.ts says why each one.
 // Cache + loader are hoisted to SettingsPanel so the favorites display can
 // also read team names from them (otherwise favorited teams that aren't in
 // today's loaded games would show "nba-8" instead of "Atlanta Hawks").
-const TEAM_PICKER_SKIP: Sport[] = ["golf", "tennis", "poker"];
+
+// A team row's logo, or a one-letter tile when ESPN has none (or it 404s) —
+// about 1 in 4 college baseball / softball teams, a handful of lower-division
+// cup sides. The tile keeps every name in the grid on the same left edge.
+function PickerTeamLogo({ logo, name }: { logo?: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (logo && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={logo} alt="" loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" onError={() => setFailed(true)} />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="w-4 h-4 shrink-0 rounded-sm flex items-center justify-center text-[9px] font-bold leading-none"
+      style={{ background: "rgba(127,127,127,0.22)" }}
+    >
+      {name.match(/[A-Za-z0-9]/)?.[0]?.toUpperCase() ?? "?"}
+    </span>
+  );
+}
 function TeamPicker({
   sports,
   favorites,
@@ -1890,6 +1913,7 @@ function TeamPicker({
     selectedSport && tabSports.some((s) => s.sport === selectedSport)
       ? selectedSport
       : null;
+  const activeLabel = activeSport ? tabSports.find((s) => s.sport === activeSport)?.label : undefined;
 
   // Fetch the active sport's teams when one is picked.
   useEffect(() => {
@@ -1997,8 +2021,10 @@ function TeamPicker({
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={activeSport ? `Search ${activeSport.toUpperCase()} teams` : "Search all teams"}
-        aria-label={activeSport ? `Search ${activeSport.toUpperCase()} teams` : "Search all teams"}
+        // The tab's own label ("NCAA Baseball", "IPL"), not the internal key —
+        // that read "Search NCAABASE teams" / "Search CRICKET teams".
+        placeholder={activeLabel ? `Search ${activeLabel} teams` : "Search all teams"}
+        aria-label={activeLabel ? `Search ${activeLabel} teams` : "Search all teams"}
         // Live filter over team names — filtered re-runs on every keystroke — not
         // a text field for prose. On mobile, iOS autocapitalize/autocorrect would
         // rewrite a partial team name as you type (e.g. "gia" toward "Giants" gets
@@ -2083,13 +2109,7 @@ function TeamPicker({
                   }}
                   title={isFav ? "Remove from favorites" : `Add ${t.displayName} to favorites`}
                 >
-                  {t.logo && (
-                    /* onError hides a 404'd/blocked ESPN logo so the row degrades
-                       to the team name instead of the browser's broken-image glyph
-                       — matches the onError guard on every other remote team logo. */
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={t.logo} alt="" loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                  )}
+                  <PickerTeamLogo logo={t.logo} name={t.shortDisplayName} />
                   <span className="min-w-0 truncate flex-1">{t.shortDisplayName}</span>
                   {/* Sport badge — only in cross-league view so the user can
                       tell Yankees (MLB) from Yankees-named results elsewhere */}

@@ -72,3 +72,41 @@ test("the women token cannot match a men's cut, and plain men would match a wome
   assert.ok(women.includes("men"), "why ncaah can never use a bare men token");
   assert.ok(men.includes("ncaa men") && !women.includes("ncaa men"));
 });
+
+test("efl: CBS for every game, then the home club, then the away club, all search-only", () => {
+  const EFL = CONFIG.efl;
+  // Bolton (358) at Norwich (381) — the 9/20 game only Norwich's channel cut.
+  const chain = buildCollegeFallbackChain(EFL, "EFL", { id: "381" }, { id: "358" }, []);
+  assert.deepEqual(chain.map((f) => f.channel), [
+    "CBS Sports Golazo - Europe", "CBS Sports Golazo", "Norwich City Football Club", "Bolton Wanderers FC",
+  ]);
+  assert.ok(chain.every((f) => f.searchOnly === true));
+  assert.deepEqual(chain[0].titleTokens, ["efl championship"]);
+  assert.deepEqual(chain[2].titleTokens, []);
+  // The app prefixes team ids with the sport; only the ESPN id is used.
+  assert.equal(buildCollegeFallbackChain(EFL, "EFL", { id: "efl-385" }, undefined, [])[2].channel, "Portsmouth FC");
+});
+
+test("efl: every club channel is title-masked and has a search page; every ESPN id maps to a club", async () => {
+  const HANDLES: Record<string, string> = (await import("../scripts/lib/channel-search.mjs")).CHANNEL_SEARCH_HANDLES;
+  const EFL = CONFIG.efl;
+  const clubs = Object.values(EFL.conferences);
+  assert.equal(clubs.length, 24);
+  for (const club of clubs) {
+    assert.ok(EFL.maskTitle?.includes(club), `${club} not masked`);
+    assert.ok(HANDLES[club], `${club} has no search handle`);
+  }
+  for (const key of Object.values(EFL.teamConferences ?? {})) assert.ok(EFL.conferences[key], key);
+  for (const ch of EFL.always ?? []) assert.ok(HANDLES[ch], ch);
+});
+
+test("ligamx: LIGA BBVA MX behind TUDN USA, search-only and title-masked", () => {
+  const chain = buildCollegeFallbackChain(CONFIG.ligamx, "TUDN USA", { id: "219" }, { id: "227" }, []);
+  assert.deepEqual(chain, [{ channel: "LIGA BBVA MX", titleTokens: [], searchOnly: true }]);
+  assert.deepEqual(CONFIG.ligamx.maskTitle, ["LIGA BBVA MX"]);
+});
+
+test("college chains are unchanged: no searchOnly flag", () => {
+  const chain = buildCollegeFallbackChain(NCAAF, PRIMARY, { conferenceId: "8" }, { conferenceId: "5" }, ["FOX"]);
+  assert.ok(chain.every((f) => !("searchOnly" in f)));
+});

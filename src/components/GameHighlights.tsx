@@ -438,7 +438,10 @@ export default function GameHighlights({
   const resolveOfficial = useCallback(async (): Promise<{ id: string; channel: string } | null> => {
     const primaryId = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, compTokens);
     if (primaryId && primaryChannel) return { id: primaryId, channel: primaryChannel };
+    // A searchOnly chain (efl, ligamx) is bake-only: the card trusts its baked
+    // id but never asks those channels live (see lib/collegeHighlights.ts).
     for (const f of fallbackChannels) {
+      if (f.searchOnly) continue;
       const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, f.channel, undefined, competition, false, weekNumber, compTokens.length ? compTokens : f.titleTokens);
       if (id) return { id, channel: f.channel };
     }

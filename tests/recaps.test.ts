@@ -211,6 +211,14 @@ test("length, ISO duration, relative time and watch-page seconds parse", () => {
   assert.equal(parseRelativeTime("2 days ago", now), now - 2 * 86400e3);
   assert.equal(parseRelativeTime("Streamed 3 hours ago", now), now - 3 * 3600e3);
   assert.equal(parseRelativeTime("", now), null);
+  // The short form YouTube served on every search card 2026-09-25.
+  assert.equal(parseRelativeTime("5d ago", now), now - 5 * 86400e3);
+  assert.equal(parseRelativeTime("2w ago", now), now - 14 * 86400e3);
+  assert.equal(parseRelativeTime("8mo ago", now), now - 8 * 30 * 86400e3);
+  assert.equal(parseRelativeTime("Streamed 1y ago", now), now - 365 * 86400e3);
+  assert.equal(parseRelativeTime("45m ago", now), now - 45 * 60e3);
+  assert.equal(parseRelativeTime("3h ago", now), now - 3 * 3600e3);
+  assert.equal(parseRelativeTime("Top 5d plays", now), null);
   assert.equal(parseWatchPageLengthSeconds('{"videoDetails":{"lengthSeconds":"596","title":"x"}}'), 596);
   assert.equal(parseWatchPageLengthSeconds("<html></html>"), null);
   assert.equal(parseWatchPagePublishMs('"publishDate":"2026-03-27T04:30:00-07:00","uploadDate":"2026-03-27T04:30:00-07:00"'), Date.parse("2026-03-27T04:30:00-07:00"));
@@ -523,6 +531,6 @@ test("narrow-column heading: Week N → WN; other headings change only past the 
   assert.deepEqual(rowRecapHeadings("Best of the day"), ["Best of the day", "Best of day"]);
   assert.deepEqual(rowRecapHeadings("Week 2"), ["Week 2", "W2"]);
   assert.deepEqual(rowRecapHeadings("Top plays"), ["Top plays"]);
-  // The stack gate sits between the sm column (192px) and the md column (225px).
-  assert.ok(RECAP_STACK_MAX_PX > 192 && RECAP_STACK_MAX_PX <= 225);
+  // The stack gate sits between the md column (225px) and the xl column (280px).
+  assert.ok(RECAP_STACK_MAX_PX > 225 && RECAP_STACK_MAX_PX <= 280);
 });

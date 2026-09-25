@@ -164,5 +164,112 @@
       "43": "ecac"
     },
     "networks": []
+  },
+  "efl": {
+    "searchOnly": true,
+    "titleTokens": [],
+    "always": [
+      "CBS Sports Golazo - Europe",
+      "CBS Sports Golazo"
+    ],
+    "conferences": {
+      "birmingham": "Birmingham City Football Club",
+      "blackburn": "Blackburn Rovers Football Club",
+      "bolton": "Bolton Wanderers FC",
+      "bristol-city": "Bristol City",
+      "burnley": "Burnley Football Club",
+      "cardiff": "Cardiff City FC",
+      "charlton": "Charlton Athletic Football Club",
+      "derby": "Derby County Football Club",
+      "lincoln": "Lincoln City FC",
+      "middlesbrough": "Middlesbrough FC",
+      "millwall": "Millwall FC",
+      "norwich": "Norwich City Football Club",
+      "portsmouth": "Portsmouth FC",
+      "preston": "Preston North End FC",
+      "qpr": "QPR FC",
+      "sheffield-united": "Sheffield United FC",
+      "southampton": "Southampton FC",
+      "stoke": "Stoke City FC",
+      "swansea": "Swansea City AFC",
+      "watford": "Watford FC",
+      "west-brom": "West Bromwich Albion",
+      "west-ham": "West Ham United FC",
+      "wolves": "Wolves",
+      "wrexham": "Wrexham AFC"
+    },
+    "teamConferences": {
+      "392": "birmingham",
+      "365": "blackburn",
+      "358": "bolton",
+      "333": "bristol-city",
+      "379": "burnley",
+      "347": "cardiff",
+      "372": "charlton",
+      "374": "derby",
+      "314": "lincoln",
+      "369": "middlesbrough",
+      "391": "millwall",
+      "381": "norwich",
+      "385": "portsmouth",
+      "394": "preston",
+      "334": "qpr",
+      "398": "sheffield-united",
+      "376": "southampton",
+      "336": "stoke",
+      "318": "swansea",
+      "395": "watford",
+      "383": "west-brom",
+      "371": "west-ham",
+      "380": "wolves",
+      "352": "wrexham"
+    },
+    "networks": [],
+    "channelTitleTokens": {
+      "CBS Sports Golazo - Europe": [
+        "efl championship"
+      ],
+      "CBS Sports Golazo": [
+        "efl championship"
+      ]
+    },
+    "maskTitle": [
+      "Birmingham City Football Club",
+      "Blackburn Rovers Football Club",
+      "Bolton Wanderers FC",
+      "Bristol City",
+      "Burnley Football Club",
+      "Cardiff City FC",
+      "Charlton Athletic Football Club",
+      "Derby County Football Club",
+      "Lincoln City FC",
+      "Middlesbrough FC",
+      "Millwall FC",
+      "Norwich City Football Club",
+      "Portsmouth FC",
+      "Preston North End FC",
+      "QPR FC",
+      "Sheffield United FC",
+      "Southampton FC",
+      "Stoke City FC",
+      "Swansea City AFC",
+      "Watford FC",
+      "West Bromwich Albion",
+      "West Ham United FC",
+      "Wolves",
+      "Wrexham AFC"
+    ]
+  },
+  "ligamx": {
+    "searchOnly": true,
+    "titleTokens": [],
+    "always": [
+      "LIGA BBVA MX"
+    ],
+    "conferences": {},
+    "networks": [],
+    "maskTitle": [
+      "LIGA BBVA MX"
+    ]
   }
 }

@@ -1,6 +1,6 @@
 import llwsRegions from "./llwsRegions.json";
 import collegeHighlightChannels from "./collegeHighlightChannels.json";
-import { buildCollegeFallbackChain, type ChainTeam, type CollegeHighlightConfig, type FallbackChannel } from "./collegeHighlights";
+import { buildCollegeFallbackChain, titleMaskedChainChannels, type ChainTeam, type CollegeHighlightConfig, type FallbackChannel } from "./collegeHighlights";
 import { isNflTeamChannel } from "./nflTeamChannels";
 
 // The JSON import types as a literal object, which cannot be indexed by an
@@ -546,8 +546,15 @@ export function leadChannelBlocksEmbeds(channels: string[]): boolean {
 // reopen the hole; anything else has to be listed.
 const TITLE_ALWAYS_MASKED_CHANNELS = new Set(["UFC", "ESPN MMA", "DAZN Boxing"]);
 
+//
+// Soccer club channels and LIGA BBVA MX (the efl / ligamx chains, 2026-09-25)
+// title by result — "Birmingham 2 Boro 2", "JUÁREZ 2-0 TIGRES" — in forms the
+// score regex does not all catch, so they are masked the same way. The list
+// lives with the chain (`maskTitle` in collegeHighlightChannels.json).
+let chainMaskedChannels: Set<string> | null = null;
 export function channelAlwaysMasksTitle(channels: string[]): boolean {
-  return channels.some((c) => TITLE_ALWAYS_MASKED_CHANNELS.has(c) || c.startsWith("UFC on "));
+  const chainMasked = (chainMaskedChannels ??= titleMaskedChainChannels(COLLEGE_HIGHLIGHT_CONFIG));
+  return channels.some((c) => TITLE_ALWAYS_MASKED_CHANNELS.has(c) || c.startsWith("UFC on ") || chainMasked.has(c));
 }
 
 export function getYouTubeSearchUrl(
