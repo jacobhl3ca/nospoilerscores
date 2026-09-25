@@ -22,6 +22,17 @@ import {
   type Picks,
   type SeriesResult,
 } from "@/lib/bracketPicks";
+import {
+  DEVICE_KEY,
+  PICKS_SYNC_EVENT,
+  SEEN_KEY,
+  STORE_KEY,
+  isPicks,
+  parseSaved,
+  syncPicksWithAccount,
+  type Saved,
+  type Sent,
+} from "@/lib/picksAccount";
 import { shadeFor } from "@/lib/playoffPicture";
 import { getApiBase } from "@/lib/youtube";
 
@@ -39,37 +50,14 @@ import { getApiBase } from "@/lib/youtube";
 // picks and its score in localStorage, which works with or without the shared
 // leaderboard. The leaderboard (/api/picks in public/_worker.js) takes one
 // entry per device and per name, and before the lock hands back names only.
+// Signed in, the account carries the device token and the submitted picks, so
+// every device on it shows and edits the same entry (lib/picksAccount).
 
 /** The prize rule, word for word. */
 export const PRIZE_RULE = "Perfect bracket OR first place: HideScore grants one wish (within reason).";
 
-interface Sent { name: string; picks: Picks; at: string }
-interface Saved { name: string; draft: Picks; sent: Sent | null; posted: boolean }
-
-const STORE_KEY = (id: string) => `picks-${id}`;
-const SEEN_KEY = (id: string) => `picks-results-seen-${id}`;
-const DEVICE_KEY = "hidescore-picks-device";
-
-const EMPTY: Saved = { name: "", draft: {}, sent: null, posted: false };
-
-const isPicks = (v: unknown): v is Picks =>
-  !!v && typeof v === "object" && !Array.isArray(v) && Object.values(v as object).every((x) => typeof x === "string");
-
 function readSaved(id: string): Saved {
-  try {
-    const raw = window.localStorage.getItem(STORE_KEY(id));
-    if (!raw) return EMPTY;
-    const v = JSON.parse(raw) as Partial<Saved>;
-    const sent = v.sent && typeof v.sent.name === "string" && isPicks(v.sent.picks) ? v.sent : null;
-    return {
-      name: typeof v.name === "string" ? v.name.slice(0, NAME_MAX) : "",
-      draft: isPicks(v.draft) ? v.draft : {},
-      sent,
-      posted: v.posted === true,
-    };
-  } catch {
-    return EMPTY;
-  }
+  try { return parseSaved(window.localStorage.getItem(STORE_KEY(id))); } catch { return parseSaved(null); }
 }
 
 function writeSaved(id: string, s: Saved) {
@@ -297,6 +285,20 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
 
   const locked = !!lockAt && now >= lockAt.getTime();
 
+  // Signed in, pick up the bracket this account submitted on another device,
+  // on open and whenever the app comes back to the front.
+  useEffect(() => {
+    const reread = () => setSaved(readSaved(id));
+    const onVis = () => { if (document.visibilityState === "visible") void syncPicksWithAccount(); };
+    window.addEventListener(PICKS_SYNC_EVENT, reread);
+    document.addEventListener("visibilitychange", onVis);
+    void syncPicksWithAccount();
+    return () => {
+      window.removeEventListener(PICKS_SYNC_EVENT, reread);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [id]);
+
   useEffect(() => {
     const ctrl = new AbortController();
     (async () => {
@@ -374,6 +376,7 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
       });
       if (r.ok) {
         save({ ...next, posted: true });
+        void syncPicksWithAccount();
         msg = { state: "ok", msg: "Submitted. You can change your picks until they lock." };
       } else if (r.status === 409) {
         msg = { state: "warn", msg: "Someone already has that name on the leaderboard. Try another name." };

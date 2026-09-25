@@ -14,6 +14,7 @@ import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports
 import { fromYmd } from "@/lib/etDay";
 import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
+import { syncPicksWithAccount } from "@/lib/picksAccount";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
@@ -900,6 +901,10 @@ export default function HomeContent({
         setAppAccountUse(Boolean(auth.signedIn && (auth.platforms?.ios || auth.platforms?.android)));
         if (!auth.signedIn) return;
         setRemoteSync(pushRemotePrefs);
+        // A device that submitted a bracket before the account knew about it
+        // hands its picks token up now, so the account's other devices can
+        // adopt it without anyone opening the Picks tab here (lib/picksAccount).
+        void syncPicksWithAccount();
         const remote = await fetchRemotePrefs();
         if (remote && Object.keys(remote).length > 0) {
           const merged = mergeRemotePreferences(loadPreferences(), remote);
