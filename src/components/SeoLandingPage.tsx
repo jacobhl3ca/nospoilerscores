@@ -160,7 +160,7 @@ export default function SeoLandingPage({
         <Link href="/about" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
           About
         </Link>
-      </div>
+      </nav>
 
       <script
         type="application/ld+json"
