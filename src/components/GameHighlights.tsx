@@ -6,7 +6,7 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
-import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, hasNoTrustedHighlightSource, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, hasNoTrustedHighlightSource, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolvedLengthSec, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId, getVerifiedEspnClip } from "@/lib/highlights";
 import { isDuplicateHighlightId } from "@/lib/highlightDedupe";
 import { clubNickname, formatRecapDuration } from "@/lib/recaps";
@@ -418,7 +418,10 @@ export default function GameHighlights({
   const resolveOfficial = useCallback(async (): Promise<{ id: string; channel: string } | null> => {
     const primaryId = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, compTokens);
     if (primaryId && primaryChannel) return { id: primaryId, channel: primaryChannel };
+    // A searchOnly chain (efl, ligamx) is bake-only: the card trusts its baked
+    // id but never asks those channels live (see lib/collegeHighlights.ts).
     for (const f of fallbackChannels) {
+      if (f.searchOnly) continue;
       const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, f.channel, undefined, competition, false, weekNumber, compTokens.length ? compTokens : f.titleTokens);
       if (id) return { id, channel: f.channel };
     }
@@ -534,6 +537,9 @@ export default function GameHighlights({
         setOfficialFromFotmob(!!officialHit?.fotmob);
         setOfficialFotmobHandOff(officialHit?.handOff ?? "");
         prefetchedOfficialId.current = officialId;
+        // A live-resolved clip has no baked length; take the one the lookup
+        // reported so this button reads "9m" like its baked neighbours.
+        if (officialId && officialId !== bakedOfficial) setOfficialDurationSec(resolvedLengthSec(officialId));
         setOfficialStatus(officialId ? "found" : "missing");
         let secondId = await secondP;
         if (!bakedSecondary && secondId && officialId && secondId === officialId) {
@@ -544,6 +550,7 @@ export default function GameHighlights({
           secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended, weekNumber, compTokens);
         }
         prefetchedVideoId.current = secondId;
+        if (secondId && secondId !== bakedSecondary) setSecondaryDurationSec(resolvedLengthSec(secondId));
         setSearchStatus(secondId ? "found" : "missing");
       })();
     }
@@ -706,6 +713,7 @@ export default function GameHighlights({
                 setFetchingOnClick(null);
                 if (hit) {
                   prefetchedOfficialId.current = hit.id;
+                  setOfficialDurationSec(resolvedLengthSec(hit.id));
                   setOfficialSource(hit.channel);
                   setOfficialFromFotmob(false);
                   setOfficialFotmobHandOff("");
@@ -773,6 +781,7 @@ export default function GameHighlights({
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;
+                  setSecondaryDurationSec(resolvedLengthSec(id));
                   setSearchStatus("found");
                   playHl(id, secondaryModalFallbackUrl!, shareCard);
                 } else {

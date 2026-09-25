@@ -17,6 +17,7 @@ import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
 } from "./lib/fotmob.mjs";
+import { channelSearchHandle, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 import { pickEspnGameClip } from "./lib/espn-clip.mjs";
 
@@ -2670,10 +2671,15 @@ const hlFallbackChain = (sport, primaryChannel, homeTeam, awayTeam, broadcasts) 
   const add = (c) => { if (c && c !== primaryChannel && !channels.includes(c)) channels.push(c); };
   const homeConf = confKey(homeTeam);
   const awayConf = confKey(awayTeam);
+  for (const c of cfg.always ?? []) add(c);
   add(homeConf ? cfg.conferences[homeConf] : undefined);
   add(awayConf ? cfg.conferences[awayConf] : undefined);
   for (const name of broadcasts ?? []) add(cfg.networks.find((n) => n.names.includes(name))?.channel);
-  return channels.map((channel) => ({ channel, titleTokens: cfg.channelTitleTokens?.[channel] ?? cfg.titleTokens }));
+  return channels.map((channel) => ({
+    channel,
+    titleTokens: cfg.channelTitleTokens?.[channel] ?? cfg.titleTokens,
+    ...(cfg.searchOnly ? { searchOnly: true } : {}),
+  }));
 };
 const hlHighlightTeamName = (sport, name, location) => {
   if (HL_LOCATION_NAME_SPORTS.has(sport)) return (location && String(location).trim()) || name;
@@ -3284,6 +3290,101 @@ async function hlEspnClipFinish() {
   }
 }
 
+// ── Channel search: our own pass for an empty official slot ──────────────
+// See scripts/lib/channel-search.mjs for why. Runs after the /api/youtube
+// lookups miss and BEFORE FotMob, on the primary channel and then each chain
+// channel, only for channels with a known search page (CHANNEL_SEARCH_HANDLES).
+// A searchOnly chain (efl clubs, LIGA BBVA MX) is asked here and nowhere else.
+//
+// Limits — YouTube throttles a burst of results pages with a redirect loop
+// (hit 2026-09-25 after ~25 pages in under a minute from one IP):
+//   • ≤30 pages per bake, 1.5 s apart; three failed fetches stop the pass for
+//     the rest of the bake;
+//   • one game + channel is not re-asked for 90 minutes;
+//   • off under GitHub Actions and with HL_CHANNEL_SEARCH=0 (the off switch).
+// Every hit logs HIGHLIGHT-CHANNEL-SEARCH, so a FotMob fill that still shows up
+// (HIGHLIGHT-FOTMOB) is a gap this pass has not learned yet.
+const HL_CS_ON = process.env.HL_CHANNEL_SEARCH !== "0" && process.env.GITHUB_ACTIONS !== "true";
+const HL_CS_MAX_FETCHES = 30;
+const HL_CS_GAP_MS = 1500;
+const HL_CS_REASK_MS = 90 * 60 * 1000;
+const HL_CS_MAX_FAILURES = 3;
+// Outside public/news for the same reason as the FotMob state file.
+const HL_CS_STATE_PATH = ".bake-state/channel-search.json";
+const hlCs = { fetches: 0, failures: 0, hits: 0, lastAt: 0, state: null };
+
+async function hlCsState() {
+  if (hlCs.state) return hlCs.state;
+  let state = null;
+  try { state = JSON.parse(await readFile(HL_CS_STATE_PATH, "utf8")); } catch { /* first run */ }
+  hlCs.state = { asked: state?.asked && typeof state.asked === "object" ? state.asked : {} };
+  return hlCs.state;
+}
+
+// The fullest title form of a team for the search box: "Boro" → "middlesbrough",
+// "Red Bull NY" → "New York Red Bulls". The title check afterwards still takes
+// every variant.
+function hlSearchName(team) {
+  return [hlAlias(team), ...(HL_WORKER_TEAM_VARIANTS[hlNormalizeTeam(team)] ?? [])]
+    .reduce((best, v) => (String(v).length > best.length ? String(v) : best), "");
+}
+
+// The id this channel's own search page holds for this game, gated, or null.
+async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTokens, exclude) {
+  const handle = channelSearchHandle(channel);
+  if (!HL_CS_ON || !handle || hlCs.failures >= HL_CS_MAX_FAILURES || hlCs.fetches >= HL_CS_MAX_FETCHES) return null;
+  const state = await hlCsState();
+  const askKey = `${key}|${channel}`;
+  if (Date.now() - (state.asked[askKey] ?? 0) < HL_CS_REASK_MS) return null;
+  const wait = hlCs.lastAt + HL_CS_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  hlCs.fetches++;
+  let cards;
+  try {
+    cards = await fetchYtChannelSearch(handle, `${hlSearchName(away)} ${hlSearchName(home)}`);
+  } catch (e) {
+    hlCs.failures++;
+    console.warn(`HIGHLIGHT-CHANNEL-SEARCH-FAIL ${key} ${channel}: ${e?.cause?.message || e?.message || e}`);
+    return null;
+  } finally {
+    hlCs.lastAt = Date.now();
+  }
+  state.asked[askKey] = Date.now();
+  const picks = pickChannelSearchCards(cards, {
+    titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home),
+    compOk: (title) => titleHasCompToken(title, compTokens),
+    gameMs: Date.parse(gameIso),
+    exclude,
+  });
+  for (const { videoId } of picks) {
+    if (!(await hlVideoMatchesChannel(videoId, channel))
+      || !(await hlVideoMatchesTeams(videoId, away, home))
+      || !(await hlVideoMatchesComp(videoId, compTokens))
+      || !(await hlVideoMatchesDate(videoId, gameIso))
+      || (await fetchYtEmbeddable(videoId)) !== true) {
+      console.warn(`HIGHLIGHT-CHANNEL-SEARCH-REJECT ${key} ${videoId} ${channel} (${away} vs ${home})`);
+      continue;
+    }
+    hlCs.hits++;
+    console.log(`HIGHLIGHT-CHANNEL-SEARCH ${key} ${videoId} ${channel}`);
+    return videoId;
+  }
+  return null;
+}
+
+async function hlChannelSearchFinish() {
+  console.log(`HIGHLIGHT-CHANNEL-SEARCH-REQUESTS n=${hlCs.fetches} hits=${hlCs.hits} failures=${hlCs.failures}`);
+  if (!hlCs.state) return;
+  const cutoff = Date.now() - HL_ENTRY_TTL_MS;
+  for (const [k, at] of Object.entries(hlCs.state.asked)) if (!(at > cutoff)) delete hlCs.state.asked[k];
+  try {
+    await mkdir(dirname(HL_CS_STATE_PATH), { recursive: true });
+    await writeFile(HL_CS_STATE_PATH, JSON.stringify(hlCs.state));
+  } catch (e) {
+    console.warn(`HIGHLIGHT-CHANNEL-SEARCH state not saved: ${e?.message || e}`);
+  }
+}
+
 async function loadPriorHighlights() {
   let local = null;
   try {
@@ -3594,6 +3695,7 @@ async function bakeGameHighlights() {
             ageRejected++;
           }
           for (const fb of official ? [] : fallbacks) {
+            if (fb.searchOnly) continue;
             const tokens = officialTokensFor(fb);
             const id = await hlResolve(away, home, dateStr, series, fb.channel, undefined, competition, false, week, tokens);
             if (!id) continue;
@@ -3609,6 +3711,21 @@ async function bakeGameHighlights() {
             official = id;
             officialChannel = fb.channel;
             console.log(`${lg.sport} fallback → ${fb.channel} ${id} (${away} vs ${home})`);
+            break;
+          }
+        }
+        // The /api/youtube lookups missed: search each channel's own page
+        // (see hlChannelSearchOfficial), primary first, then the chain.
+        if (!official) {
+          const channels = [
+            { channel: primaryChannel, tokens: compTokens },
+            ...fallbacks.map((fb) => ({ channel: fb.channel, tokens: officialTokensFor(fb) })),
+          ];
+          for (const c of channels) {
+            const id = await hlChannelSearchOfficial(key, c.channel, away, home, item.date, c.tokens, [prevExtended]);
+            if (!id) continue;
+            official = id;
+            officialChannel = c.channel;
             break;
           }
         }
@@ -3817,6 +3934,7 @@ async function bakeGameHighlights() {
 
   if (HL_FOTMOB_ON) await hlFotmobFinish();
   if (HL_ESPN_CLIP_ON) await hlEspnClipFinish();
+  if (HL_CS_ON) await hlChannelSearchFinish();
 
   const ageLine = `HIGHLIGHT-AGE-UNREADABLE n=${hlAgeUnreadable}/${hlAgeChecks} (upload date unreadable; those ids were KEPT)`;
   if (hlAgeUnreadable > 0) console.warn(ageLine); else console.log(ageLine);
