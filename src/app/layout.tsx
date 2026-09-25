@@ -264,7 +264,7 @@ const JSON_LD = {
         "@type": "ContactPoint",
         email: "hi@hidescore.com",
         contactType: "customer support",
-        url: "https://hidescore.com/about#contact",
+        url: "https://hidescore.com/contact",
       },
       // Both store listings, so the Organization resolves to the same entity
       // whichever storefront a crawler arrives from.

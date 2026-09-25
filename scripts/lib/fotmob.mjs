@@ -167,20 +167,37 @@ export function findFotmobFixture(fixtures, { away, home, dateIso }, variantsOf 
   return hits.length === 1 ? hits[0] : null;
 }
 
+// A result score in a clip title: "GETAFE CF 1 - 0 MÁLAGA CF", "TOULOUSE FC -
+// HAVRE AC (2-1)". Two 1–2 digit numbers around a dash, not part of a longer
+// number, so "2026-27", "Matchday 4 – Bundesliga" and "26/27" stay clean.
+export function titlePrintsScore(title) {
+  return /(?<!\d)\d{1,2}\s*[-–—]\s*\d{1,2}(?!\d)/.test(String(title ?? ""));
+}
+
 // The gates every FotMob id must pass before it may fill the official slot.
 // oEmbed first: a 401 there means the uploader turned embedding off (2 of 5
 // EPL club clips on the probe). The uploader oEmbed reports becomes the slot's
 // channel marker. oEmbed 200 is NOT enough on its own: every LALIGA EA SPORTS
 // clip FotMob linked on 2026-09-23 passed oEmbed yet refuses to play embedded
-// (the /embed shell says playableInEmbed false, and the modal showed "can't
-// play here"). Its hand-off opens YouTube, where those titles print the score,
-// so an unplayable clip is rejected here. Returns { ok: true, channel } or
-// { ok: false, reason }.
-export async function gateFotmobVideo(videoId, { oembedMeta, embeddable, matchesTeams, matchesDate }) {
+// (the /embed shell says UNPLAYABLE, and the modal showed "can't play here").
+//
+// Until 2026-09-25 such a clip was rejected, because its hand-off opens
+// YouTube, where LaLiga and Ligue 1 titles print the score. Jacob chose the NFL
+// behaviour instead: keep the button, open straight on the "Watch on YouTube"
+// card, and say on that card when the title shows the score. So an
+// embed-blocked clip now passes if it plays on youtube.com from the mini (US) —
+// `watchable` — and comes back flagged `embedBlocked`, with `titleScore` when
+// its title prints a result. A TUDN Liga MX cut fails `watchable` (not
+// available in the US at all) and is still rejected as "embed". An unknown
+// embed verdict (null) is rejected as before. Returns { ok: true, channel,
+// embedBlocked?, titleScore? } or { ok: false, reason }.
+export async function gateFotmobVideo(videoId, { oembedMeta, embeddable, watchable, matchesTeams, matchesDate }) {
   const meta = await oembedMeta(videoId);
   if (!meta?.author) return { ok: false, reason: "oembed" };
-  if (!(await embeddable(videoId))) return { ok: false, reason: "embed" };
+  const embed = await embeddable(videoId);
+  if (embed !== true && !(embed === false && watchable && (await watchable(videoId)) === true)) return { ok: false, reason: "embed" };
   if (!(await matchesTeams(videoId))) return { ok: false, reason: "teams" };
   if (!(await matchesDate(videoId))) return { ok: false, reason: "date" };
-  return { ok: true, channel: meta.author };
+  if (embed === true) return { ok: true, channel: meta.author };
+  return { ok: true, channel: meta.author, embedBlocked: true, ...(titlePrintsScore(meta.title) ? { titleScore: true } : {}) };
 }

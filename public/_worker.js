@@ -730,6 +730,15 @@ export default {
           "københavn": ["københavn", "kobenhavn", "copenhagen", "fc copenhagen"],
           "real madrid": ["real madrid", "madrid"],
           "barcelona": ["barcelona", "barça", "barca", "fc barcelona"],
+          // League title forms the FotMob step rejected as "teams" on the
+          // 2026-09-19/20 weekend: Serie A "ROMA-INTER", Bundesliga "1. FC KÖLN",
+          // Sheffield United's own channel, Portsmouth's "Pompey v Blackburn",
+          // Ligue 1's "TOULOUSE FC - HAVRE AC".
+          "as roma": ["as roma", "roma"],
+          "cologne": ["cologne", "köln", "koln", "fc köln", "1. fc köln"],
+          "sheffield utd": ["sheffield utd", "sheffield united", "sheff utd"],
+          "portsmouth": ["portsmouth", "pompey"],
+          "le havre ac": ["le havre ac", "le havre", "havre ac"],
           // World Cup national teams — ESPN shortDisplayName ↔ the full country
           // name official broadcasters (FOX) put in titles. Only the divergent /
           // variant-spelling teams need an entry; the rest (Brazil, France, …)

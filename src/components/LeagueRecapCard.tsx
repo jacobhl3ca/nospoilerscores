@@ -30,13 +30,14 @@ import type { ShareCardMeta } from "@/lib/shareCard";
 // The reserveSlot spacer mirrors whichever layout is live so sibling columns
 // keep the same top offset.
 //
-// `onShowBracket`: the same row on TODAY's MLB column during the playoff
-// window holds a "Playoff bracket" pill with one icon-only button (Jacob 9/24:
-// "playoff bracket bubble … where nfl's week highlights are, that row"; then
-// "make it playoff bracket name and the button is just the icon"). Same pill
-// and button box model, so it lines up with a sibling's recap exactly as a
-// recap does. When the day also has a recap, the recap keeps the heading and
-// the bracket icon joins its buttons, last.
+// `onShowPlayoffs`: the same row on TODAY's MLB column during the playoff
+// window holds a "Playoffs" pill with three text buttons — Bracket, Odds,
+// Picks — each opening the playoff picture on that tab (Jacob 9/25: "just have
+// playoff word, then 3 selectable things"). Same pill and button box model, so
+// it lines up with a sibling's recap exactly as a recap does, and on a phone it
+// stacks the same way: "Playoffs" on top, the three buttons in a row under it.
+// When the day also has a recap, the recap keeps the heading and a bracket
+// icon joins its buttons, last.
 
 // Outer pill and button classes per layout (see the header note). Shared by
 // the real pill and the reserveSlot spacer so their heights always agree.
@@ -45,12 +46,19 @@ const STACKED_PILL = "flex-col gap-1 px-1.5 py-1.5";
 const ROW_BTN = "gap-1 px-2";
 const STACKED_BTN = "flex-1 min-w-0 gap-0.5 px-0";
 
+export type PlayoffsTab = "bracket" | "odds" | "picks";
+const PLAYOFFS_TABS: { key: PlayoffsTab; label: string }[] = [
+  { key: "bracket", label: "Bracket" },
+  { key: "odds", label: "Odds" },
+  { key: "picks", label: "Picks" },
+];
+
 export default function LeagueRecapCard({
   sport,
   date,
   lastPlayedDate,
   reserveSlot = false,
-  onShowBracket,
+  onShowPlayoffs,
   onPlayHighlight,
   onPlayEmbed,
 }: {
@@ -65,9 +73,9 @@ export default function LeagueRecapCard({
   // first game cards of every column sit at the same y — the same idea as
   // PlayoffSubtitle's transparent header spacer.
   reserveSlot?: boolean;
-  // Opens the playoff picture on its Bracket tab. Set only when the bracket
+  // Opens the playoff picture on the given tab. Set only when the playoffs
   // pill is due (see the header note).
-  onShowBracket?: (() => void) | null;
+  onShowPlayoffs?: ((tab: PlayoffsTab) => void) | null;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
 }) {
@@ -136,15 +144,15 @@ export default function LeagueRecapCard({
     };
   }, [sport, ymd]);
 
-  // Icon only. The zero-width text keeps the button's line box, so it is as
-  // tall as a "▶ 8m" button and the pill as tall as the reserveSlot spacer.
-  const bracketButton = onShowBracket ? (
+  // Icon only, for a day that also has a recap. The zero-width text keeps the
+  // button's line box, so it is as tall as a "▶ 8m" button.
+  const bracketButton = onShowPlayoffs ? (
     <button
       type="button"
       data-recap-bracket
       onClick={(e) => {
         e.stopPropagation();
-        onShowBracket();
+        onShowPlayoffs("bracket");
       }}
       className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? STACKED_BTN : ROW_BTN}`}
       style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
@@ -156,12 +164,12 @@ export default function LeagueRecapCard({
     </button>
   ) : null;
 
-  if (!records.length && onShowBracket) {
+  if (!records.length && onShowPlayoffs) {
     return (
       <div
         ref={setEl}
         data-league-recap={sport}
-        data-recap-kind="bracket"
+        data-recap-kind="playoffs"
         data-recap-layout={stacked ? "stacked" : "row"}
         className={`mb-2 rounded-lg flex ${stacked ? STACKED_PILL : ROW_PILL}`}
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
@@ -171,10 +179,28 @@ export default function LeagueRecapCard({
           className="flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate"
           style={{ color: "var(--text)" }}
         >
-          Playoff bracket
+          Playoffs
         </span>
         <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
-          {bracketButton}
+          {PLAYOFFS_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              data-recap-playoffs-tab={t.key}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowPlayoffs(t.key);
+              }}
+              // Stacked: sized by their words plus an equal share of what is
+              // left, since "Bracket" needs ~33px and an even third is 32px.
+              className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? "flex-auto gap-0.5 px-0" : ROW_BTN}`}
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              aria-label={`Playoff ${t.label.toLowerCase()}`}
+              title={`Playoff ${t.label.toLowerCase()}`}
+            >
+              <span className={`${minsText} font-medium whitespace-nowrap`}>{t.label}</span>
+            </button>
+          ))}
         </div>
       </div>
     );

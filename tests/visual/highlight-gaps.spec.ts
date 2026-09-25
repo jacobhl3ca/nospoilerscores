@@ -239,6 +239,47 @@ test("an embed-blocked league goes straight to the YouTube card, no retry chain"
   expect(requests).toEqual([]);
 });
 
+// 2026-09-25: a FotMob official the uploader will not let play embedded
+// (LALIGA EA SPORTS) is kept and handed off like the NFL's, straight to the
+// card, with a line saying the YouTube title shows the score.
+test("an embed-blocked FotMob clip opens straight on the YouTube card with the score note", async ({ page }) => {
+  const playerApiLoads: string[] = [];
+  page.on("request", (r) => { if (r.url().includes("youtube.com/iframe_api")) playerApiLoads.push(r.url()); });
+  await page.clock.setFixedTime(new Date("2026-09-21T16:00:00-04:00"));
+  await setSingleLeague(page, "laliga");
+  await page.route("**/news/highlights.json", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ games: { "laliga:401882861": {
+      t: Date.parse("2026-09-21T12:00:00Z"), teams: ["Málaga", "Getafe"], matchup: "getafe|malaga", eventDate: "2026-09-20T12:00Z",
+      official: "VLO0aPib4SU", officialChannel: "LALIGA EA SPORTS", officialDurationSec: 170, sourcePolicy: "official-channel",
+      src: "fotmob", officialEmbeddable: false, officialTitleScore: true,
+    } } }),
+  }));
+  await page.route("**/soccer/esp.1/scoreboard?**", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: finishedScoreboard({
+      id: "401882861",
+      date: "2026-09-20T12:00:00Z",
+      away: { id: "mal", displayName: "Málaga", shortDisplayName: "Málaga", abbreviation: "MCF", score: "0" },
+      home: { id: "get", displayName: "Getafe", shortDisplayName: "Getafe", abbreviation: "GET", score: "0" },
+    }),
+  }));
+  await page.route("**/api/youtube?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":null}' }));
+
+  await page.goto("/yesterday");
+  const official = page.getByRole("button", { name: /highlights/i }).first();
+  await expect(official).toBeVisible();
+  await official.click();
+  await expect(page.getByText("the league blocked embedded playback")).toBeVisible();
+  await expect(page.getByText("YouTube shows the score in this video’s title")).toBeVisible();
+  await expect(page.getByRole("button", { name: /watch on youtube/i }).first()).toBeVisible();
+  await expect(page.locator("iframe")).toHaveCount(0);
+  await page.waitForTimeout(1500);
+  expect(playerApiLoads, "the IFrame API was fetched, so a player was being built").toEqual([]);
+});
+
 // Lit 2026-09-19 against ESPN FC. The league is no longer dark, but the two
 // properties that kept it dark are now carried by the request itself: every
 // lookup must name the exact channel AND demand the competition in the title.

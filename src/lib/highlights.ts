@@ -39,6 +39,12 @@ export type BakedHighlight = {
   // club, league or broadcaster). The bake gated it through oEmbed, both teams
   // and the upload date. See scripts/lib/fotmob.mjs.
   src?: "fotmob";
+  // FotMob official only: false when the uploader refuses every embed but the
+  // clip plays on youtube.com (LALIGA EA SPORTS, Ligue 1). The button opens
+  // straight on the "Watch on YouTube" card, like the NFL's. officialTitleScore
+  // marks a YouTube title that prints the result, so the card says so.
+  officialEmbeddable?: false;
+  officialTitleScore?: true;
 };
 
 const BAKED_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000;
