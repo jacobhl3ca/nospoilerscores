@@ -1,7 +1,8 @@
 import Link from "next/link";
 import DocTopBar from "@/components/DocTopBar";
+import FeedbackBox from "@/components/FeedbackBox";
 import type { ReactNode } from "react";
-import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
+import { formatUpdated, routeFirstPublished, routeLastModified } from "@/lib/routeLastModified";
 
 type FaqItem = {
   q: string;
@@ -14,6 +15,8 @@ type LinkItem = {
 };
 
 type SeoLandingPageProps = {
+  // Small uppercase kicker above the h1. Was a plain "HideScore" line until
+  // 2026-09-25; the pinned bar already carries the brand.
   eyebrow?: string;
   h1: string;
   // Short label beside the logo in the pinned top bar ("HideScore | NFL
@@ -54,7 +57,7 @@ type SeoLandingPageProps = {
 };
 
 export default function SeoLandingPage({
-  eyebrow = "HideScore",
+  eyebrow = "Spoiler-free guide",
   h1,
   subject,
   lead,
@@ -77,22 +80,74 @@ export default function SeoLandingPage({
   // Skipped on a page with a live `lead` panel: the MLB playoff pages change
   // every game day, and a months-old source date would undersell them.
   const updated = lead ? null : routeLastModified(canonical);
+  const published = routeFirstPublished(canonical);
+  const topic = subject ?? h1.replace(/\s+without spoilers$/i, "");
+  const route = canonical.replace(/^\//, "");
+  // Read time over everything a reader scrolls past, FAQ included, at 230 wpm.
+  const words = [...intro, ...sections.flatMap((x) => [x.h, x.p]), ...bullets, ...faq.flatMap((x) => [x.q, x.a])]
+    .join(" ")
+    .split(/\s+/).length;
+  const readMin = Math.max(1, Math.ceil(words / 230));
+  const body = { color: "var(--text-body)" };
+  const muted = { color: "var(--text-muted)" };
+  // Article layout 2026-09-25 (Jacob: "more official looking"): breadcrumb +
+  // kicker, a larger h1 with the meta description as its dek, a byline row, an
+  // "At a glance" box built from `bullets` (they used to sit at the bottom
+  // under "What HideScore helps with"), darker body copy, and an "About this
+  // guide" box with a Report-an-error link. No page's copy changed.
   return (
-    <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
-      <DocTopBar
-        route={canonical.replace(/^\//, "")}
-        ctaHref={ctaHref}
-        subject={subject ?? h1.replace(/\s+without spoilers$/i, "")}
-      />
-      <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
+    <main className="mx-auto max-w-2xl px-4 doc-page text-base leading-relaxed" style={{ color: "var(--text)" }}>
+      <DocTopBar route={route} ctaHref={ctaHref} subject={topic} />
+
+      <nav aria-label="Breadcrumb" className="mb-2 text-xs" style={muted}>
+        <ol className="flex flex-wrap items-center gap-x-1.5">
+          <li>
+            <Link href="/" className="hover:underline">HideScore</Link>
+          </li>
+          <li aria-hidden="true">›</li>
+          <li>
+            <Link href="/spoiler-free-sports" className="hover:underline">Guides</Link>
+          </li>
+          <li aria-hidden="true">›</li>
+          <li aria-current="page" className="font-medium" style={{ color: "var(--text-secondary)" }}>
+            {topic}
+          </li>
+        </ol>
+      </nav>
+      <p className="mb-2 text-[11.5px] font-bold uppercase tracking-[0.09em]" style={{ color: "var(--accent)" }}>
         {eyebrow}
       </p>
-      <h1 className="text-2xl font-bold mb-4">{h1}</h1>
-      {updated ? (
-        <p className="-mt-2 mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
-          Updated <time dateTime={updated.toISOString()}>{formatUpdated(updated)}</time>
+      <h1 className="mb-3 text-3xl sm:text-4xl font-extrabold tracking-tight leading-[1.12]">{h1}</h1>
+      {/* The meta description doubles as the dek. Not on a live-panel page:
+          there the panel is the summary, and the dek would push it a screen
+          further from a visitor arriving from search. */}
+      {lead ? null : (
+        <p className="mb-4 text-lg leading-snug" style={body}>
+          {schemaDescription}
         </p>
-      ) : null}
+      )}
+
+      <div
+        className="mb-6 flex items-center gap-2.5 py-2.5 text-[13px]"
+        style={{ ...muted, borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
+      >
+        <svg className="w-6 h-6 shrink-0 header-logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <circle cx="16" cy="16" r="16" className="header-logo-bg" />
+          <text x="16" y="21.5" textAnchor="middle" fontSize="15" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
+        </svg>
+        <p>
+          By{" "}
+          <Link href="/about" className="font-semibold hover:underline" style={{ color: "var(--text)" }}>
+            the HideScore team
+          </Link>
+          {updated ? (
+            <>
+              {" · "}Updated <time dateTime={updated.toISOString()}>{formatUpdated(updated, "short")}</time>
+            </>
+          ) : null}
+          {` · ${readMin} min read`}
+        </p>
+      </div>
 
       {lead ? (
         // Centred on the page and allowed past the 2xl text column: the bracket
@@ -103,27 +158,31 @@ export default function SeoLandingPage({
         </div>
       ) : null}
 
+      <aside className="doc-glance mb-7 rounded-md px-4 py-3" aria-labelledby="doc-glance-title">
+        <h2 id="doc-glance-title" className="mb-1.5 text-[11.5px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--accent)" }}>
+          At a glance
+        </h2>
+        <ul className="list-disc space-y-1 pl-5 text-[15px]" style={body}>
+          {bullets.map((bullet, i) => (
+            <li key={`${bullet}-${i}`}>{bullet}</li>
+          ))}
+        </ul>
+      </aside>
+
       {intro.map((paragraph, i) => (
-        <p key={`${paragraph}-${i}`} className="mb-4" style={{ color: "var(--text-muted)" }}>
+        <p key={`${paragraph}-${i}`} className="mb-4" style={body}>
           {paragraph}
         </p>
       ))}
 
       {sections.map((section, i) => (
         <section key={`${section.h}-${i}`}>
-          <h2 className="text-lg font-semibold mt-8 mb-2">{section.h}</h2>
-          <p className="mb-4" style={{ color: "var(--text-muted)" }}>
+          <h2 className="text-xl font-bold tracking-tight mt-9 mb-2">{section.h}</h2>
+          <p className="mb-4" style={body}>
             {section.p}
           </p>
         </section>
       ))}
-
-      <h2 className="text-lg font-semibold mt-8 mb-3">What HideScore helps with</h2>
-      <ul className="mb-4 space-y-1.5 list-disc pl-5" style={{ color: "var(--text-muted)" }}>
-        {bullets.map((bullet, i) => (
-          <li key={`${bullet}-${i}`}>{bullet}</li>
-        ))}
-      </ul>
 
       <div
         className="mt-8 rounded-xl px-5 py-5 text-center"
@@ -134,12 +193,12 @@ export default function SeoLandingPage({
           href={ctaHref}
           className="inline-block rounded-lg px-5 py-2.5 font-semibold"
           style={{ background: "var(--accent)", color: "#fff" }}
-          data-umami-event={`seo-open-${canonical.replace(/^\//, "")}`}
+          data-umami-event={`seo-open-${route}`}
         >
           {ctaLabel}
         </Link>
         {links.length > 0 && (
-          <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-muted)" }}>
+          <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs" style={muted}>
             {links.map((link) => (
               <Link key={link.href} href={link.href} className="underline underline-offset-2">
                 {link.label}
@@ -149,22 +208,48 @@ export default function SeoLandingPage({
         )}
       </div>
 
-      <h2 className="text-lg font-semibold mt-8 mb-3">Frequently asked questions</h2>
+      <h2 className="text-xl font-bold tracking-tight mt-9 mb-3">Frequently asked questions</h2>
       <section className="space-y-5">
         {faq.map((item, i) => (
           <div key={`${item.q}-${i}`}>
             <h3 className="font-semibold mb-1">{item.q}</h3>
-            <p style={{ color: "var(--text-muted)" }}>{item.a}</p>
+            <p style={body}>{item.a}</p>
           </div>
         ))}
       </section>
+
+      <aside
+        className="mt-10 rounded-xl px-4 py-4 text-sm"
+        style={{ ...body, background: "var(--bg-card)" }}
+        aria-labelledby="doc-about-title"
+      >
+        <h2 id="doc-about-title" className="mb-1 font-bold" style={{ color: "var(--text)" }}>
+          About this guide
+        </h2>
+        <p>
+          Written and kept up to date by{" "}
+          <Link href="/about" className="underline underline-offset-2">
+            the HideScore team
+          </Link>
+          , who build the spoiler-free board it describes.
+          {updated ? <> Last updated {formatUpdated(updated)}.</> : null}
+        </p>
+        {/* A div, not a p: FeedbackBox renders its modal (a div + form) in place. */}
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>Spotted a mistake?</span>
+          <FeedbackBox label="Report an error" seed={`Error on ${canonical}: `} />
+          <Link href="/contact" className="underline underline-offset-2" style={muted}>
+            Contact
+          </Link>
+        </div>
+      </aside>
 
       <div className="mt-10 flex flex-wrap gap-x-4 gap-y-2">
         <Link
           href="/"
           className="underline underline-offset-2"
           style={{ color: "var(--text-muted)" }}
-          data-umami-event={`doc-bottom-open-${canonical.replace(/^\//, "")}`}
+          data-umami-event={`doc-bottom-open-${route}`}
         >
           Back to HideScore
         </Link>
@@ -220,7 +305,8 @@ export default function SeoLandingPage({
                 "@id": `https://hidescore.com${canonical}#breadcrumb`,
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
-                  { "@type": "ListItem", position: 2, name: h1, item: `https://hidescore.com${canonical}` },
+                  { "@type": "ListItem", position: 2, name: "Guides", item: "https://hidescore.com/spoiler-free-sports" },
+                  { "@type": "ListItem", position: 3, name: h1, item: `https://hidescore.com${canonical}` },
                 ],
               },
               {
@@ -247,6 +333,24 @@ export default function SeoLandingPage({
                   name: item.q,
                   acceptedAnswer: { "@type": "Answer", text: item.a },
                 })),
+              },
+              {
+                // The article itself, with the byline's author (2026-09-25).
+                // Author and publisher point at layout.tsx's Organization node
+                // by @id, like the WebApplication/WebSite nodes do.
+                "@type": "Article",
+                "@id": `https://hidescore.com${canonical}#article`,
+                headline: h1,
+                description: schemaDescription,
+                url: `https://hidescore.com${canonical}`,
+                mainEntityOfPage: `https://hidescore.com${canonical}`,
+                inLanguage: "en",
+                image: "https://hidescore.com/og-image.png",
+                author: { "@id": "https://hidescore.com/#organization" },
+                publisher: { "@id": "https://hidescore.com/#organization" },
+                isPartOf: { "@id": "https://hidescore.com/#website" },
+                ...(published ? { datePublished: published.toISOString() } : {}),
+                ...(updated ? { dateModified: updated.toISOString() } : {}),
               },
               ...extraSchema,
             ],
