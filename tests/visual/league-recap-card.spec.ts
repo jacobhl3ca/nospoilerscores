@@ -189,7 +189,7 @@ test("the recap pill sits on top of the NFL and MLB columns on /yesterday, and t
 // plus MLB's two. At 390px a column is 114px wide; before 9/24 the pill kept
 // one row, so the buttons ran into the next column and MLB's heading truncated
 // to "Best of…". Now: stacked (heading over an equal-width button row), nothing
-// past the pill's own edge, the short heading whole; desktop keeps one row.
+// past the pill's own edge, the full heading whole; desktop keeps one row.
 const RECAPS_THREE = JSON.stringify({
   fetchedAt: "2026-09-14T14:00:00Z",
   recaps: {
@@ -224,7 +224,7 @@ async function pillMetrics(page: Page, sport: string) {
   }, sport);
 }
 
-test("phone (390px): three NFL cuts stack under \"W1\" and stay inside the column; desktop keeps one row", async ({ page }, testInfo) => {
+test("phone (390px): three NFL cuts stack under \"Week 1 highlights\" and stay inside the column; desktop keeps one row", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.clock.setFixedTime(NOW);
   await seed(page);
@@ -251,7 +251,7 @@ test("phone (390px): three NFL cuts stack under \"W1\" and stay inside the colum
   const nfl = await pillMetrics(page, "nfl");
   expect(nfl.width, "a phone column").toBeLessThan(200);
   expect(nfl.buttonTexts).toEqual(["6m", "17m", "30m"]);
-  expect(nfl.headingText).toBe("W1");
+  expect(nfl.headingText).toBe("Week 1 highlights");
   expect(nfl.headingClipped).toBe(false);
   // Nothing hidden: every phone heading fits its line, so none is dropped.
   expect(await page.locator("[data-recap-heading].invisible").count()).toBe(0);
@@ -261,7 +261,8 @@ test("phone (390px): three NFL cuts stack under \"W1\" and stay inside the colum
 
   const mlb = await pillMetrics(page, "mlb");
   expect(mlb.layout).toBe("stacked");
-  expect(mlb.headingText).toBe("Best of day");
+  // Full heading on its own line (Jacob 9/25: "best of the day" on mobile).
+  expect(mlb.headingText).toBe("Best of the day");
   expect(mlb.headingClipped).toBe(false);
   expect(mlb.overflow).toBe(0);
   expect(mlb.buttonsPastEdge).toBe(0);
@@ -283,6 +284,16 @@ test("phone (390px): three NFL cuts stack under \"W1\" and stay inside the colum
 
   const shot = await page.locator("main").screenshot();
   await testInfo.attach("phone-390-recap-pills", { body: shot, contentType: "image/png" });
+
+  // A narrower phone: the full phrase no longer fits, so "W1", not a
+  // clipped or dropped heading.
+  await page.setViewportSize({ width: 340, height: 740 });
+  await expect(nflPill.locator("[data-recap-heading]")).toHaveText("W1", { timeout: 5_000 });
+  const narrowNfl = await pillMetrics(page, "nfl");
+  expect(narrowNfl.headingClipped).toBe(false);
+  // MLB falls back to "Best of day" where the full heading does not fit.
+  expect((await pillMetrics(page, "mlb")).headingClipped).toBe(false);
+  expect(await page.locator("[data-recap-heading].invisible").count()).toBe(0);
 
   // Desktop: one row, the full heading.
   await page.setViewportSize({ width: 1280, height: 800 });

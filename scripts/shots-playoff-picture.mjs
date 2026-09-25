@@ -71,7 +71,8 @@ async function open(theme, width, height) {
     else await page.keyboard.press("Escape").catch(() => {});
     await page.waitForTimeout(700);
   }
-  await page.getByRole("button", { name: "Playoff picture", exact: true }).first().click();
+  // Today's MLB "Playoffs" pill (the "Playoff picture" subtitle link is gone).
+  await page.locator('[data-recap-playoffs-tab="odds"], [data-recap-bracket]').first().click();
   await page.locator(DIALOG).waitFor({ timeout: 15000 });
   await page.waitForTimeout(5500); // statsapi + espn
   return { ctx, page };

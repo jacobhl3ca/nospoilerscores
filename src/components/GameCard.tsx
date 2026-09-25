@@ -53,6 +53,9 @@ interface GameCardProps {
   // column suppresses it for single-matchup Finals views where the favorite
   // sort can't reorder anything.
   showStars?: boolean;
+  // Italic current W-L on upcoming NFL cards — see hideUpcomingRecords in
+  // preferences.ts for why only NFL and only pre-game.
+  showUpcomingRecords?: boolean;
 }
 
 // Poll name for the rank-chip tooltip, keyed on sport. Anything absent reads
@@ -311,7 +314,7 @@ export function CompactUpcomingCard({
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, showUpcomingRecords }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
   // before this, overlays only closed via the tiny ✕ and piled up across cards.
@@ -1034,10 +1037,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   • Everyone else — the current overall standings rank, which
                     DOES move with results, so it is hidden on finished/past
                     cards behind the same gate the W-L record below uses
-                    (!effectivePastDate && !isFinished). The record is
-                    additionally hidden on upcoming cards (its extra !isFuture);
-                    the rank still shows there, since a pre-game standing isn't
-                    a spoiler. */}
+                    (!effectivePastDate && !isFinished). A pre-game standing
+                    isn't a spoiler, so it shows on upcoming cards. */}
               {(() => {
                 if (isTBD) return null;
                 let rank: number | null = null;
@@ -1077,6 +1078,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 team-schedule view + the Settings team picker. */}
             {showStars ? star(team.id, team.displayName, favoriteTeams.includes(team.id), isTBD) : null}
             <span className="flex-1 min-w-0" />
+            {/* Current W-L on upcoming NFL cards only (Jacob 9/24). Italic
+                marks it as the record going in, not a live number. Gated on
+                isFuture + !effectivePastDate so it never reaches a live,
+                finished or past-date card; 0-0 / 0-0-0 is ESPN's pre-season
+                placeholder and says nothing, so it is skipped. */}
+            {showUpcomingRecords && game.sport === "nfl" && isFuture && !effectivePastDate && !isTBD && team.record && !/^0-0(-0)?$/.test(team.record) ? (
+              <span className="text-[10px] sm:text-xs italic tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }} title="Record going into this game">{team.record}</span>
+            ) : null}
           </div>
         ))}
       </div>

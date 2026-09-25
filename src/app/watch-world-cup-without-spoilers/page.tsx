@@ -76,7 +76,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Is there a World Cup app?",
-    a: "HideScore is a free app on the App Store and on Google Play, and also works in any web browser at hidescore.com/worldcup. Both hide scores until you choose to reveal them.",
+    a: "HideScore is a free app on the App Store and on Google Play, and also works in any web browser at hidescore.com/worldcup. Neither prints a score.",
   },
   {
     q: "What time are 2026 World Cup matches in the US?",

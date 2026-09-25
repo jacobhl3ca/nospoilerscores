@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
 
 type FaqItem = {
   q: string;
@@ -64,12 +65,22 @@ export default function SeoLandingPage({
   extraSchema = [],
   mainEntityId,
 }: SeoLandingPageProps) {
+  // The date this page's own copy last changed, shown under the h1 and sent as
+  // dateModified (2026-09-24, for the freshness signal answer engines read).
+  // Skipped on a page with a live `lead` panel: the MLB playoff pages change
+  // every game day, and a months-old source date would undersell them.
+  const updated = lead ? null : routeLastModified(canonical);
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
       <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
         {eyebrow}
       </p>
       <h1 className="text-2xl font-bold mb-4">{h1}</h1>
+      {updated ? (
+        <p className="-mt-2 mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
+          Updated <time dateTime={updated.toISOString()}>{formatUpdated(updated)}</time>
+        </p>
+      ) : null}
 
       {lead ? (
         // Centred on the page and allowed past the 2xl text column: the bracket
@@ -106,7 +117,7 @@ export default function SeoLandingPage({
         className="mt-8 rounded-xl px-5 py-5 text-center"
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       >
-        <p className="font-semibold mb-3">Open HideScore with scores hidden by default.</p>
+        <p className="font-semibold mb-3">Open HideScore. No score is printed on the board.</p>
         <Link
           href={ctaHref}
           className="inline-block rounded-lg px-5 py-2.5 font-semibold"
@@ -146,6 +157,9 @@ export default function SeoLandingPage({
         <Link href="/faq" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
           FAQ
         </Link>
+        <Link href="/about" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+          About
+        </Link>
       </div>
 
       <script
@@ -160,6 +174,7 @@ export default function SeoLandingPage({
                 description: schemaDescription,
                 url: `https://hidescore.com${canonical}`,
                 inLanguage: "en",
+                ...(updated ? { dateModified: updated.toISOString() } : {}),
                 // Reference the site-level WebSite node by @id (declared in
                 // layout.tsx's JSON-LD @graph) rather than re-declaring an
                 // @id-less WebSite here. Both blocks render on the same page, so

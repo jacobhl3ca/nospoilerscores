@@ -4,7 +4,7 @@ import { worldCup2026Ended, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 
 const TITLE = "World Cup Highlights Without Spoilers | HideScore";
 const DESC =
-  "Watch 2026 FIFA World Cup highlights without seeing scores, winners, thumbnails or spoiler headlines first. HideScore keeps results hidden until you tap.";
+  "Watch 2026 FIFA World Cup highlights without seeing scores, winners, thumbnails or spoiler headlines first. HideScore prints no result anywhere.";
 
 export const metadata: Metadata = {
   title: TITLE,

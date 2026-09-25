@@ -354,15 +354,26 @@ function feederLabel(bracket: LeagueBracket, from: BracketMatchupKey): string {
 // pill: by then every club left is in the field, so the pill would only ever
 // say 100%. The loser of a finished series is dimmed rather than removed, so
 // the pairing still reads.
-function Seat({ slot, odds, chasers, emptyLabel, outcome = null }: {
+function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false }: {
   slot: BracketSlot;
   odds: PlayoffOdds | null;
   chasers: PlayoffTeam[];
   emptyLabel: string;
   outcome?: "won" | "lost" | null;
+  // Both seats of the card are empty: no logo gutter, label centred.
+  compact?: boolean;
 }) {
   const t = slot.team;
   if (!t) {
+    if (compact) {
+      return (
+        <div data-bracket-slot className="flex items-center justify-center px-1.5 h-[30px]">
+          <span className="text-[9px] italic whitespace-nowrap" style={{ color: "var(--text-muted)", opacity: 0.75 }}>
+            {emptyLabel}
+          </span>
+        </div>
+      );
+    }
     return (
       <div data-bracket-slot className="flex items-center gap-1.5 px-1.5 h-[30px]">
         <span className="w-[18px] shrink-0" />
@@ -440,6 +451,12 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null }: {
   );
 }
 
+// A card whose two seats are both still empty ("ALDS winner" over "ALDS
+// winner") shrinks to its labels instead of holding a full card's width, so
+// the whole bracket fits and the NL side shows without a sideways scroll
+// (Jacob 9/25). It grows back to full width once a club moves into it.
+const CARD_W = "w-[124px] xl:w-[140px]";
+
 // One card per matchup, two lines and a hairline between them — the same shape
 // the World Cup bracket uses, so the two brackets in this app read alike.
 function MatchupBox({ matchup, bracket, odds, chasers }: {
@@ -452,14 +469,16 @@ function MatchupBox({ matchup, bracket, odds, chasers }: {
   const label = (slot: BracketSlot) => (slot.from ? feederLabel(bracket, slot.from) : slot.seed ? `Seed ${slot.seed}` : "Winner");
   const outcome = (slot: BracketSlot) =>
     matchup.winner == null || !slot.team ? null : slot.team.id === matchup.winner ? "won" as const : "lost" as const;
+  const compact = !matchup.sides[0].team && !matchup.sides[1].team;
   return (
     <div
-      className="rounded-lg py-0.5 w-[124px] md:w-[140px]"
+      {...(compact ? { "data-bracket-compact": "" } : {})}
+      className={`rounded-lg py-0.5 ${compact ? "" : CARD_W}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
-      <Seat slot={matchup.sides[0]} odds={odds} chasers={seatChasers(matchup.sides[0])} emptyLabel={label(matchup.sides[0])} outcome={outcome(matchup.sides[0])} />
+      <Seat slot={matchup.sides[0]} odds={odds} chasers={seatChasers(matchup.sides[0])} emptyLabel={label(matchup.sides[0])} outcome={outcome(matchup.sides[0])} compact={compact} />
       <div className="mx-1.5 h-px" style={{ background: "var(--border)", opacity: 0.6 }} />
-      <Seat slot={matchup.sides[1]} odds={odds} chasers={seatChasers(matchup.sides[1])} emptyLabel={label(matchup.sides[1])} outcome={outcome(matchup.sides[1])} />
+      <Seat slot={matchup.sides[1]} odds={odds} chasers={seatChasers(matchup.sides[1])} emptyLabel={label(matchup.sides[1])} outcome={outcome(matchup.sides[1])} compact={compact} />
     </div>
   );
 }
@@ -480,7 +499,7 @@ function RoundColumn({ round, league, season, matchups, bracket, odds, chasers }
   const channel = broadcastFor(season, round, league);
   return (
     <div className="flex flex-col shrink-0">
-      <div className={`${HEADER_H} text-center px-1`}>
+      <div className={`${HEADER_H} text-center px-0.5 sm:px-1`}>
         <div className="text-[10px] font-bold uppercase tracking-wide leading-tight" style={{ color: "var(--text)" }}>
           {roundLabel(round, league)}
         </div>
@@ -515,7 +534,7 @@ function LeagueHalf({ league, bracket, season, odds, mirrored }: {
   // thing WorldCupBracket does, and the only thing that stays aligned now that
   // a card with chasers under it is taller than one without.
   return (
-    <div className={`flex items-stretch gap-2 md:gap-3 ${mirrored ? "flex-row md:flex-row-reverse" : "flex-row"}`}>
+    <div className={`flex items-stretch gap-1 sm:gap-2 xl:gap-3 ${mirrored ? "flex-row md:flex-row-reverse" : "flex-row"}`}>
       {col("wildCard")}
       {col("divisionSeries")}
       {col("championship")}
@@ -534,6 +553,7 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
   // no odds pill, like every other seat a series winner moves into.
   const seat = (team: PlayoffTeam | null): BracketSlot => ({ team, seed: null, from: "cs" });
   const outcome = (team: PlayoffTeam | null) => (winner == null || !team ? null : team.id === winner ? "won" as const : "lost" as const);
+  const compact = !al && !nl;
   return (
     <div className="flex flex-col shrink-0">
       <div className={`${HEADER_H} text-center`}>
@@ -545,12 +565,13 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
       </div>
       <div className="flex-1 flex flex-col justify-center">
         <div
-          className="rounded-lg py-0.5 w-[124px] md:w-[140px]"
+          {...(compact ? { "data-bracket-compact": "" } : {})}
+          className={`rounded-lg py-0.5 ${compact ? "" : CARD_W}`}
           style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
         >
-          <Seat slot={seat(al)} odds={null} chasers={[]} emptyLabel="AL champion" outcome={outcome(al)} />
+          <Seat slot={seat(al)} odds={null} chasers={[]} emptyLabel="AL champion" outcome={outcome(al)} compact={compact} />
           <div className="mx-1.5 h-px" style={{ background: "var(--border)", opacity: 0.6 }} />
-          <Seat slot={seat(nl)} odds={null} chasers={[]} emptyLabel="NL champion" outcome={outcome(nl)} />
+          <Seat slot={seat(nl)} odds={null} chasers={[]} emptyLabel="NL champion" outcome={outcome(nl)} compact={compact} />
         </div>
       </div>
     </div>

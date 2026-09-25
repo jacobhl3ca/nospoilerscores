@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from "react";
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
-import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
+import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
@@ -14,10 +14,11 @@ import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports
 import { fromYmd } from "@/lib/etDay";
 import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
+import { syncPicksWithAccount } from "@/lib/picksAccount";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
-import LeagueColumn from "@/components/LeagueColumn";
+import LeagueColumn, { playoffPictureInWindow } from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
 import EventDetailModal from "@/components/EventDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
@@ -34,7 +35,7 @@ import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
-import LeagueRecapCard from "@/components/LeagueRecapCard";
+import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
 import { getRecapsFor } from "@/lib/recaps";
 import Link from "next/link";
 
@@ -601,7 +602,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -639,6 +640,8 @@ export default function HomeContent({
   // see SlamBracketModal / PlayoffPictureModal.
   const [slamBracketOpen, setSlamBracketOpen] = useState(false);
   const [playoffPictureOpen, setPlayoffPictureOpen] = useState(false);
+  // The recap-row "Playoffs" pill opens the playoff picture on the tab it names.
+  const [playoffPictureTab, setPlayoffPictureTab] = useState<PlayoffsTab | undefined>(undefined);
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
@@ -785,7 +788,12 @@ export default function HomeContent({
       if (isDemoModeActive() && (sharedVideoId || hStream || hEmbed || hImage)) {
         setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       } else if (sharedVideoId) {
-        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster });
+        // A clip opened on /watch is any link someone pasted: nothing vetted
+        // its title, and there is no blurred headline under the player to fall
+        // back on. So the title cover is on here whatever the Settings toggle
+        // says (it defaults off since 9/8). It still lifts once the title reads clean.
+        const forceTitleMask = /^\/watch\/?$/.test(window.location.pathname);
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster, forceTitleMask });
       } else if (hStream || hEmbed || hImage) {
         setVideoModal({
           videoId: "",
@@ -909,6 +917,10 @@ export default function HomeContent({
         setAppAccountUse(Boolean(auth.signedIn && (auth.platforms?.ios || auth.platforms?.android)));
         if (!auth.signedIn) return;
         setRemoteSync(pushRemotePrefs);
+        // A device that submitted a bracket before the account knew about it
+        // hands its picks token up now, so the account's other devices can
+        // adopt it without anyone opening the Picks tab here (lib/picksAccount).
+        void syncPicksWithAccount();
         const remote = await fetchRemotePrefs();
         if (remote && Object.keys(remote).length > 0) {
           const merged = mergeRemotePreferences(loadPreferences(), remote);
@@ -1065,6 +1077,8 @@ export default function HomeContent({
   // own "Copy link" (see buildHighlightShareUrl). Returned root-relative ("/?…")
   // so (a) pushState is same-origin in every shell (prod / iOS app / localhost)
   // and (b) it lands on "/", where the worker injects the per-share OG preview.
+  // Exception: a YouTube clip on /watch stays on /watch (see highlightSharePath),
+  // so its preview is the generic card, not the thumbnail.
   // Carries NO pref params, so copying the address bar shares the clip cleanly —
   // the recipient keeps their own leagues — exactly like Copy link. Syncing this
   // into the URL bar is why "copy the URL bar" == "Copy link".
@@ -1083,6 +1097,7 @@ export default function HomeContent({
       sourceLabel: m.sourceLabel || null,
       headline: m.headline || null,
       cardKey: m.shareCard?.key ?? null,
+      path: highlightSharePath(),
     });
     return abs ? abs.replace(/^https?:\/\/[^/]+/, "") : null;
   }, []);
@@ -2499,7 +2514,14 @@ export default function HomeContent({
     };
   }, [recapQueryKey]);
   // A stale set from the previous date/column mix never reserves a row.
-  const anyRecap = recapSports.key === recapQueryKey && recapSports.sports.size > 0;
+  // Today's MLB column puts a "Playoffs" pill in the same row during
+  // the playoff-picture window (LeagueRecapCard onShowPlayoffs), so it reserves
+  // the row on sibling columns exactly as a recap does.
+  const bracketPillDue = isToday && playoffPictureInWindow("mlb", selectedDate);
+  const bracketPillShown = bracketPillDue && sortedLeagues
+    .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
+    .some((l) => l.sport === "mlb");
+  const anyRecap = (recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown;
 
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
@@ -3716,10 +3738,10 @@ export default function HomeContent({
               onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
-              onShowPlayoffPicture: () => setPlayoffPictureOpen(true),
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
+              showUpcomingRecords: !prefs.hideUpcomingRecords,
               onAbbrevReport,
               namesCompact,
             };
@@ -3758,6 +3780,9 @@ export default function HomeContent({
                   date={selectedDate}
                   lastPlayedDate={league.games.length ? null : league.previousGameDay?.date}
                   reserveSlot={reserveRecapSlot}
+                  onShowPlayoffs={bracketPillDue && league.sport === "mlb"
+                    ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
+                    : null}
                   onPlayHighlight={openVideoModal}
                   onPlayEmbed={openEmbedModal}
                 />
@@ -4208,6 +4233,7 @@ export default function HomeContent({
               <a href="/no-spoiler-scores" style={{ textDecoration: "underline" }}>no-spoiler scores</a>,{" "}
               <a href="/how-to-watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>how to watch sports highlights without spoilers</a>,{" "}
               <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
+              <a href="/watch" style={{ textDecoration: "underline" }}>watch any YouTube link without spoilers</a>,{" "}
               <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
               <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>,{" "}
               <a href="/nhl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NHL highlights</a>,{" "}
@@ -4225,11 +4251,15 @@ export default function HomeContent({
               <a href="/f1-without-spoilers" style={{ textDecoration: "underline" }}>F1</a> and{" "}
               <a href="/ufc-results-without-spoilers" style={{ textDecoration: "underline" }}>UFC</a>. Compare us with the other{" "}
               <a href="/best-spoiler-free-sports-sites" style={{ textDecoration: "underline" }}>spoiler-free sports apps</a>, or see the{" "}
-              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Or read our{" "}
+              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Read more{" "}
+              <a href="/about" style={{ textDecoration: "underline" }}>about HideScore</a>, or read our{" "}
               <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
           </div>
         </details>
+          {/* "Contact", not "About": the disclosure above is already labelled
+              About, and a second "About" beside it read as a duplicate. */}
+          <a href="/contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
           <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
           <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} />
           <button
@@ -4602,7 +4632,7 @@ export default function HomeContent({
           published={videoModal.published}
           body={videoModal.body}
           shareCard={videoModal.shareCard}
-          maskVideoTitle={prefs.maskVideoTitle ?? false}
+          maskVideoTitle={(prefs.maskVideoTitle ?? false) || !!videoModal.forceTitleMask}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
@@ -4650,7 +4680,7 @@ export default function HomeContent({
 
       {slamBracketOpen && <SlamBracketModal onClose={() => setSlamBracketOpen(false)} />}
 
-      {playoffPictureOpen && <PlayoffPictureModal onClose={() => setPlayoffPictureOpen(false)} />}
+      {playoffPictureOpen && <PlayoffPictureModal initialTab={playoffPictureTab} onClose={() => setPlayoffPictureOpen(false)} />}
 
       {/* Bottom-right keyboard guide. Sits outside every modal so it can say
           what the post-modal keys are WHILE that modal is open (Jacob 9/8). */}

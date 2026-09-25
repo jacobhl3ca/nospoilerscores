@@ -48,6 +48,15 @@
                 <data android:scheme="https" android:host="www.hidescore.com" />
             </intent-filter>
 
+            <!-- Share sheet: "Share → HideScore" from the YouTube app (or any app
+                 that shares text). MainActivity.loadSharedText opens /watch with
+                 the shared text, and the page finds the YouTube link in it. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
         </activity>
 
         <provider

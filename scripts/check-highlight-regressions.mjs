@@ -463,6 +463,16 @@ check(
       gameHighlights.includes("&nss_mask_title=1") &&
       videoModal.includes("|| fallbackForcesTitleMask(fallbackUrl)"),
   );
+  // 2026-09-25: an embed-blocked FotMob clip that plays on youtube.com is kept
+  // and opens straight on the "Watch on YouTube" card, like the NFL's.
+  check(
+    "FotMob embed-blocked clips hand off to YouTube with a score-title note",
+    prebake.includes("watchable: fetchYtWatchPlayable") &&
+      prebake.includes("entry.officialEmbeddable = false;") &&
+      gameHighlights.includes("&nss_embed_blocked=1") &&
+      videoModal.includes('|| fallbackFlag(fallbackUrl, "nss_embed_blocked")') &&
+      videoModal.includes('fallbackFlag(fallbackUrl, "nss_title_score")'),
+  );
 }
 check(
   "prebaker bakes NCAA volleyball from each match's conference chain behind the volleyball token",

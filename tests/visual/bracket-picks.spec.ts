@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // The Picks tab of the MLB playoff picture, driven through the real click path:
-// MLB column → "Playoff picture ▸" → the picture's own cover → Picks.
+// today's MLB "Playoffs" pill → Picks (or the bracket icon on a recap day, then
+// the Picks tab) → the picture's own cover.
 //
 // StatsAPI is stubbed so the bracket is fixed: the standings put the 2025 field
 // in its real 2025 seeds, and the postseason feed is either 2026's as it stood
@@ -65,7 +66,10 @@ async function stub(page: Page, postseasonYear: number, picksApi: (method: strin
 // straight onto the tab.
 async function openPicks(page: Page, revealed = false) {
   await page.goto("/?l=m&s=m.0.0&dd=t&dv=s");
-  await page.getByRole("button", { name: /Playoff picture/ }).first().click({ timeout: 20_000 });
+  // The pill is today's only, and the smart default can still land on
+  // yesterday before the cutoff hour.
+  await page.getByRole("button", { name: "Today", exact: true }).click({ timeout: 20_000 });
+  await page.locator('[data-recap-playoffs-tab="picks"], [data-recap-bracket]').first().click({ timeout: 20_000 });
   const dialog = page.getByRole("dialog", { name: "MLB playoff picture" });
   await dialog.getByRole("tab", { name: "Picks" }).click();
   if (!revealed) {
@@ -189,4 +193,43 @@ test("after the lock: results sit behind their own cover, then score and rank", 
   const again = await openPicks(page, true);
   await again.getByRole("button", { name: "Leaderboard" }).click();
   await expect(again.getByRole("button", { name: /Show results/ })).toBeVisible();
+});
+
+test("signed in: the phone shows the bracket the account submitted on the PC, and edits it with the PC's token", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.clock.setFixedTime(new Date("2026-09-25T12:00:00-04:00"));
+  const TOKEN = "11111111-2222-3333-4444-555555555555";
+  const posts: string[] = [];
+  await stub(page, 2026, (method, body) => {
+    if (method === "POST") { posts.push(body ?? ""); return { status: 200, json: { ok: true } }; }
+    return { status: 200, json: { board: "mlb-2026", locked: false, count: 1, names: ["JH"] } };
+  });
+  // Registered after the /api/picks stub, so these win for their own paths.
+  await page.route("**/api/me", (r) => r.fulfill({ json: { signedIn: true, email: "j@example.com", uid: "u1", provider: "apple" } }));
+  await page.route("**/api/prefs", (r) => r.fulfill({ json: r.request().method() === "GET" ? { prefs: null } : { ok: true } }));
+  const puts: string[] = [];
+  await page.route("**/api/picks/account", (r) => {
+    if (r.request().method() === "PUT") { puts.push(r.request().postData() ?? ""); return r.fulfill({ json: { ok: true } }); }
+    return r.fulfill({ json: { picks: { token: TOKEN, boards: { "mlb-2026": { name: "JH", picks: PERFECT, at: "2026-09-24T20:00:00.000Z" } } } } });
+  });
+
+  const dialog = await openPicks(page);
+  // No reload: the account copy lands in the open tab.
+  await expect(dialog.getByLabel("Your name or initials")).toHaveValue("JH");
+  await expect(dialog.locator("[data-pick-seat][aria-pressed=true]")).toHaveCount(11);
+  await expect(dialog.getByText(/11 of 11 picked · submitted/)).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("hidescore-picks-device"))).toBe(TOKEN);
+
+  // Flip the World Series pick and resubmit: same token, so the leaderboard
+  // lets this device edit "JH".
+  await dialog.locator('[data-pick-card="ws"] button[data-pick-seat][aria-pressed=false]').click();
+  await dialog.getByRole("button", { name: "Update picks" }).click();
+  await expect(dialog.getByText("Submitted. You can change your picks until they lock.")).toBeVisible();
+  expect(JSON.parse(posts[0]).token).toBe(TOKEN);
+  expect(JSON.parse(posts[0]).name).toBe("JH");
+  // The edit goes back up to the account for the PC to pick up.
+  await expect.poll(() => puts.length).toBeGreaterThan(0);
+  const put = JSON.parse(puts[puts.length - 1]);
+  expect(put.token).toBe(TOKEN);
+  expect(put.boards["mlb-2026"].picks.ws).not.toBe(PERFECT.ws);
 });
