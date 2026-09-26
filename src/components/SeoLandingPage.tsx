@@ -204,7 +204,7 @@ export default function SeoLandingPage({
                 {link.label}
               </Link>
             ))}
-          </nav>
+          </div>
         )}
       </div>
 
@@ -262,7 +262,7 @@ export default function SeoLandingPage({
         <Link href="/about" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
           About
         </Link>
-      </nav>
+      </div>
 
       <script
         type="application/ld+json"
