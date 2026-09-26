@@ -3,11 +3,9 @@ import test from "node:test";
 
 import type { Game, Sport, Team } from "../src/lib/types.ts";
 import {
+  espnFrontPageSports,
+  orderByEspnHeader,
   parseEspnHeader,
-  rankTopEvents,
-  scoreGame,
-  topEventsSourceSports,
-  TOP_EVENTS_MAX_PER_LEAGUE,
   type EspnHeaderFeature,
 } from "../src/lib/topEvents.ts";
 
@@ -28,11 +26,6 @@ function game(over: Partial<Game> & { id: string; sport: Sport }): Game {
     ...over,
   };
 }
-
-const NO_FEATURES: EspnHeaderFeature[] = [];
-const ctx = (over: Partial<Parameters<typeof rankTopEvents>[1]> = {}) => ({
-  favoriteTeams: [], features: NO_FEATURES, nowMs: NOW, count: 8, ...over,
-});
 
 // ── ESPN homepage strip ──────────────────────────────────────────────────────
 
@@ -56,97 +49,79 @@ test("parseEspnHeader never throws on a reshaped payload", () => {
   assert.deepEqual(parseEspnHeader({ sports: [{ leagues: "nope" }, 7, { leagues: [{}] }] }), []);
 });
 
-// ── Ranking ──────────────────────────────────────────────────────────────────
+// ── ESPN front page column ──────────────────────────────────────────────────
 
-test("a starred team outranks a featured live game", () => {
-  const mine = game({ id: "mine", sport: "mlb", homeTeam: team("nym") });
-  const featuredLive = game({ id: "big", sport: "ncaaf", state: "in", statusDetail: "3rd Quarter" });
-  const features: EspnHeaderFeature[] = [{ sport: "ncaaf", eventIds: ["big"], sportOrder: 0 }];
-  const picked = rankTopEvents([featuredLive, mine], ctx({ favoriteTeams: ["mlb-nym"], features }));
-  assert.deepEqual(picked.map((g) => g.id), ["mine", "big"]);
-  assert.ok(scoreGame(mine, ctx({ favoriteTeams: ["mlb-nym"] })).reasons.includes("your team"));
-});
+// Saturday 9/26 in miniature: college football leads the strip, then MLB,
+// then two soccer leagues that share one "soccer" sport entry.
+const FEATURES: EspnHeaderFeature[] = [
+  { sport: "ncaaf", eventIds: ["f1", "f2"], sportOrder: 0 },
+  { sport: "mlb", eventIds: ["b1"], sportOrder: 1 },
+  { sport: "nwsl", eventIds: ["w1"], sportOrder: 2 },
+  { sport: "mls", eventIds: ["s1", "s2"], sportOrder: 2 },
+];
 
-test("what espn.com is featuring beats an identical unfeatured game, in ESPN's order", () => {
-  const games = ["a", "b", "c"].map((id) => game({ id, sport: "mlb" }));
-  const features: EspnHeaderFeature[] = [{ sport: "mlb", eventIds: ["c", "b"], sportOrder: 0 }];
-  assert.deepEqual(rankTopEvents(games, ctx({ features })).map((g) => g.id), ["c", "b", "a"]);
-});
-
-test("live beats not-yet-started; starting soon beats later tonight", () => {
-  const live = game({ id: "live", sport: "nba", state: "in", statusDetail: "2nd Quarter" });
-  const soon = game({ id: "soon", sport: "nba", date: new Date(NOW + 1 * H).toISOString() });
-  const later = game({ id: "later", sport: "nba", date: new Date(NOW + 6 * H).toISOString() });
-  assert.deepEqual(rankTopEvents([later, soon, live], ctx()).map((g) => g.id), ["live", "soon", "later"]);
-});
-
-test("one league can't flood the column — unless it's your team", () => {
-  const mlb = ["m1", "m2", "m3", "m4", "m5"].map((id) => game({ id, sport: "mlb" }));
-  const nba = ["n1", "n2"].map((id) => game({ id, sport: "nba", date: new Date(NOW + 8 * H).toISOString() }));
-  // Five slots, five MLB games that all outrank the two NBA games on start
-  // time: the cap still lets both NBA games in.
-  const picked = rankTopEvents([...mlb, ...nba], ctx({ count: 5 }));
-  assert.equal(picked.filter((g) => g.sport === "mlb").length, TOP_EVENTS_MAX_PER_LEAGUE);
-  assert.deepEqual(picked.filter((g) => g.sport === "nba").map((g) => g.id), ["n1", "n2"]);
-
-  const withFav = rankTopEvents([...mlb, ...nba], ctx({ count: 5, favoriteTeams: ["mlb-m5h"] }));
-  assert.equal(withFav[0].id, "m5");
-  assert.equal(withFav.filter((g) => g.sport === "mlb").length, TOP_EVENTS_MAX_PER_LEAGUE + 1);
-  assert.equal(withFav.filter((g) => g.sport === "nba").length, 1);
-});
-
-test("the per-league cap yields when nothing else is on: a quiet Thursday still fills", () => {
-  const mlb = Array.from({ length: 9 }, (_, i) => game({ id: `m${i}`, sport: "mlb" }));
-  const nba = game({ id: "n1", sport: "nba" });
-  const picked = rankTopEvents([...mlb, nba], ctx({ count: 8 }));
-  assert.equal(picked.length, 8);
-  // Diversity first — the NBA game is in even though 8 MLB games outrank the fill pass…
-  assert.ok(picked.some((g) => g.id === "n1"));
-  // …then MLB fills the rest, best-first.
-  assert.deepEqual(picked.slice(0, 3).map((g) => g.id), ["m0", "m1", "m2"]);
-});
-
-test("count caps the column and duplicates collapse", () => {
-  const many = Array.from({ length: 10 }, (_, i) => game({ id: `g${i}`, sport: (["mlb", "nba", "nhl", "nfl"] as Sport[])[i % 4] }));
-  assert.equal(rankTopEvents([...many, ...many], ctx({ count: 5 })).length, 5);
-  assert.equal(rankTopEvents(many, ctx({ count: 12 })).length, 10);
-});
-
-test("'ranked' means the AP top 25 in college and a top-four clash in the pros", () => {
-  const cfb = game({ id: "cfb", sport: "ncaaf", homeTeam: team("uga", 3), awayTeam: team("bama", 7) });
-  assert.ok(scoreGame(cfb, ctx()).reasons.includes("ranked matchup"));
-  const cfbOne = game({ id: "cfb1", sport: "ncaaf", homeTeam: team("uga", 3), awayTeam: team("vandy", null) });
-  assert.ok(scoreGame(cfbOne, ctx()).reasons.includes("ranked team"));
-  // Standings rank: every MLB team has one, so 10 vs 12 is nothing special…
-  const mid = game({ id: "mid", sport: "mlb", homeTeam: team("x", 10), awayTeam: team("y", 12) });
-  assert.equal(scoreGame(mid, ctx()).score, 5); // only the "later tonight" +5
-  // …but first vs second is.
-  const top = game({ id: "top", sport: "mlb", homeTeam: team("x", 1), awayTeam: team("y", 2) });
-  assert.ok(scoreGame(top, ctx()).reasons.includes("top of the table"));
-});
-
-test("playoffs and national TV are visible-on-the-card signals that count", () => {
-  const plain = game({ id: "plain", sport: "nhl" });
-  const cup = game({ id: "cup", sport: "nhl", isPlayoff: true, playoffLabel: "Stanley Cup Final", broadcasts: ["TNT"], seriesNote: "Game 7" });
-  const s = scoreGame(cup, ctx());
-  assert.ok(s.score > scoreGame(plain, ctx()).score);
-  assert.deepEqual(s.reasons, ["stanley cup final", "national TV", "game 7"]);
-});
-
-// ── Which leagues get pulled ─────────────────────────────────────────────────
-
-test("manual mode uses exactly the ticked game-card leagues, in order", () => {
-  const out = topEventsSourceSports("manual", ["nba", "golf", "mlb", "nba"] as Sport[], NO_FEATURES, ["nfl-1"]);
-  assert.deepEqual(out, ["nba", "mlb"]);
-});
-
-test("auto mode = your teams' leagues first, then ESPN's strip in ESPN's order, capped", () => {
-  const features: EspnHeaderFeature[] = [
-    { sport: "mlb", eventIds: ["1"], sportOrder: 1 },
-    { sport: "ncaaf", eventIds: ["2"], sportOrder: 0 },
-    { sport: "epl", eventIds: ["3"], sportOrder: 2 },
+test("the column is ESPN's picks in ESPN's order, whatever order the boards arrive in", () => {
+  const games = [
+    game({ id: "s2", sport: "mls" }),
+    game({ id: "b1", sport: "mlb", state: "in" }),
+    game({ id: "f2", sport: "ncaaf" }),
+    game({ id: "s1", sport: "mls" }),
+    game({ id: "w1", sport: "nwsl" }),
+    game({ id: "f1", sport: "ncaaf", state: "post", completed: true }),
   ];
-  assert.deepEqual(topEventsSourceSports("auto", undefined, features, ["nhl-5"]), ["nhl", "ncaaf", "mlb", "epl"]);
-  assert.deepEqual(topEventsSourceSports("auto", undefined, features, ["nhl-5"], 2), ["nhl", "ncaaf"]);
-  assert.deepEqual(topEventsSourceSports("auto", undefined, [], []), []);
+  assert.deepEqual(orderByEspnHeader(games, FEATURES).map((g) => g.id), ["f1", "f2", "b1", "w1", "s1", "s2"]);
+});
+
+test("games ESPN is not featuring stay out, even live ones or a bigger league's", () => {
+  const games = [
+    game({ id: "b1", sport: "mlb" }),
+    game({ id: "b2", sport: "mlb", state: "in", isPlayoff: true }),
+    game({ id: "x9", sport: "nfl" }),
+  ];
+  assert.deepEqual(orderByEspnHeader(games, FEATURES).map((g) => g.id), ["b1"]);
+});
+
+test("an id only matches inside its own sport, and duplicates collapse", () => {
+  const games = [
+    game({ id: "b1", sport: "nhl" }), // same id, wrong sport
+    game({ id: "b1", sport: "mlb" }),
+    game({ id: "b1", sport: "mlb" }), // a league on the board twice
+  ];
+  const out = orderByEspnHeader(games, FEATURES);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].sport, "mlb");
+});
+
+test("no ESPN signal = an empty column, never a guess", () => {
+  assert.deepEqual(orderByEspnHeader([game({ id: "b1", sport: "mlb" })], []), []);
+});
+
+test("the leagues to pull follow the strip, deduped and capped", () => {
+  assert.deepEqual(espnFrontPageSports(FEATURES), ["ncaaf", "mlb", "nwsl", "mls"]);
+  assert.deepEqual(espnFrontPageSports(FEATURES, 2), ["ncaaf", "mlb"]);
+  assert.deepEqual(espnFrontPageSports([]), []);
+});
+
+test("the live 9/26 strip shape parses into the front page's league order", () => {
+  const payload = {
+    sports: [
+      { slug: "football", leagues: [{ slug: "college-football", events: [{ id: "401", priority: 0 }, { id: "402", priority: 1 }] }] },
+      { slug: "baseball", leagues: [{ slug: "mlb", events: [{ id: "501", priority: 17 }] }] },
+      { slug: "golf", leagues: [{ slug: "pga", events: [{ id: "g1", priority: 26 }] }] },
+      { slug: "hockey", leagues: [{ slug: "nhl", events: [{ id: "601", priority: 27 }] }] },
+      { slug: "soccer", leagues: [
+        { slug: "fifa.friendly", events: [{ id: "x1", priority: 37 }] },
+        { slug: "usa.nwsl", events: [{ id: "701", priority: 39 }] },
+        { slug: "usa.1", events: [{ id: "801", priority: 42 }] },
+      ] },
+    ],
+  };
+  const features = parseEspnHeader(payload);
+  assert.deepEqual(espnFrontPageSports(features), ["ncaaf", "mlb", "nhl", "nwsl", "mls"]);
+  const games = [
+    game({ id: "801", sport: "mls" }), game({ id: "601", sport: "nhl" }),
+    game({ id: "402", sport: "ncaaf" }), game({ id: "501", sport: "mlb" }),
+    game({ id: "401", sport: "ncaaf" }), game({ id: "701", sport: "nwsl" }),
+  ];
+  assert.deepEqual(orderByEspnHeader(games, features).map((g) => g.id), ["401", "402", "501", "601", "701", "801"]);
 });

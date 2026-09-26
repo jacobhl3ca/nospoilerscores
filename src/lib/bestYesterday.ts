@@ -2,7 +2,7 @@
 // (Jacob 9/12: "greatest cross league hoghlights on yesterday - same as top
 // events one on todays thing").
 //
-// Built the way Top events is: a synthetic league ("best") that LeagueColumn
+// Built the way ESPN front page is: a synthetic league ("best") that LeagueColumn
 // renders like any other column. Three things differ:
 //   1. The day. The pool is YESTERDAY's finished games — the day before the
 //      board's own "today" (getEtServiceDate, the same day the date nav and the
@@ -20,22 +20,17 @@
 // and the one value import (./topEvents.ts) is pure too and carries the .ts
 // extension node's type stripping needs (same as prefsSync → devicePrefs.ts).
 import type { Game, Sport } from "./types";
-import {
-  isTopEventsGameSport,
-  TOP_EVENTS_DEFAULT_COUNT,
-  TOP_EVENTS_MAX_PER_LEAGUE,
-  TOP_EVENTS_MAX_SOURCES,
-} from "./topEvents.ts";
+import { isTopEventsGameSport, TOP_EVENTS_MAX_SOURCES } from "./topEvents.ts";
 
 // Master switch. Off → the switcher row, the Settings option and the auto-add
 // all go, a saved "best" slot resolves to Auto, and nothing fetches yesterday.
 export const BEST_YESTERDAY_ENABLED = true;
 
 export const BEST_YESTERDAY_LABEL = "Best of yesterday";
-// Same shape as Top events: 8 cards, at most 3 from one league (MLB plays 15 a
-// night and would otherwise be the whole column).
-export const BEST_YESTERDAY_COUNT = TOP_EVENTS_DEFAULT_COUNT;
-export const BEST_YESTERDAY_MAX_PER_LEAGUE = TOP_EVENTS_MAX_PER_LEAGUE;
+// 8 cards, at most 3 from one league (MLB plays 15 a night and would
+// otherwise be the whole column).
+export const BEST_YESTERDAY_COUNT = 8;
+export const BEST_YESTERDAY_MAX_PER_LEAGUE = 3;
 // Yesterday scoreboards fetched for the column, at most. One request each.
 export const BEST_YESTERDAY_MAX_SOURCES = TOP_EVENTS_MAX_SOURCES;
 // The column puts itself on the today board (the last Auto column) only when
@@ -43,7 +38,7 @@ export const BEST_YESTERDAY_MAX_SOURCES = TOP_EVENTS_MAX_SOURCES;
 export const BEST_YESTERDAY_MIN_GAMES = 3;
 
 // Leagues the column can draw from: two-team game cards whose clips the app
-// can play. Top events' set, plus the CFL (baked highlights, not on ESPN's
+// can play. The topEvents.ts game-card set, plus the CFL (baked highlights, not on ESPN's
 // strip) and tennis (per-match baked highlights during a Slam).
 export function isBestYesterdaySourceSport(sport: Sport): boolean {
   return isTopEventsGameSport(sport) || sport === "cfl" || sport === "tennis";
@@ -86,7 +81,7 @@ export interface BestYesterdayContext {
 
 // Finished, has a clip, best rating first → the user's league order → bake
 // time → id (stable across re-renders). At most `maxPerLeague` per league and
-// `count` in all. The cap is a hard ceiling here, unlike Top events: a quiet
+// `count` in all. The cap is a hard ceiling: a quiet
 // night with only MLB shows three MLB games, not eight.
 export function rankBestYesterday(games: readonly Game[], ctx: BestYesterdayContext): Game[] {
   const count = ctx.count ?? BEST_YESTERDAY_COUNT;

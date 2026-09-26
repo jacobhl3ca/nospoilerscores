@@ -10,8 +10,8 @@ import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
-import type { BestYesterdayOptions, TopEventsOptions } from "@/lib/espn";
-import { TOP_EVENTS_ENABLED } from "@/lib/topEvents";
+import type { BestYesterdayOptions } from "@/lib/espn";
+import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
 import { fromYmd } from "@/lib/etDay";
 import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
@@ -97,17 +97,6 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
   return keepDeviceLocalPrefs(reconciled, local);
 }
 
-// What the Top events column reads from prefs. A pure projection so fetchData
-// (a stable useCallback) can take it off a ref instead of closing over prefs.
-function topEventsOptions(p: Preferences): TopEventsOptions {
-  return {
-    favoriteTeams: p.favoriteTeams,
-    mode: p.topEventsMode,
-    leagues: p.topEventsLeagues,
-    count: p.topEventsCount,
-  };
-}
-
 // What the Best of yesterday column pulls, in the user's order: the leagues on
 // their board (the pin, else what Auto puts there), then their favorite
 // leagues, then the auto-picker's own ranking, then the opt-in switcher
@@ -115,7 +104,8 @@ function topEventsOptions(p: Preferences): TopEventsOptions {
 // migration opted every legacy user into all of them at once, and ahead of the
 // ranking they filled the source cap with five soccer leagues before MLB.
 // Only leagues in season YESTERDAY — a pinned offseason league has no games to
-// give — and never a hidden one. Pure, for the same reason as topEventsOptions.
+// give — and never a hidden one. A pure projection so fetchData (a stable
+// useCallback) can take it off a ref instead of closing over prefs.
 function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): BestYesterdayOptions {
   const yesterday = fromYmd(prevYmd(date));
   const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && isLeagueActive(l, yesterday));
@@ -1337,7 +1327,6 @@ export default function HomeContent({
       let [data] = await Promise.all([
         fetchAllLeagues(
           date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3,
-          topEventsOptions(prefsRef.current),
           bestYesterdayOptions(prefsRef.current, date, isWideViewport() ? 5 : 3),
           prefsRef.current.hiddenLeagues,
         ),
@@ -1410,25 +1399,8 @@ export default function HomeContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide, hiddenKey]);
 
-  // The Top events column is the one column whose CONTENTS depend on prefs
-  // other than its slot — the ranking pool (auto/manual), the count and the
-  // starred teams. Re-pull silently when any of those change while a Top
-  // events column is on the board; every other column is unaffected.
-  useEffect(() => {
-    if (!mountedRef.current || !selectedDate) return;
-    const slots = [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague];
-    if (!TOP_EVENTS_ENABLED || !slots.includes("top")) return;
-    fetchData(selectedDate, prefs.thirdLeague, {
-      first: prefs.firstLeague,
-      second: prefs.secondLeague,
-      third: prefs.thirdLeague,
-      fourth: prefs.fourthLeague,
-      fifth: prefs.fifthLeague,
-    }, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.topEventsMode, prefs.topEventsLeagues, prefs.topEventsCount, prefs.favoriteTeams]);
-
-  // Same for Best of yesterday: its pool is the user's leagues, so starring or
+  // Best of yesterday is the one column whose CONTENTS depend on prefs other
+  // than its slot: its pool is the user's leagues, so starring or
   // opting into one re-pulls the column while it is showing. (Hiding one
   // re-pulls the whole board — see hiddenKey above.)
   const bestOnBoard = leagues.some((l) => l.sport === "best");
@@ -1758,10 +1730,6 @@ export default function HomeContent({
     // switcher out from under someone mid-scroll.
     const options = new Map<Sport, { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string; defaultInSwitcher: boolean }>();
     const satisfiedByActive = new Set<Sport>();
-    // The cross-league pill leads every switcher: never offseason, never
-    // auto-picked, always addable (Jacob 9/4: "top events special pill").
-    // Switched off 9/5 — see TOP_EVENTS_ENABLED.
-    if (TOP_EVENTS_ENABLED) options.set("top", { sport: "top", label: "Top events", defaultInSwitcher: true });
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       const active = isLeagueActive(league, viewDate);
@@ -1790,6 +1758,11 @@ export default function HomeContent({
     if (BEST_YESTERDAY_ENABLED && selectedDate === getDateString(0)) {
       options.set("best", { sport: "best", label: BEST_YESTERDAY_LABEL, defaultInSwitcher: true });
     }
+    // ESPN front page: ESPN's strip is today's, so the same today-only rule
+    // and the same place in the map (Jacob 9/26).
+    if (TOP_EVENTS_ENABLED && selectedDate === getDateString(0)) {
+      options.set("top", { sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: true });
+    }
     return [...options.values()];
   }, [selectedDate]);
 
@@ -1801,8 +1774,6 @@ export default function HomeContent({
   // Soccer is grouped as one block at the very bottom rather than interleaved,
   // so the domestic leagues read as a set you scroll past or into.
   const PICKER_RANK: Sport[] = [
-    // The cross-league pill first: the one option that is never offseason.
-    "top",
     // MLB leads: it is the league actually playing games today, and a picker
     // whose first pill is an offseason/preseason league reads as stale (Jacob
     // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
@@ -1825,9 +1796,9 @@ export default function HomeContent({
       return i === -1 ? PICKER_RANK.indexOf("epl") - 0.5 : i;
     };
     // The first-run picker chooses leagues for every day's board; Best of
-    // yesterday is a today-only column that puts itself on the board anyway.
+    // yesterday and ESPN front page are today-only columns.
     return thirdLeagueOptions
-      .filter((o) => o.sport !== "best")
+      .filter((o) => o.sport !== "best" && o.sport !== "top")
       .sort((a, b) => rank(a.sport) - rank(b.sport));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- PICKER_RANK is a literal constant
   }, [thirdLeagueOptions]);
@@ -3372,10 +3343,10 @@ export default function HomeContent({
           const mirrorEntryFor = (slotIdx: number) => {
             const sport = scoreSlotSports[slotIdx];
             if (!sport) return null;
-            // A Top events / Best of yesterday score column has no news feed
+            // An ESPN front page / Best of yesterday score column has no news feed
             // of its own (it is a cross-league pick, not a league). The board
             // keeps its other mirrors plus the News column rather than an
-            // empty "Top events".
+            // empty "ESPN front page".
             if (sport === "top" || sport === "best") return null;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             const orderedCascade = leagueSourceCascade(sport);
@@ -3396,7 +3367,7 @@ export default function HomeContent({
           // 1-3 follow scores cols 1-3 (Jacob 9/25: "shouldn't it match 1 for 1
           // with my leagues on homepage unless manually set there"). Col 3
           // falls back to the ESPN/general feed when scores col 3 has no league
-          // with news (Empty, Top events, Best of yesterday). Before 9/25, col 3
+          // with news (Empty, ESPN front page, Best of yesterday). Before 9/25, col 3
           // was always that feed unless a 3rd news league was picked.
           const firstTwoEntries = leagueEntries.filter((e) => e.slotIdx === 0 || e.slotIdx === 1);
           // A pick in col 3's own switcher overrides the mirror: a league, or
