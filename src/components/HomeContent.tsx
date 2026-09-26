@@ -3371,8 +3371,16 @@ export default function HomeContent({
           // their News-first merged feed (Jacob 5/30), so only the column
           // board mirrors it.
           const thirdMirrorEntry = isMobile ? null : mirrorEntryFor(2);
-          const thirdLeagueEntry = prefs.newsThirdLeague ? (() => {
-            const sport = prefs.newsThirdLeague!;
+          // A col 3 pick only counts while that league is still in the user's
+          // switcher. A stored pick of a league they never added or later
+          // turned off (a CFL pick the old sync bug kept bringing back, Jacob
+          // 9/26: "still see cfl ... when its not my league") falls back to Auto.
+          const newsThirdPick = prefs.newsThirdLeague
+            && newsSwitcherOptions.some((o) => o.sport === prefs.newsThirdLeague)
+            ? prefs.newsThirdLeague
+            : undefined;
+          const thirdLeagueEntry = newsThirdPick ? (() => {
+            const sport = newsThirdPick;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             return { slotIdx: 2, sport, id: sport as string, label, orderedCascade: leagueSourceCascade(sport) };
           })() : null;
@@ -3550,7 +3558,7 @@ export default function HomeContent({
           // on the same two things the funnel checks: the "espn" source type is
           // selected and the ESPN label isn't hidden. Otherwise a Reddit-only
           // funnel still showed ESPN headlines in col 3's tail.
-          const useEspnTopTail = stripActive && espnColIdx >= 0 && !prefs.newsThirdLeague
+          const useEspnTopTail = stripActive && espnColIdx >= 0 && !newsThirdPick
             && newsTypeFilters.includes("espn") && !newsHiddenSources.includes("ESPN");
           // Sources stripped of the video lead when the strip is active.
           const sourcesForEntry = (entry: typeof renderedEntries[number], idx: number) => {
