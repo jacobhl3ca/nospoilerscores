@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { routeLastModified } from "@/lib/routeLastModified";
+import { TEAM_PAGES } from "@/lib/teamPages";
 
 // Static sitemap for hidescore.com. Works with `output: "export"` — Next emits
 // a static /sitemap.xml at build time. Keep the route list in sync with src/app.
@@ -133,6 +134,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     return d ? { lastModified: d } : {};
   };
 
+  // Added 2026-09-26: the /teams hub and one page per NFL, NBA, NHL, MLB and
+  // Premier League team (144). League-intent priority, like the per-league
+  // guides. Each team page shows that team's own live schedule plus baked
+  // venue/division facts, so they are not the thin near-duplicates the
+  // league-route comments above warn about. Dated by the hub folder: the
+  // [league]/[team] folder name is a glob character class to routeLastModified.
+  const teamPages = ["/teams", ...TEAM_PAGES.map((t) => `/teams/${t.league}/${t.slug}`)];
+  const teamsDate = dated("/teams");
+
   return [
     ...daily.map((path) => ({
       url: `${BASE}${path}`,
@@ -151,6 +161,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       ...dated(path),
       changeFrequency: "weekly" as const,
       priority: highIntent.has(path) ? 0.8 : leagueIntent.has(path) ? 0.7 : 0.5,
+    })),
+    ...teamPages.map((path) => ({
+      url: `${BASE}${path}`,
+      ...teamsDate,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
     })),
   ];
 }

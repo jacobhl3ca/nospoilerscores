@@ -174,6 +174,7 @@ export default function NhlHighlightsWithoutSpoilersPage() {
       ctaLabel="Open NHL highlights without spoilers"
       ctaHref="/yesterday"
       links={[
+        { href: "/teams#nhl", label: "NHL teams" },
         { href: "/nhl-scores-without-spoilers", label: "NHL scores" },
         // Added 2026-09-20: the NBA now has a highlights route of its own, and
         // this is its closest sibling — same split between a scores page and a

@@ -220,6 +220,10 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/worldcup" className="underline underline-offset-2">
             World Cup
           </Link>
+          {/* Added 2026-09-26: the hub for the 144 per-team pages. */}
+          <Link href="/teams" className="underline underline-offset-2">
+            Team schedules
+          </Link>
           <Link href="/faq" className="underline underline-offset-2">
             FAQ
           </Link>
