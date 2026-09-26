@@ -118,6 +118,9 @@ interface NewsColumnProps {
   // Switch this column to the ESPN "Top news" headlines feed (see NewsColumnTitle).
   onPickEspn?: () => void;
   espnActive?: boolean;
+  // Switch this column to "ESPN front page" (espn.com's headlines + clips only).
+  onPickFrontPage?: () => void;
+  frontPageActive?: boolean;
   // What "Auto" resolves to for this column, so the switcher can mark it
   // "· default" instead of leaving Auto an opaque choice (Jacob 8/9).
   autoSport?: Sport;
@@ -166,6 +169,8 @@ export function NewsColumnTitle({
   onSwapLeague,
   onPickEspn,
   espnActive,
+  onPickFrontPage,
+  frontPageActive,
   autoSport,
   autoIsEspn,
   measureRef,
@@ -185,6 +190,9 @@ export function NewsColumnTitle({
   // was emptied (it reappears as the last column).
   onPickEspn?: () => void;
   espnActive?: boolean;
+  // See NewsColumnProps.
+  onPickFrontPage?: () => void;
+  frontPageActive?: boolean;
   // See NewsColumnProps — marks the option "Auto" would land on.
   autoSport?: Sport;
   autoIsEspn?: boolean;
@@ -322,6 +330,25 @@ export function NewsColumnTitle({
                   >
                     Top news (ESPN)
                     {autoIsEspn && !espnActive && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
+                  </button>
+                )}
+                {/* ESPN front page = espn.com's own headlines + homepage clips,
+                    with no Reddit (Jacob 9/26). */}
+                {onPickFrontPage && (
+                  <button
+                    type="button"
+                    onClick={() => { onPickFrontPage(); setSwapOpen(false); }}
+                    aria-current={frontPageActive ? "true" : undefined}
+                    className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                    style={{
+                      color: frontPageActive ? "var(--accent)" : "var(--text)",
+                      fontWeight: frontPageActive ? 600 : 400,
+                    }}
+                    title="Show only espn.com's front page: its top headlines, then its clips"
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    ESPN front page
                   </button>
                 )}
                 {swappableOptions!.map((opt) => {
@@ -1076,6 +1103,8 @@ export default function NewsColumn({
   onSwapLeague,
   onPickEspn,
   espnActive,
+  onPickFrontPage,
+  frontPageActive,
   autoSport,
   autoIsEspn,
   hideTitle,
@@ -1145,6 +1174,8 @@ export default function NewsColumn({
           onSwapLeague={onSwapLeague}
           onPickEspn={onPickEspn}
           espnActive={espnActive}
+          onPickFrontPage={onPickFrontPage}
+          frontPageActive={frontPageActive}
           autoSport={autoSport}
           autoIsEspn={autoIsEspn}
           measureRef={titleMeasureRef}

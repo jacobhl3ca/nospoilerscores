@@ -1,4 +1,4 @@
-// "top" is not a league: it is the cross-league "Top events" column (lib/topEvents.ts).
+// "top" is not a league: it is the cross-league "ESPN front page" column (lib/topEvents.ts).
 // Nor is "best": the cross-league "Best of yesterday" column (lib/bestYesterday.ts).
 // Both are deliberately absent from ALL_LEAGUES, so nothing that walks the catalog
 // (season windows, news feeds, prebake scripts) ever sees them — they exist as a

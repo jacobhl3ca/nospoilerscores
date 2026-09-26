@@ -17,7 +17,6 @@ const espn = await jiti.import<{
     third: undefined,
     overrides: Record<string, string | undefined>,
     slotCount: number,
-    topOpts: undefined,
     bestOpts: undefined,
     hidden?: string[],
   ) => Promise<Array<{ sport: string } | null>>;
@@ -39,7 +38,7 @@ test.before(() => {
 test.after(() => { globalThis.fetch = realFetch; });
 
 const boardSports = async (overrides: Record<string, string | undefined>, hidden: string[], slots = 3) =>
-  (await espn.fetchAllLeagues(DATE, undefined, overrides, slots, undefined, undefined, hidden))
+  (await espn.fetchAllLeagues(DATE, undefined, overrides, slots, undefined, hidden))
     .flatMap((l) => (l ? [l.sport] : []));
 
 test("Auto never places a hidden league", () => {
@@ -77,4 +76,10 @@ test("hiding an Auto column's league moves that column, not the pins", async () 
   const auto = espn.pickAndAssignLeagues(DAY, 3).map((l) => l.sport);
   const shown = await boardSports({}, [auto[0]]);
   assert.ok(!shown.includes(auto[0]), `${auto[0]} still on ${shown}`);
+});
+
+test("an ESPN front page pin is today-only: any other date shows the slot's Auto league", async () => {
+  const shown = await boardSports({ first: "mlb", second: "nfl", third: "top" }, []);
+  assert.equal(shown.length, 3);
+  assert.ok(!shown.includes("top"), `top on a past board: ${shown}`);
 });

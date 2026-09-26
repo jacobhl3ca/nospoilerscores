@@ -1,5 +1,4 @@
 import { Sport } from "./types";
-import type { TopEventsMode, TopEventsCount } from "./topEvents";
 import type { RecordLeague } from "./upcomingRecords";
 import { setServiceTimeZone } from "./etDay";
 
@@ -269,11 +268,9 @@ export interface Preferences {
   // lib/dismissals.ts. (A `kickoffBannerSnoozedUntil` date lived here 9/4-9/5;
   // old blobs may still carry it, nothing reads it.)
   kickoffBannersDismissed?: string[];
-  // Top events column (lib/topEvents.ts). All three undefined = Auto (ESPN's
-  // homepage strip + your starred teams), 8 games.
-  topEventsMode?: TopEventsMode;
-  topEventsLeagues?: Sport[];
-  topEventsCount?: TopEventsCount;
+  // (topEventsMode / topEventsLeagues / topEventsCount tuned the 9/4 Top
+  // events column. Its 9/26 ESPN front page successor has no knobs; old blobs
+  // may still carry them, nothing reads them.)
   // The footer's Google Play badge, hidden by its own dismiss control. Only
   // signed-in users are given that control, because the dismissal rides this
   // prefs blob and only a signed-in account pushes the blob to the server — a
@@ -290,6 +287,11 @@ export interface Preferences {
   // 9/25: a set newsGenericSlot then stands in for it, because only that
   // switcher pick ever wrote newsGenericSlot.
   newsTopNews?: boolean;
+  // True when the user picked "ESPN front page" from a news switcher (Jacob
+  // 9/26): the generic column shows only espn.com's Top Headlines + homepage
+  // clips instead of Top news. Uses the same column (and newsGenericSlot
+  // position) as Top news, so the two are either/or.
+  newsFrontPage?: boolean;
   // News column 3 is on the board by default, even when scores column 3 is
   // Empty (it then shows Top news). True means the user removed it.
   newsGenericHidden?: boolean;

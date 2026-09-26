@@ -10,8 +10,8 @@ import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
-import type { BestYesterdayOptions, TopEventsOptions } from "@/lib/espn";
-import { TOP_EVENTS_ENABLED } from "@/lib/topEvents";
+import type { BestYesterdayOptions } from "@/lib/espn";
+import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
 import { fromYmd } from "@/lib/etDay";
 import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
@@ -32,7 +32,7 @@ import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
@@ -97,17 +97,6 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
   return keepDeviceLocalPrefs(reconciled, local);
 }
 
-// What the Top events column reads from prefs. A pure projection so fetchData
-// (a stable useCallback) can take it off a ref instead of closing over prefs.
-function topEventsOptions(p: Preferences): TopEventsOptions {
-  return {
-    favoriteTeams: p.favoriteTeams,
-    mode: p.topEventsMode,
-    leagues: p.topEventsLeagues,
-    count: p.topEventsCount,
-  };
-}
-
 // What the Best of yesterday column pulls, in the user's order: the leagues on
 // their board (the pin, else what Auto puts there), then their favorite
 // leagues, then the auto-picker's own ranking, then the opt-in switcher
@@ -115,7 +104,8 @@ function topEventsOptions(p: Preferences): TopEventsOptions {
 // migration opted every legacy user into all of them at once, and ahead of the
 // ranking they filled the source cap with five soccer leagues before MLB.
 // Only leagues in season YESTERDAY — a pinned offseason league has no games to
-// give — and never a hidden one. Pure, for the same reason as topEventsOptions.
+// give — and never a hidden one. A pure projection so fetchData (a stable
+// useCallback) can take it off a ref instead of closing over prefs.
 function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): BestYesterdayOptions {
   const yesterday = fromYmd(prevYmd(date));
   const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && isLeagueActive(l, yesterday));
@@ -1342,7 +1332,6 @@ export default function HomeContent({
       let [data] = await Promise.all([
         fetchAllLeagues(
           date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3,
-          topEventsOptions(prefsRef.current),
           bestYesterdayOptions(prefsRef.current, date, isWideViewport() ? 5 : 3),
           prefsRef.current.hiddenLeagues,
         ),
@@ -1415,25 +1404,8 @@ export default function HomeContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide, hiddenKey]);
 
-  // The Top events column is the one column whose CONTENTS depend on prefs
-  // other than its slot — the ranking pool (auto/manual), the count and the
-  // starred teams. Re-pull silently when any of those change while a Top
-  // events column is on the board; every other column is unaffected.
-  useEffect(() => {
-    if (!mountedRef.current || !selectedDate) return;
-    const slots = [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague];
-    if (!TOP_EVENTS_ENABLED || !slots.includes("top")) return;
-    fetchData(selectedDate, prefs.thirdLeague, {
-      first: prefs.firstLeague,
-      second: prefs.secondLeague,
-      third: prefs.thirdLeague,
-      fourth: prefs.fourthLeague,
-      fifth: prefs.fifthLeague,
-    }, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.topEventsMode, prefs.topEventsLeagues, prefs.topEventsCount, prefs.favoriteTeams]);
-
-  // Same for Best of yesterday: its pool is the user's leagues, so starring or
+  // Best of yesterday is the one column whose CONTENTS depend on prefs other
+  // than its slot: its pool is the user's leagues, so starring or
   // opting into one re-pulls the column while it is showing. (Hiding one
   // re-pulls the whole board — see hiddenKey above.)
   const bestOnBoard = leagues.some((l) => l.sport === "best");
@@ -1529,6 +1501,7 @@ export default function HomeContent({
     updatePrefs({
       newsThirdLeague: sport,
       newsTopNews: false,
+      newsFrontPage: false,
       newsGenericHidden: false,
       // Keep a one-column Focus view pointed at the replacement column.
       newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
@@ -1763,10 +1736,6 @@ export default function HomeContent({
     // switcher out from under someone mid-scroll.
     const options = new Map<Sport, { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string; defaultInSwitcher: boolean }>();
     const satisfiedByActive = new Set<Sport>();
-    // The cross-league pill leads every switcher: never offseason, never
-    // auto-picked, always addable (Jacob 9/4: "top events special pill").
-    // Switched off 9/5 — see TOP_EVENTS_ENABLED.
-    if (TOP_EVENTS_ENABLED) options.set("top", { sport: "top", label: "Top events", defaultInSwitcher: true });
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       const active = isLeagueActive(league, viewDate);
@@ -1795,6 +1764,11 @@ export default function HomeContent({
     if (BEST_YESTERDAY_ENABLED && selectedDate === getDateString(0)) {
       options.set("best", { sport: "best", label: BEST_YESTERDAY_LABEL, defaultInSwitcher: true });
     }
+    // ESPN front page: ESPN's strip is today's, so the same today-only rule
+    // and the same place in the map (Jacob 9/26).
+    if (TOP_EVENTS_ENABLED && selectedDate === getDateString(0)) {
+      options.set("top", { sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: true });
+    }
     return [...options.values()];
   }, [selectedDate]);
 
@@ -1806,8 +1780,6 @@ export default function HomeContent({
   // Soccer is grouped as one block at the very bottom rather than interleaved,
   // so the domestic leagues read as a set you scroll past or into.
   const PICKER_RANK: Sport[] = [
-    // The cross-league pill first: the one option that is never offseason.
-    "top",
     // MLB leads: it is the league actually playing games today, and a picker
     // whose first pill is an offseason/preseason league reads as stale (Jacob
     // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
@@ -1830,9 +1802,9 @@ export default function HomeContent({
       return i === -1 ? PICKER_RANK.indexOf("epl") - 0.5 : i;
     };
     // The first-run picker chooses leagues for every day's board; Best of
-    // yesterday is a today-only column that puts itself on the board anyway.
+    // yesterday and ESPN front page are today-only columns.
     return thirdLeagueOptions
-      .filter((o) => o.sport !== "best")
+      .filter((o) => o.sport !== "best" && o.sport !== "top")
       .sort((a, b) => rank(a.sport) - rank(b.sport));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- PICKER_RANK is a literal constant
   }, [thirdLeagueOptions]);
@@ -3365,6 +3337,16 @@ export default function HomeContent({
             label: "News",
             orderedCascade: GENERIC_CASCADE,
           };
+          // "ESPN front page" (Jacob 9/26): espn.com's Top Headlines, then its
+          // homepage clips, nothing else. Picked from a news switcher, or the
+          // Auto news column under an ESPN front page scores column.
+          const frontPageEntryFor = (slotIdx: number) => ({
+            slotIdx,
+            sport: undefined as Sport | undefined,
+            id: "espn-front",
+            label: ESPN_FRONT_PAGE_LABEL,
+            orderedCascade: ESPN_FRONT_PAGE_CASCADE,
+          });
           // fetchAllLeagues collapses empty slots out of the returned array, so
           // walk it as a shifting queue — one pull per non-empty slot — exactly
           // like the scores view (see leagueQueue below) and setSlotLeague. A
@@ -3377,11 +3359,13 @@ export default function HomeContent({
           const mirrorEntryFor = (slotIdx: number) => {
             const sport = scoreSlotSports[slotIdx];
             if (!sport) return null;
-            // A Top events / Best of yesterday score column has no news feed
-            // of its own (it is a cross-league pick, not a league). The board
-            // keeps its other mirrors plus the News column rather than an
-            // empty "Top events".
-            if (sport === "top" || sport === "best") return null;
+            // An ESPN front page score column's news is espn.com's own front
+            // page: its headlines and homepage clips (Jacob 9/26).
+            if (sport === "top") return frontPageEntryFor(slotIdx);
+            // Best of yesterday has no news feed of its own (it is a
+            // cross-league pick, not a league). The board keeps its other
+            // mirrors plus the News column rather than an empty column.
+            if (sport === "best") return null;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             const orderedCascade = leagueSourceCascade(sport);
             return { slotIdx, sport, id: sport as string, label, orderedCascade };
@@ -3392,8 +3376,16 @@ export default function HomeContent({
           // their News-first merged feed (Jacob 5/30), so only the column
           // board mirrors it.
           const thirdMirrorEntry = isMobile ? null : mirrorEntryFor(2);
-          const thirdLeagueEntry = prefs.newsThirdLeague ? (() => {
-            const sport = prefs.newsThirdLeague!;
+          // A col 3 pick only counts while that league is still in the user's
+          // switcher. A stored pick of a league they never added or later
+          // turned off (a CFL pick the old sync bug kept bringing back, Jacob
+          // 9/26: "still see cfl ... when its not my league") falls back to Auto.
+          const newsThirdPick = prefs.newsThirdLeague
+            && newsSwitcherOptions.some((o) => o.sport === prefs.newsThirdLeague)
+            ? prefs.newsThirdLeague
+            : undefined;
+          const thirdLeagueEntry = newsThirdPick ? (() => {
+            const sport = newsThirdPick;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             return { slotIdx: 2, sport, id: sport as string, label, orderedCascade: leagueSourceCascade(sport) };
           })() : null;
@@ -3401,7 +3393,7 @@ export default function HomeContent({
           // 1-3 follow scores cols 1-3 (Jacob 9/25: "shouldn't it match 1 for 1
           // with my leagues on homepage unless manually set there"). Col 3
           // falls back to the ESPN/general feed when scores col 3 has no league
-          // with news (Empty, Top events, Best of yesterday). Before 9/25, col 3
+          // with news (Empty, ESPN front page, Best of yesterday). Before 9/25, col 3
           // was always that feed unless a 3rd news league was picked.
           const firstTwoEntries = leagueEntries.filter((e) => e.slotIdx === 0 || e.slotIdx === 1);
           // A pick in col 3's own switcher overrides the mirror: a league, or
@@ -3424,9 +3416,12 @@ export default function HomeContent({
             orderedCascade: leagueSourceCascade(nextNewsSport),
           } : null;
           const topNewsFallback = topNewsOff ? nextNewsEntry : espnEntry;
+          // An ESPN front page pick takes the same column Top news would.
           const thirdColEntry = prefs.newsGenericHidden
             ? null
-            : thirdLeagueEntry ?? (topNewsPicked && !topNewsOff ? espnEntry : thirdMirrorEntry ?? topNewsFallback);
+            : prefs.newsFrontPage
+              ? frontPageEntryFor(2)
+              : thirdLeagueEntry ?? (topNewsPicked && !topNewsOff ? espnEntry : thirdMirrorEntry ?? topNewsFallback);
           // What Auto gives col 3: the mirror, else the fallback above.
           const thirdAutoSport = thirdMirrorEntry?.sport ?? nextNewsEntry?.sport;
           const thirdAutoIsEspn = !thirdMirrorEntry && !topNewsOff;
@@ -3457,6 +3452,9 @@ export default function HomeContent({
             ? visibleNewsEntries.filter((e) => e.id === newsFocusLeague)
             : visibleNewsEntries;
           const orderedColumnSourcesFor = (entry: typeof visibleNewsEntries[number]): ColumnSource[] => {
+            // ESPN front page IS its two ESPN cards: the funnel (Reddit-only
+            // by default) and hidden labels would otherwise blank it.
+            if (entry.id === "espn-front") return entry.orderedCascade;
             const visible = entry.orderedCascade.filter((s) => !newsHiddenSources.includes(s.label));
             const typeMatched = visible.filter((s) => newsTypeFilters.includes(classifySource(s) as NewsSourceType));
             // Not every league has a source of every type — NWSL and cricket
@@ -3519,11 +3517,22 @@ export default function HomeContent({
             updatePrefs({
               newsThirdLeague: undefined,
               newsTopNews: true,
+              newsFrontPage: false,
               newsGenericHidden: false,
               newsGenericSlot: position === undefined
                 ? prefs.newsGenericSlot
                 : (Math.max(0, Math.min(2, position)) as 0 | 1 | 2),
               newsFocusLeague: prefs.newsFocusLeague ? "espn" : undefined,
+            });
+          };
+          // Same move for ESPN front page: it takes the generic column's place.
+          const pickFrontPage = (position: number) => {
+            updatePrefs({
+              newsThirdLeague: undefined,
+              newsTopNews: false,
+              newsFrontPage: true,
+              newsGenericHidden: false,
+              newsGenericSlot: Math.max(0, Math.min(2, position)) as 0 | 1 | 2,
             });
           };
 
@@ -3554,7 +3563,7 @@ export default function HomeContent({
           // on the same two things the funnel checks: the "espn" source type is
           // selected and the ESPN label isn't hidden. Otherwise a Reddit-only
           // funnel still showed ESPN headlines in col 3's tail.
-          const useEspnTopTail = stripActive && espnColIdx >= 0 && !prefs.newsThirdLeague
+          const useEspnTopTail = stripActive && espnColIdx >= 0 && !newsThirdPick
             && newsTypeFilters.includes("espn") && !newsHiddenSources.includes("ESPN");
           // Sources stripped of the video lead when the strip is active.
           const sourcesForEntry = (entry: typeof renderedEntries[number], idx: number) => {
@@ -3579,6 +3588,9 @@ export default function HomeContent({
           // News, then higher-priority league A, then league B. This replaces
           // the old interleaving that put B Reddit before B video.
           const MOBILE_SOURCE_RANK: Record<string, number> = {
+            // ESPN front page leads the phone feed: headlines, then clips.
+            "front:espn": 0,
+            "front:topvideos": 0.5,
             "news:topvideos": 1,
             "news:espn": 2,
             "news:reddit": 3,
@@ -3600,9 +3612,9 @@ export default function HomeContent({
             // Sort the score-league entries by the fixed global priority so role
             // A is always the higher-priority league (MLB ahead of NBA), not
             // whatever sits in scores column 1.
-            const newsEntry = renderedEntries.filter((e) => e.id === "espn");
+            const newsEntry = renderedEntries.filter((e) => e.id === "espn" || e.id === "espn-front");
             const leagueEntries = renderedEntries
-              .filter((e) => e.id !== "espn")
+              .filter((e) => e.id !== "espn" && e.id !== "espn-front")
               .sort((a, b) => {
                 const ra = a.sport ? MOBILE_NEWS_LEAGUE_ORDER.indexOf(a.sport) : -1;
                 const rb = b.sport ? MOBILE_NEWS_LEAGUE_ORDER.indexOf(b.sport) : -1;
@@ -3613,7 +3625,9 @@ export default function HomeContent({
               const leagueIdx = leagueEntries.indexOf(entry);
               const role = entry.id === "espn"
                 ? "news"
-                : leagueIdx === 0 ? "A" : leagueIdx === 1 ? "B" : "C";
+                : entry.id === "espn-front"
+                  ? "front"
+                  : leagueIdx === 0 ? "A" : leagueIdx === 1 ? "B" : "C";
               return orderedColumnSourcesFor(entry).map((cs, subIdx) => ({
                 cs,
                 rank: MOBILE_SOURCE_RANK[`${role}:${classifySource(cs)}`] ?? 900 + subIdx,
@@ -3696,6 +3710,8 @@ export default function HomeContent({
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
                             onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                             espnActive={isEspn}
+                            onPickFrontPage={() => pickFrontPage(idx)}
+                            frontPageActive={entry.id === "espn-front"}
                             autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
                             autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                             removable={renderedEntries.length > 1}
@@ -3759,6 +3775,8 @@ export default function HomeContent({
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
                       onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                       espnActive={isEspn}
+                      onPickFrontPage={() => pickFrontPage(idx)}
+                      frontPageActive={entry.id === "espn-front"}
                       autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
                       autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                       hideTitle={stripActive}

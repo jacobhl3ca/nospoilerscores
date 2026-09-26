@@ -996,10 +996,10 @@ export default function LeagueColumn({
   // only ever grows — the same no-flash direction the old flag had.
   const [narrowColumn, setNarrowColumn] = useState(true);
   const headerLabel = (narrowColumn && SHORT_LEAGUE_LABELS[league.label]) || league.label;
-  // The Top events and Best of yesterday columns mix leagues, so each card
-  // names ITS league — the highlight channel and the share card are keyed by
-  // that label, and a "Top events" channel does not exist. Every other column
-  // is one league.
+  // The ESPN front page and Best of yesterday columns mix leagues, so each
+  // card names ITS league — the highlight channel and the share card are keyed
+  // by that label, and an "ESPN front page" channel does not exist. Every
+  // other column is one league.
   const crossLeague = league.sport === "top" || league.sport === "best";
   const cardLeagueLabel = (game: Game): string => {
     if (!crossLeague) return league.label;
@@ -1013,7 +1013,7 @@ export default function LeagueColumn({
   // The chip on each cross-league card ("MLB", "UCL", "Prem"): the short form
   // of the label above. Undefined everywhere else — see GameCard.leagueTag.
   // Reads game.sport (applyDemoMode leaves it untouched by design — see
-  // demoMode.ts) directly, so a Top events / Best of yesterday column, the
+  // demoMode.ts) directly, so an ESPN front page / Best of yesterday column, the
   // one place this chip renders, printed the REAL league name right on an
   // otherwise-anonymized card under ?demo=1. Drop it in demo mode instead of
   // trying to genericize per-sport — the column header is already anonymized
@@ -1459,9 +1459,9 @@ export default function LeagueColumn({
   };
 
   const sorted = [...league.games].sort((a, b) => {
-    // Top events arrives already ranked (your teams, then what espn.com is
-    // featuring, live, playoffs…) — that order IS the column, in both modes.
-    // Array.prototype.sort is stable, so 0 keeps it. See lib/topEvents.ts.
+    // ESPN front page arrives in ESPN's own strip order — that order IS the
+    // column, in both modes. Array.prototype.sort is stable, so 0 keeps it.
+    // See lib/topEvents.ts.
     // Best of yesterday arrives ranked too (lib/bestYesterday.ts).
     if (crossLeague) return 0;
     const aPri = getFavPriority(a);
@@ -1553,8 +1553,15 @@ export default function LeagueColumn({
   // date their feed has nothing for. They keep rendering the column either way
   // — see the eventCard branch of fetchLeague.
   const isEventTileSport = league.sport === "chess" || league.sport === "boxing" || league.sport === "poker";
-  // A pinned Best of yesterday column can come up empty (no clips posted yet).
-  const emptyLabel = isEventTileSport ? "No event" : league.sport === "best" ? "No highlights from yesterday yet" : "No games";
+  // A pinned Best of yesterday column can come up empty (no clips posted yet),
+  // and ESPN's strip can carry nothing we render (golf only, early morning).
+  const emptyLabel = isEventTileSport
+    ? "No event"
+    : league.sport === "best"
+      ? "No highlights from yesterday yet"
+      : league.sport === "top"
+        ? "No games on ESPN's front page right now"
+        : "No games";
   const emptyUpcomingLabel = isEventTileSport ? "No event scheduled" : "Upcoming Schedule TBD";
   // Same reason the empty copy differs: an event-tile column has no "schedule"
   // to be unavailable, it has one card that didn't load.
@@ -1959,9 +1966,11 @@ export default function LeagueColumn({
                         offseason, the one state that actually limits what
                         picking it gets you. */}
                     {[...swappableOptions!].sort((a, b) => {
-                      // The cross-league pills lead the list wherever they appear.
-                      if ((a.sport === "top") !== (b.sport === "top")) return a.sport === "top" ? -1 : 1;
+                      // The cross-league pills lead the list wherever they
+                      // appear: Best of yesterday first (Jacob 9/26), then
+                      // ESPN front page.
                       if ((a.sport === "best") !== (b.sport === "best")) return a.sport === "best" ? -1 : 1;
+                      if ((a.sport === "top") !== (b.sport === "top")) return a.sport === "top" ? -1 : 1;
                       const ae = a.sport !== league.sport && !!shownElsewhere?.some((e) => e.sport === a.sport);
                       const be = b.sport !== league.sport && !!shownElsewhere?.some((e) => e.sport === b.sport);
                       return (ae ? 1 : 0) - (be ? 1 : 0);
@@ -1987,7 +1996,7 @@ export default function LeagueColumn({
                           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
-                          {opt.sport === "top" ? "⭐ " : ""}{opt.label}
+                          {opt.label}
                           {opt.offseason && <em className="font-normal"> · offseason</em>}
                           {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
                           {elsewhere && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · col {elsewhere.col}</em>}

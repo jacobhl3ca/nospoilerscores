@@ -2,7 +2,7 @@ import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventC
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
-import { parseEspnHeader, rankTopEvents, topEventsSourceSports, TOP_EVENTS_DEFAULT_COUNT, TOP_EVENTS_ENABLED, type EspnHeaderFeature, type TopEventsMode, type TopEventsCount } from "./topEvents";
+import { espnFrontPageSports, orderByEspnHeader, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_MIN_GAMES, prevYmd, rankBestYesterday } from "./bestYesterday";
 import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
@@ -75,7 +75,7 @@ const SPORT_PATHS: Record<Sport, string> = {
   boxing: "",
   poker: "",
   esports: "",
-  // Top events has no scoreboard of its own — fetchTopEvents pulls the real
+  // ESPN front page has no scoreboard of its own — fetchTopEvents pulls the real
   // leagues' boards. Present only so the Record stays total. Same for Best of
   // yesterday (fetchBestYesterday).
   top: "",
@@ -1447,7 +1447,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // marginCloseness. `multiplier` still drives the comeback bonus for them.
   closenessCurve?: ClosenessCurve;
 }> = {
-  // Never consulted: a Top events game keeps its real sport, so the rating
+  // Never consulted: an ESPN front page game keeps its real sport, so the rating
   // engine rates it as that league. Present only so the Record stays total.
   // Same for a Best of yesterday game.
   top:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 30,  regulationPeriods: 4 },
@@ -2980,7 +2980,7 @@ export function espnGameUrl(game: Game): string {
     // PandaScore supplies no public per-match page, so there is no gamecast
     // to link to; this only satisfies the exhaustive switch.
     case "esports": return `https://www.pandascore.co/`;
-    // A Top events / Best of yesterday card keeps its REAL sport, so this
+    // An ESPN front page / Best of yesterday card keeps its REAL sport, so this
     // never runs either.
     case "top":
     case "best": return `https://www.espn.com/`;
@@ -5479,26 +5479,21 @@ export async function resolveMlbGameVideos(game: Game): Promise<MlbGameVideos | 
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TOP EVENTS — the cross-league column (Jacob 9/4)
+// ESPN FRONT PAGE — the cross-league column (Jacob 9/4, ESPN mirror 9/26)
 // ═══════════════════════════════════════════════════════════════
 // Not in ALL_LEAGUES on purpose: it has no season, no news feed and no
 // scoreboard, and every loop over the catalog would otherwise have to special-
 // case it. resolveSlot hands this config back for a "top" slot pref, and
 // fetchAllLeagues fills it AFTER the real columns so their games are reused
 // instead of fetched twice.
-export const TOP_EVENTS_CONFIG: LeagueConfig = { sport: "top", label: "Top events", excludeFromAuto: true };
+// Label spelled out (= ESPN_FRONT_PAGE_LABEL): tests/league-labels scans espn.ts
+// for label literals to keep the phone short form keyed to a real label.
+export const TOP_EVENTS_CONFIG: LeagueConfig = { sport: "top", label: "ESPN front page", excludeFromAuto: true };
 
-export interface TopEventsOptions {
-  favoriteTeams?: string[];
-  mode?: TopEventsMode;
-  leagues?: Sport[];
-  count?: TopEventsCount;
-}
-
-// ESPN's homepage "Top Events" strip. Same CDN family as the scoreboards,
-// CORS-open, 10 s edge cache. Editorial rather than exhaustive: on a Friday
-// in September it carries ~5 sports and 1-16 events each — exactly the
-// "what is espn.com leading with" signal the ranking anchors on.
+// ESPN's homepage scores strip. Same CDN family as the scoreboards,
+// CORS-open, 10 s edge cache. Editorial rather than exhaustive: on Saturday
+// 9/26 it carried 17 of 65 college football games, 9 of 13 MLB and 9 of 14
+// NHL, in a fixed order — the strip is the column.
 const ESPN_HEADER_URL = "https://site.web.api.espn.com/apis/v2/scoreboard/header?region=us&lang=en&contentorigin=espn&tz=America%2FNew_York";
 
 async function fetchEspnHeader(): Promise<EspnHeaderFeature[]> {
@@ -5511,34 +5506,14 @@ async function fetchEspnHeader(): Promise<EspnHeaderFeature[]> {
   }
 }
 
-// Sports the auto pool falls back to when ESPN's strip is empty (fetch failed,
-// or a quiet morning) and the user has no starred teams: the board's own
-// in-season ranking, trimmed to game-card sports.
-function fallbackTopSports(viewDate: Date): Sport[] {
-  const { firstPref, rest } = getActiveLeagueCandidates(viewDate);
-  const out: Sport[] = [];
-  for (const cfg of [...firstPref, ...rest]) {
-    if (!out.includes(cfg.sport)) out.push(cfg.sport);
-  }
-  return out;
-}
-
 export async function fetchTopEvents(
   date: string | undefined,
-  viewDate: Date,
-  opts: TopEventsOptions | undefined,
   // Games the board already fetched for this date, by sport — a league that is
   // also a column costs nothing extra.
   prefetched: Map<Sport, Game[]>,
 ): Promise<LeagueData> {
-  const mode: TopEventsMode = opts?.mode ?? "auto";
-  const favoriteTeams = opts?.favoriteTeams ?? [];
   const features = await fetchEspnHeader();
-  let sports = topEventsSourceSports(mode, opts?.leagues, features, favoriteTeams);
-  if (mode === "auto" && sports.length < 3) {
-    sports = topEventsSourceSports("manual", [...sports, ...fallbackTopSports(viewDate)], features, favoriteTeams);
-  }
-  const pools = await Promise.all(sports.map(async (sport) => {
+  const pools = await Promise.all(espnFrontPageSports(features).map(async (sport) => {
     const pre = prefetched.get(sport);
     if (pre) return pre;
     try {
@@ -5547,19 +5522,14 @@ export async function fetchTopEvents(
       return [] as Game[];
     }
   }));
-  const games = rankTopEvents(pools.flat(), {
-    favoriteTeams,
-    features,
-    nowMs: Date.now(),
-    count: opts?.count ?? TOP_EVENTS_DEFAULT_COUNT,
-  });
+  const games = orderByEspnHeader(pools.flat(), features);
   return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false };
 }
 
 // ═══════════════════════════════════════════════════════════════
 // BEST OF YESTERDAY — the cross-league column of yesterday's best (Jacob 9/12)
 // ═══════════════════════════════════════════════════════════════
-// Same pattern as Top events: not in ALL_LEAGUES, handed back by resolveSlot
+// Same pattern as ESPN front page: not in ALL_LEAGUES, handed back by resolveSlot
 // for a "best" slot pref, filled by fetchAllLeagues. It exists on the TODAY
 // board only — "yesterday" means the day before today, and on any other date
 // the slot falls back to its Auto league. See lib/bestYesterday.ts.
@@ -5638,8 +5608,6 @@ export async function fetchAllLeagues(
   // 3 on phones/laptops, 5 on wide viewports (the caller measures). Slots 4-5
   // exist only in the 5-column board; their prefs are ignored at count 3.
   slotCount: number = MAX_LEAGUES,
-  // Only read when a slot is "top" — see fetchTopEvents.
-  topOpts?: TopEventsOptions,
   // Only read on the today board — see fetchBestYesterday.
   bestOpts?: BestYesterdayOptions,
   // Leagues turned off in Settings' switcher list. An Auto column skips them
@@ -5673,8 +5641,13 @@ export async function fetchAllLeagues(
   const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | "hidden" | null => {
     if (sport === "empty") return "empty";
     if (!sport) return null;
-    // A "top" pin saved while the column was on reads as Auto while it is off.
-    if (sport === "top") return TOP_EVENTS_ENABLED ? TOP_EVENTS_CONFIG : null;
+    // ESPN's strip is today's front page, so a "top" pin is a today-board
+    // column like "best" below: Auto on any other date or while the column is
+    // switched off, and filled like a turned-off league when hidden.
+    if (sport === "top") {
+      if (!TOP_EVENTS_ENABLED || !isTodayView) return null;
+      return hidden.includes("top") ? "hidden" : TOP_EVENTS_CONFIG;
+    }
     // "Yesterday" is the day before TODAY, so a "best" pin is a today-board
     // column. Any other date gets the slot's Auto league instead.
     // Turned off in Settings, it is filled like any turned-off league.
@@ -5971,7 +5944,7 @@ export async function fetchAllLeagues(
   // returns [] on any error), so this is defense-in-depth against a future
   // enrichment step reintroducing a throw — one bad column drops out, the
   // rest still render.
-  // Top events runs AFTER the real columns so it can reuse their games —
+  // ESPN front page runs AFTER the real columns so it can reuse their games —
   // then slots back into its own position(s), duplicates included.
   // Best of yesterday reads yesterday's boards, not this one, so it can pull
   // alongside the real columns instead of after them.
@@ -5987,7 +5960,7 @@ export async function fetchAllLeagues(
   if (final.some((cfg) => cfg.sport === "top")) {
     const prefetched = new Map<Sport, Game[]>();
     for (const r of results) if (r && r.games.length) prefetched.set(r.sport, r.games);
-    top = await fetchTopEvents(date, viewDate, topOpts, prefetched).catch(
+    top = await fetchTopEvents(date, prefetched).catch(
       (): LeagueData => ({ sport: "top", label: TOP_EVENTS_CONFIG.label, games: [], fetchFailed: true }),
     );
   }
