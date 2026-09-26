@@ -1111,7 +1111,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // would bake a literal "#null" into it if that guard ever
                   // moved. Set it only when we actually have a rank.
                   if (rank != null) title = `FIFA world ranking: #${rank}`;
-                } else if (game.sport === "ncaaf" || game.sport === "ncaah" || game.sport === "ncaawh" || game.sport === "ncaavb" || game.sport === "ncaabase" || game.sport === "ncaasoft") {
+                } else if (game.sport === "ncaaf" || game.sport === "ncaah" || game.sport === "ncaawh" || game.sport === "ncaavb" || game.sport === "ncaawsoc" || game.sport === "ncaamsoc" || game.sport === "ncaabase" || game.sport === "ncaasoft") {
                   // No date/finished gate — see the NCAAF bullet above. The
                   // tooltip stays poll-neutral because ESPN's curated rank is
                   // the AP Top 25 until December and the CFP committee's
