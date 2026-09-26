@@ -102,13 +102,13 @@ const EXPECTED = ["Patriots at Seahawks", "Lions at Bears", "Liberty at Aces", "
 const NEVER = ["Sun at Dream", "Brighton at Burnley", "Galaxy at Sounders"];
 const SCORES = ["37", "34", "41", "38", "88", "86", "95", "71"];
 
-async function seed(page: Page) {
+async function seed(page: Page, { showRatings = false } = {}) {
   await page.clock.setFixedTime(NOW);
-  await page.addInitScript(() => localStorage.setItem("nss-preferences", JSON.stringify({
+  await page.addInitScript((ratings) => localStorage.setItem("nss-preferences", JSON.stringify({
     favoriteLeagues: [],
     favoriteTeams: [],
     theme: "light",
-    showRatings: false,
+    showRatings: ratings,
     skipExplainer: true,
     skipNewsExplainer: true,
     showNews: false,
@@ -122,7 +122,7 @@ async function seed(page: Page) {
     hiddenLeagues: ["mls"],
     defaultDateMode: "today",
     defaultLandingView: "scores",
-  })));
+  })), showRatings);
   await page.route("**/apis/site/v2/sports/**", (route: Route) => {
     const url = new URL(route.request().url());
     const m = /\/sports\/(.+)\/scoreboard$/.exec(url.pathname);
@@ -179,6 +179,45 @@ for (const { name, width, height } of [
     await testInfo.attach(`best-yesterday-${width}`, { body: shot, contentType: "image/png" });
     // SHOTS_DIR=… keeps a copy outside test-results for a PR or a read-back.
     if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/best-yesterday-${width}.png` });
+  });
+}
+
+// Ratings on: each card's row holds the league chip on the left and the
+// GREAT/GOOD badge in the middle. The chip once sat outside the equal-share
+// pair that centers the badge, so every badge drifted right by half the
+// chip's width (Jacob 9/25, "MLB" + GREAT). Now the badge sits at the row's
+// true center whenever the chip fits in the left half, and never covers the
+// chip when it does not (a 3-column phone board).
+for (const { name, width, height } of [
+  { name: "phone", width: 390, height: 844 },
+  { name: "desktop", width: 1180, height: 820 },
+]) {
+  test(`a card's rating badge stays centered next to its league chip (${name} ${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await seed(page, { showRatings: true });
+    await page.goto("/");
+    const rows = page.locator('[data-league-column="best"] .game-meta-row:has([data-league-tag])');
+    await expect(rows).toHaveCount(5, { timeout: 30_000 });
+    let centered = 0;
+    for (let i = 0; i < 5; i++) {
+      const row = rows.nth(i);
+      const badge = row.locator('[aria-label^="Worth-watching rating"]');
+      await expect(badge).toBeVisible();
+      await expect(row.locator("[data-league-tag]")).toBeVisible();
+      const r = (await row.boundingBox())!;
+      const b = (await badge.boundingBox())!;
+      const c = (await row.locator("[data-league-tag]").boundingBox())!;
+      expect(c.x + c.width, `card ${i}: the badge covers the league chip`).toBeLessThanOrEqual(b.x);
+      expect(b.y, `card ${i}: the badge wrapped below the chip`).toBeLessThan(c.y + c.height);
+      const gap = parseFloat(await row.evaluate((el) => getComputedStyle(el).columnGap)) || 0;
+      const fits = c.x - r.x + c.width + gap <= (r.width - b.width) / 2;
+      const drift = (b.x + b.width / 2) - (r.x + r.width / 2);
+      if (fits) expect(Math.abs(drift), `card ${i}: badge is ${drift.toFixed(1)}px off the row center`).toBeLessThanOrEqual(1);
+      centered += fits ? 1 : 0;
+    }
+    // The desktop column is wide enough for every card to center.
+    if (width >= 1024) expect(centered).toBe(5);
+    if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/best-yesterday-badge-${width}.png` });
   });
 }
 

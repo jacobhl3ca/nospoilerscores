@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 export default function WorldCupTeamsPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
-      <DocTopBar route="worldcup/teams" />
+      <DocTopBar route="worldcup/teams" subject="World Cup teams" />
       <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
         HideScore
       </p>

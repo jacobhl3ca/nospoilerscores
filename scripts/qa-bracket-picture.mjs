@@ -504,6 +504,33 @@ try {
       ok(`all six odds columns show at ${w}px`, fit.every((f) => f.cols === 6), fit.map((f) => f.cols).join(" / "));
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
+
+    // The picture locks the board behind it: scrolling in the dialog or on the
+    // dim backdrop must not move the page, and closing it must leave the board
+    // where the reader tapped (Safari used to land ~110px further down).
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+    await page.evaluate(() => window.scrollTo(0, 20));
+    await page.waitForTimeout(300);
+    const startY = await page.evaluate(() => window.scrollY);
+    const pb = await page.locator(PILL_OPENER).first().boundingBox();
+    // A real click at the pill: locator.click() would scroll it clear of the
+    // sticky header first and move the page itself.
+    await page.mouse.click(pb.x + pb.width / 2, pb.y + pb.height / 2);
+    await dialog.waitFor({ timeout: 15000 });
+    await page.waitForTimeout(800);
+    const db = await dialog.boundingBox();
+    await page.mouse.move(db.x + db.width / 2, db.y + db.height / 2);
+    for (let i = 0; i < 6; i++) { await page.mouse.wheel(0, 400); await page.waitForTimeout(100); }
+    await page.mouse.move(5, 995);
+    for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, 400); await page.waitForTimeout(100); }
+    await page.waitForTimeout(300);
+    const locked = await page.evaluate(() => document.body.style.position);
+    ok("the board behind the picture is scroll-locked", locked === "fixed", locked || "not locked");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(600);
+    const endY = await page.evaluate(() => window.scrollY);
+    ok("closing the picture leaves the board where it was", endY === startY, `${startY}px → ${endY}px`);
   }
 } catch (e) {
   ok("run completed without throwing", false, e.message);

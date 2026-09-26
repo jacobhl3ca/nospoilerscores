@@ -80,6 +80,7 @@ export default function WatchPage() {
       <WatchAnyLink>
         <SeoLandingPage
           h1="Watch any highlight link without spoilers"
+      subject="Watch any link"
           lead={
             <div className="mx-auto max-w-2xl">
               <p className="mb-4">

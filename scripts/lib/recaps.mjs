@@ -146,6 +146,10 @@ export const RECAP_SERIES = {
       heading: "Every goal, Matchweek {n}", label: "Every goal, 4 minutes",
       channelId: "UCG5qGWdu8nIRZqJ_GgDwQ-w", channelName: "Premier League", handle: "premierleague",
       titleRx: /^EVERY Weekend Goal \| Matchweek (\d{1,2})/i, weekGroup: 1,
+      // "… | Matchweek 5 | 2026/27 Premier League Highlights". Required: last
+      // season's Matchweek 36 (uploaded May, no publish time read) sat on the
+      // 9/18–9/24 boards and outranked this season's Matchweek 5.
+      seasonRx: /\b(\d{4})\/\d{2} Premier League Highlights\b/, seasonRequired: true,
       searchQuery: "EVERY Weekend Goal Matchweek",
     },
     {
@@ -529,6 +533,18 @@ export function stripRecapRecord(rec) {
     if (rec?.[k] !== undefined && rec[k] !== null && rec[k] !== "") out[k] = rec[k];
   }
   return out;
+}
+
+// Does a record carried from the prior file stay? Not once its coverage ends
+// before `cutoff`. Not without an upload time when the upload time is what
+// dated it: a weekly window with no `published` was built from the bake clock
+// (2025's MLS Matchday 31 sat on 2026's 9/14–9/20 boards), and a daily record
+// dated today or later with none is the premature "Best of the day" pill.
+export function keepCarriedRecap(rec, cutoff, todayYmd) {
+  const end = rec?.cadence === "weekly" ? rec.windowEnd : rec?.coversDate;
+  if (!end || end < cutoff) return false;
+  if (rec.published) return true;
+  return rec.cadence === "weekly" ? false : rec.coversDate < todayYmd;
 }
 
 export function fillHeading(template, n) {

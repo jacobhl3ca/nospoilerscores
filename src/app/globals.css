@@ -186,6 +186,9 @@ html.blur-news-media .news-media-preview > * {
   --text: #111111;
   --text-secondary: #666666;
   --text-muted: #999999;
+  /* Article body copy on the doc pages (2026-09-25). --text-muted is 2.8:1 on
+     white, under the 4.5:1 floor for body text, and read as a draft. */
+  --text-body: #374151;
   --border: rgba(0, 0, 0, 0.1);
   --border-hover: rgba(0, 0, 0, 0.2);
   --menu-hover: rgba(0, 0, 0, 0.12);
@@ -200,6 +203,7 @@ html.blur-news-media .news-media-preview > * {
   --text: #ededed;
   --text-secondary: #9ca3af;
   --text-muted: #6b7280;
+  --text-body: #d1d5db;
   --border: rgba(255, 255, 255, 0.1);
   --border-hover: rgba(255, 255, 255, 0.2);
   --menu-hover: rgba(255, 255, 255, 0.12);
@@ -274,7 +278,7 @@ body {
 .date-nav-btn:focus-visible,
 .date-nav-arrow:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: -1px;
 }
 
 .monkey-toggle {
@@ -325,11 +329,12 @@ body {
    GolfLeaderboard) yet were the last interactive control class still falling back
    to the inconsistent default browser outline. Re-use the same accent ring the
    date-nav pills, view tabs, and monkey toggle use — keyboard-only
-   (:focus-visible) so mouse/touch taps stay clean, offset to sit outside the
-   button's rounded corners. */
+   (:focus-visible) so mouse/touch taps stay clean. -1px offset puts the ring
+   ON the button's edge, like every other ring in the app (see the text-field
+   rule below). */
 .highlight-btn:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: -1px;
 }
 
 /* ── Card height floor: the MLB card is the height every card should be ─────
@@ -404,7 +409,7 @@ main:has(.hl-slot .highlight-btn) .hl-slot:not(:has([data-hl-pending])) { min-he
 .ns-card-focus:focus-visible { outline: none; }
 html[data-kbd-nav] .ns-card-focus:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: -1px;
 }
 
 
@@ -509,43 +514,46 @@ html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
    monkey-toggle, and only shows for keyboard nav (not mouse/touch). */
 .view-tab:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: -1px;
 }
 
-/* Visible keyboard focus ring on the footer feedback input (WCAG 2.4.7). The
-   input ships Tailwind's outline-none — in v4 that's outline-style:none, which
-   fully drops the focus indicator — and its border doesn't change on focus, so
-   a keyboard Tab landing on the field gave no visible cue. Re-add the same 2px
-   accent ring the view tabs / date-nav pills / monkey toggle use, keyboard-only
-   (:focus-visible) so mouse clicks stay clean. Keyed on the input's stable id
-   so the rule lives with the app's other focus rings and survives a component
-   rewrite. The id selector outranks the .outline-none utility. */
-#hs-feedback-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+/* Same ring, same place, for every button-like control that has no ring rule
+   of its own: league pills, Settings toggles, the × close buttons, card-less
+   role=button chips, box-styled links. Those fell back to the browser ring,
+   which draws just OUTSIDE the 1px border (grey border, then ring): the same
+   look Jacob flagged on the feedback field (9/25). Plain text links stay on
+   the browser ring: they have no border to sit on, and -1px would clip glyphs.
+   In @layer base on purpose: every unlayered class rule in this file (cards,
+   monkey toggle, date nav) and every Tailwind outline-none / focus:outline-none
+   opt-out (skip link, <main>, the video modal box) still wins over it. */
+@layer base {
+  :where(button, summary, [role="button"], [role="switch"], [role="tab"], a[class*="rounded"]):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+  }
 }
 
-/* Same WCAG 2.4.7 fix for the feedback form's email field, the twin of the
-   message input above. It ships the identical Tailwind outline-none and its
-   border only changes color in the invalid (emailLooksWrong) state — never on
-   focus — so a keyboard Tab into the optional email field showed no cue on the
-   empty/valid path. Re-add the same keyboard-only (:focus-visible) accent ring;
-   the red error border still wins for the invalid state (it sits on the element
-   itself, distinct from this outline). Mouse clicks stay clean. */
-#hs-feedback-email:focus-visible {
+/* Focus ring ON the field's border, every text field and dropdown in the app
+   (WCAG 2.4.7). The rings used to sit 1px OUTSIDE the 1px border, so a focused
+   field showed grey border, dark gap, blue ring: "outline is around the actual
+   border i want on the border" (Jacob 9/25). -1px offset lays the 2px ring
+   over the border itself. One element-level rule instead of per-id rules, so
+   the fields that kept the browser default ring (Settings search, email, ZIP,
+   selects, bracket name, /watch link) match too, and a new field is covered
+   without a new rule. Several fields ship Tailwind's outline-none (v4:
+   outline-style:none); this unlayered rule outranks that layered utility.
+   Checkboxes/radios keep the browser ring: -1px would cover the box itself. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: -1px;
 }
-
-/* Same WCAG 2.4.7 fix for the World Cup groups/ranked "Highlight a country"
-   filter input: it also ships Tailwind's outline-none and its border doesn't
-   change on focus, so a keyboard Tab landing on it gave no visible cue. Re-add
-   the same keyboard-only (:focus-visible) accent ring, keyed on its stable id
-   (the team-search input in Settings keeps the browser default outline, so it
-   isn't affected). Mouse clicks stay clean. */
-#wc-country-filter:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+/* The feedback email field flags a malformed address with a red border. The
+   ring above now covers that border while the field has focus, so carry the
+   red into the ring instead of losing the cue. Same literal as FeedbackBox. */
+#hs-feedback-email[aria-invalid="true"]:focus-visible {
+  outline-color: #d9534f;
 }
 
 /* Single-column board (Settings → Board layout → Single column): bigger cards.
@@ -635,6 +643,51 @@ iframe#yt-player {
 .doc-page {
   padding-top: calc(env(safe-area-inset-top, 0px) + 2.5rem);
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem);
+}
+
+/* Doc-page top bar (DocTopBar), pinned on scroll 2026-09-25.
+   - Pinned at top:0 it would sit under the iOS status bar, so it carries the
+     inset as padding and takes the same amount back as a negative margin: the
+     unpinned layout is unchanged, the pinned bar fills behind the clock.
+   - The page column is max-w-2xl, but the MLB pages' live panel runs up to
+     72rem wide and would scroll visibly past a column-wide bar. The
+     border-image draws the background and the bottom hairline 100vmax out to
+     each side. Border-image outset is ink overflow, so it adds no horizontal
+     scroll the way a 100vw pseudo-element would. */
+.doc-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+  margin-top: calc(-1 * (env(safe-area-inset-top, 0px) + 0.75rem));
+  padding-bottom: 0.75rem;
+  border-image: linear-gradient(to top, var(--border) 1px, var(--bg) 1px) fill 0 / 0 / 0 100vmax;
+}
+/* An in-page #anchor must land below the pinned bar, not under it. */
+.doc-page [id] { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 4.5rem); }
+
+/* "At a glance" box near the top of each SeoLandingPage article (2026-09-25).
+   color-mix tints the accent in both themes; an engine without it keeps the
+   plain card background from the line before. */
+.doc-glance {
+  background: var(--bg-card);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-left: 3px solid var(--accent);
+}
+
+/* Reading-progress line (DocReadProgress). Fixed to the viewport top, above the
+   pinned bar; JS sets scaleX(0..1). */
+.doc-progress {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 41;
+  height: 3px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  pointer-events: none;
 }
 
 /* ── Descenders are not clipping ──────────────────────────────────────────────

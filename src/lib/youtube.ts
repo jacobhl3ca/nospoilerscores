@@ -352,9 +352,13 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // Highlights - September 18, 2026 | #ECACHockey"), 3/3 strict on the 9/18-9/19
 // opening weekend with a `women` title token, no score in the title. Lit
 // WITHOUT a fixed channel, like ncaavb: a game with an ECAC school uses the
-// conference chain, every other game stays dark. The channel probe (AHA prints
-// scores, Hockey East/WCHA/NEWHA post no per-game cut) is in
-// lib/collegeHighlights.ts, with the men's re-probe and what ncaah still needs.
+// conference chain, every other game stays dark. Atlantic Hockey America
+// joined the chain 2026-09-26: one cut per AHA women's game, score in every
+// title (covered by `maskTitle`, the title bar stays masked) and no gender
+// word (its own empty `channelTitleTokens` list, flagged `ownTokens`, replaces
+// the sport-wide `women` token for that channel only). The channel probe
+// (Hockey East/WCHA/NEWHA post no per-game cut) is in lib/collegeHighlights.ts,
+// with the men's re-probe and what ncaah still needs.
 //
 // ufl (UFL spring football, added 2026-09-14): probed against the LIVE worker
 // with strict=1 on 5 completed 2026 fixtures (May 3, May 16, May 29, Jun 7
@@ -401,6 +405,27 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 //     round-of-16 tie), i.e. the wrong-match class again.
 // Re-probe once the 2026-27 knockouts exist; any relight needs ≥4/5 and a
 // competition title token.
+//
+// nations (UEFA Nations League, added 2026-09-26, DARK). Probed against the
+// LIVE worker with strict=1 on 10 completed 2026-09-24/25 league-phase
+// fixtures, bare query shape:
+//   "FOX Soccer" 1/10, and that one was WRONG — Belgium–Italy served the
+//     Women's Euro 2025 meeting.
+//   "UEFA" 1/10, also WRONG — Germany–Netherlands served a "Classic Nations
+//     League Highlights" re-upload of an older tie.
+//   "FOX Sports" (the US rightsholder; ESPN names FS1/FS2) 3/10, all three
+//     titled "… Highlights ⚽ UEFA Nations League" — right competition, but
+//     under the 4/5 gate, and the same two nations meet again in the knockouts.
+// Re-probe FOX Sports with a "nations league" title token after the
+// October matchdays; a relight needs ≥4/5 and 0 wrong.
+//
+// ncaawsoc / ncaamsoc (NCAA soccer, added 2026-09-26, both DARK). The cut
+// Jacob found for Penn State at Ohio State (women's, 9/10) is on "Real Woso
+// Fan", a fan channel, not an uploader the app can trust; no conference or
+// network channel has been probed for either sport yet. Regular-season matches
+// stream on ESPN+ with no official upload. Light either the way ncaavb was:
+// a per-school conference chain in collegeHighlightChannels.json once a
+// conference channel measures ≥4/5 strict with a title token.
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "copadelrey",
   "cricket",
@@ -412,11 +437,15 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   // competition title token. See OFFICIAL_CHANNELS above.
   "ncaah",
   "ncaabase",
+  // Both college soccer feeds: no trusted uploader yet (see the note above).
+  "ncaamsoc",
   "ncaasoft",
+  "ncaawsoc",
   "rugbychamp",
   "rugbytest",
   "ufl",
   "uecl",
+  "nations",
 ]);
 
 // True when a league has no exact approved channel. Callers must render no
@@ -655,7 +684,9 @@ const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   // ncaawh: ECAC Hockey posts the men's and the women's cut of the same two
   // schools, often the same weekend. "women" is in every women's title and in
   // no men's title. The reverse token must be "ncaa men": "men" alone is a
-  // substring of "women s" once punctuation folds to spaces.
+  // substring of "women s" once punctuation folds to spaces. Atlantic Hockey
+  // America's titles carry neither word, so that channel opts out through its
+  // own empty list in collegeHighlightChannels.json (`ownTokens`).
   ncaawh: ["women"],
 };
 
@@ -820,6 +851,14 @@ export function getApiBase(): string {
   return "";
 }
 
+// Running time (seconds) the /api/youtube lookup reported for each id it
+// returned. Lets a live-resolved button show minutes like a baked one; ids the
+// worker had no length for are simply absent.
+const resolvedLengths = new Map<string, number>();
+export function resolvedLengthSec(id: string | null | undefined): number | null {
+  return id ? resolvedLengths.get(id) ?? null : null;
+}
+
 export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[], weekNumber?: number | null, compTokens?: string[]): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
@@ -844,6 +883,7 @@ export async function fetchFirstVideoId(query: string, channel?: string, exclude
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
+    if (data.videoId && Number.isFinite(data.lengthSec) && data.lengthSec > 0) resolvedLengths.set(data.videoId, data.lengthSec);
     return data.videoId ?? null;
   } catch {
     return null;

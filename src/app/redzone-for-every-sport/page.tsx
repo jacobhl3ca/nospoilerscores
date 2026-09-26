@@ -81,6 +81,7 @@ export default function RedzoneForEverySportPage() {
   return (
     <SeoLandingPage
       h1="Is there a RedZone for every sport?"
+      subject="RedZone by sport"
       intro={[
         "Almost. Seven leagues run a whip-around show that cuts between simultaneous games the way NFL RedZone does, and two more appear for a few weeks a year. College football is the one real gap.",
         "Here is the full 2026 list: what each show is called, when it airs, where it lives, and what it costs. Every time below is Eastern.",

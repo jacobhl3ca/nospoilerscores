@@ -184,6 +184,7 @@ export default function BestSpoilerFreeSportsSitesPage() {
   return (
     <SeoLandingPage
       h1="The best spoiler-free sports sites and apps"
+      subject="Spoiler-free sites"
       intro={[
         "Six services try to solve the same problem: letting you find out that a game happened without finding out how it ended. They are not interchangeable, and the honest answer to which is best depends entirely on what you follow. Everything below was checked on September 20, 2026.",
         "HideScore is one of the six and it is ours, so treat this as an interested comparison rather than a neutral one. What we can promise is that every claim about somebody else's product was re-checked against their live site or their App Store listing on the day this was written, and that the section on our own weaknesses is as specific as the rest.",

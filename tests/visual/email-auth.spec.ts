@@ -23,6 +23,7 @@ test("email sign-in advances from address to the six-digit code", async ({ page 
 
   await page.goto("/");
   await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByRole("button", { name: "Use email instead" }).click();
   await page.getByLabel("Email address").fill("fan@example.com");
   await page.getByRole("button", { name: "Email me a code" }).click();
 

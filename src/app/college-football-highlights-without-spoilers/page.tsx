@@ -113,6 +113,7 @@ export default function CollegeFootballHighlightsWithoutSpoilersPage() {
   return (
     <SeoLandingPage
       h1="College football highlights without spoilers"
+      subject="College football"
       intro={[
         "Yes, you can watch college football highlights without spoilers: no score is printed anywhere on the Saturday board, and each game's cut opens straight from its card with the video title masked.",
         "No other sport hands you this much at once. ESPN lists 65 FBS games for Saturday, September 26, 2026, and they are not spread out — 11 start at noon Eastern, another 12 at 3:30, and the night stacks up again from 7:00. Whichever one is on your screen, a dozen others are ending beside it, and each of those endings is a banner, an alert or a friend's text.",

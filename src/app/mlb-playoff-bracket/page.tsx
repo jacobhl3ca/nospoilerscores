@@ -102,6 +102,7 @@ export default function MlbPlayoffBracketPage() {
   return (
     <SeoLandingPage
       h1="MLB playoff bracket 2026"
+      subject="MLB playoff bracket"
       lead={<PlayoffPictureModal variant="page" initialTab="bracket" />}
       intro={[
         "This is the 2026 MLB postseason bracket, drawn from MLB's own standings feed each time the page loads. Until the regular season ends on Sunday, September 27, it shows the field as if the season ended today, and the seeds move as the last games are played.",

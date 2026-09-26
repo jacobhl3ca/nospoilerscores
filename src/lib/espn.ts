@@ -10,6 +10,7 @@ import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } fr
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { fetchCuratedBoxingEvent } from "./boxing";
+import { logoForTeam, logoOverride, ncaaSchoolLogo, isPlaceholderTeam } from "./teamLogos";
 import {
   chessEventState,
   buildChessEventUrl,
@@ -128,6 +129,20 @@ const SPORT_PATHS: Record<Sport, string> = {
   // 2026-09-14: 200, calendar 2026-08-21 → 2026-11-29 (regular season only),
   // 159 games on a Saturday, curatedRank = AVCA Top 25, records[0] = overall.
   ncaavb: "/volleyball/womens-college-volleyball/scoreboard",
+  // NCAA women's and men's soccer (added 2026-09-26, after Jacob found the
+  // per-game cuts on YouTube). Standard ESPN soccer shape (status.clock counts
+  // up to 5400, STATUS_FULL_TIME, two halves), so parseGame reads them as is
+  // and both sit in SOCCER_SPORTS. Probed live 2026-09-26: 200, league abbr
+  // CWSOC / CMSOC, 40 and 60 games on a Friday, calendars 2026-08-12 →
+  // 12-30 (padded past the College Cup) and 2026-08-20 → 11-08 (tournament
+  // not yet listed). curatedRank = United Soccer Coaches poll (1, 6, 16 seen;
+  // 99 = unranked). Team ids are SOCCER-specific (ETSU 20606), but every
+  // event carries team.logo pointing at the school mark (ncaa/500/2193.png),
+  // which parseTeam takes first. records[0] is "6-1-3" (W-L-T). `links` is
+  // empty on every event and notes are empty even in the tournament, so
+  // isPlayoff never flips here (see the ncaavb note in parseGame).
+  ncaawsoc: "/soccer/usa.ncaa.w.1/scoreboard",
+  ncaamsoc: "/soccer/usa.ncaa.m.1/scoreboard",
   // CFL (added 2026-09-13). ESPN stopped serving the CFL after 2023 (its
   // calendar is frozen there and every date returns 0 events), so this is NOT
   // an ESPN path: it is our own worker route (public/_worker.js), which
@@ -172,6 +187,11 @@ const SPORT_PATHS: Record<Sport, string> = {
   facup: "/soccer/eng.fa/scoreboard",
   copadelrey: "/soccer/esp.copa_del_rey/scoreboard",
   dfbpokal: "/soccer/ger.dfb_pokal/scoreboard",
+  // UEFA Nations League (added 2026-09-26). Probed live via site.web.api the
+  // same day: 200, standard soccer event shape, national teams under
+  // /teamlogos/countries/. Single dates only — like the college feeds, a
+  // dates=A-B range comes back empty, so windows were probed day by day.
+  nations: "/soccer/uefa.nations/scoreboard",
   // Cricket (added 2026-08-03). ESPN's cricket API is keyed by ESPNcricinfo
   // SERIES id, not by a league slug — 8048 is the IPL. Verified 2026-08-03: it
   // returns a full 62-date calendar (03-28 → 05-31) and standard two-competitor
@@ -370,6 +390,37 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "ucl", label: "UCL", startDate: "09-06", endDate: "06-06", kickoffDate: "09-08", championshipDate: "06-05", verifiedFor: 2026 },
   // ── UEFA Europa League (Sep group → late May Final) ──
   { sport: "uel", label: "UEL", startDate: "09-14", endDate: "05-28", kickoffDate: "09-16", championshipDate: "05-26", verifiedFor: 2026 },
+  // ── UEFA Conference League (added 2026-09-14; moved beside UEL 2026-09-26 so
+  // the three UEFA club competitions sit together in the switcher) ──
+  // Conference League: MD1 2026-10-15 (18 fixtures, Paramount+), league phase
+  // through 12-17; 2026-27 final Istanbul 2027-06-02 per UEFA (ESPN has not
+  // listed the knockouts yet — far edge unverified by fixtures). Re-probed
+  // 2026-09-26: 0 on 10-13/10-14/10-16, 18 on 10-15/10-22/12-17, 0 on 12-18 and
+  // on every Jan–Jun 2027 Thursday tried.
+  { sport: "uecl", label: "Conference League", startDate: "10-13", kickoffDate: "10-15", endDate: "06-03", championshipDate: "06-02", verifiedFor: 2026, excludeFromAuto: true },
+  // ── UEFA Nations League (added 2026-09-26) — the national-team competition ──
+  // BIENNIAL across two calendar years: the league phase runs Sep–Nov of an
+  // EVEN year (2026), the quarterfinals, promotion/relegation playoffs and the
+  // four-team Finals run Mar + Jun of the next ODD year (2027), and the odd→even
+  // autumn in between belongs to Euro/World Cup qualifying. One Sep→Jun window
+  // would call it in season for all of 2027-28, so it is three windows, each
+  // yearCycle-gated on its own calendar year (same pattern as nationschamp).
+  // League phase, read off ESPN one date at a time on 2026-09-26 (uefa.nations
+  // rejects ranges): 0 on 09-20/22/23, games every day 09-24 → 09-29 (8–10 a
+  // day), 0 on 09-30, games 10-01 → 10-06, 0 on 10-07 and 10-14, 0 on 11-10/11,
+  // games 11-12 → 11-17, 0 on 11-18/19. The Oct 7 → Nov 11 gap is five weeks,
+  // same order as UCL's gaps between matchdays, so it stays one window.
+  { sport: "nations", label: "Nations League", startDate: "09-22", kickoffDate: "09-24", endDate: "11-18", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
+  // Knockouts ⚠️ PROVISIONAL: ESPN lists no 2027 fixture yet (every date
+  // 03-18 → 03-31 and 06-01 → 06-13 2027 probed empty on 2026-09-26). The
+  // edges bracket the 2024-25 running on the same feed — quarterfinals +
+  // relegation playoffs 2025-03-20 → 03-23, semifinals 06-04/05, third place +
+  // final 06-08 — widened to cover the whole March and June FIFA windows.
+  // Re-probe once ESPN lists the draw; being wrong here only costs an empty or
+  // missing opt-in column, never a wrong score. championshipDate is
+  // deliberately absent until the Finals date is on the feed.
+  { sport: "nations", label: "Nations League", startDate: "03-18", endDate: "03-31", excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
+  { sport: "nations", label: "Nations League", startDate: "06-01", endDate: "06-13", excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
   // ── The other four big-five domestic leagues (Aug–May) ──
   // All excludeFromAuto: the 3-column default layout is already tuned around
   // NBA/MLB/NHL/NFL + EPL/UCL, and four more Aug–May soccer leagues competing
@@ -429,10 +480,6 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // calendar. Rule: open when the top-division clubs enter, close on the final.
   // Qualifying rounds (Copa del Rey Sep 26 / Oct 3: 20 clubs, no logos) stay
   // outside the window on purpose.
-  // Conference League: MD1 2026-10-15 (18 fixtures, Paramount+), league phase
-  // through 12-17; 2026-27 final Istanbul 2027-06-02 per UEFA (ESPN has not
-  // listed the knockouts yet — far edge unverified by fixtures).
-  { sport: "uecl", label: "Conference League", startDate: "10-13", kickoffDate: "10-15", endDate: "06-03", championshipDate: "06-02", verifiedFor: 2026, excludeFromAuto: true },
   // FA Cup: third round proper (PL clubs enter) 2027-01-09, final 2027-05-22
   // per the FA's published calendar; ESPN has no 2026-27 fixtures yet, so both
   // edges are checked against the 2025-26 running (01-09 → 05-16).
@@ -488,6 +535,16 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // semifinals 12-18, national final 12-21. Opt-in (excludeFromAuto), like
   // NCAAW and NCAA Hockey, so it never takes a column from NCAAF or the NFL.
   { sport: "ncaavb", label: "NCAA Volleyball", startDate: "08-21", endDate: "12-21", championshipDate: "12-21", verifiedFor: 2026, excludeFromAuto: true },
+  // ── NCAA soccer (mid Aug–mid Dec) ──
+  // Women: ESPN's 2026 calendar opens 08-12 (read 2026-09-26). The finale is
+  // the College Cup, read from the 2025 tournament (?dates=20251205 /
+  // 20251208: semifinals 12-05, final 12-08); 2026's is set for Dec 4 and 7.
+  // Men: 2026 calendar opens 08-20; the 2025 College Cup ran 12-12 → 12-15
+  // (final on the Monday). 12-15 keeps the 2026 final inside the window
+  // whether it lands on the 14th or the 15th — re-read once ESPN lists it.
+  // Both opt-in (excludeFromAuto), like every other college add since NCAAW.
+  { sport: "ncaawsoc", label: "NCAAW Soccer", startDate: "08-12", endDate: "12-08", championshipDate: "12-07", verifiedFor: 2026, excludeFromAuto: true },
+  { sport: "ncaamsoc", label: "NCAA Soccer", startDate: "08-20", endDate: "12-15", championshipDate: "12-14", verifiedFor: 2026, excludeFromAuto: true },
   // ── CFL (Jun–Nov) ──
   // 2026: regular season Thu Jun 4 → Sat Oct 24 (21 weeks), division
   // semi-finals Oct 31, division finals Nov 7, 113th Grey Cup Sun Nov 15 in
@@ -818,12 +875,12 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 // listed falls back to a neutral marker rather than getting a wrong icon.
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", ncaabase: "⚾", ncaasoft: "🥎", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
-  nfl: "🏈", ncaaf: "🏈", ufl: "🏈", cfl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", ncaavb: "🏐", golf: "⛳", tennis: "🎾",
+  nfl: "🏈", ncaaf: "🏈", ufl: "🏈", cfl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", ncaavb: "🏐", ncaawsoc: "⚽", ncaamsoc: "⚽", golf: "⛳", tennis: "🎾",
   sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
-  uecl: "⚽", facup: "⚽", copadelrey: "⚽", dfbpokal: "⚽",
+  uecl: "⚽", facup: "⚽", copadelrey: "⚽", dfbpokal: "⚽", nations: "⚽",
   cricket: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
   ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", esports: "🎮", top: "⭐",
 };
@@ -873,8 +930,10 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   epl: "soccer", ucl: "soccer", uel: "soccer", laliga: "soccer",
   seriea: "soccer", bundesliga: "soccer", ligue1: "soccer", mls: "soccer",
   ligamx: "soccer", nwsl: "soccer", efl: "soccer", libertadores: "soccer",
+  ncaawsoc: "soccer", ncaamsoc: "soccer",
   saudi: "soccer", fifa: "soccer", euro: "soccer", afcon: "soccer",
   uecl: "soccer", facup: "soccer", copadelrey: "soccer", dfbpokal: "soccer",
+  nations: "soccer",
   golf: "majors", tennis: "majors",
   f1: "other", nascar: "other", indycar: "other", ufc: "other",
   boxing: "other", cricket: "other", chess: "other", poker: "other",
@@ -1115,6 +1174,11 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   // games. UEL one notch below — Europa nights pair with UCL but UCL wins.
   ucl: 10,
   uel: 11,
+  // The other two UEFA competitions sort with UEL (2026-09-26). Both are
+  // excludeFromAuto, so the number only orders the switcher; the stable sort
+  // keeps the catalog order (UEL, Conference League, Nations League) on the tie.
+  uecl: 11,
+  nations: 11,
   mls: 12,
   // The other big-five domestic leagues sort right below MLS, in the order a
   // US viewer is most likely to want them. excludeFromAuto means these never
@@ -1200,8 +1264,12 @@ export function getActiveLeagueCandidates(viewDate?: Date): {
 // documented rules. Returns leagues in slot order — the first three follow the
 // [left, center, right] pin rules; slots beyond 3 (the wide-viewport 5-column
 // board) fill from the remaining pool by LEAGUE_PRIORITY.
-export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES): LeagueConfig[] {
-  const eligible = ALL_LEAGUES.filter((l) => isLeagueAutoEligible(l, viewDate) && !l.excludeFromAuto);
+//
+// `hidden` = the leagues the user turned off in Settings' switcher list. They
+// never win an Auto column: the next league down the ranking takes it, the
+// same way it would if the hidden one were out of season (Jacob 9/26).
+export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES, hidden: readonly Sport[] = []): LeagueConfig[] {
+  const eligible = ALL_LEAGUES.filter((l) => isLeagueAutoEligible(l, viewDate) && !l.excludeFromAuto && !hidden.includes(l.sport));
 
   const mustInclude = eligible.filter((l) => l.mustInclude && !l.backfillOnly);
   const firstPref   = eligible.filter((l) => effectiveFirstPref(l, viewDate) && !l.mustInclude && !l.backfillOnly);
@@ -1248,6 +1316,17 @@ export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES
   }
 
   return slots.filter((l): l is LeagueConfig => l !== null);
+}
+
+// The league that takes a column whose PINNED league the user has since turned
+// off (Jacob 9/26: F1 unticked in Settings, still on the board). The switcher's
+// own relevance order — firstPref pins, then LEAGUE_PRIORITY — minus hidden
+// leagues and minus leagues already on the board, so the column becomes the
+// top league the user could have switched to rather than a duplicate. null when
+// every ranked league is taken; the caller then uses the slot's Auto pick.
+export function nextUnusedLeague(viewDate: Date, hidden: readonly Sport[], used: ReadonlySet<Sport>): LeagueConfig | null {
+  const { firstPref, rest } = getActiveLeagueCandidates(viewDate);
+  return [...firstPref, ...rest].find((l) => !hidden.includes(l.sport) && !used.has(l.sport)) ?? null;
 }
 
 // Resolves the display label for a league at a given date — NCAAM swaps to
@@ -1343,7 +1422,9 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
     shortDisplayName: competitor.team?.shortDisplayName ?? "",
     ...(competitor.team?.location ? { location: competitor.team.location } : {}),
     ...(competitor.team?.conferenceId != null ? { conferenceId: String(competitor.team.conferenceId) } : {}),
-    logo: competitor.team?.logo ?? "",
+    // ESPN has no artwork for some one-off opponents (mostly D2/D3 schools);
+    // teamLogoOverrides.ts fills those in.
+    logo: competitor.team?.logo || logoOverride(sport, String(rawId)) || "",
     color: competitor.team?.color ?? "666666",
     score: formatScore(competitor.score ?? "0", sport),
     winner: competitor.winner ?? false,
@@ -1433,6 +1514,11 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   ligamx:       { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   nwsl:         { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   efl:          { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  // NCAA soccer: two 45-minute halves like every other soccer league. The
+  // regular season has no overtime (ties stand since 2022); the tournament
+  // plays two 10-minute periods then kicks, which is the same OT shape.
+  ncaawsoc:     { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  ncaamsoc:     { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   saudi:        { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   libertadores: { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   // Conference League + the three domestic cups (2026-09-14): knockout ties go
@@ -1441,6 +1527,10 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   facup:        { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   copadelrey:   { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   dfbpokal:     { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
+  // Nations League (2026-09-26): the UCL row. League-phase games end at 90'
+  // like UCL's; the quarterfinals and Finals go to extra time like UCL's
+  // knockouts, so the UCL overtime bonus fits both halves.
+  nations:      { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   euro:         { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   afcon:        { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   // Cricket never reaches the generic scorer — calculateRating hands a T20
@@ -1496,7 +1586,8 @@ const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
 const SOCCER_SPORTS = new Set<Sport>([
   "epl", "mls", "ucl", "uel", "fifa", "laliga", "seriea", "bundesliga", "ligue1",
   "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi",
-  "uecl", "facup", "copadelrey", "dfbpokal",
+  "uecl", "facup", "copadelrey", "dfbpokal", "nations",
+  "ncaawsoc", "ncaamsoc",
 ]);
 const FULL_MATCH_SECONDS = 5400;
 
@@ -2194,7 +2285,7 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
   // 2026-09-14): altGameNote is "English FA Cup, Third Round", "German Cup,
   // First Round", "UEFA Conference League, League Phase" — the ordinal-round
   // and league-phase forms are cup-only and never carry a result.
-  if (/^(group [a-l]|round of \d+|quarter-?finals?|semi-?finals?|final|third place(?: match)?|matchday \d+|knockout(?: round)?(?: play-?offs?)?|(?:preliminary|qualifying|first|second|third|fourth|fifth|sixth) round|league phase)$/i.test(seg)) {
+  if (/^(group [a-l]|group [a-d][1-4]|round of \d+|quarter-?finals?|semi-?finals?|final|third place(?: match)?|matchday \d+|knockout(?: round)?(?: play-?offs?)?|(?:preliminary|qualifying|first|second|third|fourth|fifth|sixth) round|league phase)$/i.test(seg)) {
     return seg;
   }
   const slug = (seasonSlug ?? "").toLowerCase().trim();
@@ -2224,6 +2315,12 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     "league-phase": "League Phase",
     "knockout-round-playoffs": "Knockout Round Playoffs",
     "knockout-round-play-offs": "Knockout Round Playoffs",
+    // Nations League (read 2026-09-26 off the 2024-25 knockouts): the altGameNote
+    // "UEFA Nations League, Relegation Playoffs" misses the pattern above, so the
+    // slug carries it. Its league-phase games read "…, Group A2" (League A,
+    // group 2), which the `group [a-d][1-4]` arm above passes through.
+    "relegation-playoffs": "Relegation Playoffs",
+    "promotion-playoffs": "Promotion Playoffs",
   };
   return slugMap[slug] ?? null;
 }
@@ -2828,6 +2925,11 @@ export function espnGameUrl(game: Game): string {
     case "facup":
     case "copadelrey":
     case "dfbpokal":
+    case "nations":
+    // College soccer: the events carry no links, but ESPN's league-agnostic
+    // match page answers 200 for a college gameId (401889506, 2026-09-26).
+    case "ncaawsoc":
+    case "ncaamsoc":
       return `https://www.espn.com/soccer/match/_/gameId/${game.id}`;
     // ESPN serves cricket off its India edition; 8048 is the IPL series id
     // (same id as SPORT_PATHS). The /scorecard/ path is the per-match page.
@@ -2927,6 +3029,10 @@ export function sportStreamFallback(sport: Sport): string {
     // league's own watch page is the only destination that covers every match.
     case "nwsl": return "https://www.nwslsoccer.com/watch";
     case "efl": return "https://plus.espn.com/";
+    // ESPN+ carries nearly every college soccer match (every 9/25 event's
+    // broadcast was ESPN+); the College Cup airs on the ESPN networks.
+    case "ncaawsoc": return "https://www.espn.com/watch/";
+    case "ncaamsoc": return "https://www.espn.com/watch/";
     case "libertadores": return "https://www.beinsports.com/en-us/";
     case "afcon": return "https://www.beinsports.com/en-us/";
     case "euro": return "https://www.foxsports.com/soccer/uefa-european-championship";
@@ -2935,6 +3041,12 @@ export function sportStreamFallback(sport: Sport): string {
     // "Paramount+" broadcast (108/108 league-phase, 45/45 knockout, read
     // 2026-09-14) — CBS holds all three UEFA club competitions in the US.
     case "uecl": return "https://www.paramountplus.com/";
+    // Nations League: FOX holds the US rights — the 2026-27 league-phase slate
+    // names FS1 / FS2 on the games ESPN lists a broadcaster for (read
+    // 2026-09-26), and the 2025 Finals aired on FS1/FOX. FOX's own competition
+    // page (200, "UEFA Nations League News, Scores, & Standings | FOX Sports");
+    // the /uefa-nations-league slug 301s to the generic /soccer page.
+    case "nations": return "https://www.foxsports.com/soccer/nations-league";
     // FA Cup / Copa del Rey / DFB-Pokal: ESPN+ on every 2025-26 fixture that
     // named a broadcaster (FA Cup 63/63 from the third round, Copa del Rey
     // 18/18 knockouts, DFB-Pokal 43/63), read 2026-09-14.
@@ -5029,7 +5141,10 @@ export async function fetchScheduleRatings(
 // which is fully CORS-open. Its response shape is flat (`items[]`) instead of
 // the nested `sports[0].leagues[0].teams[]` of the site host, and items lack
 // the `logos` array — we synthesize logo URLs from ESPN's CDN conventions
-// (or from the item's `guid`, for the college diamond sports).
+// (or from the item's `guid`, for the college diamond sports) — see
+// lib/teamLogos.ts. The core host has no cricket teams at all ("Invalid
+// sport/league combination"), so IPL reads its ten clubs off the standings
+// table instead, which is CORS-open and carries each club's logo.
 export interface SportTeam {
   id: string;           // "${sport}-${rawId}" — same shape as Team.id elsewhere
   rawId: string;        // ESPN's numeric id, useful for schedule fetches
@@ -5037,98 +5152,86 @@ export interface SportTeam {
   shortDisplayName: string;
   abbreviation: string;
   logo?: string;
+  slug?: string;        // "temple-owls" — how a diamond team finds its school logo
 }
 
-function logoForTeam(sport: Sport, rawId: string, abbreviation: string, guid?: string): string | undefined {
-  const abbr = abbreviation.toLowerCase();
-  // ESPN CDN team-logo path conventions, verified empirically. The major US
-  // leagues use abbreviation; NCAAM uses team id; soccer uses team id under
-  // a shared /soccer/ path.
-  switch (sport) {
-    case "mlb":
-    case "nba":
-    case "wnba":
-    case "nhl":
-    case "nfl":
-    // UFL follows the abbreviation convention (lou.png / bham.png answer 200,
-    // checked 2026-09-14).
-    case "ufl":
-      return abbr ? `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbr}.png` : undefined;
-    case "ncaam":
-    case "ncaah":
-    case "ncaawh":
-    case "ncaavb":
-      return `https://a.espncdn.com/i/teamlogos/ncaa/500/${rawId}.png`;
-    // College baseball/softball team ids are sport-specific (softball OU is 524,
-    // baseball UCLA is 66), NOT the ncaa/500 school ids — that path 404s for
-    // most of them (checked 2026-09-14: 5 of 6 softball ids, 2 of 8 baseball).
-    // The scoreboard event and the core teams payload both carry a `guid`, and
-    // a.espncdn.com/guid/<guid>/logos/default.png is the logo ESPN itself uses
-    // on the event (342 of 400 baseball teams have one). No guid → no logo,
-    // never a broken image.
-    case "ncaabase":
-    case "ncaasoft":
-      return guid ? `https://a.espncdn.com/guid/${guid}/logos/default.png` : undefined;
-    // Cricket follows the soccer convention (team id under its own sport path).
-    case "cricket":
-      return `https://a.espncdn.com/i/teamlogos/cricket/500/${rawId}.png`;
-    case "epl":
-    case "mls":
-    case "fifa":
-    case "ucl":
-    case "uel":
-    case "laliga":
-    case "seriea":
-    case "bundesliga":
-    case "ligue1":
-    case "ligamx":
-    case "nwsl":
-    case "efl":
-    case "libertadores":
-    case "euro":
-    case "afcon":
-    case "saudi":
-    case "uecl":
-    case "facup":
-    case "copadelrey":
-    case "dfbpokal":
-      return `https://a.espncdn.com/i/teamlogos/soccer/500/${rawId}.png`;
-    default:
-      return undefined;
-  }
+const STANDINGS_TEAM_SPORTS = new Set<Sport>(["cricket"]);
+
+type RawTeamItem = {
+  id?: string | number;
+  displayName?: string;
+  shortDisplayName?: string;
+  abbreviation?: string;
+  slug?: string;
+  guid?: unknown;
+  active?: boolean;
+  isActive?: boolean;
+  logos?: { href?: string }[];
+};
+
+function standingsTeamItems(data: unknown): RawTeamItem[] {
+  const d = data as { children?: { standings?: { entries?: { team?: RawTeamItem }[] } }[]; standings?: { entries?: { team?: RawTeamItem }[] } };
+  const groups = d?.children?.length ? d.children.map((c) => c.standings?.entries ?? []) : [d?.standings?.entries ?? []];
+  return groups.flat().map((e) => e.team).filter((t): t is RawTeamItem => !!t);
+}
+
+// slug → school id, from the basketball lists (whose ids ARE the ncaa/500
+// school ids). Matched 2026-09-25: this gives 56 of the 94 logo-less baseball
+// teams and 60 of the 112 softball teams their school logo, and also covers
+// teams whose guid logo 404s. What is left is mostly D2 / NAIA / JUCO.
+async function ncaaSchoolIdsBySlug(): Promise<Map<string, string>> {
+  const lists = await Promise.all([fetchSportTeams("ncaam"), fetchSportTeams("ncaaw")]);
+  const bySlug = new Map<string, string>();
+  for (const t of lists.flat()) if (t.slug && !bySlug.has(t.slug)) bySlug.set(t.slug, t.rawId);
+  return bySlug;
 }
 
 const sportTeamsCache = new Map<Sport, Promise<SportTeam[]>>();
 export function fetchSportTeams(sport: Sport): Promise<SportTeam[]> {
   const cached = sportTeamsCache.get(sport);
   if (cached) return cached;
+  const fromStandings = STANDINGS_TEAM_SPORTS.has(sport);
   const url = WORKER_SCOREBOARD_SPORTS.has(sport)
     ? `${workerOrigin()}${SPORT_PATHS[sport]}/teams`
-    // 500, not 400: college baseball lists 437 teams and softball 446 (read
-    // 2026-09-14), so the old cap silently dropped the tail of the alphabet.
-    : `https://sports.core.api.espn.com/v3/sports${SPORT_PATHS[sport].replace(/\/scoreboard$/, "")}/teams?limit=500`;
+    : fromStandings
+      ? standingsUrl(sport)
+      // 1000, not 500: college football lists 762 teams (read 2026-09-25) in
+      // ESPN's own order, not A-Z, so a 500 cap dropped a random third of them.
+      : `https://sports.core.api.espn.com/v3/sports${SPORT_PATHS[sport].replace(/\/scoreboard$/, "")}/teams?limit=1000`;
   const p = (async (): Promise<SportTeam[]> => {
     try {
       const res = await fetchWithRetry(url, 1, 8000);
       if (!res.ok) return [];
       const data = await res.json();
-      const items = Array.isArray(data?.items) ? data.items : [];
+      const items: RawTeamItem[] = fromStandings ? standingsTeamItems(data) : Array.isArray(data?.items) ? data.items : [];
       const out: SportTeam[] = [];
       for (const t of items) {
         if (!t?.id || !t?.displayName) continue;
-        if (t.active === false) continue;
+        if (t.active === false || t.isActive === false) continue;
         const rawId = String(t.id);
+        if (isPlaceholderTeam(rawId, t.displayName)) continue;
         const abbreviation = String(t.abbreviation || "");
+        // IPL's standings short name IS the abbreviation ("MI", "DC", "GT");
+        // the full club name reads better in the picker grid.
+        const short = t.shortDisplayName && !(fromStandings && t.shortDisplayName === abbreviation) ? t.shortDisplayName : t.displayName;
         out.push({
           id: `${sport}-${rawId}`,
           rawId,
           displayName: t.displayName,
-          shortDisplayName: t.shortDisplayName || t.displayName,
+          shortDisplayName: short,
           abbreviation,
-          // The worker leagues ship the logo on the item (theScore's CDN);
-          // ESPN's core items don't, hence the CDN-convention synthesis.
+          // The worker leagues and the standings rows ship the logo on the
+          // item; ESPN's core items don't, hence the CDN-convention synthesis.
           logo: t.logos?.[0]?.href || logoForTeam(sport, rawId, abbreviation, typeof t.guid === "string" ? t.guid : undefined),
+          slug: t.slug,
         });
+      }
+      if (sport === "ncaabase" || sport === "ncaasoft") {
+        const schools = await ncaaSchoolIdsBySlug();
+        for (const team of out) {
+          const schoolId = team.slug ? schools.get(team.slug) : undefined;
+          if (schoolId) team.logo = ncaaSchoolLogo(schoolId);
+        }
       }
       out.sort((a, b) => a.displayName.localeCompare(b.displayName));
       return out;
@@ -5510,6 +5613,9 @@ export async function fetchAllLeagues(
   topOpts?: TopEventsOptions,
   // Only read on the today board — see fetchBestYesterday.
   bestOpts?: BestYesterdayOptions,
+  // Leagues turned off in Settings' switcher list. An Auto column skips them
+  // (pickAndAssignLeagues); a column pinned to one shows nextUnusedLeague.
+  hidden: readonly Sport[] = [],
 ): Promise<LeagueData[]> {
   // Parse viewed date so league visibility matches the day being viewed, not today
   const viewDate = date
@@ -5528,14 +5634,14 @@ export async function fetchAllLeagues(
   // Resolved slot order from the layout rules. The first three follow
   // [left, center, right] order — see the "FULL YEAR SCHEDULE" comment up top;
   // slots 4-5 (wide viewports) fill from the remaining pool by priority.
-  const auto = pickAndAssignLeagues(viewDate, slotCount);
+  const auto = pickAndAssignLeagues(viewDate, slotCount, hidden);
 
   // Per-slot overrides: each slot independently swappable to any active league.
   // "empty" hides the slot entirely (no auto fallback). Falls back to legacy
   // thirdLeagueSport when slotOverrides.third is unset to preserve old share URLs.
   // Returns LeagueConfig for a sport, "empty" to keep the slot explicitly hidden,
   // or null when unset (which then triggers the auto fallback downstream).
-  const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | null => {
+  const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | "hidden" | null => {
     if (sport === "empty") return "empty";
     if (!sport) return null;
     // A "top" pin saved while the column was on reads as Auto while it is off.
@@ -5543,6 +5649,9 @@ export async function fetchAllLeagues(
     // "Yesterday" is the day before TODAY, so a "best" pin is a today-board
     // column. Any other date gets the slot's Auto league instead.
     if (sport === "best") return BEST_YESTERDAY_ENABLED && isTodayView ? BEST_YESTERDAY_CONFIG : null;
+    // A pin on a league the user has since turned off. Still a pin (the
+    // column stays out of Auto), but it is filled below by nextUnusedLeague.
+    if (hidden.includes(sport)) return "hidden";
     const configs = ALL_LEAGUES.filter((l) => l.sport === sport);
     if (!configs.length) return null;
     // Several sports have more than one seasonal config (NFL regular season +
@@ -5596,13 +5705,21 @@ export async function fetchAllLeagues(
     // unset (null) → fall back to that slot's auto pick.
     const resolveFinal = (cfg: LeagueConfig | "empty" | null, slotIdx: number): LeagueConfig | null =>
       cfg === "empty" ? null : (cfg ?? nextAutoForSlot(slotIdx));
-    const slots: (LeagueConfig | null)[] = [slot1Cfg, slot2Cfg, slot3Cfg, slot4Cfg, slot5Cfg]
-      .slice(0, slotCount)
-      .map((cfg, slotIdx) => resolveFinal(cfg, slotIdx));
+    const picked = [slot1Cfg, slot2Cfg, slot3Cfg, slot4Cfg, slot5Cfg].slice(0, slotCount);
+    const slots: (LeagueConfig | null)[] = picked.map((cfg, slotIdx) => (cfg === "hidden" ? null : resolveFinal(cfg, slotIdx)));
+    // Columns pinned to a turned-off league, left to right, each take the top
+    // league not already on the board.
+    const used = new Set(slots.flatMap((cfg) => (cfg ? [cfg.sport] : [])));
+    picked.forEach((cfg, slotIdx) => {
+      if (cfg !== "hidden") return;
+      const next = nextUnusedLeague(viewDate, hidden, used) ?? nextAutoForSlot(slotIdx);
+      slots[slotIdx] = next;
+      if (next) used.add(next.sport);
+    });
     // Drop both empty slots and any null auto-fallback misses.
     final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
     if (lastOnAuto) autoLast = slots[slotCount - 1] ? "filled" : "open";
-  } else if (slot3Cfg && slot3Cfg !== "empty" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
+  } else if (slot3Cfg && slot3Cfg !== "empty" && slot3Cfg !== "hidden" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
     // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen
     // league. Slice at slotCount, NOT MAX_LEAGUES: `auto` holds up to slotCount
     // configs, so on a wide (5-column) board MAX_LEAGUES-1 (2) kept only the
@@ -5969,10 +6086,18 @@ function applyTeamRanks(
 // `${sport}-${rawId}` — caller passes the raw ESPN team id here.
 // Returns games parsed via the shared parser, sorted oldest → newest.
 // Pulls requested season(s); for current season defaults to current year.
+// `opts.upcoming` (added 2026-09-26 for the /teams pages; TeamView does not
+// pass it, so its requests are unchanged) also asks for the games the default
+// answer leaves out. Measured 2026-09-26: in the NBA/NHL preseason the default
+// is season type 1 only (5 exhibitions, dropped below), so the 80-game regular
+// season needs an explicit seasontype=2; and a soccer team's default schedule
+// is RESULTS only — its 33 remaining Premier League fixtures come back only
+// with fixture=true.
 export async function fetchTeamSchedule(
   sport: Sport,
   espnTeamId: string,
-  seasons?: number[]
+  seasons?: number[],
+  opts?: { upcoming?: boolean }
 ): Promise<Game[]> {
   const years = seasons && seasons.length > 0 ? seasons : [new Date().getFullYear()];
   if (WORKER_SCOREBOARD_SPORTS.has(sport)) return fetchWorkerTeamSchedule(sport, espnTeamId, years);
@@ -5994,12 +6119,18 @@ export async function fetchTeamSchedule(
       // default flipped underneath us. Every other sport still makes the single
       // call it always made — no extra requests, no new behaviour to re-verify.
       const seasonTypes = sport === "nfl" || sport === "ncaaf" ? [1, 2, 3] : [undefined];
-      const pages = await Promise.all(seasonTypes.map(async (seasonType) => {
+      const calls: { seasonType?: number; fixture?: boolean }[] = seasonTypes.length > 1 || !opts?.upcoming
+        ? seasonTypes.map((seasonType) => ({ seasonType }))
+        : sportGroup(sport) === "soccer"
+          ? [{}, { fixture: true }]
+          : [{}, { seasonType: 2 }, { seasonType: 3 }];
+      const pages = await Promise.all(calls.map(async ({ seasonType, fixture }) => {
         const url = new URL(
           `${BASE_URL}${sportPath}/teams/${espnTeamId}/schedule`
         );
         url.searchParams.set("season", String(year));
         if (seasonType != null) url.searchParams.set("seasontype", String(seasonType));
+        if (fixture) url.searchParams.set("fixture", "true");
         try {
           const r = await fetchWithRetry(url.toString());
           if (!r.ok) return [];

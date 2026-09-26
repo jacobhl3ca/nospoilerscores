@@ -31,6 +31,9 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   ncaawh: "/hockey/womens-college-hockey",
   // Probed 2026-09-14: 200, 6 articles (ESPN "Game Highlights" clips).
   ncaavb: "/volleyball/womens-college-volleyball",
+  // Probed 2026-09-26: 200, 6 articles each.
+  ncaawsoc: "/soccer/usa.ncaa.w.1",
+  ncaamsoc: "/soccer/usa.ncaa.m.1",
   golf: "/golf/pga",
   // ESPN has no bare /tennis/news feed (404) — the ATP league feed carries the
   // marquee tennis news (Slams, both tours' headlines), so route tennis there.
@@ -63,6 +66,8 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   facup: "/soccer/eng.fa",
   copadelrey: "/soccer/esp.copa_del_rey",
   dfbpokal: "/soccer/ger.dfb_pokal",
+  // Nations League (2026-09-26): /news probed 200 with 6 articles.
+  nations: "/soccer/uefa.nations",
   // Cricket: same league-base + /news shape. Note this feed is ESPNcricinfo's
   // GENERAL cricket wire, not IPL-only — it carries county / Hundred / Test
   // headlines too. That's still the right feed (it's the only one ESPN serves
@@ -321,6 +326,9 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   ncaawh: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
   // ESPN's own league mark for women's college volleyball (leagues[0].logos, 2026-09-14).
   ncaavb: "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/sports-volleyball-solid.png",
+  // ESPN's own league mark for both college soccer feeds (leagues[0].logos, 2026-09-26).
+  ncaawsoc: "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/sports-soccer-solid.png",
+  ncaamsoc: "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/sports-soccer-solid.png",
   // The current CFL shield (2016 mark) on en.wikipedia — the Commons
   // CFL_logo.svg is the old 250×41 wordmark, unreadable at 40px. Verified 200
   // image/png, 250×229, 2026-09-13.
@@ -352,6 +360,8 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   facup: "https://a.espncdn.com/i/leaguelogos/soccer/500/40.png",
   copadelrey: "https://a.espncdn.com/i/leaguelogos/soccer/500/80.png",
   dfbpokal: "https://a.espncdn.com/i/leaguelogos/soccer/500/2061.png",
+  // Nations League: league id 2395 off its scoreboard `logos`, 200 on 2026-09-26.
+  nations: "https://a.espncdn.com/i/leaguelogos/soccer/500/2395.png",
   // Cricket keys its league logos by series id under its own /cricket/ path
   // (8048 = IPL), not the /soccer/ path. Verified 200 on 2026-08-03.
   cricket: "https://a.espncdn.com/i/leaguelogos/cricket/500/8048.png",
@@ -491,6 +501,8 @@ const SOCCER_REDDIT_FIREHOSE = new Set<Sport>([
   // Conference League + the domestic cups (2026-09-14): no per-cup sub has the
   // volume, and r/soccer already carries every one of them.
   "uecl", "facup", "copadelrey", "dfbpokal",
+  // Nations League (2026-09-26): r/soccer carries the international windows.
+  "nations",
   // nwsl is deliberately NOT here. r/soccer is overwhelmingly men's club
   // football, so piping it into the NWSL column would fill that column with
   // news about a different sport. As of 2026-08-04 NWSL has its own r/NWSL
@@ -518,6 +530,7 @@ const ESPN_LEAGUE_LABEL: Partial<Record<Sport, string>> = {
   facup: "ESPN FA Cup",
   copadelrey: "ESPN Copa del Rey",
   dfbpokal: "ESPN DFB-Pokal",
+  nations: "ESPN Nations League",
 };
 
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
@@ -580,7 +593,8 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   // yearCycle-gated national-team tournaments sit just above it, since in a year
   // when they're active they're the biggest story in the sport.
   "euro", "afcon", "ligamx", "nwsl", "efl", "libertadores", "saudi",
-  "uecl", "facup", "copadelrey", "dfbpokal",
+  "uecl", "facup", "copadelrey", "dfbpokal", "nations",
+  "ncaawsoc", "ncaamsoc",
   "cricket",
   "ufc", "boxing", "f1", "nascar", "indycar", "poker",
 ];

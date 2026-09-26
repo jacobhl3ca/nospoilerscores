@@ -845,7 +845,35 @@ export default function PlayoffPictureModal({
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      opener?.focus?.();
+      // preventScroll: the scroll lock below puts the board back where it was;
+      // a scrolling focus() would then nudge it to the pill's edge.
+      opener?.focus?.({ preventScroll: true });
+    };
+  }, [inline]);
+
+  // Body scroll lock — EventDetailModal's position:fixed + negative-top lock.
+  // Without it a scroll inside the picture runs on into the board behind, and
+  // on close Safari leaves the page further down than where the reader tapped.
+  useEffect(() => {
+    if (inline) return;
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+    };
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    return () => {
+      body.style.overflow = prev.overflow;
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
     };
   }, [inline]);
 

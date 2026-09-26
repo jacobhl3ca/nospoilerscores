@@ -77,7 +77,7 @@ export const metadata: Metadata = {
 export default function SpoilerFreeSportsPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
-      <DocTopBar route="spoiler-free-sports" />
+      <DocTopBar route="spoiler-free-sports" subject="Spoiler-free guide" />
       <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
         HideScore
       </p>
@@ -193,6 +193,17 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/champions-league-without-spoilers" className="underline underline-offset-2">
             Champions League
           </Link>
+          {/* 2026-09-26: the other three UEFA competition routes, linked here on
+              their first day for the same orphan reason as the batch above. */}
+          <Link href="/europa-league-without-spoilers" className="underline underline-offset-2">
+            Europa League
+          </Link>
+          <Link href="/conference-league-without-spoilers" className="underline underline-offset-2">
+            Conference League
+          </Link>
+          <Link href="/nations-league-without-spoilers" className="underline underline-offset-2">
+            Nations League
+          </Link>
           <Link href="/la-liga-without-spoilers" className="underline underline-offset-2">
             La Liga
           </Link>
@@ -219,6 +230,10 @@ export default function SpoilerFreeSportsPage() {
           </Link>
           <Link href="/worldcup" className="underline underline-offset-2">
             World Cup
+          </Link>
+          {/* Added 2026-09-26: the hub for the 144 per-team pages. */}
+          <Link href="/teams" className="underline underline-offset-2">
+            Team schedules
           </Link>
           <Link href="/faq" className="underline underline-offset-2">
             FAQ

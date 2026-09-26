@@ -86,6 +86,7 @@ export default function MlbWildCardStandingsPage() {
   return (
     <SeoLandingPage
       h1="MLB wild card standings 2026"
+      subject="MLB wild card"
       lead={<PlayoffPictureModal variant="page" initialTab="odds" initialSort="seed" />}
       intro={[
         "These are the 2026 American League and National League wild card standings, laid out in seed order. MLB's standings feed and ESPN's odds load fresh with the page, so the race updates as the last weekend of the season is played.",

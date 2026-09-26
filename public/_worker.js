@@ -65,6 +65,19 @@ const CARD_REV = 4;
 // Keep this narrow. An unscoped result-bearing upload must still be rejected.
 const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"]);
 
+// Atlantic Hockey America (NCAA women's hockey chain, lit 2026-09-26) titles
+// every per-game cut as a bare scoreline with the date and nothing else:
+// "Ohio State 2, Penn State 1 OT - Sept. 24, 2026". No "highlights", and the
+// score is in the title. The client keeps that channel's title bar masked
+// (`maskTitle` in collegeHighlightChannels.json), so — like the combat
+// channels — the title may carry the result. This regex is the ONLY shape
+// accepted from it: winner, score, loser, score, optional OT/SO, a dash, a
+// month with an optional period, day, year. The date gate below then has to
+// agree with the query, which is what separates the 9/24 and 9/25 cuts of the
+// same pair; an undated exhibition ("Robert Morris 8, Post 3") never matches.
+const AHA_CHANNEL = "atlantic hockey america";
+const AHA_SCORELINE_RX = /^\s*\S.*?\s\d{1,2},\s\S.*?\s\d{1,2}(?:\s(?:\d?OT|SO))?\s-\s(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s\d{1,2},\s\d{4}\s*$/i;
+
 // Chess organizers who post the ROUND itself as a full broadcast VOD, with no
 // "highlights"/"recap" keyword in the title. Lowercased YouTube author_name —
 // mirrors CHESS_ORGANIZER_CHANNELS in src/lib/espn.ts, keep the two in step.
@@ -239,6 +252,22 @@ function publishedBeforeGame(publishedText, gameMs, nowMs) {
   const latest = latestPossiblePublish(publishedText, nowMs);
   if (latest === null) return false; // no stamp we can read → unchanged
   return latest < gameMs - AGE_GATE_SLACK_MS;
+}
+
+// A videoRenderer block's running time ("8:46", "1:02:15") in seconds, or null
+// when the block has none (live streams, premieres). Returned beside the id so
+// a button the client resolves live can show minutes like a baked one does —
+// before this, a game the bake missed read "UCL" while its neighbour read "9m"
+// (Roma–Fenerbahce vs Shakhtar–PSV, UCL 2026-09-10).
+function blockLengthSec(block) {
+  // lengthText nests an accessibility label before simpleText, so read a short
+  // window after the key rather than matching braces.
+  const at = block.indexOf('"lengthText":{');
+  if (at < 0) return null;
+  const m = block.slice(at, at + 400).match(/"simpleText":"(\d{1,2}(?::\d{2}){1,2})"/);
+  if (!m) return null;
+  const sec = m[1].split(":").reduce((acc, part) => acc * 60 + Number(part), 0);
+  return sec > 0 ? sec : null;
 }
 
 // WEEK TOKEN — shared by the gridiron week gate below. Reads both digit
@@ -869,8 +898,10 @@ export default {
 
         // Split HTML into videoRenderer blocks and parse each one individually
         const blocks = html.split('"videoRenderer":{').slice(1);
+        const lengthById = new Map();
         const videos = blocks.map((block) => {
           const idMatch = block.match(/^"videoId":"([a-zA-Z0-9_-]{11})"/);
+          if (idMatch && !lengthById.has(idMatch[1])) lengthById.set(idMatch[1], blockLengthSec(block));
           const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
           const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
           const publishedMatch = block.match(/"publishedTimeText":\{"simpleText":"(.*?)"/);
@@ -1027,11 +1058,20 @@ export default {
             queryWeek !== null &&
             titleWeek === queryWeek &&
             /^cfl\s+week\b/i.test(titleLower.trim());
+          // See AHA_SCORELINE_RX. Strict + the channel + both teams + the
+          // house scoreline shape; the explicit-date gate below still applies.
+          const isStrictAhaScoreline =
+            strictChannelParam &&
+            isFromChannel &&
+            preferChannelLower === AHA_CHANNEL &&
+            queryHasSpecificTeams &&
+            AHA_SCORELINE_RX.test(title);
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
             isStrictBareCflWeek ||
+            isStrictAhaScoreline ||
             roundOnlyTitleOk ||
             isStrictBareWnbaRecap ||
             isChessRoundBroadcast ||
@@ -1125,7 +1165,10 @@ export default {
             // which slipped past the slash-only regex and let a 2016 NYCFC
             // upload win a 2026 NYCFC query.
             const shortTok = title.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/);
-            const longTok = title.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),\s+(\d{4})\b/i);
+            // "[a-z]*\.?" — Atlantic Hockey America abbreviates with a period
+            // ("Sept. 24, 2026"); without the optional period the title read as
+            // undated and a same-pair cut from the night before could serve.
+            const longTok = title.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),\s+(\d{4})\b/i);
             if (shortTok) {
               titleHasExplicitDate = true;
               const tM = parseInt(shortTok[1], 10);
@@ -1804,6 +1847,7 @@ export default {
           if (
             !isOfficialWorldCupUpload &&
             !isMaskedOfficialCombatUpload &&
+            !isStrictAhaScoreline &&
             (SCORE_RX.test(title) || SPOILER_RX.test(title) || isTeamScoreSpoiler(title))
           )
             continue;
@@ -2149,6 +2193,7 @@ export default {
               let chExtendedId = null;
               for (const block of chBlocks) {
                 const idMatch = block.match(/^"videoId":"([a-zA-Z0-9_-]{11})"/);
+                if (idMatch && !lengthById.has(idMatch[1])) lengthById.set(idMatch[1], blockLengthSec(block));
                 if (!idMatch || excludeSet.has(idMatch[1])) continue;
                 const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
                 const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
@@ -2196,7 +2241,8 @@ export default {
           });
         }
 
-        return new Response(JSON.stringify({ videoId }), {
+        const lengthSec = lengthById.get(videoId) ?? null;
+        return new Response(JSON.stringify(lengthSec ? { videoId, lengthSec } : { videoId }), {
           headers: {
             "Content-Type": "application/json",
             "Cache-Control": "public, max-age=300",

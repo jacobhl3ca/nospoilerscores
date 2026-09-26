@@ -283,6 +283,94 @@ test("an embed-blocked FotMob clip opens straight on the YouTube card with the s
   expect(playerApiLoads, "the IFrame API was fetched, so a player was being built").toEqual([]);
 });
 
+// 2026-09-25: the same embed-blocked La Liga game with ESPN's spoiler-free
+// "Game Highlights" mp4 baked beside it. The clip takes the first button and
+// plays in the native <video>; the YouTube hand-off moves to a labelled link.
+test("a blocked La Liga official plays ESPN's clip in-app and keeps the YouTube link", async ({ page }) => {
+  const clipUrl = "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/0920/abc/abc.mp4";
+  await page.clock.setFixedTime(new Date("2026-09-21T16:00:00-04:00"));
+  await setSingleLeague(page, "laliga");
+  await page.route("**/news/highlights.json", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ games: { "laliga:401882861": {
+      t: Date.parse("2026-09-21T12:00:00Z"), teams: ["Málaga", "Getafe"], matchup: "getafe|malaga", eventDate: "2026-09-20T12:00Z",
+      official: "VLO0aPib4SU", officialChannel: "LALIGA EA SPORTS", officialDurationSec: 170, sourcePolicy: "official-channel",
+      src: "fotmob", officialEmbeddable: false, officialTitleScore: true,
+      espnClipUrl: clipUrl, espnClipHeadline: "Getafe vs. Málaga - Game Highlights", espnClipSec: 71,
+    } } }),
+  }));
+  await page.route("**/espnmedia-cdn.akamaized.net/**", route => route.fulfill({ status: 404, body: "" }));
+  await page.route("**/soccer/esp.1/scoreboard?**", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: finishedScoreboard({
+      id: "401882861",
+      date: "2026-09-20T12:00:00Z",
+      away: { id: "mal", displayName: "Málaga", shortDisplayName: "Málaga", abbreviation: "MCF", score: "0" },
+      home: { id: "get", displayName: "Getafe", shortDisplayName: "Getafe", abbreviation: "GET", score: "0" },
+    }),
+  }));
+  await page.route("**/api/youtube?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":null}' }));
+
+  await page.goto("/yesterday");
+  const clip = page.getByRole("button", { name: "ESPN highlights" }).first();
+  await expect(clip).toBeVisible();
+  const handOff = page.getByRole("button", { name: "Full highlights (title shows score)" }).first();
+  await expect(handOff).toBeVisible();
+  // The blocked official no longer has a button of its own.
+  await expect(page.getByRole("button", { name: "ESPN FC highlights" })).toHaveCount(0);
+  // The link sits under the clip button, not beside it.
+  const clipBox = await clip.boundingBox();
+  const linkBox = await handOff.boundingBox();
+  expect(linkBox!.y).toBeGreaterThan(clipBox!.y + clipBox!.height - 1);
+
+  // The link is today's hand-off: the YouTube card with the score note.
+  await handOff.click();
+  await expect(page.getByText("YouTube shows the score in this video’s title")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("YouTube shows the score in this video’s title")).toHaveCount(0);
+
+  await clip.click();
+  const video = page.locator("video");
+  await expect(video).toHaveCount(1);
+  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.getAttribute("src") || v.currentSrc)).toBe(clipUrl);
+  expect(await video.getAttribute("poster")).toBeNull();
+  await expect(page.locator("iframe")).toHaveCount(0);
+});
+
+// An official that plays in-app keeps its button; the ESPN clip stays unused.
+test("an ESPN clip beside an embeddable official changes nothing", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-21T16:00:00-04:00"));
+  await setSingleLeague(page, "laliga");
+  await page.route("**/news/highlights.json", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ games: { "laliga:401882861": {
+      t: Date.parse("2026-09-21T12:00:00Z"), teams: ["Málaga", "Getafe"], matchup: "getafe|malaga", eventDate: "2026-09-20T12:00Z",
+      official: "VLO0aPib4SU", officialChannel: "ESPN FC", officialDurationSec: 170, sourcePolicy: "official-channel",
+      espnClipUrl: "https://espnmedia-cdn.akamaized.net/espn/media/x/x.mp4", espnClipHeadline: "Getafe vs. Málaga - Game Highlights",
+    } } }),
+  }));
+  await page.route("**/soccer/esp.1/scoreboard?**", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: finishedScoreboard({
+      id: "401882861",
+      date: "2026-09-20T12:00:00Z",
+      away: { id: "mal", displayName: "Málaga", shortDisplayName: "Málaga", abbreviation: "MCF", score: "0" },
+      home: { id: "get", displayName: "Getafe", shortDisplayName: "Getafe", abbreviation: "GET", score: "0" },
+    }),
+  }));
+  await page.route("**/api/youtube?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":null}' }));
+
+  await page.goto("/yesterday");
+  // An embeddable official keeps today's button, and no ESPN button appears.
+  await expect(page.getByRole("button", { name: "ESPN FC highlights" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "ESPN highlights" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Full highlights (title shows score)" })).toHaveCount(0);
+});
+
 // Lit 2026-09-19 against ESPN FC. The league is no longer dark, but the two
 // properties that kept it dark are now carried by the request itself: every
 // lookup must name the exact channel AND demand the competition in the title.

@@ -10,7 +10,7 @@ import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
   parseRelativeTime, isoDurationToSec, etYmd, shiftYmd, dailyCoversDate, weekdayCoversDate,
   weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, parseWatchPagePlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
-  fillHeading, pickShorterClub, promoteLoneExtended, eplSeasonYear, uploadFitsGameDate,
+  fillHeading, pickShorterClub, promoteLoneExtended, eplSeasonYear, uploadFitsGameDate, keepCarriedRecap,
   classifyMlbReviewTitle, mlbReviewSeason, mlbTeamIdsFromKeywords, mlbToEspnTeamIds, ROUND_ORDER,
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
@@ -20,6 +20,7 @@ import {
 } from "./lib/fotmob.mjs";
 import { channelSearchHandle, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
+import { pickEspnGameClip } from "./lib/espn-clip.mjs";
 
 const OUT_DIR = "public/news";
 
@@ -2472,7 +2473,7 @@ async function fetchTheScore(leagueSlug, sectionLabel) {
 // The key MUST be `${sport}:${event.id}` — GameHighlights keys off game.sport +
 // game.id, and game.id === event.id for every team-sport card (espn.ts parseGame).
 const HL_OUT_PATH = `${OUT_DIR}/highlights.json`;
-const HL_ENTRY_TTL_MS = 10 * 24 * 60 * 60 * 1000; // prune baked games older than 10d
+const HL_ENTRY_TTL_MS = 21 * 24 * 60 * 60 * 1000; // prune baked games older than 21d (same as RECAP_TTL_DAYS)
 
 // Leagues that render per-game highlight cards, with their official YouTube
 // channel — mirrors OFFICIAL_CHANNELS + the scoreboard paths in src/lib. Golf/
@@ -2675,11 +2676,21 @@ const hlFallbackChain = (sport, primaryChannel, homeTeam, awayTeam, broadcasts) 
   add(homeConf ? cfg.conferences[homeConf] : undefined);
   add(awayConf ? cfg.conferences[awayConf] : undefined);
   for (const name of broadcasts ?? []) add(cfg.networks.find((n) => n.names.includes(name))?.channel);
-  return channels.map((channel) => ({
-    channel,
-    titleTokens: cfg.channelTitleTokens?.[channel] ?? cfg.titleTokens,
-    ...(cfg.searchOnly ? { searchOnly: true } : {}),
-  }));
+  // Clean-title channels before `maskTitle` ones, stable within each group —
+  // mirrors buildCollegeFallbackChain (the AHA women's hockey case).
+  const masked = new Set(cfg.maskTitle ?? []);
+  const ordered = [...channels.filter((c) => !masked.has(c)), ...channels.filter((c) => masked.has(c))];
+  return ordered.map((channel) => {
+    const own = cfg.channelTitleTokens?.[channel];
+    return {
+      channel,
+      titleTokens: own ?? cfg.titleTokens,
+      ...(cfg.searchOnly ? { searchOnly: true } : {}),
+      // A channel's own token list beats the sport-wide HL_COMPETITION_TOKENS
+      // (AHA titles carry no gender word, so `women` would refuse every cut).
+      ...(own ? { ownTokens: true } : {}),
+    };
+  });
 };
 const hlHighlightTeamName = (sport, name, location) => {
   if (HL_LOCATION_NAME_SPORTS.has(sport)) return (location && String(location).trim()) || name;
@@ -3193,6 +3204,103 @@ async function hlFotmobFinish() {
   }
 }
 
+// ── ESPN "Game Highlights": in-app clip for a blocked La Liga official ────
+// See scripts/lib/espn-clip.mjs. LALIGA EA SPORTS refuses every embed, so a
+// La Liga game whose official slot is empty or embed-blocked asks ESPN's
+// summary for its ~70 s spoiler-free package, a direct mp4 the modal plays
+// in-app. The YouTube official is left exactly as it is; the client shows it
+// as a second, labelled option.
+//
+// Limits: La Liga only; mini bake only (off under GitHub Actions, which still
+// carries a clip the prior manifest has); HL_ESPN_CLIP=0 turns it off and drops
+// every carried clip; ≤12 summaries per bake, 1 per second; a game ESPN
+// answered without a clip is not re-asked for 6 hours, and a hit is kept.
+const HL_ESPN_CLIP_OFF = process.env.HL_ESPN_CLIP === "0";
+const HL_ESPN_CLIP_ON = !HL_ESPN_CLIP_OFF && process.env.GITHUB_ACTIONS !== "true";
+const HL_ESPN_CLIP_LEAGUES = { laliga: "esp.1" };
+const HL_ESPN_CLIP_MAX_FETCHES = 12;
+const HL_ESPN_CLIP_GAP_MS = 1000;
+const HL_ESPN_CLIP_REASK_MS = 6 * 60 * 60 * 1000;
+// Outside public/news for the same reason as HL_FOTMOB_STATE_PATH.
+const HL_ESPN_CLIP_STATE_PATH = ".bake-state/espn-clip.json";
+const hlEspnClip = { requests: 0, lastAt: 0, state: null, isScoreSpoiler: undefined };
+
+// The client's own score check (src/lib/spoilers.ts), so bake and client agree.
+// Node strips the types itself; jiti covers an older node. Null if neither
+// loads, and then no clip is written or carried.
+async function hlEspnClipScoreCheck() {
+  if (hlEspnClip.isScoreSpoiler !== undefined) return hlEspnClip.isScoreSpoiler;
+  hlEspnClip.isScoreSpoiler = null;
+  try {
+    hlEspnClip.isScoreSpoiler = (await import("../src/lib/spoilers.ts")).isScoreSpoiler ?? null;
+  } catch {
+    try {
+      const { createJiti } = await import("jiti");
+      hlEspnClip.isScoreSpoiler = (await createJiti(import.meta.url).import("../src/lib/spoilers.ts")).isScoreSpoiler ?? null;
+    } catch (e) {
+      console.warn(`HIGHLIGHT-ESPN-CLIP score check not loaded: ${e?.message || e}`);
+    }
+  }
+  return hlEspnClip.isScoreSpoiler;
+}
+
+async function hlEspnClipState() {
+  if (hlEspnClip.state) return hlEspnClip.state;
+  let state = null;
+  try { state = JSON.parse(await readFile(HL_ESPN_CLIP_STATE_PATH, "utf8")); } catch { /* first run */ }
+  hlEspnClip.state = { games: state?.games && typeof state.games === "object" ? state.games : {} };
+  return hlEspnClip.state;
+}
+
+// { url, headline, sec? } for this game, or null. A carried or cached clip is
+// re-checked for a score, never re-fetched.
+async function hlEspnClipFor(sport, key, eventId, prev, label) {
+  const league = HL_ESPN_CLIP_LEAGUES[sport];
+  if (!league || HL_ESPN_CLIP_OFF) return null;
+  const isScoreSpoiler = await hlEspnClipScoreCheck();
+  if (!isScoreSpoiler) return null;
+  const clean = (c) => (c?.url && typeof c.headline === "string" && !isScoreSpoiler(c.headline) ? c : null);
+  const carried = prev?.espnClipUrl
+    ? clean({ url: prev.espnClipUrl, headline: prev.espnClipHeadline, ...(Number.isFinite(prev.espnClipSec) ? { sec: prev.espnClipSec } : {}) })
+    : null;
+  if (carried) return carried;
+  if (!HL_ESPN_CLIP_ON) return null;
+  const state = await hlEspnClipState();
+  const cached = state.games[key];
+  if (cached?.clip) return clean(cached.clip);
+  if (cached && Date.now() - (cached.at ?? 0) < HL_ESPN_CLIP_REASK_MS) return null;
+  if (hlEspnClip.requests >= HL_ESPN_CLIP_MAX_FETCHES) return null;
+  const wait = hlEspnClip.lastAt + HL_ESPN_CLIP_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  hlEspnClip.requests++;
+  let data = null;
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/summary?event=${encodeURIComponent(eventId)}`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+    if (res.ok) data = await res.json();
+  } catch { /* retried next bake */ } finally {
+    hlEspnClip.lastAt = Date.now();
+  }
+  if (!data) return null;
+  const { clip, reason } = pickEspnGameClip(data.videos, isScoreSpoiler);
+  state.games[key] = { at: Date.now(), ...(clip ? { clip } : {}) };
+  console.log(`HIGHLIGHT-ESPN-CLIP ${key} ${reason} (${label})`);
+  return clip;
+}
+
+// End of bake: request tally and the state file, pruned to the entry TTL.
+async function hlEspnClipFinish() {
+  console.log(`HIGHLIGHT-ESPN-CLIP-REQUESTS n=${hlEspnClip.requests}`);
+  if (!hlEspnClip.state) return;
+  const cutoff = Date.now() - HL_ENTRY_TTL_MS;
+  for (const [k, v] of Object.entries(hlEspnClip.state.games)) if (!(v?.at > cutoff)) delete hlEspnClip.state.games[k];
+  try {
+    await mkdir(dirname(HL_ESPN_CLIP_STATE_PATH), { recursive: true });
+    await writeFile(HL_ESPN_CLIP_STATE_PATH, JSON.stringify(hlEspnClip.state));
+  } catch (e) {
+    console.warn(`HIGHLIGHT-ESPN-CLIP state not saved: ${e?.message || e}`);
+  }
+}
+
 // ── Channel search: our own pass for an empty official slot ──────────────
 // See scripts/lib/channel-search.mjs for why. Runs after the /api/youtube
 // lookups miss and BEFORE FotMob, on the primary channel and then each chain
@@ -3335,6 +3443,10 @@ async function bakeGameHighlights() {
   const HL_DEFAULT_DAYS = 7;
   const hlDaysArg = parseInt(process.argv.find((a) => a.startsWith("--hl-days="))?.slice("--hl-days=".length) ?? "", 10);
   const hlDays = Number.isFinite(hlDaysArg) && hlDaysArg > 0 ? Math.min(hlDaysArg, 30) : HL_DEFAULT_DAYS;
+  // --hl-sports=laliga[,…] walks only those leagues' scoreboards, for a
+  // one-off local check of one league. Every other entry is carried as is.
+  const hlSportsArg = process.argv.find((a) => a.startsWith("--hl-sports="))?.slice("--hl-sports=".length);
+  const hlSports = hlSportsArg ? new Set(hlSportsArg.split(",").map((x) => x.trim()).filter(Boolean)) : null;
 
   const games = {};
   const prior = await loadPriorHighlights();
@@ -3363,7 +3475,7 @@ async function bakeGameHighlights() {
 
     // AGE SWEEP for the frozen band. The per-game loop below only walks the
     // last `hlDays` (7) of scoreboards, while this carry-forward keeps an entry
-    // for HL_ENTRY_TTL_MS (10 days). A game between those two numbers is still
+    // for HL_ENTRY_TTL_MS (21 days). A game between those two numbers is still
     // SERVED but is never revisited, so the upload-date gate cannot reach it:
     // on the 2026-09-20 bake that band held 14 wrong-season clips, the oldest a
     // 2019 MLS game. Check those slots here instead. Only out-of-window entries
@@ -3396,6 +3508,11 @@ async function bakeGameHighlights() {
     }
     if (populatedSlots.some((slot) => kept[slot])) games[k] = kept;
     else console.warn(`HIGHLIGHT-AGE-DROP ${k} carried (${kept.eventDate})`);
+  }
+  // HL_ESPN_CLIP=0 drops every carried ESPN clip, not only the ones the
+  // per-game loop below revisits.
+  if (HL_ESPN_CLIP_OFF) {
+    for (const v of Object.values(games)) for (const field of ["espnClipUrl", "espnClipHeadline", "espnClipSec"]) delete v[field];
   }
   for (const [k, seed] of Object.entries(HL_WORLD_CUP_SEEDS)) {
     const teams = seed.teams ?? String(seed.matchup ?? "").split("|").filter(Boolean);
@@ -3446,7 +3563,7 @@ async function bakeGameHighlights() {
   const HL_CFL_DAYS = 30;
   const cflDates = Array.from({ length: HL_CFL_DAYS }, (_, i) => hlEtYmd(-i));
   let resolved = 0;
-  for (const lg of HL_LEAGUES) {
+  for (const lg of hlSports ? HL_LEAGUES.filter((l) => hlSports.has(l.sport)) : HL_LEAGUES) {
     const lgDates = lg.sport === "fifa" ? fifaDates : (lg.sport === "cfl" ? cflDates : dates);
     for (const ymd of lgDates) {
       let data;
@@ -3478,6 +3595,9 @@ async function bakeGameHighlights() {
             const chainIsPrimary = !lg.channel && !!HL_COLLEGE_CHANNELS[lg.sport]?.primaryFromChain;
             const channel = chainIsPrimary ? chain[0]?.channel : lg.channel;
             const fallbacks = chainIsPrimary ? chain.slice(1) : chain;
+            // When the chain's first channel has its own token list (AHA), the
+            // primary lookup must use it instead of the sport-wide tokens.
+            const primaryTokens = chainIsPrimary && chain[0]?.ownTokens ? chain[0].titleTokens : null;
             if (!event.id || !away || !home || (chainIsPrimary && !channel)) return [];
             let series = null;
             for (const note of comp?.notes ?? []) {
@@ -3502,7 +3622,7 @@ async function bakeGameHighlights() {
             const cflPlayoff = lg.sport === "cfl" && event.season?.type === 3
               ? hlCflPlayoffTokens(comp?.notes?.[0]?.headline)
               : null;
-            return [{ id: event.id, away, home, date: event.date, series, channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks }];
+            return [{ id: event.id, away, home, date: event.date, series, channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks, primaryTokens }];
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
@@ -3526,6 +3646,9 @@ async function bakeGameHighlights() {
         const dateStr = hlDateStr(item.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
         const compTokens = preseason ? HL_NFL_PRESEASON_TOKENS : (cflPlayoff ?? HL_COMPETITION_TOKENS[lg.sport] ?? null);
+        // The official slot's tokens: the chain-primary channel's own list when
+        // it has one (AHA), else the sport-wide tokens.
+        const primaryTokens = item.primaryTokens ?? compTokens;
         const preferExtended = !!competition;
         const primaryChannel = item.channel;
         const secondaryChannel = isFifa ? "FOX Sports" : (lg.secondaryChannel ?? primaryChannel);
@@ -3537,7 +3660,7 @@ async function bakeGameHighlights() {
         const carriedFallback = fallbacks.find((f) => sameChannel(prev.officialChannel, f.channel)) ?? null;
         const carriedOfficial = sameChannel(prev.officialChannel, primaryChannel) || carriedFallback ? prev.official : null;
         let officialChannel = carriedFallback ? carriedFallback.channel : primaryChannel;
-        const officialTokensFor = (fb) => (fb && !compTokens?.length ? fb.titleTokens : compTokens);
+        const officialTokensFor = (fb) => (fb?.ownTokens ? fb.titleTokens : fb && !compTokens?.length ? fb.titleTokens : fb ? compTokens : primaryTokens);
         const carriedExtended = sameChannel(prev.extendedChannel, secondaryChannel) ? prev.extended : null;
         // 1st button (official/primary) and 2nd button (extended/secondary),
         // deduped so the two buttons never play the same clip — mirrors the
@@ -3578,8 +3701,8 @@ async function bakeGameHighlights() {
         let official = prevOfficial ?? null;
         if (!official) {
           officialChannel = primaryChannel;
-          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, compTokens);
-          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week, cflWeekRequired)) || !(await hlVideoMatchesComp(official, compTokens)))) {
+          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, primaryTokens);
+          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week, cflWeekRequired)) || !(await hlVideoMatchesComp(official, primaryTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
           }
@@ -3612,7 +3735,7 @@ async function bakeGameHighlights() {
         // (see hlChannelSearchOfficial), primary first, then the chain.
         if (!official) {
           const channels = [
-            { channel: primaryChannel, tokens: compTokens },
+            { channel: primaryChannel, tokens: primaryTokens },
             ...fallbacks.map((fb) => ({ channel: fb.channel, tokens: officialTokensFor(fb) })),
           ];
           for (const c of channels) {
@@ -3784,7 +3907,17 @@ async function bakeGameHighlights() {
           entry.telemundoExtended = telemundoExtended;
           entry.telemundoExtendedChannel = "Telemundo Deportes";
         }
-        if (entry.official || entry.extended || entry.telemundo || entry.telemundoExtended || entry.club) {
+        // La Liga official missing or embed-blocked: ESPN's spoiler-free clip
+        // plays in-app instead (see hlEspnClipFor). The official stays as is.
+        if (HL_ESPN_CLIP_LEAGUES[lg.sport] && (!entry.official || entry.officialEmbeddable === false)) {
+          const clip = await hlEspnClipFor(lg.sport, key, item.id, prev, `${away} vs ${home}`);
+          if (clip) {
+            entry.espnClipUrl = clip.url;
+            entry.espnClipHeadline = clip.headline;
+            if (Number.isFinite(clip.sec)) entry.espnClipSec = clip.sec;
+          }
+        }
+        if (entry.official || entry.extended || entry.telemundo || entry.telemundoExtended || entry.club || entry.espnClipUrl) {
           games[key] = entry;
           const changedSlots = ["official", "extended", "telemundo", "telemundoExtended", "club"]
             .filter((slot) => entry[slot] && entry[slot] !== rawPrev[slot]);
@@ -3817,6 +3950,7 @@ async function bakeGameHighlights() {
   }
 
   if (HL_FOTMOB_ON) await hlFotmobFinish();
+  if (HL_ESPN_CLIP_ON) await hlEspnClipFinish();
   if (HL_CS_ON) await hlChannelSearchFinish();
 
   const ageLine = `HIGHLIGHT-AGE-UNREADABLE n=${hlAgeUnreadable}/${hlAgeChecks} (upload date unreadable; those ids were KEPT)`;
@@ -3956,10 +4090,16 @@ async function resolveYtRecapSeries(series, seasonYear) {
   // would have been filed under today), so read the watch page's publishDate
   // before trusting it.
   if (!Number.isFinite(pick.publishedMs)) pick.publishedMs = (await fetchYtWatchMeta(pick.videoId)).publishedMs;
+  // Still no upload time → the cut cannot be dated, and a weekly window built
+  // from the bake clock put last season's Matchweek 36 on this season's boards.
+  if (!Number.isFinite(pick.publishedMs)) {
+    console.log(`recaps ${series.channelName} ${series.key}: no publish time, skipped`);
+    return null;
+  }
   // Out of season the newest cut is months old (NBA in September). It could
   // never cover a day the card shows, so stop before the oEmbed fetch. The
   // write-time prune below is the second net.
-  if (Number.isFinite(pick.publishedMs) && Date.now() - pick.publishedMs > (RECAP_TTL_DAYS + 7) * 86400000) {
+  if (Date.now() - pick.publishedMs > (RECAP_TTL_DAYS + 7) * 86400000) {
     console.log(`recaps ${series.channelName} ${series.key}: newest is ${Math.round((Date.now() - pick.publishedMs) / 86400000)}d old, skipping`);
     return null;
   }
@@ -3972,23 +4112,39 @@ async function resolveYtRecapSeries(series, seasonYear) {
   return pick;
 }
 
-// mlb.com topic page → the newest card whose slug matches the series. The page
-// lists newest first and its slug names the WEEKDAY, not the date.
-async function resolveMlbRecapSeries(series, todayYmd) {
+// mlb.com topic page → every card on it (~20, about three weeks) whose slug
+// matches the series, one per day, newest first. The slug names the WEEKDAY,
+// not the date, so each cut is dated by its upload day: the named weekday on
+// or before it (FastCast posts the next morning, so a Sunday cut uploaded
+// Monday covers Sunday). Cuts already carried (`carriedUrl`) are not fetched.
+async function resolveMlbRecapSeries(series, todayYmd, cutoff, carriedUrl) {
   const html = await getText(series.topicUrl);
   const linkRe = /<a[^>]+href="\/video\/([^"?/]+)"/g;
+  const seen = new Set();
+  const days = new Set();
+  const hits = [];
+  let first = true;
   let m;
   while ((m = linkRe.exec(html)) !== null) {
     const slug = m[1];
     const sm = slug.match(series.slugRx);
-    if (!sm) continue;
-    const coversDate = weekdayCoversDate(sm[series.weekdayGroup], todayYmd);
-    if (!coversDate) continue;
+    if (!sm || seen.has(slug)) continue;
+    seen.add(slug);
+    const isFirst = first;
+    first = false;
+    if (carriedUrl(`https://www.mlb.com/video/${slug}`)) continue;
     const meta = await fetchMLBVideoMeta(slug);
     if (!meta?.playbackUrl) continue;
-    return { slug, coversDate, ...meta };
+    // No upload date: only the page's newest card may be dated from today;
+    // an older cut's day is never guessed.
+    const anchor = meta.uploadDate ? etYmd(meta.uploadDate) : isFirst ? todayYmd : "";
+    const coversDate = anchor ? weekdayCoversDate(sm[series.weekdayGroup], anchor) : "";
+    if (!coversDate || coversDate < cutoff || days.has(coversDate)) continue;
+    days.add(coversDate);
+    console.log(`recaps mlb ${series.key}: found ${coversDate} (${slug})`);
+    hits.push({ slug, coversDate, ...meta });
   }
-  return null;
+  return hits;
 }
 
 // MLB Film Room's search (the gateway behind mlb.com/video/search), newest
@@ -4011,22 +4167,25 @@ async function fetchFilmRoomTag(tag, season) {
 }
 
 // mlb.com series → its recent cuts, minus days already carried (`carried`).
-// A topic-page series (FastCast, Real Fast) yields its newest cut; a dated
-// slug (Top 5) tries the last three days by name; a Film Room tag (the oddity
-// round-ups) yields the newest few matches, one per ET day.
-async function resolveMlbRecapHits(series, todayYmd, carried) {
-  if (series.topicUrl) {
-    const hit = await resolveMlbRecapSeries(series, todayYmd);
-    return hit ? [hit] : [];
-  }
+// A topic-page series (FastCast, Real Fast) yields every cut on the page inside
+// the recap window; a dated slug (Top 5) tries each day of the window by name;
+// a Film Room tag (the oddity round-ups) yields the newest few matches, one per
+// ET day. Only days not yet carried are fetched, so after the first run a bake
+// costs one or two page GETs per series.
+async function resolveMlbRecapHits(series, todayYmd, carried, carriedUrl) {
+  const cutoff = shiftYmd(todayYmd, -RECAP_TTL_DAYS);
+  if (series.topicUrl) return resolveMlbRecapSeries(series, todayYmd, cutoff, carriedUrl);
   const hits = [];
   if (series.slugForDate) {
-    for (let back = 1; back <= 3; back++) {
+    for (let back = 1; back <= RECAP_TTL_DAYS; back++) {
       const ymd = shiftYmd(todayYmd, -back);
+      if (ymd < cutoff) break;
       if (carried(ymd)) continue;
       const slug = series.slugForDate(ymd);
       const meta = await fetchMLBVideoMeta(slug);
-      if (meta?.playbackUrl) hits.push({ slug, coversDate: ymd, ...meta });
+      if (!meta?.playbackUrl) continue;
+      console.log(`recaps mlb ${series.key}: found ${ymd} (${slug})`);
+      hits.push({ slug, coversDate: ymd, ...meta });
     }
   } else if (series.filmRoomTag) {
     const seen = new Set();
@@ -4072,14 +4231,12 @@ async function bakeLeagueRecaps() {
   }
   const byId = new Map();
   for (const [id, rec] of prior.byId) {
-    const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
-    if (!end || end < cutoff) continue;
-    // A daily record dated today or later with no upload time was stamped from
-    // an older run's bake clock, not from the cut itself (the `?? now` fallback
-    // removed below). It is the premature "Best of the day" pill, so it does
-    // not survive the carry.
-    if (rec.cadence !== "weekly" && !rec.published && rec.coversDate >= todayYmd) {
-      console.log(`recaps: dropping undated ${rec.sport}:${rec.key} stamped ${rec.coversDate}`);
+    // Out of the window, or dated from an older run's bake clock instead of the
+    // cut itself: an undated weekly window, or an undated daily record dated
+    // today or later (the premature "Best of the day" pill). See keepCarriedRecap.
+    if (!keepCarriedRecap(rec, cutoff, todayYmd)) {
+      const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
+      if (end && end >= cutoff) console.log(`recaps: dropping undated ${rec.sport}:${rec.key} ${rec.cadence === "weekly" ? `week ${rec.coversWeek}` : rec.coversDate}`);
       continue;
     }
     byId.set(id, rec);
@@ -4108,7 +4265,8 @@ async function bakeLeagueRecaps() {
         let mlbRecs = null;
         if (series.source === "mlbcom") {
           const carried = (ymd) => byId.has(`${sport}:${series.key}:${ymd}`);
-          mlbRecs = (await resolveMlbRecapHits(series, todayYmd, carried)).map((hit) => ({
+          const carriedUrl = (url) => [...byId.values()].some((r) => r.sport === sport && r.key === series.key && r.pageUrl === url);
+          mlbRecs = (await resolveMlbRecapHits(series, todayYmd, carried, carriedUrl)).map((hit) => ({
             sport, key: series.key, heading: series.heading, label: series.label, cadence: "daily",
             coversDate: hit.coversDate, playbackUrl: hit.playbackUrl, poster: hit.poster,
             pageUrl: `https://www.mlb.com/video/${hit.slug}`, channel: "MLB.com",

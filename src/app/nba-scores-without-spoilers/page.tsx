@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
-const TITLE = "NBA Scores Without Spoilers: Find the Best Games | HideScore";
+// Retitled 2026-09-26: "nba no spoilers" had 14 impressions, 0 clicks at
+// position 10.1 (28 days to Sep 24). Title and description now lead with the
+// query's words.
+const TITLE = "NBA No Spoilers: Scores Hidden, Games Rated | HideScore";
 const DESC =
-  "Follow NBA scores without seeing the result. Every game is rated for excitement first, so you know which ones to watch. Free, no account.";
+  "NBA with no spoilers: scores hidden, no winner named. An optional excitement rating on each finished game tells you which ones to watch. Free, no account.";
 const CANONICAL = "/nba-scores-without-spoilers";
 
 // Rebuilt 2026-09-03. This page was the worst performer on the site with real

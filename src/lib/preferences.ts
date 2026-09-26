@@ -32,12 +32,16 @@ const STORAGE_KEY = "nss-preferences";
 // both checked free against every code in the map.
 // Added 2026-09-14: ncaawh→hw (women's college hockey), collision-free.
 // Added 2026-09-14: ncaavb→vb (women's college volleyball), collision-free.
+// Added 2026-09-26: ncaawsoc→ws, ncaamsoc→ms (college soccer), collision-free.
 // Added 2026-09-14: uecl→cl, facup→fa, copadelrey→cr, dfbpokal→dp. All four
 // checked collision-free against every code above ("c" is ncaam, "ch" chess,
 // "cf" ncaaf, "cw" ncaaw, "ck" cricket — none of these two-letter forms).
 // Added 2026-09-14: cfl→ca ("cl" went to uecl first; "cf" is ncaaf, "ch" chess).
 // Added 2026-09-23: best→by (the Best of yesterday column), collision-free.
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", ncaah: "hc", cfl: "ca", ncaawh: "hw", ncaavb: "vb", nfl: "f", ufl: "uf", llws: "lw", ncaabase: "cb", ncaasoft: "cs", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", uecl: "cl", facup: "fa", copadelrey: "cr", dfbpokal: "dp", cricket: "ck", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es", top: "tp", best: "by" };
+// Added 2026-09-26: nations→nl (UEFA Nations League), collision-free ("nc" is
+// the rugby Nations Championship, "n" nba).
+// Added 2026-09-26: ncaawsoc→ws, ncaamsoc→ms (college soccer), collision-free.
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", ncaah: "hc", cfl: "ca", ncaawh: "hw", ncaavb: "vb", ncaawsoc: "ws", ncaamsoc: "ms", nfl: "f", ufl: "uf", llws: "lw", ncaabase: "cb", ncaasoft: "cs", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", uecl: "cl", facup: "fa", copadelrey: "cr", dfbpokal: "dp", nations: "nl", cricket: "ck", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es", top: "tp", best: "by" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;
@@ -204,8 +208,10 @@ export interface Preferences {
   // header — switching only via Settings).
   leagueSwitcherMode?: "dropdown" | "arrows" | "both" | "off";
   // Leagues the user removed from the homepage switcher (header dropdown /
-  // arrow cycling / news swap / + button picks). Settings' slot pickers stay
-  // unfiltered so a hidden league can still be pinned deliberately.
+  // arrow cycling / news swap / + button picks) and from the board itself: an
+  // Auto column skips them and a column pinned to one shows the next league
+  // (Jacob 9/26). Settings' slot pickers stay unfiltered; pinning a hidden
+  // league there turns it back on.
   hiddenLeagues?: Sport[];
   // Opt-in leagues the user explicitly added to the homepage switcher. Leagues
   // marked excludeFromAuto start unchecked, so this separate allowlist lets a
@@ -274,9 +280,18 @@ export interface Preferences {
   // signed-out dismissal would be silently device-only, which is not what
   // "stays removed on their account" is supposed to mean.
   playBadgeDismissed?: boolean;
-  newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
-  // The generic "News" column is independent of scores slot 3. It appears by
-  // default; true means the user explicitly removed it from the news board.
+  // A league picked in news column 3's own switcher. Undefined = Auto: the
+  // column follows scores column 3, the same way news columns 1-2 follow
+  // theirs (Jacob 9/25). Before 9/25, Auto meant the Top news feed.
+  newsThirdLeague?: Sport;
+  // True when the user picked "Top news (ESPN)" from a news switcher, so the
+  // generic feed stays even though a league sits in scores column 3. False
+  // once they pick a league or Auto there. Undefined on blobs from before
+  // 9/25: a set newsGenericSlot then stands in for it, because only that
+  // switcher pick ever wrote newsGenericSlot.
+  newsTopNews?: boolean;
+  // News column 3 is on the board by default, even when scores column 3 is
+  // Empty (it then shows Top news). True means the user removed it.
   newsGenericHidden?: boolean;
   // Which POSITION the generic "Top news" column occupies on the news board
   // (0-2, default 2 = last). Picking "Top news (ESPN)" from any column's
@@ -508,6 +523,12 @@ const defaults: Preferences = {
   // Existing users are unaffected — a saved newsTypeFilter always wins.
   newsTypeFilter: "reddit",
 };
+
+// A fresh copy of the install defaults. The signed-in merge starts from these,
+// not from this device's blob — see mergeRemotePreferences in HomeContent.
+export function defaultPreferences(): Preferences {
+  return { ...defaults };
+}
 
 export function loadPreferences(): Preferences {
   if (typeof window === "undefined") return defaults;
