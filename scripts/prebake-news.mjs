@@ -4049,7 +4049,9 @@ async function loadPriorRecaps(todayYmd) {
   const unreadableMonths = new Set();
   const localMonths = new Set();
   let archiveGets = 0;
-  for (const month of monthsBetween(firstDay, todayYmd)) {
+  // Two weeks ahead too: an NFL window runs past next week's Sunday, so late
+  // in a month its records already sit in next month's file.
+  for (const month of monthsBetween(firstDay, shiftYmd(todayYmd, 14))) {
     let data = await readJsonFile(`${RECAPS_ARCHIVE_DIR}/${month}.json`);
     if (data) localMonths.add(month);
     else {
@@ -4655,7 +4657,7 @@ async function bakeLeagueRecapsInner(now, todayYmd, cutoff) {
   const emptyByMonth = splitEmptyByMonth(emptyObj);
   const months = new Set([...byMonth.keys(), ...emptyByMonth.keys(), ...prior.priorKeys.keys()]);
   const pending = new Set((await readFile(RECAPS_PENDING_PATH, "utf8").catch(() => "")).split("\n").filter(Boolean));
-  let rewritten = 0;
+  const rewritten = [];
   await mkdir(RECAPS_ARCHIVE_DIR, { recursive: true });
   for (const month of [...months].sort()) {
     // A month whose live copy could not be read and that has no local copy
@@ -4672,12 +4674,12 @@ async function bakeLeagueRecapsInner(now, todayYmd, cutoff) {
     await writeFile(`${RECAPS_ARCHIVE_DIR}/${month}.json`, JSON.stringify({ fetchedAt, ...body }));
     if (changed) {
       pending.add(`${month}.json`);
-      rewritten++;
+      rewritten.push(month);
     }
   }
   await writeFile(RECAPS_PENDING_PATH, [...pending].sort().map((n) => `${n}\n`).join(""));
   const sizes = [...byMonth.keys()].sort().map((m) => `${m}:${byMonth.get(m).length}`).join(" ");
-  console.log(`RECAP-ARCHIVE rewritten=${rewritten} pending=${pending.size} archiveGets=${prior.archiveGets} months ${sizes}`);
+  console.log(`RECAP-ARCHIVE rewritten=${rewritten.length}${rewritten.length ? ` (${rewritten.join(" ")})` : ""} pending=${pending.size} archiveGets=${prior.archiveGets} months ${sizes}`);
 }
 
 // ── Write ─────────────────────────────────────────────────────────
