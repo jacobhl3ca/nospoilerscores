@@ -2675,11 +2675,21 @@ const hlFallbackChain = (sport, primaryChannel, homeTeam, awayTeam, broadcasts) 
   add(homeConf ? cfg.conferences[homeConf] : undefined);
   add(awayConf ? cfg.conferences[awayConf] : undefined);
   for (const name of broadcasts ?? []) add(cfg.networks.find((n) => n.names.includes(name))?.channel);
-  return channels.map((channel) => ({
-    channel,
-    titleTokens: cfg.channelTitleTokens?.[channel] ?? cfg.titleTokens,
-    ...(cfg.searchOnly ? { searchOnly: true } : {}),
-  }));
+  // Clean-title channels before `maskTitle` ones, stable within each group —
+  // mirrors buildCollegeFallbackChain (the AHA women's hockey case).
+  const masked = new Set(cfg.maskTitle ?? []);
+  const ordered = [...channels.filter((c) => !masked.has(c)), ...channels.filter((c) => masked.has(c))];
+  return ordered.map((channel) => {
+    const own = cfg.channelTitleTokens?.[channel];
+    return {
+      channel,
+      titleTokens: own ?? cfg.titleTokens,
+      ...(cfg.searchOnly ? { searchOnly: true } : {}),
+      // A channel's own token list beats the sport-wide HL_COMPETITION_TOKENS
+      // (AHA titles carry no gender word, so `women` would refuse every cut).
+      ...(own ? { ownTokens: true } : {}),
+    };
+  });
 };
 const hlHighlightTeamName = (sport, name, location) => {
   if (HL_LOCATION_NAME_SPORTS.has(sport)) return (location && String(location).trim()) || name;
@@ -3584,6 +3594,9 @@ async function bakeGameHighlights() {
             const chainIsPrimary = !lg.channel && !!HL_COLLEGE_CHANNELS[lg.sport]?.primaryFromChain;
             const channel = chainIsPrimary ? chain[0]?.channel : lg.channel;
             const fallbacks = chainIsPrimary ? chain.slice(1) : chain;
+            // When the chain's first channel has its own token list (AHA), the
+            // primary lookup must use it instead of the sport-wide tokens.
+            const primaryTokens = chainIsPrimary && chain[0]?.ownTokens ? chain[0].titleTokens : null;
             if (!event.id || !away || !home || (chainIsPrimary && !channel)) return [];
             let series = null;
             for (const note of comp?.notes ?? []) {
@@ -3608,7 +3621,7 @@ async function bakeGameHighlights() {
             const cflPlayoff = lg.sport === "cfl" && event.season?.type === 3
               ? hlCflPlayoffTokens(comp?.notes?.[0]?.headline)
               : null;
-            return [{ id: event.id, away, home, date: event.date, series, channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks }];
+            return [{ id: event.id, away, home, date: event.date, series, channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks, primaryTokens }];
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
@@ -3632,6 +3645,9 @@ async function bakeGameHighlights() {
         const dateStr = hlDateStr(item.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
         const compTokens = preseason ? HL_NFL_PRESEASON_TOKENS : (cflPlayoff ?? HL_COMPETITION_TOKENS[lg.sport] ?? null);
+        // The official slot's tokens: the chain-primary channel's own list when
+        // it has one (AHA), else the sport-wide tokens.
+        const primaryTokens = item.primaryTokens ?? compTokens;
         const preferExtended = !!competition;
         const primaryChannel = item.channel;
         const secondaryChannel = isFifa ? "FOX Sports" : (lg.secondaryChannel ?? primaryChannel);
@@ -3643,7 +3659,7 @@ async function bakeGameHighlights() {
         const carriedFallback = fallbacks.find((f) => sameChannel(prev.officialChannel, f.channel)) ?? null;
         const carriedOfficial = sameChannel(prev.officialChannel, primaryChannel) || carriedFallback ? prev.official : null;
         let officialChannel = carriedFallback ? carriedFallback.channel : primaryChannel;
-        const officialTokensFor = (fb) => (fb && !compTokens?.length ? fb.titleTokens : compTokens);
+        const officialTokensFor = (fb) => (fb?.ownTokens ? fb.titleTokens : fb && !compTokens?.length ? fb.titleTokens : fb ? compTokens : primaryTokens);
         const carriedExtended = sameChannel(prev.extendedChannel, secondaryChannel) ? prev.extended : null;
         // 1st button (official/primary) and 2nd button (extended/secondary),
         // deduped so the two buttons never play the same clip — mirrors the
@@ -3684,8 +3700,8 @@ async function bakeGameHighlights() {
         let official = prevOfficial ?? null;
         if (!official) {
           officialChannel = primaryChannel;
-          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, compTokens);
-          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week, cflWeekRequired)) || !(await hlVideoMatchesComp(official, compTokens)))) {
+          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, primaryTokens);
+          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week, cflWeekRequired)) || !(await hlVideoMatchesComp(official, primaryTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
           }
@@ -3718,7 +3734,7 @@ async function bakeGameHighlights() {
         // (see hlChannelSearchOfficial), primary first, then the chain.
         if (!official) {
           const channels = [
-            { channel: primaryChannel, tokens: compTokens },
+            { channel: primaryChannel, tokens: primaryTokens },
             ...fallbacks.map((fb) => ({ channel: fb.channel, tokens: officialTokensFor(fb) })),
           ];
           for (const c of channels) {

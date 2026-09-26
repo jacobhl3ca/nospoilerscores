@@ -1,5 +1,21 @@
 # HideScore — Master Backlog
 
+## 2026-09-26 — NCAA women's + men's soccer get columns; Atlantic Hockey America lights the AHA women's hockey games
+
+**Situation:** Jacob sent three YouTube links: a women's college soccer cut (fan channel) and two Atlantic Hockey America women's hockey cuts (Penn State–Ohio State, Lindenwood–Merrimack). Audit: ESPN serves both college soccer feeds (`soccer/usa.ncaa.w.1`, `soccer/usa.ncaa.m.1`, 40/60 games a Friday, coaches-poll rank on `curatedRank`) and the app had neither. NCAA women's hockey was in the app but its clip chain listed only ECAC Hockey, so every AHA-conference game (Penn State, Lindenwood, Mercyhurst, RIT, Robert Morris, Syracuse, Delaware) was dark. The 9/23 probe had left AHA out because every title prints the score; the `maskTitle` mechanism the efl/ligamx chains brought on 9/25 covers that now.
+
+**Built 2026-09-26** on `feat/ncaa-soccer-aha-clips` (worktree `~/hs-leagues`):
+- `ncaawsoc` / `ncaamsoc`: the full league plumbing (types, paths, opt-in windows 08-12→12-08 and 08-20→12-15, soccer rating/clock sets, poll rank, short codes `ws`/`ms`, labels "NCAAW Soccer"→"W. Soccer" / "NCAA Soccer", settings + switcher + news order, calendar durations, news paths, ESPN league marks, share-card + airings + TV catalog, both DARK for highlights). Team ids are soccer-specific; the school logo comes from `team.logo` on the event. `isPlayoff` never flips (no notes, no round words in the tournament feed) — open.
+- AHA in the `ncaawh` chain: `aha` conference + 7 team ids, `maskTitle`, and an EMPTY `channelTitleTokens` list (AHA titles carry no gender word; the sport-wide `women` token would refuse every cut). New `ownTokens` flag on a chain channel overrides the sport-wide tokens in GameHighlights (primary + fallback + modal retry) and in the bake (`primaryTokens`, `officialTokensFor`). Chains now sort `maskTitle` channels behind clean-title ones, so RIT at Clarkson takes the ECAC cut first.
+- Worker: `AHA_SCORELINE_RX` carve-out (strict + channel + both teams + the house "A 2, B 1 OT - Sept. 24, 2026" shape) passes the highlight-word gate and the score/spoiler skip for that channel only; the long-form date regex accepts "Sept." so the 9/24 and 9/25 cuts of the same pair are told apart by the date gate.
+- Re-probed 9/26: Hockey East and WCHA still post no per-game cut (WCHA: media day only after its 9/25 opener). NEWHA inactive.
+
+**Proof:** tsc clean, eslint 0 errors, test:unit 637/637 (new `ncaa-soccer-leagues` on a real 9/25 Stanford–SMU event, `youtube-aha-scoreline` through the real worker handler, chain tests extended), `highlights:check` all pass, `tv:catalog:check` up to date (44 leagues). Live worker before deploy: AHA lookups "No results" for all four linked games, ECAC control hit — the carve-out is what lights them.
+
+- [ ] **Deploy + read-back**: after merge, `/api/youtube?q=Ohio State vs Penn State highlights Sep 24, 2026&channel=Atlantic Hockey America&strict=1` must return a video id; the 9/25 query a different one; then the mini bake writes them.
+- [ ] **College soccer clips**: probe conference channels (ACC Digital Network, Big Ten, SEC) with a `soccer` token the way ncaavb was lit; the Real Woso Fan channel is not a trusted uploader.
+- [ ] **Men's College Cup 2026 dates**: window ends 12-15; re-read ESPN's calendar once the tournament is listed.
+
 ## 2026-09-22 — CFL highlight gates: spelled-out weeks, TSN's no-week re-uploads, team typos, an abbreviated age stamp
 
 **Situation:** QA probed all 61 completed CFL 2026 games against production (client/prebake query → `/api/youtube?…&channel=TSN&week=N&strict=1`). 51/61 right, 8 wrong: 3 served a Week 1 recap for a Week 6/8 query, 2 served a 2024 upload for a 2026 game (one live, one baked), 2 came back with no result though TSN had posted one, 1 shared a title format quirk with the no-result case. Root causes, all specific to TSN/CFL and inert for every other league sharing the same gates:
