@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getRecapsFor, formatRecapDuration, recapButtonText, rowRecapHeadings, stackedRecapHeadings, RECAP_STACK_MAX_PX, RECAP_COMPACT_MAX_PX, type RecapRecord } from "@/lib/recaps";
 import { leadChannelBlocksEmbeds } from "@/lib/youtube";
-import type { ShareCardMeta } from "@/lib/shareCard";
+import type { PlayHandler, PlayOpts } from "@/components/NewsColumn";
 
 // The league-wide recap — the NFL's "Week 1", MLB's "Best of the day", NBA's
 // "Top 10 plays of the night", EPL / MLS "Every goal" — as one compact pill on
@@ -39,6 +39,11 @@ import type { ShareCardMeta } from "@/lib/shareCard";
 // stacks the same way: "Playoff" on top, the three buttons in a row under it.
 // When the day also has a recap, the recap keeps the heading and a bracket
 // icon joins its buttons, last.
+//
+// `onPlayList`: each button opens its cut with the pill's other cuts as
+// siblings, so the modal pages through them — Shift+←/→ or ↑/↓, or the
+// ‹ › buttons — without closing (Jacob 9/26: "shift click to cycle the best
+// of day highlights").
 
 // Outer pill and button classes per layout (see the header note). Shared by
 // the real pill and the reserveSlot spacer so their heights always agree.
@@ -63,8 +68,7 @@ export default function LeagueRecapCard({
   lastPlayedDate,
   reserveSlot = false,
   onShowPlayoffs,
-  onPlayHighlight,
-  onPlayEmbed,
+  onPlayList,
 }: {
   sport: string;
   date: string;
@@ -80,8 +84,7 @@ export default function LeagueRecapCard({
   // Opens the playoff picture on the given tab. Set only when the playoffs
   // pill is due (see the header note).
   onShowPlayoffs?: ((tab: PlayoffsTab) => void) | null;
-  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
-  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
+  onPlayList?: PlayHandler;
 }) {
   const ymd = lastPlayedDate || date;
   const [records, setRecords] = useState<RecapRecord[]>([]);
@@ -241,23 +244,31 @@ export default function LeagueRecapCard({
     );
   }
 
-  const play = (rec: RecapRecord) => {
-    if (rec.playbackUrl) {
-      // MLB.com HLS — the same path the per-game 3m / 10m buttons take.
-      if (onPlayEmbed) onPlayEmbed("", rec.pageUrl, "MLB.com", null, rec.playbackUrl, rec.poster ?? null);
-      return;
-    }
-    if (!rec.videoId || !onPlayHighlight) return;
-    // A watch?v= fallback has no search_query, so a failed embed goes straight
-    // to the "Watch on YouTube" card. Channels that refuse embeds (NFL, the
-    // clubs) carry the strict channel gate so VideoModal skips the player —
-    // unless the bake measured THIS video as embeddable (the NFL's Top 15 and
-    // Every TD cuts are; Sunday's best is not).
-    const base = `https://www.youtube.com/watch?v=${rec.videoId}`;
-    const fallbackUrl = rec.embeddable !== true && leadChannelBlocksEmbeds([rec.channel])
+  // A watch?v= fallback has no search_query, so a failed embed goes straight
+  // to the "Watch on YouTube" card. Channels that refuse embeds (NFL, the
+  // clubs) carry the strict channel gate so VideoModal skips the player —
+  // unless the bake measured THIS video as embeddable (the NFL's Top 15 and
+  // Every TD cuts are; Sunday's best is not).
+  const youtubeFallback = (rec: RecapRecord, videoId: string) => {
+    const base = `https://www.youtube.com/watch?v=${videoId}`;
+    return rec.embeddable !== true && leadChannelBlocksEmbeds([rec.channel])
       ? `${base}&nss_strict=1&nss_channels=${encodeURIComponent(rec.channel)}`
       : base;
-    onPlayHighlight(rec.videoId, fallbackUrl);
+  };
+  // The modal payload for one cut: MLB.com HLS (the same path the per-game
+  // 3m / 10m buttons take) or a YouTube id. Null = nothing to play.
+  const toOpts = (rec: RecapRecord): PlayOpts | null => {
+    if (rec.playbackUrl) return { fallbackUrl: rec.pageUrl, playbackUrl: rec.playbackUrl, poster: rec.poster ?? null, sourceLabel: "MLB.com" };
+    if (rec.videoId) return { videoId: rec.videoId, fallbackUrl: youtubeFallback(rec, rec.videoId) };
+    return null;
+  };
+  const playableRecs = records.filter((r) => toOpts(r) !== null);
+  const playable = playableRecs.map((r) => toOpts(r) as PlayOpts);
+
+  const play = (rec: RecapRecord) => {
+    const opts = toOpts(rec);
+    if (!opts || !onPlayList) return;
+    onPlayList({ ...opts, siblings: playable, index: playableRecs.indexOf(rec) });
   };
 
   const candidates = stacked ? stackedRecapHeadings(records[0].heading) : rowRecapHeadings(records[0].heading);

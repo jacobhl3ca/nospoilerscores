@@ -402,3 +402,47 @@ test("no record for the day → no pill, no layout change", async ({ page }) => 
   await page.waitForTimeout(1000);
   await expect(page.locator("[data-league-recap]")).toHaveCount(0);
 });
+
+test("a Best-of-the-day clip pages to the pill's other cuts: Shift+→ / Shift+← and the › ‹ buttons", async ({ page }) => {
+  await page.clock.setFixedTime(NOW);
+  await seed(page);
+  await page.route("**/football/nfl/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: NFL_EVENTS }));
+  await page.route("**/baseball/mlb/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: MLB_EVENTS }));
+  await page.route("**/news/recaps.json", route => route.fulfill({ status: 200, contentType: "application/json", body: RECAPS_MLB_FOUR }));
+  await page.route("**/news/highlights.json", route => route.fulfill({ status: 200, contentType: "application/json", body: HIGHLIGHTS }));
+  await page.route("https://example.invalid/**", route => route.abort());
+
+  await page.goto("/yesterday");
+  const mlbPill = page.locator('[data-league-recap="mlb"]');
+  await expect(mlbPill).toBeVisible({ timeout: 15_000 });
+  // The address bar follows the open clip (modalShareHref), so it names the cut.
+  const onCut = (key: string) => expect.poll(() => decodeURIComponent(page.url())).toContain(`${key}.m3u8`);
+
+  await mlbPill.locator('[data-recap-key="top5"]').click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await onCut("top5");
+  const prev = dialog.getByRole("button", { name: "Previous post" });
+  const next = dialog.getByRole("button", { name: "Next post" });
+  await expect(prev).toBeDisabled();
+
+  await page.keyboard.press("Shift+ArrowRight");
+  await onCut("realfast");
+  await next.click();
+  await onCut("fastcast");
+  await page.keyboard.press("Shift+ArrowRight");
+  await onCut("oddities");
+  await expect(next).toBeDisabled();
+  await page.keyboard.press("Shift+ArrowLeft");
+  await onCut("fastcast");
+  await prev.click();
+  await onCut("realfast");
+
+  // Opening a middle cut starts there, with both directions live.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await mlbPill.locator('[data-recap-key="fastcast"]').click();
+  await onCut("fastcast");
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Previous post" })).toBeEnabled();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Next post" })).toBeEnabled();
+});
