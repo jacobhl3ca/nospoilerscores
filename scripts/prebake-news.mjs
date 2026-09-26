@@ -17,7 +17,7 @@ import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
 } from "./lib/fotmob.mjs";
-import { channelSearchHandle, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
+import { channelSearchHandle, channelSearchMinSec, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 import { pickEspnGameClip } from "./lib/espn-clip.mjs";
 
@@ -3365,6 +3365,7 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
     compOk: (title) => titleHasCompToken(title, compTokens),
     gameMs: Date.parse(gameIso),
     exclude,
+    minSec: channelSearchMinSec(channel),
   });
   for (const { videoId } of picks) {
     if (!(await hlVideoMatchesChannel(videoId, channel))
