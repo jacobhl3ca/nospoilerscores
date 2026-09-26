@@ -37,7 +37,7 @@ import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
-import { getRecapsFor } from "@/lib/recaps";
+import { getRecapsFor, getRecapsForSync, loadBakedRecaps } from "@/lib/recaps";
 import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
@@ -116,7 +116,7 @@ function topEventsOptions(p: Preferences): TopEventsOptions {
 function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): BestYesterdayOptions {
   const yesterday = fromYmd(prevYmd(date));
   const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && isLeagueActive(l, yesterday));
-  const auto = pickAndAssignLeagues(fromYmd(date), slotCount).map((l) => l.sport);
+  const auto = pickAndAssignLeagues(fromYmd(date), slotCount, p.hiddenLeagues).map((l) => l.sport);
   const board = [p.firstLeague, p.secondLeague, p.thirdLeague, p.fourthLeague, p.fifthLeague]
     .slice(0, slotCount)
     .map((pref, i) => (pref === undefined ? auto[i] : pref))
@@ -1336,8 +1336,17 @@ export default function HomeContent({
           date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3,
           topEventsOptions(prefsRef.current),
           bestYesterdayOptions(prefsRef.current, date, isWideViewport() ? 5 : 3),
+          prefsRef.current.hiddenLeagues,
         ),
         loadBakedHighlights(),
+        // Recaps too, so the "Best of day" / "Week N" pill is in the board's
+        // first paint. Without this the pill's fetch only started once the
+        // columns had rendered — one extra round trip after every card was
+        // already up, and the sibling columns' first cards jumped down when
+        // the row got reserved (Jacob 9/26). The loader never rejects; the
+        // race caps what a stalled R2 read can cost the board — past it the
+        // pill falls back to landing when the file does, as before.
+        Promise.race([loadBakedRecaps(), new Promise<void>((r) => setTimeout(r, 1500))]),
       ]);
       // A newer fetch started while we awaited — discard this now-stale result
       // rather than paint the wrong day's board over the current one.
@@ -1383,7 +1392,9 @@ export default function HomeContent({
   }, [selectedDate]);
 
   // isWide is a dep so resizing across the 5-column breakpoint silently
-  // fetches (or drops) the extra two leagues.
+  // fetches (or drops) the extra two leagues. hiddenKey is one too: turning a
+  // league off in Settings moves its column to the next league at once.
+  const hiddenKey = (prefs.hiddenLeagues ?? []).join(",");
   useEffect(() => {
     if (!mountedRef.current || !selectedDate) return;
     fetchData(selectedDate, prefs.thirdLeague, {
@@ -1394,7 +1405,7 @@ export default function HomeContent({
       fifth: prefs.fifthLeague,
     }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide]);
+  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide, hiddenKey]);
 
   // The Top events column is the one column whose CONTENTS depend on prefs
   // other than its slot — the ranking pool (auto/manual), the count and the
@@ -1414,8 +1425,9 @@ export default function HomeContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.topEventsMode, prefs.topEventsLeagues, prefs.topEventsCount, prefs.favoriteTeams]);
 
-  // Same for Best of yesterday: its pool is the user's leagues, so hiding one
-  // (or starring / opting into one) re-pulls the column while it is showing.
+  // Same for Best of yesterday: its pool is the user's leagues, so starring or
+  // opting into one re-pulls the column while it is showing. (Hiding one
+  // re-pulls the whole board — see hiddenKey above.)
   const bestOnBoard = leagues.some((l) => l.sport === "best");
   useEffect(() => {
     if (!mountedRef.current || !selectedDate || !bestOnBoard) return;
@@ -1427,7 +1439,7 @@ export default function HomeContent({
       fifth: prefs.fifthLeague,
     }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.hiddenLeagues, prefs.favoriteLeagues, prefs.shownLeagues]);
+  }, [prefs.favoriteLeagues, prefs.shownLeagues]);
 
   // Live-clock polling: while any game on the board is in-progress, silently
   // refetch every 10s so the Q4/period and clock keep advancing (matches
@@ -2065,8 +2077,8 @@ export default function HomeContent({
   const autoSlotSports = useMemo(() => {
     if (!selectedDate) return [] as Sport[];
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
-    return pickAndAssignLeagues(viewDate, slotCount).map((l) => l.sport);
-  }, [selectedDate, slotCount]);
+    return pickAndAssignLeagues(viewDate, slotCount, prefs.hiddenLeagues).map((l) => l.sport);
+  }, [selectedDate, slotCount, prefs.hiddenLeagues]);
 
   // ‹ › cycling cursor, per slot. Lives up here (in a ref) because the column
   // component remounts whenever its league changes — per-column state would
@@ -2529,8 +2541,22 @@ export default function HomeContent({
     return pairs.join(",");
   })();
   const [recapSports, setRecapSports] = useState<{ key: string; sports: Set<string> }>({ key: "", sports: new Set() });
+  const recapPairs = recapQueryKey ? recapQueryKey.split(",").map((p) => p.split(":") as [string, string]) : [];
+  // Synchronous answer when recaps.json is already in the session cache
+  // (fetchData loads it with the scores), so the row is reserved in the same
+  // paint as the cards. null = cache cold, the effect below resolves it.
+  const recapSportsSync = (() => {
+    if (!recapPairs.length) return null;
+    const hits = new Set<string>();
+    for (const [sport, ymd] of recapPairs) {
+      const list = getRecapsForSync(sport, ymd);
+      if (list === null) return null;
+      if (list.length) hits.add(sport);
+    }
+    return hits;
+  })();
   useEffect(() => {
-    if (!recapQueryKey) return;
+    if (!recapQueryKey || recapSportsSync) return;
     let alive = true;
     const pairs = recapQueryKey.split(",").map((p) => p.split(":") as [string, string]);
     Promise.all(pairs.map(([sport, ymd]) => getRecapsFor(sport, ymd).then((list) => (list.length ? sport : null)).catch(() => null)))
@@ -2540,6 +2566,7 @@ export default function HomeContent({
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recapSportsSync is derived from recapQueryKey + the session cache
   }, [recapQueryKey]);
   // A stale set from the previous date/column mix never reserves a row.
   // Today's MLB column puts a "Playoffs" pill in the same row during
@@ -2549,7 +2576,9 @@ export default function HomeContent({
   const bracketPillShown = bracketPillDue && sortedLeagues
     .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
     .some((l) => l.sport === "mlb");
-  const anyRecap = (recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown;
+  const anyRecap = (recapSportsSync
+    ? recapSportsSync.size > 0
+    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown;
 
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
@@ -3811,8 +3840,7 @@ export default function HomeContent({
                   onShowPlayoffs={bracketPillDue && league.sport === "mlb"
                     ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
                     : null}
-                  onPlayHighlight={openVideoModal}
-                  onPlayEmbed={openEmbedModal}
+                  onPlayList={playNewsVideo}
                 />
               )
               : undefined;

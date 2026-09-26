@@ -204,8 +204,10 @@ export interface Preferences {
   // header — switching only via Settings).
   leagueSwitcherMode?: "dropdown" | "arrows" | "both" | "off";
   // Leagues the user removed from the homepage switcher (header dropdown /
-  // arrow cycling / news swap / + button picks). Settings' slot pickers stay
-  // unfiltered so a hidden league can still be pinned deliberately.
+  // arrow cycling / news swap / + button picks) and from the board itself: an
+  // Auto column skips them and a column pinned to one shows the next league
+  // (Jacob 9/26). Settings' slot pickers stay unfiltered; pinning a hidden
+  // league there turns it back on.
   hiddenLeagues?: Sport[];
   // Opt-in leagues the user explicitly added to the homepage switcher. Leagues
   // marked excludeFromAuto start unchecked, so this separate allowlist lets a

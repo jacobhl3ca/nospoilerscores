@@ -339,15 +339,15 @@ export default function SettingsPanel({
   const [recordsOpen, setRecordsOpen] = useState(false);
   // Columns 4-5 exist only on a wide board, so their slots hide elsewhere.
   const isWideBoard = useMediaQuery(WIDE_BOARD_QUERY);
-  // Android shell only — see the Rate link in the legal row below.
-  const [isAndroidApp, setIsAndroidApp] = useState(false);
+  // Native shells only — see the Rate link in the legal row below.
+  const [appStore, setAppStore] = useState<"ios" | "android" | null>(null);
   useEffect(() => {
     if (!open) return;
     const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
     setCanUseGoogle(!cap?.isNativePlatform?.() || hasNativeGoogleBridge());
     setShowLinkMore(false);
     setShowEmailForm(false);
-    setIsAndroidApp(!!cap?.isNativePlatform?.() && cap?.getPlatform?.() === "android");
+    setAppStore(cap?.isNativePlatform?.() ? (cap?.getPlatform?.() === "android" ? "android" : "ios") : null);
     let alive = true;
     getAuthState().then((a) => { if (alive) setAuthState(a); });
     return () => { alive = false; };
@@ -506,12 +506,19 @@ export default function SettingsPanel({
       return pref ?? shown;
     });
     resolved[slotIdx] = sport;
+    // Pinning a league that is turned off in the switcher list turns it back
+    // on: the board shows the next league in place of a turned-off one, so
+    // the pin would otherwise do nothing.
+    const hiddenLeagues = (prefs.hiddenLeagues ?? []).filter((s) => s !== sport);
     updatePrefs({
       firstLeague: resolved[0],
       secondLeague: resolved[1],
       thirdLeague: resolved[2],
       fourthLeague: resolved[3],
       fifthLeague: resolved[4],
+      ...(hiddenLeagues.length !== (prefs.hiddenLeagues ?? []).length
+        ? { hiddenLeagues: hiddenLeagues.length ? hiddenLeagues : undefined }
+        : {}),
     });
   };
 
@@ -1825,17 +1832,26 @@ export default function SettingsPanel({
             >
               Privacy
             </a>
-            {/* Android shell only: the web has no store to rate on and iOS has a
-                different one. A plain anchor is what makes this work — hidescore.com
-                is the server.url host, so a foreign host falls through Capacitor's
-                Bridge.launchIntent to an ACTION_VIEW Intent and the Play Store app
-                opens on the listing. An in-app browser would only show the store's
-                web page, which has no rating control. */}
-            {isAndroidApp && (
+            {/* Native shells only: the web has no store to rate on. A plain anchor
+                is what makes this work — hidescore.com is the server.url host and
+                there is no allowNavigation list, so a foreign host leaves the
+                WebView. Android: Capacitor's Bridge.launchIntent fires an
+                ACTION_VIEW Intent and the Play Store app opens on the listing.
+                iOS: WebViewDelegationHandler cancels the top-level navigation and
+                calls UIApplication.shared.open; apps.apple.com is a universal link,
+                so the App Store app opens on the listing with the write-review
+                sheet. An in-app browser would only show the store's web page, which
+                has no rating control. A LINK is all Apple allows here: no native
+                prompt from a button, no "do you like it?" pre-filter, no reward. */}
+            {appStore && (
               <>
                 <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
                 <a
-                  href="https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
+                  href={
+                    appStore === "ios"
+                      ? "https://apps.apple.com/app/id6766885311?action=write-review"
+                      : "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
+                  }
                   className="underline underline-offset-2 transition-opacity hover:opacity-80"
                   style={{ color: "var(--text-muted)" }}
                 >
