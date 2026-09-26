@@ -401,6 +401,19 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 //     round-of-16 tie), i.e. the wrong-match class again.
 // Re-probe once the 2026-27 knockouts exist; any relight needs ≥4/5 and a
 // competition title token.
+//
+// nations (UEFA Nations League, added 2026-09-26, DARK). Probed against the
+// LIVE worker with strict=1 on 10 completed 2026-09-24/25 league-phase
+// fixtures, bare query shape:
+//   "FOX Soccer" 1/10, and that one was WRONG — Belgium–Italy served the
+//     Women's Euro 2025 meeting.
+//   "UEFA" 1/10, also WRONG — Germany–Netherlands served a "Classic Nations
+//     League Highlights" re-upload of an older tie.
+//   "FOX Sports" (the US rightsholder; ESPN names FS1/FS2) 3/10, all three
+//     titled "… Highlights ⚽ UEFA Nations League" — right competition, but
+//     under the 4/5 gate, and the same two nations meet again in the knockouts.
+// Re-probe FOX Sports with a "nations league" title token after the
+// October matchdays; a relight needs ≥4/5 and 0 wrong.
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "copadelrey",
   "cricket",
@@ -417,6 +430,7 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "rugbytest",
   "ufl",
   "uecl",
+  "nations",
 ]);
 
 // True when a league has no exact approved channel. Callers must render no

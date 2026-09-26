@@ -195,6 +195,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   facup: "FA Cup",
   copadelrey: "Copa del Rey",
   dfbpokal: "DFB-Pokal",
+  nations: "UEFA Nations League",
   cricket: "IPL",
   sixnations: "Six Nations",
   rugbywc: "Rugby World Cup",

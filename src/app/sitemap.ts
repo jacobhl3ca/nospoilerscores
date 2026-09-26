@@ -52,6 +52,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/ufc-results-without-spoilers",
     "/la-liga-without-spoilers",
     "/mls-highlights-without-spoilers",
+    // Added 2026-09-26 — the other three UEFA competitions, with the Nations
+    // League column.
+    "/europa-league-without-spoilers",
+    "/conference-league-without-spoilers",
+    "/nations-league-without-spoilers",
     "/best-spoiler-free-sports-sites",
     "/redzone-for-every-sport",
     "/faq",
@@ -120,6 +125,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/ufc-results-without-spoilers",
     "/la-liga-without-spoilers",
     "/mls-highlights-without-spoilers",
+    // Added 2026-09-26. Same specificity gate as the batch above, and each one
+    // answers a spoiler mechanism the UCL page cannot: the Europa League's
+    // Thursday rounds and its all-at-3:00-pm final matchday, the Conference
+    // League's six Thursdays and 10:30 am ET Almaty starts (and why it has no
+    // highlight button), the Nations League's six-days-in-a-row windows. Dates,
+    // ET kickoffs and US broadcasters verified on ESPN the day they shipped.
+    "/europa-league-without-spoilers",
+    "/conference-league-without-spoilers",
+    "/nations-league-without-spoilers",
   ]);
 
   // Build timestamp, for the boards whose rendered content really does change

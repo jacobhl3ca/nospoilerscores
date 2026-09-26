@@ -148,6 +148,9 @@ export default function ChampionsLeagueWithoutSpoilersPage() {
       ctaLabel="Open the Champions League without spoilers"
       ctaHref="/today"
       links={[
+        { href: "/europa-league-without-spoilers", label: "Europa League" },
+        { href: "/conference-league-without-spoilers", label: "Conference League" },
+        { href: "/nations-league-without-spoilers", label: "Nations League" },
         { href: "/premier-league-without-spoilers", label: "Premier League" },
         { href: "/la-liga-without-spoilers", label: "La Liga" },
         { href: "/mls-highlights-without-spoilers", label: "MLS highlights" },

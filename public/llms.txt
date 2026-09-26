@@ -49,7 +49,7 @@ basketball (men's and women's), college hockey, college volleyball, college
 baseball and softball, CFL, UFL. Soccer: Premier League, Champions League,
 Europa League, Conference League, La Liga, Serie A, Bundesliga, Ligue 1, MLS,
 Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, FA Cup,
-Copa del Rey, DFB-Pokal, plus the World Cup, the Euros and AFCON in their
+Copa del Rey, DFB-Pokal, the UEFA Nations League, plus the World Cup, the Euros and AFCON in their
 years. Also Formula 1, NASCAR, IndyCar, UFC, boxing, the four golf majors, the
 four tennis Grand Slams, cricket (IPL), rugby, chess and poker.
 
@@ -85,6 +85,9 @@ button rather than serving a re-upload whose title gives the result away.
 - https://hidescore.com/soccer-highlights-without-spoilers
 - https://hidescore.com/premier-league-without-spoilers
 - https://hidescore.com/champions-league-without-spoilers
+- https://hidescore.com/europa-league-without-spoilers
+- https://hidescore.com/conference-league-without-spoilers
+- https://hidescore.com/nations-league-without-spoilers
 - https://hidescore.com/la-liga-without-spoilers
 - https://hidescore.com/mls-highlights-without-spoilers
 - https://hidescore.com/liga-mx-scores-without-spoilers

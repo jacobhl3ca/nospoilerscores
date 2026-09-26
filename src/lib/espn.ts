@@ -173,6 +173,11 @@ const SPORT_PATHS: Record<Sport, string> = {
   facup: "/soccer/eng.fa/scoreboard",
   copadelrey: "/soccer/esp.copa_del_rey/scoreboard",
   dfbpokal: "/soccer/ger.dfb_pokal/scoreboard",
+  // UEFA Nations League (added 2026-09-26). Probed live via site.web.api the
+  // same day: 200, standard soccer event shape, national teams under
+  // /teamlogos/countries/. Single dates only — like the college feeds, a
+  // dates=A-B range comes back empty, so windows were probed day by day.
+  nations: "/soccer/uefa.nations/scoreboard",
   // Cricket (added 2026-08-03). ESPN's cricket API is keyed by ESPNcricinfo
   // SERIES id, not by a league slug — 8048 is the IPL. Verified 2026-08-03: it
   // returns a full 62-date calendar (03-28 → 05-31) and standard two-competitor
@@ -371,6 +376,37 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "ucl", label: "UCL", startDate: "09-06", endDate: "06-06", kickoffDate: "09-08", championshipDate: "06-05", verifiedFor: 2026 },
   // ── UEFA Europa League (Sep group → late May Final) ──
   { sport: "uel", label: "UEL", startDate: "09-14", endDate: "05-28", kickoffDate: "09-16", championshipDate: "05-26", verifiedFor: 2026 },
+  // ── UEFA Conference League (added 2026-09-14; moved beside UEL 2026-09-26 so
+  // the three UEFA club competitions sit together in the switcher) ──
+  // Conference League: MD1 2026-10-15 (18 fixtures, Paramount+), league phase
+  // through 12-17; 2026-27 final Istanbul 2027-06-02 per UEFA (ESPN has not
+  // listed the knockouts yet — far edge unverified by fixtures). Re-probed
+  // 2026-09-26: 0 on 10-13/10-14/10-16, 18 on 10-15/10-22/12-17, 0 on 12-18 and
+  // on every Jan–Jun 2027 Thursday tried.
+  { sport: "uecl", label: "Conference League", startDate: "10-13", kickoffDate: "10-15", endDate: "06-03", championshipDate: "06-02", verifiedFor: 2026, excludeFromAuto: true },
+  // ── UEFA Nations League (added 2026-09-26) — the national-team competition ──
+  // BIENNIAL across two calendar years: the league phase runs Sep–Nov of an
+  // EVEN year (2026), the quarterfinals, promotion/relegation playoffs and the
+  // four-team Finals run Mar + Jun of the next ODD year (2027), and the odd→even
+  // autumn in between belongs to Euro/World Cup qualifying. One Sep→Jun window
+  // would call it in season for all of 2027-28, so it is three windows, each
+  // yearCycle-gated on its own calendar year (same pattern as nationschamp).
+  // League phase, read off ESPN one date at a time on 2026-09-26 (uefa.nations
+  // rejects ranges): 0 on 09-20/22/23, games every day 09-24 → 09-29 (8–10 a
+  // day), 0 on 09-30, games 10-01 → 10-06, 0 on 10-07 and 10-14, 0 on 11-10/11,
+  // games 11-12 → 11-17, 0 on 11-18/19. The Oct 7 → Nov 11 gap is five weeks,
+  // same order as UCL's gaps between matchdays, so it stays one window.
+  { sport: "nations", label: "Nations League", startDate: "09-22", kickoffDate: "09-24", endDate: "11-18", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
+  // Knockouts ⚠️ PROVISIONAL: ESPN lists no 2027 fixture yet (every date
+  // 03-18 → 03-31 and 06-01 → 06-13 2027 probed empty on 2026-09-26). The
+  // edges bracket the 2024-25 running on the same feed — quarterfinals +
+  // relegation playoffs 2025-03-20 → 03-23, semifinals 06-04/05, third place +
+  // final 06-08 — widened to cover the whole March and June FIFA windows.
+  // Re-probe once ESPN lists the draw; being wrong here only costs an empty or
+  // missing opt-in column, never a wrong score. championshipDate is
+  // deliberately absent until the Finals date is on the feed.
+  { sport: "nations", label: "Nations League", startDate: "03-18", endDate: "03-31", excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
+  { sport: "nations", label: "Nations League", startDate: "06-01", endDate: "06-13", excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
   // ── The other four big-five domestic leagues (Aug–May) ──
   // All excludeFromAuto: the 3-column default layout is already tuned around
   // NBA/MLB/NHL/NFL + EPL/UCL, and four more Aug–May soccer leagues competing
@@ -430,10 +466,6 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // calendar. Rule: open when the top-division clubs enter, close on the final.
   // Qualifying rounds (Copa del Rey Sep 26 / Oct 3: 20 clubs, no logos) stay
   // outside the window on purpose.
-  // Conference League: MD1 2026-10-15 (18 fixtures, Paramount+), league phase
-  // through 12-17; 2026-27 final Istanbul 2027-06-02 per UEFA (ESPN has not
-  // listed the knockouts yet — far edge unverified by fixtures).
-  { sport: "uecl", label: "Conference League", startDate: "10-13", kickoffDate: "10-15", endDate: "06-03", championshipDate: "06-02", verifiedFor: 2026, excludeFromAuto: true },
   // FA Cup: third round proper (PL clubs enter) 2027-01-09, final 2027-05-22
   // per the FA's published calendar; ESPN has no 2026-27 fixtures yet, so both
   // edges are checked against the 2025-26 running (01-09 → 05-16).
@@ -824,7 +856,7 @@ const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
-  uecl: "⚽", facup: "⚽", copadelrey: "⚽", dfbpokal: "⚽",
+  uecl: "⚽", facup: "⚽", copadelrey: "⚽", dfbpokal: "⚽", nations: "⚽",
   cricket: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
   ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", esports: "🎮", top: "⭐",
 };
@@ -876,6 +908,7 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   ligamx: "soccer", nwsl: "soccer", efl: "soccer", libertadores: "soccer",
   saudi: "soccer", fifa: "soccer", euro: "soccer", afcon: "soccer",
   uecl: "soccer", facup: "soccer", copadelrey: "soccer", dfbpokal: "soccer",
+  nations: "soccer",
   golf: "majors", tennis: "majors",
   f1: "other", nascar: "other", indycar: "other", ufc: "other",
   boxing: "other", cricket: "other", chess: "other", poker: "other",
@@ -1116,6 +1149,11 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   // games. UEL one notch below — Europa nights pair with UCL but UCL wins.
   ucl: 10,
   uel: 11,
+  // The other two UEFA competitions sort with UEL (2026-09-26). Both are
+  // excludeFromAuto, so the number only orders the switcher; the stable sort
+  // keeps the catalog order (UEL, Conference League, Nations League) on the tie.
+  uecl: 11,
+  nations: 11,
   mls: 12,
   // The other big-five domestic leagues sort right below MLS, in the order a
   // US viewer is most likely to want them. excludeFromAuto means these never
@@ -1459,6 +1497,10 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   facup:        { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   copadelrey:   { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   dfbpokal:     { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
+  // Nations League (2026-09-26): the UCL row. League-phase games end at 90'
+  // like UCL's; the quarterfinals and Finals go to extra time like UCL's
+  // knockouts, so the UCL overtime bonus fits both halves.
+  nations:      { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   euro:         { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   afcon:        { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   // Cricket never reaches the generic scorer — calculateRating hands a T20
@@ -1514,7 +1556,7 @@ const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
 const SOCCER_SPORTS = new Set<Sport>([
   "epl", "mls", "ucl", "uel", "fifa", "laliga", "seriea", "bundesliga", "ligue1",
   "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi",
-  "uecl", "facup", "copadelrey", "dfbpokal",
+  "uecl", "facup", "copadelrey", "dfbpokal", "nations",
 ]);
 const FULL_MATCH_SECONDS = 5400;
 
@@ -2212,7 +2254,7 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
   // 2026-09-14): altGameNote is "English FA Cup, Third Round", "German Cup,
   // First Round", "UEFA Conference League, League Phase" — the ordinal-round
   // and league-phase forms are cup-only and never carry a result.
-  if (/^(group [a-l]|round of \d+|quarter-?finals?|semi-?finals?|final|third place(?: match)?|matchday \d+|knockout(?: round)?(?: play-?offs?)?|(?:preliminary|qualifying|first|second|third|fourth|fifth|sixth) round|league phase)$/i.test(seg)) {
+  if (/^(group [a-l]|group [a-d][1-4]|round of \d+|quarter-?finals?|semi-?finals?|final|third place(?: match)?|matchday \d+|knockout(?: round)?(?: play-?offs?)?|(?:preliminary|qualifying|first|second|third|fourth|fifth|sixth) round|league phase)$/i.test(seg)) {
     return seg;
   }
   const slug = (seasonSlug ?? "").toLowerCase().trim();
@@ -2242,6 +2284,12 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     "league-phase": "League Phase",
     "knockout-round-playoffs": "Knockout Round Playoffs",
     "knockout-round-play-offs": "Knockout Round Playoffs",
+    // Nations League (read 2026-09-26 off the 2024-25 knockouts): the altGameNote
+    // "UEFA Nations League, Relegation Playoffs" misses the pattern above, so the
+    // slug carries it. Its league-phase games read "…, Group A2" (League A,
+    // group 2), which the `group [a-d][1-4]` arm above passes through.
+    "relegation-playoffs": "Relegation Playoffs",
+    "promotion-playoffs": "Promotion Playoffs",
   };
   return slugMap[slug] ?? null;
 }
@@ -2846,6 +2894,7 @@ export function espnGameUrl(game: Game): string {
     case "facup":
     case "copadelrey":
     case "dfbpokal":
+    case "nations":
       return `https://www.espn.com/soccer/match/_/gameId/${game.id}`;
     // ESPN serves cricket off its India edition; 8048 is the IPL series id
     // (same id as SPORT_PATHS). The /scorecard/ path is the per-match page.
@@ -2953,6 +3002,12 @@ export function sportStreamFallback(sport: Sport): string {
     // "Paramount+" broadcast (108/108 league-phase, 45/45 knockout, read
     // 2026-09-14) — CBS holds all three UEFA club competitions in the US.
     case "uecl": return "https://www.paramountplus.com/";
+    // Nations League: FOX holds the US rights — the 2026-27 league-phase slate
+    // names FS1 / FS2 on the games ESPN lists a broadcaster for (read
+    // 2026-09-26), and the 2025 Finals aired on FS1/FOX. FOX's own competition
+    // page (200, "UEFA Nations League News, Scores, & Standings | FOX Sports");
+    // the /uefa-nations-league slug 301s to the generic /soccer page.
+    case "nations": return "https://www.foxsports.com/soccer/nations-league";
     // FA Cup / Copa del Rey / DFB-Pokal: ESPN+ on every 2025-26 fixture that
     // named a broadcaster (FA Cup 63/63 from the third round, Copa del Rey
     // 18/18 knockouts, DFB-Pokal 43/63), read 2026-09-14.

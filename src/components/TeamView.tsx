@@ -55,6 +55,9 @@ const TWO_CALENDAR_YEAR_SPORTS = new Set<Sport>([
   "ligamx", "efl", "saudi",
   // Conference League and the three domestic cups all run autumn → late spring.
   "uecl", "facup", "copadelrey", "dfbpokal",
+  // Nations League: a league phase in the autumn of an even year, knockouts in
+  // the following spring/summer — ESPN files it as one season across both.
+  "nations",
 ]);
 
 // Fallback multi-year window so a season that spans (or hasn't filled) the
