@@ -187,9 +187,24 @@ test("ratings mode keeps ESPN's order instead of re-sorting by rating", async ({
   expect(await cardNames(page)).toEqual(EXPECTED);
 });
 
-test("the column switcher offers ESPN front page on today's board", async ({ page }) => {
+// Opt-in while it is tested (Jacob 9/26: "default off for all"): no row
+// until Settings turns it on or a column pins it. These seeds pin a real
+// league in column 3: `thirdLeague: undefined` would vanish when the init
+// script's argument is serialized, leaving the base "top" pin in place.
+test("the column switcher has no ESPN front page row by default", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
-  await seed(page, { thirdLeague: undefined, hiddenLeagues: [] });
+  await seed(page, { thirdLeague: "ncaaf", hiddenLeagues: [] });
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
+  await page.locator('button[title="Switch league"]').first().click();
+  const menu = page.getByRole("dialog", { name: "Switch league" }).first();
+  await expect(menu.getByRole("button", { name: "Auto" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /ESPN front page/ })).toHaveCount(0);
+});
+
+test("turned on, the column switcher offers ESPN front page on today's board", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { thirdLeague: "ncaaf", hiddenLeagues: [], shownLeagues: ["top"] });
   await page.goto("/");
   await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
   await page.locator('button[title="Switch league"]').first().click();
@@ -240,5 +255,22 @@ test("Settings: the Across leagues list turns ESPN front page off and on", async
     .toContain("top");
   await box.check();
   await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}").hiddenLeagues ?? []))
+    .not.toContain("top");
+});
+
+test("Settings: ESPN front page starts unticked, and ticking it adds it to the switcher", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { thirdLeague: "ncaaf" });
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
+  await page.locator('[aria-label="Open settings"]').first().click();
+  await page.getByText(/leagues in the switcher · Edit/).click();
+  const box = page.getByRole("checkbox", { name: "ESPN front page" });
+  await expect(box).not.toBeChecked();
+  await box.check();
+  await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}").shownLeagues ?? []))
+    .toContain("top");
+  await box.uncheck();
+  await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}").shownLeagues ?? []))
     .not.toContain("top");
 });
