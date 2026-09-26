@@ -41,6 +41,8 @@ interface VideoModalProps {
   // default (e.g. "r/baseball" instead of "Reddit", "MLB Most Popular" instead
   // of "MLB.com"). Falls back to URL-host inference when null.
   sourceLabel?: string | null;
+  // Third footer link, e.g. the MLB season-review dialog behind an MLB.com cut.
+  extraLink?: { label: string; onClick: () => void } | null;
   // Post metadata — surfaced in a card layout so the modal is a useful
   // preview of the post (headline / author / time / subreddit) instead of
   // just an unframed image lightbox. When no media (no video, no image)
@@ -450,7 +452,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = false, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   // The React-owned box the YouTube player lives INSIDE. React renders this and
   // nothing else touches it; the #yt-player node YT destroys is a plain DOM
@@ -3133,6 +3135,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 {copied ? "Link copied" : ""}
               </span>
             </>
+          )}
+          {extraLink && (
+            <button
+              type="button"
+              data-modal-extra-link
+              onClick={(e) => { e.stopPropagation(); extraLink.onClick(); }}
+              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
+            >
+              {extraLink.label}
+            </button>
           )}
         </div>
         )}

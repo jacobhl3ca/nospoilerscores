@@ -26,7 +26,7 @@ import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import SlamBracketModal from "@/components/SlamBracketModal";
 import PlayoffPictureModal from "@/components/PlayoffPictureModal";
 import MlbSeasonReviewModal from "@/components/MlbSeasonReviewModal";
-import { getMlbReview, mlbReviewPillDue, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
+import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
@@ -2549,9 +2549,10 @@ export default function HomeContent({
   // the row on sibling columns exactly as a recap does.
   // After the World Series the "2026 in review" pill takes the same row and
   // wins over the Playoffs pill where their windows overlap (the bracket is
-  // over). Only fetched Oct–Feb on today's board: in season it can never show.
+  // over). Only fetched Oct–Feb: in season it can never show. Any board, not
+  // just today's: yesterday's Top 5 clip carries the "All 2026 cuts" link.
   const reviewMonth = Number(selectedDate.slice(4, 6));
-  const reviewFetchDue = isToday && (reviewMonth >= 10 || reviewMonth <= 2);
+  const reviewFetchDue = reviewMonth >= 10 || reviewMonth <= 2;
   useEffect(() => {
     if (!reviewFetchDue) return;
     let alive = true;
@@ -2559,6 +2560,8 @@ export default function HomeContent({
     return () => { alive = false; };
   }, [reviewFetchDue]);
   const reviewPillDue = mlbReviewPillDue(selectedDate, mlbReview, isToday);
+  // The clip modal's "All 2026 cuts" link: same window, keyed on today's date.
+  const reviewLinkDue = mlbReviewLinkDue(getDateString(0), mlbReview);
   const reviewSections: MlbReviewSection[] = mlbReview
     ? [
         ...(mlbReview.months.some((m) => m.top25 || m.oddities) ? ["months" as const] : []),
@@ -2572,6 +2575,9 @@ export default function HomeContent({
     .some((l) => l.sport === "mlb");
   const bracketPillShown = bracketPillDue && mlbColumnShown;
   const reviewPillShown = reviewPillDue && mlbColumnShown;
+  // Nov 2 on the MLB column is off the board (ALL_LEAGUES endDate), so the
+  // pill gets its own strip above the columns while no MLB column shows.
+  const reviewStripShown = reviewPillDue && !mlbColumnShown;
   const anyRecap = (recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown;
 
   return (
@@ -3844,6 +3850,25 @@ export default function HomeContent({
                 />
               )
               : undefined;
+            // Offseason home for the review pill (no MLB column to sit in).
+            const reviewStrip = reviewStripShown ? (
+              <div data-review-strip className="flex justify-center">
+                <div className="w-full max-w-[560px]">
+                  <LeagueRecapCard
+                    sport="mlb"
+                    date={selectedDate}
+                    lastPlayedDate={null}
+                    reserveSlot={false}
+                    onShowPlayoffs={null}
+                    onShowReview={(section) => { setReviewSection(section); setReviewOpen(true); }}
+                    reviewSeason={mlbReview?.season ?? null}
+                    reviewSections={reviewSections}
+                    onPlayHighlight={openVideoModal}
+                    onPlayEmbed={openEmbedModal}
+                  />
+                </div>
+              </div>
+            ) : null;
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
               // `idx` is the raw slot (0-4), but empty slots collapse, so the
@@ -4179,6 +4204,7 @@ export default function HomeContent({
               return (
                 <>
                 {topBanner}
+                {reviewStrip}
                 <div className={boardRowCls}>
                   {/* Invisible leading spacer balances the trailing + button so
                       the columns stay centered when a slot has been emptied
@@ -4210,6 +4236,7 @@ export default function HomeContent({
             return (
               <>
               {topBanner}
+              {reviewStrip}
               <div className={boardRowCls}>
                 {/* Invisible leading spacer balances the trailing + button so
                     the columns stay centered when a slot has been emptied
@@ -4730,6 +4757,9 @@ export default function HomeContent({
           onPrev={videoModal.siblings && (videoModal.sibIndex ?? 0) > 0 ? () => stepVideo(-1) : undefined}
           onNext={videoModal.siblings && (videoModal.sibIndex ?? 0) < videoModal.siblings.length - 1 ? () => stepVideo(1) : undefined}
           alternates={videoModal.alternates}
+          extraLink={reviewLinkDue && mlbReview && videoModal.sourceLabel === "MLB.com"
+            ? { label: `All ${mlbReview.season} cuts`, onClick: () => { closeVideoModal("explicit"); setReviewOpen(true); } }
+            : null}
           onClose={closeVideoModal}
         />
       )}

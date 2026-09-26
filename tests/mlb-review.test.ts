@@ -16,7 +16,8 @@ import type { MlbReview, MlbReviewTeamRec } from "../src/lib/mlbReview.ts";
 // mlbReview.ts imports @/lib/youtube at runtime → load through jiti, as
 // recaps.test.ts does.
 const jiti = createJiti(import.meta.url);
-const { mlbReviewPillDue, mlbReviewPillEnd, sortTeamsForFavorites, mlbReviewHasContent } = (await jiti.import("../src/lib/mlbReview.ts")) as {
+const { mlbReviewPillDue, mlbReviewLinkDue, mlbReviewPillEnd, sortTeamsForFavorites, mlbReviewHasContent } = (await jiti.import("../src/lib/mlbReview.ts")) as {
+  mlbReviewLinkDue: (todayYmd: string, review: MlbReview | null | undefined) => boolean;
   mlbReviewPillDue: (selectedDate: string, review: MlbReview | null | undefined, isToday: boolean) => boolean;
   mlbReviewPillEnd: (season: number) => string;
   sortTeamsForFavorites: <T extends Pick<MlbReviewTeamRec, "espnTeamIds">>(teams: T[], favs: string[]) => { favorites: T[]; others: T[] };
@@ -144,6 +145,18 @@ test("mlbReviewPillDue: from the World Series cut's day to Feb 14, today only", 
   // Nothing resolved → no pill (never an empty dialog).
   assert.equal(mlbReviewHasContent({ ...REVIEW, months: [] }), false);
   assert.equal(mlbReviewPillDue("20261105", { ...REVIEW, months: [] }, true), false);
+});
+
+test("mlbReviewLinkDue: same window as the pill, keyed on today, any board", () => {
+  assert.equal(mlbReviewLinkDue("20261101", REVIEW), false);
+  assert.equal(mlbReviewLinkDue("20261102", REVIEW), true);
+  assert.equal(mlbReviewLinkDue("20270214", REVIEW), true);
+  assert.equal(mlbReviewLinkDue("20270215", REVIEW), false);
+  assert.equal(mlbReviewLinkDue("20261105", { ...REVIEW, months: [] }), false);
+  assert.equal(mlbReviewLinkDue("20261105", null), false);
+  assert.equal(mlbReviewLinkDue("", REVIEW), false);
+  // The pill still needs today's board.
+  assert.equal(mlbReviewPillDue("20261105", REVIEW, false), false);
 });
 
 test("sortTeamsForFavorites: favorites first in favorite order, a player counts for his team", () => {

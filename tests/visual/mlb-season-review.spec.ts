@@ -45,8 +45,8 @@ const REVIEW = JSON.stringify({
   ],
 });
 
-async function seed(page: Page) {
-  await page.addInitScript(() => localStorage.setItem("nss-preferences", JSON.stringify({
+async function seed(page: Page, prefs: Record<string, unknown> = {}) {
+  await page.addInitScript((over) => localStorage.setItem("nss-preferences", JSON.stringify({
     favoriteLeagues: ["mlb", "nfl"],
     favoriteTeams: ["mlb-12"],
     theme: "light",
@@ -62,11 +62,13 @@ async function seed(page: Page) {
     fifthLeague: "empty",
     defaultDateMode: "today",
     defaultLandingView: "scores",
-  })));
+    ...over,
+  })), prefs);
   await page.route("**/api/youtube?**", route =>
     route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"No results"}' }));
   await page.route("**/baseball/mlb/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"events":[]}' }));
   await page.route("**/football/nfl/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"events":[]}' }));
+  await page.route("**/basketball/nba/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"events":[]}' }));
   await page.route("**/news/recaps.json", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"fetchedAt":"2026-11-05T12:00:00Z","recaps":{}}' }));
   await page.route("**/news/highlights.json", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"games":{}}' }));
   await page.route("**/news/mlb-review.json", route => route.fulfill({ status: 200, contentType: "application/json", body: REVIEW }));
@@ -112,8 +114,35 @@ for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
     expect(["2026 in review", "’26 review"]).toContain(m.headingText);
     // No Playoffs pill once the review is due.
     await expect(page.locator("[data-recap-playoffs-tab]")).toHaveCount(0);
+    // The MLB column hosts it, so no offseason strip.
+    await expect(page.locator("[data-review-strip]")).toHaveCount(0);
     const shot = await page.locator("main").screenshot();
     await testInfo.attach(`review-pill-${vp.width}`, { body: shot, contentType: "image/png" });
+  });
+}
+
+// From Nov 2 the MLB column is off the board; the pill moves to a strip above
+// the columns (any column mix without MLB shows the same).
+const OFFSEASON = new Date("2026-11-05T16:00:00-05:00");
+const NO_MLB = { favoriteLeagues: ["nfl", "nba"], firstLeague: "nfl", secondLeague: "nba", thirdLeague: "empty" };
+
+for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
+  test(`${vp.width}px: no MLB column → the review pill sits in a strip above the board`, async ({ page }, testInfo) => {
+    await page.setViewportSize(vp);
+    await page.clock.setFixedTime(OFFSEASON);
+    await seed(page, NO_MLB);
+    await page.goto("/");
+    const pill = page.locator('[data-review-strip] [data-league-recap="mlb"][data-recap-kind="review"]');
+    await expect(pill).toBeVisible({ timeout: 20_000 });
+    await expect(pill.getByRole("button")).toHaveCount(3);
+    const m = await pillMetrics(page);
+    expect(m.buttonTexts).toEqual(["Months", "Playoffs", "Teams"]);
+    expect(m.overflow).toBe(0);
+    expect(m.buttonsPastEdge).toBe(0);
+    expect(m.buttonsClipped).toBe(0);
+    expect(m.headingClipped).toBe(false);
+    await expect(page.locator('[data-league-column] [data-league-recap="mlb"]')).toHaveCount(0);
+    await testInfo.attach(`review-strip-${vp.width}-${m.layout}`, { body: await page.locator("main").screenshot(), contentType: "image/png" });
   });
 }
 
@@ -146,6 +175,45 @@ test("Teams opens the dialog with the favorite team's cut first; a month Top 25 
   // Closing the video brings the review back.
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "MLB 2026 in review" })).toBeVisible({ timeout: 10_000 });
+
+  // "All 2026 cuts" under the clip goes back to the review too.
+  await page.getByRole("dialog", { name: "MLB 2026 in review" }).locator('[data-review-play="top-25-march-april"]').click();
+  await expect(page.locator("video")).toHaveCount(1, { timeout: 10_000 });
+  const extra = page.locator("[data-modal-extra-link]");
+  await expect(extra).toHaveText("All 2026 cuts");
+  await extra.click();
+  await expect(page.locator("video")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "MLB 2026 in review" })).toBeVisible({ timeout: 10_000 });
+  // It stays open after the modal's history.back() settles.
+  await page.waitForTimeout(500);
+  await expect(page.getByRole("dialog", { name: "MLB 2026 in review" })).toBeVisible();
+
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "MLB 2026 in review" })).toHaveCount(0);
+});
+
+// The day after the World Series: the last Top 5 sits on YESTERDAY's MLB
+// column, and its clip carries the link to the season review.
+test("yesterday's Top 5 clip carries \"All 2026 cuts\", which opens the review at Months", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.clock.setFixedTime(new Date("2026-11-02T16:00:00-05:00"));
+  await seed(page, { defaultDateMode: "yesterday" });
+  await page.route("**/news/recaps.json", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+    fetchedAt: "2026-11-02T12:00:00Z",
+    recaps: { mlb: [
+      { sport: "mlb", key: "top5", heading: "Best of the day", label: "Top 5 plays of the day", cadence: "daily", coversDate: "20261101", playbackUrl: "https://example.invalid/top5.m3u8", pageUrl: "https://www.mlb.com/video/11-1-26-top-5-plays-of-the-day", channel: "MLB.com", durationSec: 60, t: 1, sourcePolicy: "mlb.com" },
+    ] },
+  }) }));
+  await page.goto("/yesterday");
+  const pill = page.locator('[data-league-recap="mlb"]');
+  await expect(pill).toBeVisible({ timeout: 20_000 });
+  await pill.locator('[data-recap-key="top5"]').click();
+  await expect(page.locator("video")).toHaveCount(1, { timeout: 10_000 });
+  const extra = page.locator("[data-modal-extra-link]");
+  await expect(extra).toHaveText("All 2026 cuts");
+  await extra.click();
+  const dialog = page.getByRole("dialog", { name: "MLB 2026 in review" });
+  await expect(dialog).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator("video")).toHaveCount(0);
+  await expect(dialog.locator('[data-review-section="months"]')).toBeVisible();
 });

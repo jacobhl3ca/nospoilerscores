@@ -86,13 +86,19 @@ export function mlbReviewPillEnd(season: number): string {
   return `${season + 1}0215`;
 }
 
-// TODAY's board only, from the first World Series cut's post day up to (not
-// including) mlbReviewPillEnd.
-export function mlbReviewPillDue(selectedDate: string, review: MlbReview | null | undefined, isToday: boolean): boolean {
-  if (!isToday || !review?.seasonOver || !/^\d{8}$/.test(review.seasonOverSince ?? "")) return false;
-  if (!/^\d{8}$/.test(selectedDate)) return false;
-  return selectedDate >= review.seasonOverSince! && selectedDate < mlbReviewPillEnd(review.season)
+// The review window: from the first World Series cut's post day up to (not
+// including) mlbReviewPillEnd. Keyed on TODAY by the clip modal's "All 2026
+// cuts" link, since the Top 5 clip that shows it lives on yesterday's board.
+export function mlbReviewLinkDue(todayYmd: string, review: MlbReview | null | undefined): boolean {
+  if (!review?.seasonOver || !/^\d{8}$/.test(review.seasonOverSince ?? "")) return false;
+  if (!/^\d{8}$/.test(todayYmd)) return false;
+  return todayYmd >= review.seasonOverSince! && todayYmd < mlbReviewPillEnd(review.season)
     && mlbReviewHasContent(review);
+}
+
+// The pill: TODAY's board only, same window.
+export function mlbReviewPillDue(selectedDate: string, review: MlbReview | null | undefined, isToday: boolean): boolean {
+  return isToday && mlbReviewLinkDue(selectedDate, review);
 }
 
 // Favorites first, in favorite order (a player's cut counts for his team),
