@@ -103,9 +103,10 @@ const ESPN_PATHS = {
   cfl:          "/api/cfl",
   // Deliberately absent: MLB (MLB.com-native); EURO, NCAA
   // men's and women's hockey, women's volleyball, UFL, NCAA baseball, NCAA
-  // softball, the Conference League, Copa del Rey, DFB-Pokal, and cricket (no
-  // approved per-match uploader, so no YouTube button). ncaah / ufl /
-  // ncaabase / ncaasoft / uecl / copadelrey / dfbpokal are in
+  // softball, the Conference League, Copa del Rey, DFB-Pokal, the Nations
+  // League, and cricket (no approved per-match uploader, so no YouTube
+  // button). ncaah / ufl / ncaabase / ncaasoft / uecl / copadelrey /
+  // dfbpokal / nations are in
   // NO_HIGHLIGHT_FALLBACK — see src/lib/youtube.ts. ncaavb and ncaawh (lit
   // 2026-09-23) have no fixed channel: each game resolves from its schools'
   // conference chain (collegeHighlightChannels.json), which this monitor does

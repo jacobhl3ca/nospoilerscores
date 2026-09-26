@@ -13,6 +13,7 @@ import {
   dailyCoversDate,
   titleDateToYmd,
   weekdayCoversDate,
+  keepCarriedRecap,
   weeklyWindowFromPublished,
   nflWeekWindow,
   matchSeriesTitle,
@@ -122,7 +123,11 @@ test("NBA Top 10 carries the games' date from the title", () => {
 });
 
 test("EPL and MLS every-goal series parse the matchweek / matchday", () => {
-  assert.equal(matchSeriesTitle(series("epl", "everygoal"), cand("EVERY Weekend Goal | Matchweek 4", "Premier League"))?.week, 4);
+  assert.equal(matchSeriesTitle(series("epl", "everygoal"), cand("EVERY Weekend Goal | Matchweek 4 | 2026/27 Premier League Highlights", "Premier League"), { seasonYear: 2026 })?.week, 4);
+  // Premier League's own cut: the "2025/26" season token is last season (the
+  // live Matchweek 36 stray), and a title with no token is rejected.
+  assert.equal(matchSeriesTitle(series("epl", "everygoal"), cand("EVERY Weekend Goal | Matchweek 36 | 2025/26 Premier League Highlights", "Premier League"), { seasonYear: 2026 }), null);
+  assert.equal(matchSeriesTitle(series("epl", "everygoal"), cand("EVERY Weekend Goal | Matchweek 4", "Premier League"), { seasonYear: 2026 }), null);
   // NBC: the season stamp is required and must be the running season.
   assert.equal(matchSeriesTitle(series("epl", "everygoalnbc"), cand("Every Premier League goal from Matchweek 4 (2026-27) | Premier League | NBC Sports", "NBC Sports"), { seasonYear: 2026 })?.week, 4);
   assert.equal(matchSeriesTitle(series("epl", "everygoalnbc"), cand("Every Premier League goal from Matchweek 38 (2025-26) | Premier League | NBC Sports", "NBC Sports"), { seasonYear: 2026 }), null);
@@ -282,6 +287,25 @@ test("MLB weekday slug → the most recent ET day with that weekday", () => {
   assert.equal(weekdayCoversDate("monday", "20260914"), "20260914");
   assert.equal(weekdayCoversDate("tuesday", "20260914"), "20260908");
   assert.equal(weekdayCoversDate("funday", "20260914"), "");
+  // FastCast dated by its upload day: a Sunday cut uploaded Monday 9/21 → 9/20.
+  assert.equal(weekdayCoversDate("sunday", "20260921"), "20260920");
+  assert.equal(weekdayCoversDate("friday", "20260905"), "20260904");
+});
+
+test("a carried record needs an upload time when its window came from one", () => {
+  const cutoff = "20260905";
+  const today = "20260926";
+  const weekly = { sport: "epl", key: "everygoal", cadence: "weekly", coversWeek: 5, windowStart: "20260915", windowEnd: "20260921" };
+  assert.equal(keepCarriedRecap({ ...weekly, published: "2026-09-20T21:00:00.000Z" }, cutoff, today), true);
+  // The live strays: EPL Matchweek 36 / MLS Matchday 31 with `published: null`.
+  assert.equal(keepCarriedRecap({ ...weekly, coversWeek: 36, windowStart: "20260918", windowEnd: "20260924" }, cutoff, today), false);
+  assert.equal(keepCarriedRecap({ ...weekly, windowEnd: "20260904", published: "2026-08-30T21:00:00.000Z" }, cutoff, today), false);
+  const daily = { sport: "mlb", key: "fastcast", cadence: "daily", coversDate: "20260920" };
+  assert.equal(keepCarriedRecap({ ...daily, published: "2026-09-21T09:00:00Z" }, cutoff, today), true);
+  // Undated daily: kept before today, dropped today or later (premature pill).
+  assert.equal(keepCarriedRecap(daily, cutoff, today), true);
+  assert.equal(keepCarriedRecap({ ...daily, coversDate: today }, cutoff, today), false);
+  assert.equal(keepCarriedRecap({ ...daily, coversDate: "20260901", published: "2026-09-02T09:00:00Z" }, cutoff, today), false);
 });
 
 test("EPL / MLS weekly window is the six days before the post plus the day itself", () => {

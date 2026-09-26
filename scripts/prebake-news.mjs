@@ -10,7 +10,7 @@ import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
   parseRelativeTime, isoDurationToSec, etYmd, shiftYmd, dailyCoversDate, weekdayCoversDate,
   weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, parseWatchPagePlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
-  fillHeading, pickShorterClub, promoteLoneExtended, eplSeasonYear, uploadFitsGameDate,
+  fillHeading, pickShorterClub, promoteLoneExtended, eplSeasonYear, uploadFitsGameDate, keepCarriedRecap,
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
 import {
@@ -2472,7 +2472,7 @@ async function fetchTheScore(leagueSlug, sectionLabel) {
 // The key MUST be `${sport}:${event.id}` — GameHighlights keys off game.sport +
 // game.id, and game.id === event.id for every team-sport card (espn.ts parseGame).
 const HL_OUT_PATH = `${OUT_DIR}/highlights.json`;
-const HL_ENTRY_TTL_MS = 10 * 24 * 60 * 60 * 1000; // prune baked games older than 10d
+const HL_ENTRY_TTL_MS = 21 * 24 * 60 * 60 * 1000; // prune baked games older than 21d (same as RECAP_TTL_DAYS)
 
 // Leagues that render per-game highlight cards, with their official YouTube
 // channel — mirrors OFFICIAL_CHANNELS + the scoreboard paths in src/lib. Golf/
@@ -3464,7 +3464,7 @@ async function bakeGameHighlights() {
 
     // AGE SWEEP for the frozen band. The per-game loop below only walks the
     // last `hlDays` (7) of scoreboards, while this carry-forward keeps an entry
-    // for HL_ENTRY_TTL_MS (10 days). A game between those two numbers is still
+    // for HL_ENTRY_TTL_MS (21 days). A game between those two numbers is still
     // SERVED but is never revisited, so the upload-date gate cannot reach it:
     // on the 2026-09-20 bake that band held 14 wrong-season clips, the oldest a
     // 2019 MLS game. Check those slots here instead. Only out-of-window entries
@@ -4073,10 +4073,16 @@ async function resolveYtRecapSeries(series, seasonYear) {
   // would have been filed under today), so read the watch page's publishDate
   // before trusting it.
   if (!Number.isFinite(pick.publishedMs)) pick.publishedMs = (await fetchYtWatchMeta(pick.videoId)).publishedMs;
+  // Still no upload time → the cut cannot be dated, and a weekly window built
+  // from the bake clock put last season's Matchweek 36 on this season's boards.
+  if (!Number.isFinite(pick.publishedMs)) {
+    console.log(`recaps ${series.channelName} ${series.key}: no publish time, skipped`);
+    return null;
+  }
   // Out of season the newest cut is months old (NBA in September). It could
   // never cover a day the card shows, so stop before the oEmbed fetch. The
   // write-time prune below is the second net.
-  if (Number.isFinite(pick.publishedMs) && Date.now() - pick.publishedMs > (RECAP_TTL_DAYS + 7) * 86400000) {
+  if (Date.now() - pick.publishedMs > (RECAP_TTL_DAYS + 7) * 86400000) {
     console.log(`recaps ${series.channelName} ${series.key}: newest is ${Math.round((Date.now() - pick.publishedMs) / 86400000)}d old, skipping`);
     return null;
   }
@@ -4089,23 +4095,39 @@ async function resolveYtRecapSeries(series, seasonYear) {
   return pick;
 }
 
-// mlb.com topic page → the newest card whose slug matches the series. The page
-// lists newest first and its slug names the WEEKDAY, not the date.
-async function resolveMlbRecapSeries(series, todayYmd) {
+// mlb.com topic page → every card on it (~20, about three weeks) whose slug
+// matches the series, one per day, newest first. The slug names the WEEKDAY,
+// not the date, so each cut is dated by its upload day: the named weekday on
+// or before it (FastCast posts the next morning, so a Sunday cut uploaded
+// Monday covers Sunday). Cuts already carried (`carriedUrl`) are not fetched.
+async function resolveMlbRecapSeries(series, todayYmd, cutoff, carriedUrl) {
   const html = await getText(series.topicUrl);
   const linkRe = /<a[^>]+href="\/video\/([^"?/]+)"/g;
+  const seen = new Set();
+  const days = new Set();
+  const hits = [];
+  let first = true;
   let m;
   while ((m = linkRe.exec(html)) !== null) {
     const slug = m[1];
     const sm = slug.match(series.slugRx);
-    if (!sm) continue;
-    const coversDate = weekdayCoversDate(sm[series.weekdayGroup], todayYmd);
-    if (!coversDate) continue;
+    if (!sm || seen.has(slug)) continue;
+    seen.add(slug);
+    const isFirst = first;
+    first = false;
+    if (carriedUrl(`https://www.mlb.com/video/${slug}`)) continue;
     const meta = await fetchMLBVideoMeta(slug);
     if (!meta?.playbackUrl) continue;
-    return { slug, coversDate, ...meta };
+    // No upload date: only the page's newest card may be dated from today;
+    // an older cut's day is never guessed.
+    const anchor = meta.uploadDate ? etYmd(meta.uploadDate) : isFirst ? todayYmd : "";
+    const coversDate = anchor ? weekdayCoversDate(sm[series.weekdayGroup], anchor) : "";
+    if (!coversDate || coversDate < cutoff || days.has(coversDate)) continue;
+    days.add(coversDate);
+    console.log(`recaps mlb ${series.key}: found ${coversDate} (${slug})`);
+    hits.push({ slug, coversDate, ...meta });
   }
-  return null;
+  return hits;
 }
 
 // MLB Film Room's search (the gateway behind mlb.com/video/search), newest
@@ -4128,22 +4150,25 @@ async function fetchFilmRoomTag(tag, season) {
 }
 
 // mlb.com series → its recent cuts, minus days already carried (`carried`).
-// A topic-page series (FastCast, Real Fast) yields its newest cut; a dated
-// slug (Top 5) tries the last three days by name; a Film Room tag (the oddity
-// round-ups) yields the newest few matches, one per ET day.
-async function resolveMlbRecapHits(series, todayYmd, carried) {
-  if (series.topicUrl) {
-    const hit = await resolveMlbRecapSeries(series, todayYmd);
-    return hit ? [hit] : [];
-  }
+// A topic-page series (FastCast, Real Fast) yields every cut on the page inside
+// the recap window; a dated slug (Top 5) tries each day of the window by name;
+// a Film Room tag (the oddity round-ups) yields the newest few matches, one per
+// ET day. Only days not yet carried are fetched, so after the first run a bake
+// costs one or two page GETs per series.
+async function resolveMlbRecapHits(series, todayYmd, carried, carriedUrl) {
+  const cutoff = shiftYmd(todayYmd, -RECAP_TTL_DAYS);
+  if (series.topicUrl) return resolveMlbRecapSeries(series, todayYmd, cutoff, carriedUrl);
   const hits = [];
   if (series.slugForDate) {
-    for (let back = 1; back <= 3; back++) {
+    for (let back = 1; back <= RECAP_TTL_DAYS; back++) {
       const ymd = shiftYmd(todayYmd, -back);
+      if (ymd < cutoff) break;
       if (carried(ymd)) continue;
       const slug = series.slugForDate(ymd);
       const meta = await fetchMLBVideoMeta(slug);
-      if (meta?.playbackUrl) hits.push({ slug, coversDate: ymd, ...meta });
+      if (!meta?.playbackUrl) continue;
+      console.log(`recaps mlb ${series.key}: found ${ymd} (${slug})`);
+      hits.push({ slug, coversDate: ymd, ...meta });
     }
   } else if (series.filmRoomTag) {
     const seen = new Set();
@@ -4189,14 +4214,12 @@ async function bakeLeagueRecaps() {
   }
   const byId = new Map();
   for (const [id, rec] of prior.byId) {
-    const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
-    if (!end || end < cutoff) continue;
-    // A daily record dated today or later with no upload time was stamped from
-    // an older run's bake clock, not from the cut itself (the `?? now` fallback
-    // removed below). It is the premature "Best of the day" pill, so it does
-    // not survive the carry.
-    if (rec.cadence !== "weekly" && !rec.published && rec.coversDate >= todayYmd) {
-      console.log(`recaps: dropping undated ${rec.sport}:${rec.key} stamped ${rec.coversDate}`);
+    // Out of the window, or dated from an older run's bake clock instead of the
+    // cut itself: an undated weekly window, or an undated daily record dated
+    // today or later (the premature "Best of the day" pill). See keepCarriedRecap.
+    if (!keepCarriedRecap(rec, cutoff, todayYmd)) {
+      const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
+      if (end && end >= cutoff) console.log(`recaps: dropping undated ${rec.sport}:${rec.key} ${rec.cadence === "weekly" ? `week ${rec.coversWeek}` : rec.coversDate}`);
       continue;
     }
     byId.set(id, rec);
@@ -4225,7 +4248,8 @@ async function bakeLeagueRecaps() {
         let mlbRecs = null;
         if (series.source === "mlbcom") {
           const carried = (ymd) => byId.has(`${sport}:${series.key}:${ymd}`);
-          mlbRecs = (await resolveMlbRecapHits(series, todayYmd, carried)).map((hit) => ({
+          const carriedUrl = (url) => [...byId.values()].some((r) => r.sport === sport && r.key === series.key && r.pageUrl === url);
+          mlbRecs = (await resolveMlbRecapHits(series, todayYmd, carried, carriedUrl)).map((hit) => ({
             sport, key: series.key, heading: series.heading, label: series.label, cadence: "daily",
             coversDate: hit.coversDate, playbackUrl: hit.playbackUrl, poster: hit.poster,
             pageUrl: `https://www.mlb.com/video/${hit.slug}`, channel: "MLB.com",
