@@ -5,14 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>HideScore — offline</title>
 <style>
+  /* Follow the OS light/dark preference. This static fallback is served by the
+     service worker with no access to the app's JS-driven [data-theme] choice,
+     so prefers-color-scheme is the only signal available here — the same reason
+     global-error.tsx keys its palette off it. Light is the default; the dark
+     values below are byte-for-byte the page's originals, so a dark-mode device
+     renders exactly as before and only light-mode devices gain a light screen
+     (matching the app, whose default theme also follows the OS setting). */
   :root {
-    color-scheme: dark;
-    --bg: #0a0a0a;
-    --fg: #f4f4f5;
-    --muted: #9b9ba3;
-    --line: #26262b;
-    --accent: #f4f4f5;
-    --accent-fg: #0a0a0a;
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #111111;
+    --muted: #666666;
+    --line: rgba(0, 0, 0, 0.1);
+    --accent: #111111;
+    --accent-fg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a0a0a;
+      --fg: #f4f4f5;
+      --muted: #9b9ba3;
+      --line: #26262b;
+      --accent: #f4f4f5;
+      --accent-fg: #0a0a0a;
+    }
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }

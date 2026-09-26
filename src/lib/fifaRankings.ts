@@ -26,6 +26,17 @@ const RANKS: Record<string, number> = {
   "switzerland": 19,
   "iran": 20,
   "turkiye": 22,
+  // Alias the everyday English "Turkey" to the official-name primary key — the
+  // Korea Republic / IR Iran fix below, run the other direction. Here the
+  // primary key "turkiye" already matches ESPN's fifa.world *standings* form
+  // (FIFA's official "Türkiye" normalizes to "turkiye"), so the groups overlay
+  // resolves. But the *scoreboard* displayName GameCard reads
+  // (fifaRank(team.displayName)) can still carry the pre-2022-rebrand English
+  // "Turkey", which normalizes to "turkey", misses, and hides the #22 rank chip
+  // on the card. Alias to the same rank so the badge resolves whichever string
+  // ESPN sends; the "turkiye" primary key stays put, so the standings-fed
+  // overlay can't regress.
+  "turkey": 22, // vs. "turkiye" (FIFA's official name)
   "ecuador": 23,
   "austria": 24,
   "south korea": 25,

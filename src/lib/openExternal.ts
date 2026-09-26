@@ -252,8 +252,12 @@ export function handleExternalClick(
   return (e) => {
     e.stopPropagation();
     if (!url) return;
-    // Let modifier-clicks (cmd/ctrl/middle) follow the default new-tab behavior.
-    if (e.metaKey || e.ctrlKey || e.shiftKey || (e as React.MouseEvent).button === 1) return;
+    // Let modifier-clicks fall through to the browser's own open behavior instead
+    // of intercepting: cmd/ctrl open a new tab, shift a new window, and the middle
+    // button (button 1) a background tab. shiftKey was already in the guard but the
+    // comment omitted it. `e` is typed React.MouseEvent, so `.button` reads directly
+    // — the prior `(e as React.MouseEvent)` assertion was a redundant no-op.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
     e.preventDefault();
     openExternal(url);
   };

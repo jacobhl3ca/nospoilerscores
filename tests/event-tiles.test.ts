@@ -241,4 +241,15 @@ test("ESPN's lower-cased race cities are title-cased before they're shown", () =
   // An all-caps state code and an interior lowercase particle survive.
   assert.equal(eventSubtitleVariants("Circuit of the Americas", "Austin", "TX")[0],
     "Circuit Of The Americas · Austin, TX");
+  // The region rides the same lower-cased ESPN feed as the city, so it's
+  // title-cased too — a country/state with a multi-word tail no longer reads
+  // like a typo right after a correctly-cased city.
+  assert.equal(eventSubtitleVariants("Yas Marina Circuit", "Abu dhabi", "United arab emirates")[0],
+    "Yas Marina Circuit · Abu Dhabi, United Arab Emirates");
+  // A place name that KEEPS its accents must be title-cased on the real word
+  // starts, not on the letter after the accent — the ASCII-`\b` version rendered
+  // "SãO Paulo"/"MontréAl" by treating "ã"/"é" as a word boundary.
+  assert.equal(titleCasePlace("são paulo"), "São Paulo");
+  assert.equal(titleCasePlace("montréal"), "Montréal");
+  assert.equal(titleCasePlace("málaga"), "Málaga");
 });

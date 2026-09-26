@@ -18,6 +18,12 @@ const geistSans = Geist({
 // window instead of leaving them past the truncation point. NFL comes out of the list
 // on purpose: its highlights are embed-blocked league-wide, and it keeps its own page.
 const SITE_TITLE = "HideScore: Spoiler-Free NHL, NBA & MLB Highlights and Scores";
+// Kept under Google's ~155-char SERP limit so the whole line shows instead of
+// being cut mid-sentence (the previous 209-char version truncated after "…until
+// you choose to reveal it"). Same trim already applied to the per-league pages.
+// Both product hooks survive the cut: scores/winners stay hidden, and games are
+// rated so you know what's worth watching. SITE_DESC feeds the meta description,
+// OG/Twitter cards, and the JSON-LD nodes, so one edit keeps them all in sync.
 const SITE_DESC =
   "Watch NHL, NBA, MLB, NFL and soccer highlights without spoilers. HideScore never prints a score or a winner, and optional game ratings tell you which games are worth watching before you hit play.";
 
@@ -120,6 +126,17 @@ const JSON_LD = {
   "@graph": [
     {
       "@type": "WebApplication",
+      // Stable @id so this primary product node is a first-class, referenceable
+      // entity like its siblings — the WebSite (#website) and Organization
+      // (#organization) both carry one, and this WebApplication was the lone
+      // node in the @graph still identified only by its (page-shared) `url`.
+      // An @id lets Google merge it to the same entity across pages and crawls
+      // (the whole app is embedded on every route via the shared layout, so this
+      // node re-renders everywhere) instead of treating each page's copy as a
+      // separate WebApplication for the same URL — the same entity-dedup reason
+      // the WebSite/Organization ids exist. Purely additive JSON-LD; no visual
+      // change and nothing else references it, so no behavior depends on it.
+      "@id": "https://hidescore.com/#webapp",
       name: "HideScore",
       alternateName: ["No Spoiler Scores", "Spoiler Free Sports"],
       url: "https://hidescore.com",
@@ -164,6 +181,17 @@ const JSON_LD = {
     },
     {
       "@type": "MobileApplication",
+      // Stable @id so this iOS product node is a referenceable entity like its
+      // siblings — the WebApplication (#webapp), WebSite (#website), and
+      // Organization (#organization) all carry one; the two MobileApplication
+      // nodes were the last product outliers still identified only by their
+      // (store) `url`. The same dedup reasoning the WebApplication @id documents
+      // applies here: every node in this @graph re-renders on every route via the
+      // shared layout, so without a stable @id Google can read each page's copy
+      // as a separate MobileApplication for the same app instead of merging them
+      // into one entity across pages and crawls. Purely additive JSON-LD — no
+      // visual change, and nothing references it, so no behavior depends on it.
+      "@id": "https://hidescore.com/#ios-app",
       name: "HideScore",
       operatingSystem: "iOS",
       applicationCategory: "SportsApplication",
@@ -198,6 +226,10 @@ const JSON_LD = {
       // 2026-08-23 and now serves a real store page, so the node is restored and
       // the @graph describes both native products instead of only the iOS one.
       "@type": "MobileApplication",
+      // Stable @id, same dedup rationale as the iOS node's #ios-app above — the
+      // Android product node re-renders on every route too, so a stable id keeps
+      // Google merging it to one entity across pages instead of one per page.
+      "@id": "https://hidescore.com/#android-app",
       name: "HideScore",
       operatingSystem: "Android",
       applicationCategory: "SportsApplication",
@@ -391,8 +423,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         {/* iOS Safari Smart App Banner. The site already promotes the HideScore
             iOS app everywhere else — the footer "also on the App Store" link, the
-            MobileApplication JSON-LD node above, the manifest's sameAs — but this
-            was the one surface still missing Apple's own native banner, the
+            MobileApplication JSON-LD node above, the Organization JSON-LD's sameAs —
+            but this was the one surface still missing Apple's own native banner, the
             highest-intent install prompt (it deep-links to Open when the app is
             already installed, App Store otherwise). app-id is the same App Store
             ID (6766885311) used by those other references, so app promotion stays
@@ -517,10 +549,10 @@ export default function RootLayout({
         />
         {/* The Capacitor shells load this site remotely (server.url), so every app
             open lands in Umami as an ordinary web visit and there is no way to tell
-            them apart. That is not academic: the Play closed test (15 paid testers,
-            from Aug 5 2026) pushed tonightnyc.com's homepage 57 -> 211 views and the
-            weekly insights job scored it a #1 "breakout" worth chasing. Tag app
-            traffic so web numbers stay web numbers.
+            them apart. That is not academic: from Aug 5 2026 the Play closed test made
+            it material — app opens masked hidescore's real web visits falling from 735
+            to 545, so web-only numbers read lower than they were. Tag app traffic so
+            web numbers stay web numbers.
 
             This runs as a before-send hook rather than a load-time data-tag attribute
             on purpose: the tracker reads data-tag once when it loads, which races the

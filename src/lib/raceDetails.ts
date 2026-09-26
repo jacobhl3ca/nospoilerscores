@@ -10,7 +10,12 @@ function isEspnUrl(candidate: string): boolean {
   try {
     const hostname = new URL(candidate).hostname.toLowerCase();
     return hostname === "espn.com" || hostname.endsWith(".espn.com")
-      || hostname === "espn.in" || hostname.endsWith(".espn.in");
+      || hostname === "espn.in" || hostname.endsWith(".espn.in")
+      // ESPN's feed links can still arrive under the legacy espn.go.com domain,
+      // which VideoModal.tsx already treats as a valid ESPN host. Without it a
+      // race event link on that domain fails this check and the tile silently
+      // drops the deep link, falling back to the generic series schedule.
+      || hostname === "espn.go.com" || hostname.endsWith(".espn.go.com");
   } catch {
     return false;
   }

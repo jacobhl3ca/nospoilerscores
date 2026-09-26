@@ -208,7 +208,13 @@ export async function fetchLeagueNews(sport: Sport, limit = 20): Promise<NewsIte
       if (!res.ok) return [];
       const doc = new DOMParser().parseFromString(await res.text(), "text/xml");
       if (doc.querySelector("parsererror")) return [];
-      return [...doc.querySelectorAll("item")].slice(0, limit).map((item) => {
+      // Filter BEFORE slicing so the `limit` counts VALID items, not raw <item>
+      // nodes. Slicing first would let a malformed entry (missing <title>/<link>)
+      // in the first `limit` positions silently drop the result below the
+      // requested count even when valid items sit further down the feed. Mapping
+      // the whole (small) RSS list is negligible, and when every item is valid —
+      // the common case — the output is identical to before.
+      return [...doc.querySelectorAll("item")].map((item) => {
         const value = (tag: string) => item.getElementsByTagName(tag)[0]?.textContent?.trim() ?? "";
         const articleUrl = value("link");
         return {
@@ -221,7 +227,7 @@ export async function fetchLeagueNews(sport: Sport, limit = 20): Promise<NewsIte
           byline: value("dc:creator"),
           section: "Boxing",
         };
-      }).filter((item) => item.headline && item.articleUrl);
+      }).filter((item) => item.headline && item.articleUrl).slice(0, limit);
     } catch {
       return [];
     }
@@ -422,7 +428,11 @@ const PREBAKED_VIDEOS: Partial<Record<Sport, { key: string; label: string; chann
   // card is baked from the league's official YouTube channel (prebake-news.mjs
   // fetchYouTubeChannelVideos), so items already carry youtubeVideoId.
   fifa: { key: "fifa-videos", label: "World Cup Top Videos", channel: "FIFA" },
-  mls: { key: "mls-videos", label: "MLS Top Videos", channel: "MLS" },
+  // The channel hint must be the YouTube author_name, NOT the abbreviation:
+  // MLS's channel resolves as "Major League Soccer" (the bare "MLS" never
+  // matched — see OFFICIAL_CHANNELS.mls in youtube.ts and prebake-news.mjs's
+  // mls scoreboard entry, both of which already use the full name).
+  mls: { key: "mls-videos", label: "MLS Top Videos", channel: "Major League Soccer" },
 };
 
 // Per-league subreddit card — pinned just below the official news link since
@@ -521,9 +531,22 @@ const ESPN_LEAGUE_LABEL: Partial<Record<Sport, string>> = {
 };
 
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
-  // ESPN has no poker desk/league feed. Do not manufacture an "ESPN POKER"
-  // card that can only return empty; the score/event view remains complete.
-  if (sport === "poker") return [];
+  // Several event-tile leagues have NO wired news source of any kind — no
+  // SPORT_NEWS_PATHS entry, no REDDIT_SUB, no PREBAKED_VIDEOS — so the only card
+  // the cascade below can build for them is the trailing ESPN catch-all, and
+  // fetchLeagueNews() returns [] for a pathless sport. That manufactured an
+  // "ESPN POKER" / "ESPN LLWS" / "ESPN SIXNATIONS" card that could only ever
+  // render "No headlines". Return nothing so the News column stays clean; the
+  // score/event tile view remains complete. Poker/chess/esports were already
+  // handled here; Little League (llws) and the six rugby-union competitions are
+  // the same sourceless case and were missed — all are selectable league
+  // columns (see SettingsPanel's league labels / ALL_LEAGUES).
+  if (
+    sport === "poker" || sport === "chess" || sport === "esports" ||
+    sport === "llws" || sport === "sixnations" || sport === "rugbywc" ||
+    sport === "rugbychamp" || sport === "superrugby" || sport === "rugbytest" ||
+    sport === "nationschamp"
+  ) return [];
   const logoUrl = LEAGUE_LOGO[sport];
   // ESPN has no CFL feed any more (its CFL endpoints froze in 2023), so an
   // "ESPN CFL" card could only ever be empty. r/CFL leads and theScore's CFL

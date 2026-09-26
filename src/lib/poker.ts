@@ -1,5 +1,6 @@
 import { EventFetchResult, LeagueEventCard } from "./types";
 import { getApiBase } from "./youtube";
+import { getEtServiceDate, toYmd } from "./etDay";
 
 // See EventFetchResult: the curated file being unreachable is not the same
 // thing as it having no major on this date.
@@ -55,6 +56,14 @@ const DATE_RX = /^\d{4}-\d{2}-\d{2}$/;
 function validRecord(event: PokerEventRecord): boolean {
   if (!event.id || !event.title || !DATE_RX.test(event.startDate) || !DATE_RX.test(event.endDate)) return false;
   if (event.startDate > event.endDate || event.officialChannel !== OFFICIAL_CHANNEL[event.tour]) return false;
+  // highlightQuery and broadcasts drive the card the same way they do on the
+  // sibling boxing tile (fetchPokerEvent copies both straight onto the card),
+  // so hold them to the same "drop, don't weaken" gate boxing.ts already
+  // applies: an empty highlightQuery feeds the highlight lookup a blank query
+  // (no clip resolves), and empty broadcasts renders a card with no "where to
+  // watch" line. A curated record missing either is a broken entry, not a
+  // weaker-but-usable one — reject it rather than surface a half-built tile.
+  if (!event.highlightQuery || !event.broadcasts?.length) return false;
   // startTime/endTime are the only optional fields, and they drive the pre/in/post
   // state and the card's `date`. Hold them to the same "drop, don't weaken" gate as
   // everything else: an unparseable value slips past the checks above but then makes
@@ -82,13 +91,18 @@ function dateMs(isoDate: string): number {
 }
 
 function displayWindow(start: string, end: string): string {
-  const fmt = (ymd: string, includeMonth = true) => {
-    const d = new Date(`${ymd}T12:00:00Z`);
+  // `isoDate` is a DASHED calendar date (YYYY-MM-DD): callers pass
+  // chosen.startDate/endDate, gated by DATE_RX. Same dashed-only contract as
+  // dateMs above and boxing.ts's displayDate — never the compact `ymd`, or
+  // `new Date("20260809T12:00:00Z")` returns Invalid Date and this renders
+  // "Invalid Date" in the subtitle (the footgun documented in lib/etDay.ts).
+  const fmt = (isoDate: string, includeMonth = true) => {
+    const d = new Date(`${isoDate}T12:00:00Z`);
     // Format in UTC — the instant is deliberately anchored to noon UTC (like
     // dateMs above and boxing.ts's displayDate), so a bare local-zone format
     // reads the wrong calendar day at UTC+12 and further east: noon UTC lands
     // after local midnight there, printing "Aug 17–30" for an Aug 16–29 series.
-    // Pin the zone so the printed day is the ymd itself in every zone.
+    // Pin the zone so the printed day is the isoDate itself in every zone.
     return new Intl.DateTimeFormat("en-US", includeMonth ? { month: "short", day: "numeric", timeZone: "UTC" } : { day: "numeric", timeZone: "UTC" }).format(d);
   };
   if (start === end) return fmt(start);
@@ -208,9 +222,18 @@ export async function fetchPokerEvent(date?: string): Promise<EventFetchResult> 
     const data = (await res.json()) as PokerEventsFile;
     // A schema we don't recognise is a broken deploy, not an empty calendar.
     if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return FAILED;
-    const todayYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(new Date());
+    // "Today" must come from the app's canonical service day, NOT a hard-coded
+    // ET calendar day. toYmd(getEtServiceDate()) is the single source of truth
+    // (see lib/etDay.ts) that honors the Settings time-zone override and the
+    // 1 AM service-day rollover, and that the sibling event tiles already route
+    // through (fetchCuratedBoxingEvent and fetchChessEvent both use it). The old
+    // `Intl … timeZone: "America/New_York"` literal ignored a user's chosen zone
+    // and could drift a day near midnight for a non-ET user — shifting both the
+    // no-date "today" fallback AND the `targetYmd < todayYmd` preferPast decision
+    // (the past-date walk-back) onto the wrong day. getEtServiceDate/toYmd yields
+    // a compact YYYYMMDD, so dash it to the YYYY-MM-DD the compares below expect.
+    const compactToday = toYmd(getEtServiceDate());
+    const todayYmd = `${compactToday.slice(0, 4)}-${compactToday.slice(4, 6)}-${compactToday.slice(6, 8)}`;
     const targetYmd = date && /^\d{8}$/.test(date)
       ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
       : todayYmd;
@@ -220,7 +243,15 @@ export async function fetchPokerEvent(date?: string): Promise<EventFetchResult> 
 
     const now = Date.now();
     const starts = chosen.startTime ? new Date(chosen.startTime).getTime() : dateMs(chosen.startDate) - DAY_MS / 2;
-    const ends = chosen.endTime ? new Date(chosen.endTime).getTime() : dateMs(chosen.endDate) + DAY_MS / 2;
+    // No-endTime fallback: dateMs anchors endDate to noon UTC, so `+ DAY_MS/2`
+    // closed the live window at endDate 24:00 UTC — 5 pm PT / 8 pm ET on the
+    // final day. A major's final table plays that evening local time (late-night
+    // UTC of the next day), so from ~5 pm PT the tile flipped to "Final" and
+    // surfaced the finished-event replay while play was still under way —
+    // spoiler-adjacent. Extend the tail a full day to endDate+1 12:00 UTC
+    // (≈ next-morning local), matching boxing.ts's documented fix; records with
+    // an exact endTime are unaffected, and the "pre" edge is unchanged.
+    const ends = chosen.endTime ? new Date(chosen.endTime).getTime() : dateMs(chosen.endDate) + DAY_MS;
     const state: "pre" | "in" | "post" = now < starts ? "pre" : now <= ends ? "in" : "post";
     const exactBroadcast = !!chosen.startTime;
     const dateWindow = displayWindow(chosen.startDate, chosen.endDate);

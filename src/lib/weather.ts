@@ -6,7 +6,7 @@
 // days — games further out just resolve to null (no weather shown).
 
 export interface WeatherHour {
-  hour24: number; // 0-23 local
+  hour24: number; // venue-local hour, 0-23; 24-47 for a late game's post-midnight tail (see the timeline build)
   label: string; // "3 PM"
   rainPct: number; // 0-100
 }
@@ -16,7 +16,7 @@ export interface GameWeather {
   icon: string; // emoji condition glyph
   label: string; // "Partly cloudy"
   rainPct: number; // gametime chance
-  timeline: WeatherHour[]; // 9 AM–11 PM local, for the rain bar chart
+  timeline: WeatherHour[]; // every fetched hour of the venue-local day; the rain block windows this around gametime
   gameHour24: number; // venue-local start hour (0-23), for the game-time window
   // Live "right now" conditions at the venue (Open-Meteo `current` block). The
   // gametime fields above are the forecast frozen at first pitch, so a drizzle
@@ -61,6 +61,15 @@ function wmo(code: number): { icon: string; label: string } {
   if (code <= 82) return { icon: "🌧️", label: "Showers" };
   if (code <= 86) return { icon: "🌨️", label: "Snow showers" };
   return { icon: "⛈️", label: "Thunderstorm" }; // 95-99
+}
+
+// The next calendar day of a YYYY-MM-DD string (UTC math, so a DST shift in the
+// venue zone can't move it). Used to extend the forecast window one day past a
+// late venue-local start so the rain timeline keeps its post-midnight tail.
+function nextIsoDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
 function hourLabel(h: number): string {
@@ -130,9 +139,23 @@ async function geocode(city: string, region: string): Promise<Geo | null> {
       d.results ?? [];
     const reg = region.toLowerCase();
     // Disambiguate same-named cities by matching the venue's state/country
-    // ("St. Louis, Missouri" → the Missouri hit, not PEI). Fall back to the
-    // top result (Open-Meteo ranks by prominence).
+    // ("St. Louis, Missouri" → the Missouri hit, not PEI). Prefer an EXACT
+    // admin1/country match, then fall back to a substring match, then to the
+    // top result (Open-Meteo ranks by prominence). The substring fallback is
+    // deliberate — it lets a shorter ESPN region match a longer official name
+    // ("Madrid" ⊆ "Community of Madrid") — but must not run first: as a bare
+    // substring test it also false-matches a region that is a substring of a
+    // DIFFERENT admin1 ("Kansas" ⊆ "Arkansas", "Mexico" ⊆ "New Mexico"), which
+    // could geocode a venue to the wrong same-named city. Trying exact first
+    // resolves those collisions to the right region while leaving the
+    // shorter-⊆-longer case unchanged.
     const pick =
+      (reg &&
+        list.find(
+          (x) =>
+            (x.admin1 ?? "").toLowerCase() === reg ||
+            (x.country ?? "").toLowerCase() === reg,
+        )) ||
       (reg &&
         list.find(
           (x) =>
@@ -245,13 +268,23 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
     10,
   ) % 24;
 
+  // A venue-local start late enough that play can cross midnight needs the NEXT
+  // day's early hours in the timeline too, or the rain block (which the modal
+  // windows to ±game-length around start) silently drops its post-midnight tail
+  // — the late-game mirror of the early-morning case the timeline loop below
+  // already fixes. weather.ts can't see the sport's game length, so extend the
+  // fetch by one day on any evening start (≥ 19:00 venue-local); those next-day
+  // rows carry hour24 ≥ 24 (see the loop) so the modal's numeric window still
+  // catches them, while a daytime game's request stays byte-identical to before.
+  const endDate = !isNaN(localHour) && localHour >= 19 ? nextIsoDate(localDate) : localDate;
+
   let data: { hourly?: Record<string, unknown[]>; current?: Record<string, unknown>; error?: boolean };
   try {
     const url =
       `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}` +
       `&hourly=temperature_2m,precipitation_probability,weather_code` +
       `&current=temperature_2m,precipitation,weather_code` +
-      `&temperature_unit=fahrenheit&timezone=${encodeURIComponent(apiTz)}&start_date=${localDate}&end_date=${localDate}`;
+      `&temperature_unit=fahrenheit&timezone=${encodeURIComponent(apiTz)}&start_date=${localDate}&end_date=${endDate}`;
     const r = await fetch(url);
     if (!r.ok) return null;
     data = await r.json();
@@ -269,11 +302,32 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
   const timeline: WeatherHour[] = [];
   let gameIdx = -1;
   for (let i = 0; i < times.length; i++) {
+    const day = times[i].slice(0, 10); // "YYYY-MM-DD"
     const hr = parseInt(times[i].slice(11, 13), 10);
-    if (!isNaN(localHour) && hr === localHour) gameIdx = i;
-    if (hr >= 9 && hr <= 23) {
+    // Match the gametime row on BOTH date and hour, day 0 only: the late-start
+    // fetch above returns two days, so the start hour appears twice and a bare
+    // `hr === localHour` (keeping the last match) would land gameIdx on the wrong
+    // day. Lexicographic YYYY-MM-DD compares chronologically.
+    if (gameIdx < 0 && day === localDate && !isNaN(localHour) && hr === localHour) gameIdx = i;
+    // Keep every fetched hour (0–23) rather than only 9 AM–11 PM. The consumer
+    // (GameDetailModal's rainWindow) already slices this to ±1h around gametime,
+    // so a 9-AM floor never trimmed a normal daytime/evening game — but it did
+    // drop the gametime hours of an early-morning venue-local start (an Asian /
+    // Australian cricket or soccer match shown to US users), silently hiding the
+    // rain block for exactly the games it's meant to warn about. The `0–23`
+    // bounds are a validity check on the parsed hour, not a trim: `times[i]` is
+    // Open-Meteo's own ISO string ("2026-08-30T00:00"), whose HH field is
+    // always "00".."23", so a well-formed entry always passes. What the guard
+    // actually earns its keep on is a malformed timestamp — `parseInt` returns
+    // NaN, and `NaN >= 0` is false — so a bad row can't push a garbage hour
+    // into the timeline.
+    if (hr >= 0 && hr <= 23) {
       const rp = Math.round(rains[i] ?? 0);
-      timeline.push({ hour24: hr, label: hourLabel(hr), rainPct: rp });
+      // A next-day row (the evening-start extension above) carries hour24 = hr+24
+      // (24–47) so it sorts after the same-day hours and the modal's numeric
+      // window [start−1 → start+len+1] still selects the post-midnight tail;
+      // hourLabel(hr) still reads "12 AM"/"1 AM" since it wraps mod 12.
+      timeline.push({ hour24: day > localDate ? hr + 24 : hr, label: hourLabel(hr), rainPct: rp });
     }
   }
   if (gameIdx < 0) gameIdx = Math.min(Math.max(isNaN(localHour) ? 0 : localHour, 0), times.length - 1);

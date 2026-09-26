@@ -15,8 +15,11 @@ import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
 const TITLE = "Is there a RedZone for every sport? All 9 whip-around shows (2026) | HideScore";
+// Trimmed to 151 chars so Google shows it whole — the prior 227-char copy was
+// truncated (~155-char SERP limit). DESC feeds only meta/OG/Twitter/JSON-LD
+// description, never visible page text, so the on-page inventory is unchanged.
 const DESC =
-  "NFL RedZone has an equivalent in almost every league: Big Inning, Goal Rush, the Golazo Show, MLS 360, NBA CrunchTime, Frozen Frenzy and more. Air days, start times and where to watch, plus how to follow along without spoilers.";
+  "NFL RedZone equivalents in almost every league: Big Inning, Goal Rush, MLS 360, NBA CrunchTime and more. Air days, times and how to watch spoiler-free.";
 const CANONICAL = "/redzone-for-every-sport";
 
 const FAQ = [

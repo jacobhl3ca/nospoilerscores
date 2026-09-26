@@ -1641,10 +1641,28 @@ function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined)
   // latest goal that CHANGED who's ahead (tie→lead, lead→tie, or a lead flip).
   const tally: Record<string, number> = {};
   const ids = [...new Set(goals.map((g) => g.team))];
+  // Whoever has the most goals so far, or "tie" when the top count is shared (or
+  // nobody has scored yet). Scan every scoring team rather than only comparing
+  // ids[0] vs ids[1]: soccer has two competitors so `ids` is normally length ≤2
+  // and this is identical to the old two-team compare, but ESPN's details[] can
+  // occasionally credit a scoring play to a third id (e.g. an oddly-attributed
+  // own goal), which the fixed-pair compare silently dropped from the leader
+  // walk — skewing the swing minute and thus the late-drama bonus.
   const leaderOf = (): string => {
-    if (ids.length < 2) return (tally[ids[0]] ?? 0) > 0 ? ids[0] : "tie";
-    const da = (tally[ids[0]] ?? 0) - (tally[ids[1]] ?? 0);
-    return da === 0 ? "tie" : da > 0 ? ids[0] : ids[1];
+    let best = "tie";
+    let bestCount = 0;
+    let tied = false;
+    for (const id of ids) {
+      const c = tally[id] ?? 0;
+      if (c > bestCount) {
+        best = id;
+        bestCount = c;
+        tied = false;
+      } else if (c === bestCount && bestCount > 0) {
+        tied = true;
+      }
+    }
+    return tied ? "tie" : best;
   };
   let prevLeader = "tie";
   let latestSwingMin = -1;
@@ -2084,11 +2102,22 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   const as = Number(awayTeam.score) || 0;
   const diff = Math.abs(hs - as);
   const setNow = match.status?.period ?? 0; // current set number
-  // Best-of-3 (all women's draws) needs 2 sets to win; best-of-5 (men's Slam
-  // singles) needs 3. The grouping slug tells us which — ESPN's `format` field
-  // is unreliable (reports 5 for both). Hoisted above the rating block so the
-  // "went the distance" gate can require the winner to have actually reached it.
-  const setsToWin = /women/.test(slug) ? 2 : 3;
+  // Best-of-3 needs 2 sets to win; best-of-5 needs 3. Only the men's Slam MAIN
+  // singles draw is best-of-5 — every women's draw AND the men's junior
+  // ("boys"), wheelchair, quad, and QUALIFYING singles draws that the `singles`
+  // filter above also admits are all best-of-3. (All four Slams play best-of-3
+  // qualifying for both tours; women's qualifying already resolves to 2 via
+  // `women`, so `qualif` is here to pull the men's qualifying draw down too —
+  // its slug is the one remaining men's-singles case that isn't the main draw.)
+  // A bare `/women/.test(slug) ? 2 : 3` mislabeled those best-of-3 men's
+  // sub-draws as best-of-5, so a genuine 2-1 decider never reached
+  // `max >= setsToWin (3)` and dropped to the 65 straight-sets bucket — the
+  // GREAT tier could never fire for them. Default to best-of-5 (so the men's
+  // main draw stays 3 whatever its exact slug) and pull only the known
+  // best-of-3 variants down to 2. ESPN's `format` field is unreliable (reports
+  // 5 for both). Hoisted above the rating block so the "went the distance" gate
+  // can require the winner to have actually reached it.
+  const setsToWin = /women|wheelchair|quad|boys|girls|qualif/.test(slug) ? 2 : 3;
   let rating: number | null = null;
   if (state === "post") {
     // GREAT is reserved for a match that went to a deciding final set (2-1 or

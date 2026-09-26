@@ -60,7 +60,7 @@ const FAQ: { q: string; a: string; links?: FaqLink[] }[] = [
   },
   {
     q: "Why don't I see a league on the main screen?",
-    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round in the In season and Offseason groups, and saved offseason picks return automatically when play resumes. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
+    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round, grouped by sport with an offseason marker on the leagues that are between seasons, and saved offseason picks return automatically when play resumes. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
   },
   {
     q: "How do the separate soccer leagues work?",

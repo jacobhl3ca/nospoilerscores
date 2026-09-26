@@ -736,7 +736,20 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         {!thumbIsTile && (
           <button
             type="button"
-            onClick={open}
+            onClick={(e) => {
+              // Mirror the thumbnail/headline controls above: modifier-click
+              // opens the source in a background tab instead of re-popping the
+              // modal, honoring this row's "every clickable part" contract.
+              if (openInNewTab(e)) return;
+              open();
+            }}
+            onAuxClick={(e) => {
+              // Middle-click fires onAuxClick, not onClick — mirror the modifier
+              // path so wheel-click also opens in a background tab.
+              if (e.button === 1 && item.articleUrl) {
+                window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+              }
+            }}
             className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--bg-card-hover)]"
             style={{ color: "var(--text-muted)" }}
             aria-label="Open post"
@@ -748,11 +761,19 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       </div>
     );
   }
+  // An ESPN item can carry an empty articleUrl (news.ts falls back to ""), and
+  // the click handlers here already no-op on a missing URL (handleExternalClick
+  // / openInNewTab both guard `if (!item.articleUrl)`). The markup has to match:
+  // an <a> with no href drops out of the tab order and leaves its
+  // aria-label="Open post" on a role-less element that announces an action it
+  // can't perform. So when there's nothing to open, render the same content
+  // without the link wrapper (and drop the dead chevron affordance).
+  const hasUrl = !!item.articleUrl;
   return (
     <div className={rowCls} style={rowStyle}>
-      {thumbIsTile ? (
+      {thumbIsTile && hasUrl ? (
         <a
-          href={item.articleUrl || undefined}
+          href={item.articleUrl}
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
@@ -765,19 +786,25 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       {/* No modal on this surface, so the headline is a real link to the
           source — same target as the thumbnail and chevron beside it, which
           keeps middle-click, keyboard, and "copy link" honest. */}
-      <a
-        href={item.articleUrl || undefined}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={handleExternalClick(item.articleUrl)}
-        className="min-w-0 flex-1 text-left cursor-pointer"
-        aria-label="Open post"
-      >
-        <span className={titleCls}>{item.headline}</span>
-      </a>
-      {!thumbIsTile && (
+      {hasUrl ? (
         <a
-          href={item.articleUrl || undefined}
+          href={item.articleUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleExternalClick(item.articleUrl)}
+          className="min-w-0 flex-1 text-left cursor-pointer"
+          aria-label="Open post"
+        >
+          <span className={titleCls}>{item.headline}</span>
+        </a>
+      ) : (
+        <span className="min-w-0 flex-1 text-left">
+          <span className={titleCls}>{item.headline}</span>
+        </span>
+      )}
+      {!thumbIsTile && hasUrl && (
+        <a
+          href={item.articleUrl}
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
@@ -904,13 +931,17 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                   }}
                   // The button wraps the thumbnail (alt="") + headline, so its
                   // accessible name is just the headline — a screen-reader/voice-
-                  // control user hears the title but gets no cue this control PLAYS
-                  // a highlight inline (vs. the sibling <a> row below that opens an
-                  // article). Name the action explicitly; the headline stays inside
-                  // the label so "Label in Name" (WCAG 2.5.3) still holds and voice
-                  // users can say the visible title to activate it. Matches the twin
-                  // Play button in AlignedVideoStrip's VideoRow/CompactTailRow.
-                  aria-label={`Play highlight: ${item.headline}`}
+                  // control user hears the title but gets no cue what this control
+                  // DOES. Name the action explicitly; the headline stays inside the
+                  // label so "Label in Name" (WCAG 2.5.3) still holds and voice
+                  // users can say the visible title to activate it. But this card
+                  // isn't videos-only: with the Text posts toggle on it also holds
+                  // clip-less text/image posts (the `shown` filter above keeps
+                  // itemIsTextPost items), and those open a card rather than play —
+                  // so branch the verb on itemIsVideo (WCAG 2.4.6 / 4.1.2, name must
+                  // match function), matching the twin Play button in
+                  // AlignedVideoStrip's VideoRow/CompactTailRow and NewsFeed's row.
+                  aria-label={itemIsVideo(item) ? `Play highlight: ${item.headline}` : `Open post: ${item.headline}`}
                   className={commonCls}
                   style={commonStyle}
                 >
@@ -918,18 +949,34 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                 </button>
               );
             }
+            if (item.articleUrl) {
+              return (
+                <a
+                  key={item.id}
+                  href={item.articleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={handleExternalClick(item.articleUrl)}
+                  className={commonCls}
+                  style={commonStyle}
+                >
+                  {body}
+                </a>
+              );
+            }
+            // No external URL (some ESPN "now" items carry articleUrl=""). Keeping
+            // href={item.articleUrl || undefined} would drop the attribute, leaving
+            // an href-less <a> that isn't keyboard-focusable and no-ops on click
+            // (WCAG 2.1.1 / 4.1.2) while still showing commonCls's cursor-pointer.
+            // Render a non-interactive wrapper instead — the row still shows, sans
+            // dead control. Mirrors the href-less-anchor guard AlignedVideoStrip's
+            // VideoRow and NewsFeed already document. (This branch only runs when
+            // onPlay is absent; both production call sites pass onPlayVideo, so it
+            // hardens the latent case rather than changing today's behavior.)
             return (
-              <a
-                key={item.id}
-                href={item.articleUrl || undefined}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={handleExternalClick(item.articleUrl)}
-                className={commonCls}
-                style={commonStyle}
-              >
+              <div key={item.id} className="block w-full text-left" style={commonStyle}>
                 {body}
-              </a>
+              </div>
             );
           })}
         </div>

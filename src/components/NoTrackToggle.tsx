@@ -54,13 +54,29 @@ export function NoTrackToggle() {
           ("Off — this browser is not counted.") when the button is pressed and
           when the initial "Checking…" resolves. Without it the text swaps
           silently and a screen-reader user gets no confirmation the toggle took
-          (WCAG 4.1.3). Same status-region pattern WorldCupBracket already uses. */}
-      <section role="status" aria-live="polite" className="mt-6 rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
-        {disabled === null ? <p>Checking&hellip;</p> : disabled ? (
-          <><p className="font-semibold">Off &mdash; this browser is not counted.</p><button type="button" onClick={() => apply(false)} className="mt-4 rounded-full border px-4 py-2 font-semibold" style={{ borderColor: "var(--border)" }}>Start counting again</button></>
+          (WCAG 4.1.3). Same status-region pattern WorldCupBracket already uses.
+          The live region wraps ONLY the status text, not the toggle button:
+          per the WAI-ARIA APG a live region shouldn't contain an interactive
+          control, or the region re-announces the button's own new label as part
+          of every status update (press "Stop counting my visits" → the region
+          would read "Off — … Start counting again"). The button keeps its own
+          accessible name and stays a sibling outside the region, so the state
+          confirmation is announced cleanly on its own. */}
+      <section className="mt-6 rounded-xl border p-5" style={{ borderColor: "var(--border)" }}>
+        <div role="status" aria-live="polite">
+          {disabled === null ? (
+            <p>Checking&hellip;</p>
+          ) : disabled ? (
+            <p className="font-semibold">Off &mdash; this browser is not counted.</p>
+          ) : (
+            <p className="font-semibold">On &mdash; this browser is currently counted.</p>
+          )}
+        </div>
+        {disabled !== null && (disabled ? (
+          <button type="button" onClick={() => apply(false)} className="mt-4 rounded-full border px-4 py-2 font-semibold" style={{ borderColor: "var(--border)" }}>Start counting again</button>
         ) : (
-          <><p className="font-semibold">On &mdash; this browser is currently counted.</p><button type="button" onClick={() => apply(true)} className="mt-4 rounded-full px-4 py-2 font-semibold text-white" style={{ background: "var(--accent)" }}>Stop counting my visits</button></>
-        )}
+          <button type="button" onClick={() => apply(true)} className="mt-4 rounded-full px-4 py-2 font-semibold text-white" style={{ background: "var(--accent)" }}>Stop counting my visits</button>
+        ))}
       </section>
       <p className="mt-4 text-xs" style={{ color: "var(--text-muted)" }}>Repeat once in each browser. Clearing this site&rsquo;s browser data resets the choice.</p>
     </main>

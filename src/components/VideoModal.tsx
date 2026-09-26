@@ -332,22 +332,31 @@ function withAutoplay(url: string): string {
   }
 }
 
+// Host matches `domain` exactly or as a proper subdomain (a leading-dot
+// boundary), never as a bare suffix. Guards against the substring collisions a
+// plain host.endsWith("nba.com") lets through: "columnba.com", "notmlb.com",
+// "myespn.com" would all falsely match. It also makes the wnba/nba pair safe
+// without relying on check order — "wnba.com" is neither exactly "nba.com" nor
+// a ".nba.com" subdomain. Same boundary the redd.it branch below already uses.
+function hostIs(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 // Per-source label for the modal's "Open on …" link. The footer used to read
 // "Open on source" generically — this maps the URL host to the actual brand so
 // users know whether they're heading to Reddit, MLB, ESPN, etc. before tapping.
 function sourceLabelFromUrl(url: string): string {
   try {
     const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
-    if (host.endsWith("reddit.com") || host === "redd.it" || host.endsWith(".redd.it")) return "Open on Reddit";
-    if (host.endsWith("mlb.com")) return "Open on MLB.com";
-    if (host.endsWith("espn.com") || host.endsWith("espn.go.com")) return "Open on ESPN";
-    // wnba.com check must precede nba.com — "wnba.com".endsWith("nba.com") is true.
-    if (host.endsWith("wnba.com")) return "Open on WNBA.com";
-    if (host.endsWith("nba.com")) return "Open on NBA.com";
-    if (host.endsWith("nhl.com")) return "Open on NHL.com";
-    if (host.endsWith("nfl.com")) return "Open on NFL.com";
-    if (host.endsWith("cbssports.com")) return "Open on CBS Sports";
-    if (host.endsWith("thescore.com")) return "Open on theScore";
+    if (hostIs(host, "reddit.com") || hostIs(host, "redd.it")) return "Open on Reddit";
+    if (hostIs(host, "mlb.com")) return "Open on MLB.com";
+    if (hostIs(host, "espn.com") || hostIs(host, "espn.go.com")) return "Open on ESPN";
+    if (hostIs(host, "wnba.com")) return "Open on WNBA.com";
+    if (hostIs(host, "nba.com")) return "Open on NBA.com";
+    if (hostIs(host, "nhl.com")) return "Open on NHL.com";
+    if (hostIs(host, "nfl.com")) return "Open on NFL.com";
+    if (hostIs(host, "cbssports.com")) return "Open on CBS Sports";
+    if (hostIs(host, "thescore.com")) return "Open on theScore";
     return `Open on ${host}`;
   } catch {
     return "Open source";
@@ -914,7 +923,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         document.body.appendChild(ta);
         ta.select();
         document.execCommand("copy");
-        document.body.removeChild(ta);
+        // `ta.remove()`, not `document.body.removeChild(ta)`: the copy already
+        // succeeded by this line, but removeChild throws "NotFoundError" if the
+        // DOM was reparented out from under us (a page-translation extension is
+        // the common cause) — the throw would skip the setCopied(true) below and
+        // swallow the "Copied!" confirmation for a copy that actually worked.
+        // remove() detaches the node from wherever it sits (or no-ops) and never
+        // throws, matching the measurement probes across the app.
+        ta.remove();
       }
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
@@ -992,15 +1008,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // ever shown. The warn-halfway confirm is gated at pointer-DOWN (below), not
   // here, so an active drag isn't interrupted.
   const seekFromClientX = useCallback((clientX: number) => {
+    const frac = fracFromClientX(clientX);
+    // Same direct-stream case as seekToPct/seekBy: no YouTube player, so drag
+    // the in-document <video>. frac is already capped at seekCap by
+    // fracFromClientX, so the ending still can't be scrubbed to.
+    const v = videoRef.current;
+    if (v && hlsMode) {
+      const d = v.duration;
+      if (!d || !isFinite(d) || d <= 0) return;
+      v.currentTime = d * frac;
+      void v.play().catch(() => { /* autoplay prompt already covers this */ });
+      setProgress(frac);
+      return;
+    }
     const p = playerRef.current;
     if (!p?.getDuration || !p?.seekTo) return;
-    const frac = fracFromClientX(clientX);
     const d = p.getDuration();
     if (!d || d <= 0) return;
     p.seekTo(d * frac, true);
     p.playVideo?.();
     setProgress(frac);
-  }, [fracFromClientX]);
+  }, [fracFromClientX, hlsMode]);
 
   // Skip back/forward by SEEK_STEP seconds — drives the ←/→ arrow keys and the
   // on-screen ±5s buttons. Unlike a jump or a bar-drag, stepping ±5s isn't a
@@ -2272,7 +2300,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 // several MB each) — cap the delivered width at the proxy so a
                 // phone isn't downloading 3.5 MB per swipe.
                 src={proxyImage(isGallery ? gallery[galAt] : imageUrl!, 1400)}
-                alt=""
+                // The lightbox's whole reason to exist is this image, and in
+                // image mode nothing else names it — no adjacent headline the
+                // way the text-card poster below has — so a bare alt="" leaves
+                // a screen reader announcing an unlabeled graphic (WCAG 1.1.1).
+                // Name it from the source label (a subreddit/publisher, never a
+                // score) rather than the headline, which is spoiler-sensitive
+                // and stays PeekBlur-covered elsewhere. Falls back to a generic
+                // name when no source is known.
+                alt={sourceLabel ? `Image from ${sourceLabel}` : "Post image"}
                 decoding="async"
                 className="block max-w-full object-contain"
                 style={{ maxHeight: mediaMaxH }}

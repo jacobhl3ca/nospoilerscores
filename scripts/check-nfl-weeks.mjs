@@ -116,6 +116,11 @@ check("GameHighlights carries nss_week on the modal fallback", /nss_week=\$\{wee
 // anywhere in the argument list instead — that is the property being asserted.
 check(
   "every GameHighlights resolve passes the week",
+  // Match weekNumber whether it's the last argument (`…, weekNumber)`) or now
+  // followed by the trailing compTokens arg (`…, weekNumber, compTokens)`) —
+  // the same signature shift the resolveHighlightVideo check above accounts
+  // for. Pinning `weekNumber\)` assumed week was last and matched zero of the
+  // real call sites once compTokens landed.
   gh.match(/resolveHighlightVideo\(/g)?.length ===
     gh.match(/resolveHighlightVideo\([^;]*?\bweekNumber\b[^;]*?\)/gs)?.length,
   `${gh.match(/resolveHighlightVideo\(/g)?.length ?? 0} call sites`,

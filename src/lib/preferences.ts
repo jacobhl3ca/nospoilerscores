@@ -421,8 +421,10 @@ export interface Preferences {
   // Undefined/false = blurred (default); true = revealed.
   revealNewsTitles?: boolean;
   // Text posts (headline-only news items — no pic/video) are independently
-  // hidden by default. Undefined/false = hidden; true = shown. Headline reveal
-  // never changes this filter, so both toolbar controls remain predictable.
+  // SHOWN by default (2026-08-09, Jacob — see the `showTextPosts: true` default
+  // below and the pre-paint guard in layout.tsx). Only an explicit false hides
+  // them; undefined = shown. Headline reveal never changes this filter, so both
+  // toolbar controls remain predictable.
   showTextPosts?: boolean;
   // News image/video previews can spoil a result (a thumbnail or embedded clip
   // gives the game away), so every preview surface is blurred by default, while

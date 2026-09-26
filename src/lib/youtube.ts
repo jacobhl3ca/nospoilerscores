@@ -923,6 +923,14 @@ const TELEMUNDO_WORLD_CUP_TEAM_ALIASES: Record<string, string> = {
   // currently-resolving lookup regresses.
   "DR Congo": "RD Congo", // vs. "Congo DR"
   "Cote d'Ivoire": "Costa de Marfil", // vs. "Ivory Coast" (FIFA's official French name)
+  // Same fix fifaRankings.ts carries for Türkiye (see its "turkey" alias): the
+  // "Turkiye" primary key above matches FIFA's official-name form, but ESPN's
+  // scoreboard shortDisplayName can still send the pre-2022-rebrand English
+  // "Turkey", which normalizes to "turkey", misses the "turkiye" key, and falls
+  // through to the English name on the Spanish-language Telemundo channel — the
+  // exact under-match this map exists to prevent. Alias to the same Spanish name;
+  // "turkiye" stays put and the two distinct keys can't collide, so nothing regresses.
+  Turkey: "Turquía", // vs. "Turkiye" (FIFA's official name)
 };
 
 // Fold diacritics + typographic apostrophes and lowercase for lookup — the SAME

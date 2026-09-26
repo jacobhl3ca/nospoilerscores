@@ -102,7 +102,7 @@ export default function CalendarButtons({
           onClick={() => { openAppScheme(reminder.url); onClose(); }}
           className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer"
           style={secondary}
-          aria-label={`Remind me in ${reminder.minutes} minutes: ${event.title}`}
+          aria-label={`Remind me in ${reminder.minutes} minute${reminder.minutes === 1 ? "" : "s"}: ${event.title}`}
         >
           Remind me ({reminder.minutes} min)
         </button>

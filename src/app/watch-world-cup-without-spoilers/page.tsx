@@ -11,7 +11,7 @@ const DESC =
 // freshness signals can never drift. Bump MODIFIED whenever the copy here
 // meaningfully changes.
 const PUBLISHED = "2026-06-23";
-const MODIFIED = "2026-06-29";
+const MODIFIED = "2026-08-16";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     // og:locale matches the site-level Open Graph block in layout.tsx and the
     // World Cup/date/SEO-landing routes. A page's openGraph replaces the parent's
     // wholesale (Next merges metadata per top-level field, not deep), so without
-    // this this page emitted no og:locale for social unfurlers (Facebook/
+    // this the page emitted no og:locale for social unfurlers (Facebook/
     // LinkedIn/Slack/iMessage). en_US is the OG-spec format (underscore, not "en").
     locale: "en_US",
     type: "article",
@@ -118,7 +118,7 @@ export default function WatchWorldCupWithoutSpoilersPage() {
       <h1 className="text-2xl font-bold mb-4">How to watch the 2026 World Cup without spoilers</h1>
 
       <p className="mb-4" style={{ color: "var(--text-muted)" }}>
-        The 2026 FIFA World Cup runs <strong style={{ color: "var(--text)" }}>June 11 to July 19</strong> across the
+        The 2026 FIFA World Cup ran <strong style={{ color: "var(--text)" }}>June 11 to July 19</strong> across the
         United States, Canada, and Mexico — <strong style={{ color: "var(--text)" }}>104 matches</strong>, with most
         weekday games kicking off at 1, 4, and 7 PM ET, right in the middle of the workday. If you can&apos;t watch
         live, a single push notification, group-chat message, or autoplay clip can give away the result before you press
@@ -155,7 +155,7 @@ export default function WatchWorldCupWithoutSpoilersPage() {
       <h2 className="text-lg font-semibold mt-8 mb-2">The 2026 World Cup at a glance</h2>
       <ul className="mb-4 space-y-1.5 list-disc pl-5" style={{ color: "var(--text-muted)" }}>
         <li>48 teams, 104 matches, 16 host cities across the US, Canada, and Mexico.</li>
-        <li>Group stage opens June 11; the tournament builds to the final on <strong style={{ color: "var(--text)" }}>July 19</strong>.</li>
+        <li>Group stage opened June 11; the tournament built to the final on <strong style={{ color: "var(--text)" }}>July 19</strong>.</li>
         <li>In the US, matches air on Fox / FS1 (English) and Telemundo / Universo (Spanish), with streaming on their apps.</li>
         <li>Most weekday matches kick off at 1, 4, and 7 PM ET — easy to miss live, easy to get spoiled.</li>
       </ul>

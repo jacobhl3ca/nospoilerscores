@@ -57,7 +57,10 @@ export function getEtServiceDate(): Date {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: getTimeZone(),
     year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false,
+    // No `minute` — the rollback below reads only the hour, and `get()` never
+    // extracts a minute part. Matches etSlateYmd's formatter, which requests
+    // exactly the fields it reads. Dropping the unread part is output-identical.
+    hour: "2-digit", hour12: false,
   }).formatToParts(new Date());
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
   const d = new Date(parseInt(get("year"), 10), parseInt(get("month"), 10) - 1, parseInt(get("day"), 10));

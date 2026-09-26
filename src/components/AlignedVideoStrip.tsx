@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import { handleExternalClick } from "@/lib/openExternal";
-import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
+import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters, itemIsVideo } from "./NewsColumn";
 import { isDemoModeActive } from "@/lib/demoMode";
 
 interface Props {
@@ -301,8 +301,10 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
 
 // Strip league/network tokens from the source label on narrow screens so the
 // logo + remaining text isn't redundant ("MLB MLB MOST POPULAR" effect when
-// the logo already conveys the league). Repeats so "ESPN NBA" → "" → keep
-// original. Empty after strip falls back to the full label.
+// the logo already conveys the league). Loops to peel stacked prefixes
+// ("MLB NBA Videos" → "Videos"); each token only matches with trailing
+// whitespace, so a bare trailing "NBA" is left intact. If stripping empties
+// the label (e.g. "NBA "), fall back to the full original.
 function stripLeaguePrefixForMobile(label: string): string {
   let s = label;
   for (let i = 0; i < 3; i++) {
@@ -391,11 +393,15 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
         }}
         // The button wraps the thumbnail (alt="") + headline, so its accessible
         // name is just the headline — a screen-reader/voice-control user hears the
-        // title but gets no cue this control PLAYS a highlight inline (vs. the
-        // sibling <a> rows that open an article). Name the action explicitly; the
-        // headline is kept inside the label so "Label in Name" (WCAG 2.5.3) still
-        // holds and voice users can say the visible title to activate it.
-        aria-label={`Play highlight: ${item.headline}`}
+        // title but gets no cue this control acts on the item inline (vs. the
+        // sibling <a> rows that open an article). Name the action explicitly. But
+        // the strip only filters its sources to items WITH a thumbnail, not to
+        // actual videos, so a non-video row opens a text/image card rather than
+        // playing — announce the real action per item (WCAG 2.4.6 / 4.1.2, name
+        // must match function), exactly like the CompactTailRow twin below. The
+        // headline stays in the label so "Label in Name" (WCAG 2.5.3) still holds
+        // and voice users can say the visible title to activate it.
+        aria-label={itemIsVideo(item) ? `Play highlight: ${item.headline}` : `Open post: ${item.headline}`}
         className={commonCls}
         style={commonStyle}
       >
@@ -403,10 +409,22 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
       </button>
     );
   }
+  if (item.articleUrl) {
+    return (
+      <a key={item.id} href={item.articleUrl} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle}>
+        {body}
+      </a>
+    );
+  }
+  // No external URL (some ESPN "now" items carry articleUrl=""). href={url ||
+  // undefined} would drop the attribute, leaving an href-less <a> that isn't
+  // keyboard-focusable and no-ops on click (WCAG 2.1.1 / 4.1.2). Render a
+  // non-interactive wrapper instead — the row still shows, sans dead control.
+  // Mirrors the href-less-anchor guard NewsFeed already documents.
   return (
-    <a key={item.id} href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle}>
+    <div key={item.id} className="block w-full text-left" style={commonStyle}>
       {body}
-    </a>
+    </div>
   );
 }
 
@@ -465,12 +483,15 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
             window.open(item.articleUrl, "_blank", "noopener,noreferrer");
           }
         }}
-        // Same inline-play control as VideoRow's button (its thumb is
-        // alt=""), so the accessible name would otherwise be just the headline
-        // with no cue this PLAYS a highlight vs. the sibling <a> tail rows that
-        // open an article. Name the action explicitly; the headline stays in
-        // the label so "Label in Name" (WCAG 2.5.3) still holds.
-        aria-label={`Play highlight: ${item.headline}`}
+        // The thumb is alt="", so this button's only accessible name is this
+        // label. But the col-3 tail is ESPN "top headlines" — mostly plain
+        // ARTICLES that open a text/image card, with only the occasional clip
+        // that actually plays. A flat "Play highlight: …" on every row (the old
+        // wording) announced a play action most of these rows don't perform
+        // (WCAG 2.4.6 / 4.1.2 — name must match function). Name the real action
+        // per item, exactly like the mobile twin NewsFeed's FeedPost; the
+        // headline stays in the label so "Label in Name" (WCAG 2.5.3) holds.
+        aria-label={itemIsVideo(item) ? `Play highlight: ${item.headline}` : `Open post: ${item.headline}`}
         className={`${rowCls} cursor-pointer`}
         style={rowStyle}
       >
@@ -479,10 +500,23 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
       </button>
     );
   }
+  if (item.articleUrl) {
+    return (
+      <a href={item.articleUrl} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle}>
+        {thumb}
+        <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
+      </a>
+    );
+  }
+  // No external URL — render a non-interactive wrapper rather than an href-less
+  // <a> (unfocusable, no-op on click; WCAG 2.1.1 / 4.1.2), mirroring the VideoRow
+  // twin above and NewsFeed's documented guard. Drop the hover affordance since
+  // there's nothing to activate.
+  const staticCls = rowCls.replace(" transition-colors hover:bg-[var(--bg-card-hover)]", "");
   return (
-    <a href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle}>
+    <div className={staticCls} style={rowStyle}>
       {thumb}
       <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
-    </a>
+    </div>
   );
 }

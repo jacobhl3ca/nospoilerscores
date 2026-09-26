@@ -300,11 +300,22 @@ export function eventTitleVariants(
 // ESPN lower-cases the tail of multi-word race cities — "Monte carlo",
 // "Mexico city", "Sao paulo", "Abu dhabi", "Kuala lumpur" (all five live on the
 // 2026 F1 calendar). Title-case each word so the subtitle doesn't read like a
-// typo. Deliberately dumb: it only ever changes the FIRST letter of a word, so
-// "of"/"de"/"the" inside a circuit name and an all-caps state code ("TX", "IA",
-// "PQ") come out unchanged.
+// typo. Deliberately dumb: it only ever touches the FIRST letter of each word.
+// An all-caps state/region code ("TX", "IA", "PQ") already starts uppercase, so
+// it comes out unchanged; short function words inside a name ARE capitalized too
+// ("Circuit of the Americas" → "Circuit Of The Americas"), which reads fine for
+// these terse venue/city subtitles (see the eventSubtitleVariants test).
+//
+// Unicode-aware on purpose. The old `/\b[a-z]/` keyed on JS's ASCII-only word
+// boundary, so an accented letter counted as a NON-word char and manufactured a
+// false boundary right after it: "são paulo" title-cased the letter following
+// the "ã" and rendered "SãO Paulo" (likewise "MontréAl", "MáLaga"). ESPN's
+// diacritic-stripped feed hides that today, but a place name that keeps its
+// accents must not be mangled. `\p{Ll}` at a start-or-non-letter boundary
+// uppercases only a real word-initial lowercase letter; every ASCII case above
+// is byte-for-byte unchanged.
 export function titleCasePlace(s: string): string {
-  return String(s || "").replace(/\b[a-z]/g, (c) => c.toUpperCase());
+  return String(s || "").replace(/(^|[^\p{L}])(\p{Ll})/gu, (_, sep, ch) => sep + ch.toUpperCase());
 }
 
 // The subtitle ladder: "<venue> · <city>, <region>" → "<venue> · <city>" →
@@ -313,7 +324,13 @@ export function titleCasePlace(s: string): string {
 export function eventSubtitleVariants(venue: string, city: string, region: string): string[] {
   const v = titleCasePlace(String(venue || "").trim());
   const c = titleCasePlace(String(city || "").trim());
-  const r = String(region || "").trim();
+  // Title-case the region too. It rides the same ESPN address object as the city
+  // (F1 circuit.address.country, the generic branch's venue.address.state/country)
+  // and gets the same lowercased tail — "United arab emirates", "Saudi arabia",
+  // "North carolina" — so without this the subtitle read like a typo right after
+  // a correctly-cased city. IndyCar's hand-cased map values ("TX", "Ontario") and
+  // any already-correct region are byte-identical no-ops through titleCasePlace.
+  const r = titleCasePlace(String(region || "").trim());
   const loc = [c, r].filter(Boolean).join(", ");
   const out: string[] = [];
   const push = (x: string) => { if (x && !out.includes(x)) out.push(x); };

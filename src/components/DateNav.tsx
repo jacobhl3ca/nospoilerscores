@@ -64,7 +64,9 @@ export function getDateString(daysOffset: number): string {
 export function getETHour(): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: getTimeZone(),
-    hour: "2-digit", minute: "2-digit", hour12: false,
+    // Only the hour is read below, so no `minute` field — this matches the
+    // hour-only formatter shape etSlateYmd already uses in lib/etDay.ts.
+    hour: "2-digit", hour12: false,
   }).formatToParts(new Date());
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
   // % 24 guards the "24" some ICU builds emit for midnight (same guard as

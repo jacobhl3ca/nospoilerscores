@@ -4,7 +4,7 @@ import DocTopBar from "@/components/DocTopBar";
 
 const TITLE = "How to Watch Sports Highlights Without Spoilers | HideScore";
 const DESC =
-  "A spoiler-free way to watch sports highlights: hide scores and winners first, use game ratings, then open recap or condensed highlights only when you are ready.";
+  "A spoiler-free way to watch sports highlights: hide scores and winners, use game ratings, then open recap or condensed highlights only when you are ready.";
 const CANONICAL = "/how-to-watch-sports-highlights-without-spoilers";
 const URL = `https://hidescore.com${CANONICAL}`;
 
@@ -128,6 +128,9 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
           </Link>
           <Link href="/nfl-highlights-without-spoilers" className="underline underline-offset-2">
             NFL
+          </Link>
+          <Link href="/nhl-highlights-without-spoilers" className="underline underline-offset-2">
+            NHL
           </Link>
           <Link href="/soccer-highlights-without-spoilers" className="underline underline-offset-2">
             Soccer

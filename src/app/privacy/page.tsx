@@ -5,6 +5,12 @@ import EmailLink from "@/components/EmailLink";
 
 const PRIVACY_TITLE = "Privacy Policy | HideScore";
 const PRIVACY_DESC = "HideScore never sells or shares your data and collects no personal information unless you choose to create an optional account.";
+// The policy's last-revision date, in one place so the visible "Last updated"
+// line, its <time dateTime>, and the WebPage JSON-LD dateModified below can
+// never drift apart — the same single-constant pattern PRIVACY_TITLE/_DESC use
+// across the metadata and the graph node. ISO YYYY-MM-DD so it's a valid
+// dateTime attribute and a valid schema.org Date literal unchanged.
+const PRIVACY_UPDATED = "2026-08-06";
 
 export const metadata: Metadata = {
   title: PRIVACY_TITLE,
@@ -114,6 +120,14 @@ export default function PrivacyPage() {
                 description: PRIVACY_DESC,
                 url: "https://hidescore.com/privacy",
                 inLanguage: "en",
+                // The policy's last-revision date, mirroring the visible
+                // "Last updated" <time> above (same PRIVACY_UPDATED constant, so
+                // they can't drift). `dateModified` is the freshness signal
+                // Google reads for a policy/legal page — it was the one property
+                // this page's WebPage node was missing, even though the date is
+                // already rendered on the page. Purely additive JSON-LD; no
+                // visual change.
+                dateModified: PRIVACY_UPDATED,
                 isPartOf: { "@id": "https://hidescore.com/#website" },
                 breadcrumb: { "@id": "https://hidescore.com/privacy#breadcrumb" },
               },

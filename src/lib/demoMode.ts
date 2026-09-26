@@ -196,6 +196,26 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         abbreviation: `${slot}${n}`,
         logo: placeholderLogo(slot, color),
         color,
+        // The overall standings rank (1 = league leader) is real data the
+        // rename can't rewrite in place — it rode straight through `...team`
+        // and rendered as the `#N` chip GameCard shows on live/upcoming cards
+        // (team.rank != null && !effectivePastDate && !isFinished), pinning the
+        // anonymized side to a real league position under ?demo=1. The FIFA
+        // path never leaked it — that chip re-derives via fifaRank(displayName),
+        // which returns null for the scrubbed "Team A1" name — so this nulls the
+        // one sport family that still showed a real rank, matching that path and
+        // the name/logo/venueLocation identity-scrub the rest of this file does.
+        rank: null,
+        // The W-L record ("12-5") is the same class of real standings data as
+        // `rank` above — it rode straight through `...team` and rendered as the
+        // record chip GameCard/GameDetailModal show on live/upcoming cards
+        // (showRecords && team.record && !effectivePastDate && !isFinished &&
+        // !isFuture), pinning the anonymized side to a real season position under
+        // ?demo=1. Blank it so those chips fall to their empty state (each guards
+        // on a truthy record), matching the rank scrub above. Empty is the type's
+        // own "unknown" value (espn.ts defaults record to ""), and LeagueColumn's
+        // getWins/getLosses/isWinningRecord already treat "" as 0-0 with no throw.
+        record: "",
       };
     };
     const transformGame = (game: Game): Game => {
@@ -210,6 +230,17 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         broadcasts: game.broadcasts.length ? ["Stream"] : [],
         playoffLabel: game.playoffLabel ? "Playoffs" : null,
         seriesStatus: null,
+        // The soccer cup stage ("Group J", "Round of 16", "Final") is the
+        // playoffLabel sibling for FIFA — rendered in the SAME detail-modal
+        // label slot (game.playoffLabel || game.stage) — but it rode straight
+        // through `...game` while playoffLabel was genericized above. Worse than
+        // a facade break: the "Group X" line is TAPPABLE in the detail modal
+        // (GameDetailModal's wcGroup) and opens the World Cup groups overlay with
+        // REAL country names, and it also drives LeagueColumn's italic phase
+        // subtitle ("Round of 16") right under an anonymized "Sports A" header.
+        // Null it so both fall to their empty state (every read guards on a
+        // truthy stage), matching the playoffLabel/seriesStatus scrub beside it.
+        stage: null,
         venue: "",
         // The venue city/state ("Minneapolis, Minnesota") is as identifying as
         // the team names transformTeam scrubs, and it renders on the detail

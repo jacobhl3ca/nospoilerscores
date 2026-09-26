@@ -335,6 +335,19 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* Visible keyboard focus ring on the footer feedback inputs (WCAG 2.4.7). Both
+   the message and email fields carry Tailwind's `outline-none`, which strips the
+   default browser outline for mouse AND keyboard — they were the last
+   interactive controls with no :focus-visible replacement, so Tab-ing onto them
+   showed only the text caret. Re-use the same accent ring the date-nav pills,
+   view tabs, monkey toggle, and highlight buttons use — keyboard-only
+   (:focus-visible) so mouse/touch taps stay clean. The :focus-visible pseudo
+   adds specificity over the base `outline-none` class, so it wins on keyboard
+   focus regardless of stylesheet order. */
+.feedback-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* ── Card height floor: the MLB card is the height every card should be ─────
    A finished card's action row is one button (--hl-btn-h, 28px) under a 4px
