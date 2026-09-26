@@ -116,7 +116,7 @@ function topEventsOptions(p: Preferences): TopEventsOptions {
 function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): BestYesterdayOptions {
   const yesterday = fromYmd(prevYmd(date));
   const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && isLeagueActive(l, yesterday));
-  const auto = pickAndAssignLeagues(fromYmd(date), slotCount).map((l) => l.sport);
+  const auto = pickAndAssignLeagues(fromYmd(date), slotCount, p.hiddenLeagues).map((l) => l.sport);
   const board = [p.firstLeague, p.secondLeague, p.thirdLeague, p.fourthLeague, p.fifthLeague]
     .slice(0, slotCount)
     .map((pref, i) => (pref === undefined ? auto[i] : pref))
@@ -1331,6 +1331,7 @@ export default function HomeContent({
           date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3,
           topEventsOptions(prefsRef.current),
           bestYesterdayOptions(prefsRef.current, date, isWideViewport() ? 5 : 3),
+          prefsRef.current.hiddenLeagues,
         ),
         loadBakedHighlights(),
       ]);
@@ -1378,7 +1379,9 @@ export default function HomeContent({
   }, [selectedDate]);
 
   // isWide is a dep so resizing across the 5-column breakpoint silently
-  // fetches (or drops) the extra two leagues.
+  // fetches (or drops) the extra two leagues. hiddenKey is one too: turning a
+  // league off in Settings moves its column to the next league at once.
+  const hiddenKey = (prefs.hiddenLeagues ?? []).join(",");
   useEffect(() => {
     if (!mountedRef.current || !selectedDate) return;
     fetchData(selectedDate, prefs.thirdLeague, {
@@ -1389,7 +1392,7 @@ export default function HomeContent({
       fifth: prefs.fifthLeague,
     }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide]);
+  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide, hiddenKey]);
 
   // The Top events column is the one column whose CONTENTS depend on prefs
   // other than its slot — the ranking pool (auto/manual), the count and the
@@ -1409,8 +1412,9 @@ export default function HomeContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.topEventsMode, prefs.topEventsLeagues, prefs.topEventsCount, prefs.favoriteTeams]);
 
-  // Same for Best of yesterday: its pool is the user's leagues, so hiding one
-  // (or starring / opting into one) re-pulls the column while it is showing.
+  // Same for Best of yesterday: its pool is the user's leagues, so starring or
+  // opting into one re-pulls the column while it is showing. (Hiding one
+  // re-pulls the whole board — see hiddenKey above.)
   const bestOnBoard = leagues.some((l) => l.sport === "best");
   useEffect(() => {
     if (!mountedRef.current || !selectedDate || !bestOnBoard) return;
@@ -1422,7 +1426,7 @@ export default function HomeContent({
       fifth: prefs.fifthLeague,
     }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.hiddenLeagues, prefs.favoriteLeagues, prefs.shownLeagues]);
+  }, [prefs.favoriteLeagues, prefs.shownLeagues]);
 
   // Live-clock polling: while any game on the board is in-progress, silently
   // refetch every 10s so the Q4/period and clock keep advancing (matches
@@ -2060,8 +2064,8 @@ export default function HomeContent({
   const autoSlotSports = useMemo(() => {
     if (!selectedDate) return [] as Sport[];
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
-    return pickAndAssignLeagues(viewDate, slotCount).map((l) => l.sport);
-  }, [selectedDate, slotCount]);
+    return pickAndAssignLeagues(viewDate, slotCount, prefs.hiddenLeagues).map((l) => l.sport);
+  }, [selectedDate, slotCount, prefs.hiddenLeagues]);
 
   // ‹ › cycling cursor, per slot. Lives up here (in a ref) because the column
   // component remounts whenever its league changes — per-column state would

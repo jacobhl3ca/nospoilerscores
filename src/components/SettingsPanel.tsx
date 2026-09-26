@@ -506,12 +506,19 @@ export default function SettingsPanel({
       return pref ?? shown;
     });
     resolved[slotIdx] = sport;
+    // Pinning a league that is turned off in the switcher list turns it back
+    // on: the board shows the next league in place of a turned-off one, so
+    // the pin would otherwise do nothing.
+    const hiddenLeagues = (prefs.hiddenLeagues ?? []).filter((s) => s !== sport);
     updatePrefs({
       firstLeague: resolved[0],
       secondLeague: resolved[1],
       thirdLeague: resolved[2],
       fourthLeague: resolved[3],
       fifthLeague: resolved[4],
+      ...(hiddenLeagues.length !== (prefs.hiddenLeagues ?? []).length
+        ? { hiddenLeagues: hiddenLeagues.length ? hiddenLeagues : undefined }
+        : {}),
     });
   };
 
