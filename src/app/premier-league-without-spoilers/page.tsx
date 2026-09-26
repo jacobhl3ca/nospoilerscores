@@ -120,6 +120,7 @@ export default function PremierLeagueWithoutSpoilersPage() {
       ]}
       ctaLabel="Open the Premier League without spoilers"
       links={[
+        { href: "/teams#premier-league", label: "Premier League clubs" },
         { href: "/soccer-highlights-without-spoilers", label: "Soccer highlights" },
         // Added 2026-09-20 — the three new soccer competition routes. This page
         // is the best-converting one on the site, so it is also the most

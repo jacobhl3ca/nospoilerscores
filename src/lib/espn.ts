@@ -5992,10 +5992,18 @@ function applyTeamRanks(
 // `${sport}-${rawId}` — caller passes the raw ESPN team id here.
 // Returns games parsed via the shared parser, sorted oldest → newest.
 // Pulls requested season(s); for current season defaults to current year.
+// `opts.upcoming` (added 2026-09-26 for the /teams pages; TeamView does not
+// pass it, so its requests are unchanged) also asks for the games the default
+// answer leaves out. Measured 2026-09-26: in the NBA/NHL preseason the default
+// is season type 1 only (5 exhibitions, dropped below), so the 80-game regular
+// season needs an explicit seasontype=2; and a soccer team's default schedule
+// is RESULTS only — its 33 remaining Premier League fixtures come back only
+// with fixture=true.
 export async function fetchTeamSchedule(
   sport: Sport,
   espnTeamId: string,
-  seasons?: number[]
+  seasons?: number[],
+  opts?: { upcoming?: boolean }
 ): Promise<Game[]> {
   const years = seasons && seasons.length > 0 ? seasons : [new Date().getFullYear()];
   if (WORKER_SCOREBOARD_SPORTS.has(sport)) return fetchWorkerTeamSchedule(sport, espnTeamId, years);
@@ -6017,12 +6025,18 @@ export async function fetchTeamSchedule(
       // default flipped underneath us. Every other sport still makes the single
       // call it always made — no extra requests, no new behaviour to re-verify.
       const seasonTypes = sport === "nfl" || sport === "ncaaf" ? [1, 2, 3] : [undefined];
-      const pages = await Promise.all(seasonTypes.map(async (seasonType) => {
+      const calls: { seasonType?: number; fixture?: boolean }[] = seasonTypes.length > 1 || !opts?.upcoming
+        ? seasonTypes.map((seasonType) => ({ seasonType }))
+        : sportGroup(sport) === "soccer"
+          ? [{}, { fixture: true }]
+          : [{}, { seasonType: 2 }, { seasonType: 3 }];
+      const pages = await Promise.all(calls.map(async ({ seasonType, fixture }) => {
         const url = new URL(
           `${BASE_URL}${sportPath}/teams/${espnTeamId}/schedule`
         );
         url.searchParams.set("season", String(year));
         if (seasonType != null) url.searchParams.set("seasontype", String(seasonType));
+        if (fixture) url.searchParams.set("fixture", "true");
         try {
           const r = await fetchWithRetry(url.toString());
           if (!r.ok) return [];
