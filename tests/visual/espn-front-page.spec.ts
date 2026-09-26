@@ -17,7 +17,7 @@ const TODAY = "20260926";
 type TeamSpec = { id: string; name: string; abbr: string; score: string };
 type Status = "final" | "live" | "scheduled";
 
-function event(id: string, away: TeamSpec, home: TeamSpec, iso: string, status: Status = "scheduled") {
+function event(id: string, away: TeamSpec, home: TeamSpec, iso: string, status: Status = "scheduled", networks: string[] = []) {
   const competitor = (t: TeamSpec, side: "home" | "away") => ({
     homeAway: side,
     team: { id: t.id, displayName: t.name, shortDisplayName: t.name, abbreviation: t.abbr, logo: "", color: "666666" },
@@ -38,7 +38,7 @@ function event(id: string, away: TeamSpec, home: TeamSpec, iso: string, status: 
         : { displayClock: "0:00", period: 0, type: { name: "STATUS_SCHEDULED", state: "pre", detail: "Sat, September 26th at 7:30 PM EDT", shortDetail: "9/26 - 7:30 PM EDT", completed: false } },
     competitions: [{
       competitors: [competitor(home, "home"), competitor(away, "away")],
-      broadcasts: [],
+      broadcasts: networks.map((n) => ({ names: [n] })),
       headlines: [],
       notes: [],
     }],
@@ -50,15 +50,15 @@ const T = (id: string, name: string, abbr: string, score = ""): TeamSpec => ({ i
 const BOARDS: Record<string, unknown[]> = {
   "football/college-football": [
     event("c1", T("1", "Texas", "TEX", "47"), T("2", "Tennessee", "TENN", "44"), "2026-09-26T16:00:00Z", "final"),
-    event("c2", T("3", "Oklahoma", "OU", "17"), T("4", "Georgia", "UGA", "13"), "2026-09-26T17:30:00Z", "live"),
+    event("c2", T("3", "Oklahoma", "OU", "17"), T("4", "Georgia", "UGA", "13"), "2026-09-26T17:30:00Z", "live", ["ESPN"]),
     event("c3", T("5", "Akron", "AKR"), T("6", "Toledo", "TOL"), "2026-09-26T19:00:00Z"),
   ],
   "baseball/mlb": [
-    event("m1", T("11", "Dodgers", "LAD"), T("12", "Giants", "SF"), "2026-09-26T20:05:00Z"),
+    event("m1", T("11", "Dodgers", "LAD"), T("12", "Giants", "SF"), "2026-09-26T20:05:00Z", "scheduled", ["FOX"]),
     event("m2", T("13", "Rockies", "COL"), T("14", "White Sox", "CHW"), "2026-09-26T23:10:00Z"),
   ],
   "hockey/nhl": [
-    event("h1", T("21", "Hurricanes", "CAR"), T("22", "Predators", "NSH"), "2026-09-26T23:00:00Z"),
+    event("h1", T("21", "Hurricanes", "CAR"), T("22", "Predators", "NSH"), "2026-09-26T23:00:00Z", "scheduled", ["ESPN+"]),
   ],
 };
 const STRIP = {
@@ -142,6 +142,42 @@ for (const { name, width, height } of [
     if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/espn-front-page-${width}.png` });
   });
 }
+
+// Phone, ratings on (Jacob 9/26 screenshot, "doesn't look consistent"): the
+// league chip + a live clock + the badge + the network needed more than one
+// row of a 3-column board, so ESPN front page cards wrapped to two lines and
+// stood taller than the MLB / NFL cards beside them. The chip now rides on the
+// card's top border, and every row is one line, as tall as a single-league
+// column's.
+test("phone: ESPN front page cards keep one-line rows like the other columns (390px)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page, { showRatings: true });
+  await page.goto("/");
+  const col = page.locator('[data-league-column="top"]');
+  await expect(col.locator("[data-league-tab]")).toHaveCount(4, { timeout: 30_000 });
+  const refH = (await page.locator('[data-league-column="mlb"] .game-meta-row').first().boundingBox())!.height;
+  const rows = col.locator(".game-meta-row");
+  await expect(rows).toHaveCount(4);
+  for (let i = 0; i < 4; i++) {
+    const h = (await rows.nth(i).boundingBox())!.height;
+    expect(h, `card ${i}: the meta row wrapped (${h}px vs ${refH}px in the MLB column)`).toBeLessThanOrEqual(refH + 0.5);
+  }
+  await expect(col.locator("[data-league-tag]")).toHaveCount(4);
+  for (let i = 0; i < 4; i++) await expect(col.locator("[data-league-tag]").nth(i)).toBeHidden();
+  const tabs = await col.locator("[data-league-tab]").evaluateAll((els) => els.map((t) => {
+    const tab = t.getBoundingClientRect();
+    const card = t.parentElement!.getBoundingClientRect();
+    const row = t.parentElement!.querySelector(".game-meta-row")!.getBoundingClientRect();
+    return { text: t.textContent, top: tab.top, bottom: tab.bottom, cardTop: card.top, rowTop: row.top, shown: getComputedStyle(t).display !== "none" };
+  }));
+  expect(tabs.map((t) => t.text)).toEqual(["NCAAF", "NHL", "MLB", "NCAAF"]);
+  for (const [i, t] of tabs.entries()) {
+    expect(t.shown, `card ${i}: tab hidden`).toBe(true);
+    expect(t.top < t.cardTop && t.bottom > t.cardTop, `card ${i}: tab is not on the card's top border`).toBe(true);
+    expect(t.bottom, `card ${i}: tab overlaps the row below it`).toBeLessThanOrEqual(t.rowTop);
+  }
+  if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/espn-front-page-phone-ratings.png` });
+});
 
 test("ratings mode keeps ESPN's order instead of re-sorting by rating", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });

@@ -566,6 +566,24 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       aria-label={cardClickable ? cardLabel : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
+      {/* League tab — the 3-column phone board's copy of the league chip,
+          sitting on the card's top border. In the meta row, chip + live clock +
+          badge + network needed ~110px of a ~100px row, so an ESPN front page
+          card wrapped to two lines and stood a line taller than its neighbours
+          in the MLB / NFL columns (Jacob 9/26 phone screenshot: "doesn't look
+          consistent"). On the border it costs no width and no height, so the
+          row reads exactly like every other column's. CSS picks one of the
+          two (globals.css, .ns-board-tight); everywhere else the inline chip
+          below shows and this one is display:none. */}
+      {leagueTag && (
+        <span
+          className="league-tag-tab absolute left-2 top-0 -translate-y-1/2 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none pointer-events-none"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+          data-league-tab={leagueTag}
+        >
+          {leagueTag}
+        </span>
+      )}
       {/* Playoff game number ("Game 3") — DAY-OF-GAME ONLY (Jacob 6/12):
           a lookahead card ("Tomorrow - 8:30PM" on today's board, nextGameDate
           set) already carries another day's game info, so the series line stays
@@ -724,14 +742,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 purpose: chips + time are this cell's floor, so on a column too
                 narrow for them + a centered badge (a 3-column phone board) the
                 badge moves right just enough to clear them instead of covering
-                the chip or clipping the live clock. Elsewhere it is
+                the chip or clipping the live clock. (The 3-column phone board
+                is that case, so there the chip leaves this row for the tab on
+                the card's border — see league-tag-tab above.) Elsewhere it is
                 display:contents — no box of its own, so the three stay direct
                 flex items of the row exactly as before. column-gap: inherit
                 keeps the row's own gap, tight-board override included. */}
             <span className={hasRating ? "flex-1 flex items-center [column-gap:inherit]" : "contents"}>
             {leagueTag && (
               <span
-                className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
+                className="league-tag-inline shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
                 data-league-tag={leagueTag}
                 title={leagueLabel && leagueLabel !== leagueTag ? leagueLabel : undefined}
