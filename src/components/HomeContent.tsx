@@ -3806,8 +3806,7 @@ export default function HomeContent({
                   onShowPlayoffs={bracketPillDue && league.sport === "mlb"
                     ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
                     : null}
-                  onPlayHighlight={openVideoModal}
-                  onPlayEmbed={openEmbedModal}
+                  onPlayList={playNewsVideo}
                 />
               )
               : undefined;
