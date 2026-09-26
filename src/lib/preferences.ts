@@ -293,6 +293,11 @@ export interface Preferences {
   // News column 3 is on the board by default, even when scores column 3 is
   // Empty (it then shows Top news). True means the user removed it.
   newsGenericHidden?: boolean;
+  // True when the user turned "Top news (ESPN)" off in Settings' switcher
+  // list (Jacob 9/26). It leaves every news switcher, and a news column 3 that
+  // would fall back to it takes the next league instead. Best of yesterday is
+  // turned off the same way, through hiddenLeagues ("best" is a Sport).
+  topNewsHidden?: boolean;
   // Which POSITION the generic "Top news" column occupies on the news board
   // (0-2, default 2 = last). Picking "Top news (ESPN)" from any column's
   // switcher moves the column here rather than doing nothing — before this,

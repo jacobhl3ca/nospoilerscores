@@ -751,6 +751,7 @@ export default function SettingsPanel({
       newsThirdLeague: undefined,
       newsTopNews: undefined,
       newsGenericHidden: undefined,
+      topNewsHidden: undefined,
       newsGenericSlot: undefined,
       // Yesterday, not "smart" — this is the documented fresh-install default
       // (see `defaults` in preferences.ts, moved off "smart" on 2026-08-09 so a
@@ -1377,6 +1378,39 @@ export default function SettingsPanel({
                       </span>
                     </label>
                   )}
+                  {/* The two cross-league columns (Jacob 9/26): on by
+                      default, and unticking one takes it out of every
+                      switcher and off the board, like a league. */}
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>Across leagues</p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                      {BEST_YESTERDAY_ENABLED && (
+                        <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
+                          <input
+                            type="checkbox"
+                            checked={!(prefs.hiddenLeagues ?? []).includes("best")}
+                            onChange={(event) => {
+                              const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
+                              if (event.target.checked) hiddenLeagues.delete("best");
+                              else hiddenLeagues.add("best");
+                              updatePrefs({ hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined });
+                            }}
+                            className="cursor-pointer accent-[var(--accent)]"
+                          />
+                          <span>{BEST_YESTERDAY_LABEL}</span>
+                        </label>
+                      )}
+                      <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
+                        <input
+                          type="checkbox"
+                          checked={!prefs.topNewsHidden}
+                          onChange={(event) => updatePrefs({ topNewsHidden: event.target.checked ? undefined : true })}
+                          className="cursor-pointer accent-[var(--accent)]"
+                        />
+                        <span>Top news (ESPN)</span>
+                      </label>
+                    </div>
+                  </div>
                   {visibleLeagueGroups.map((group) => (
                     <div key={group.key}>
                       <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>{group.label}</p>
