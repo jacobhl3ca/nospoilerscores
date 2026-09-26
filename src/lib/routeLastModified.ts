@@ -43,11 +43,41 @@ export function routeLastModified(route: string): Date | null {
   return result;
 }
 
+// When a route's page was first committed (2026-09-25, for the Article node's
+// datePublished on SeoLandingPage). Same shallow-clone rule as above: no date
+// rather than a wrong one.
+const firstCache = new Map<string, Date | null>();
+export function routeFirstPublished(route: string): Date | null {
+  const hit = firstCache.get(route);
+  if (hit !== undefined) return hit;
+  let result: Date | null = null;
+  try {
+    if (shallow === undefined) {
+      shallow =
+        execFileSync("git", ["rev-parse", "--is-shallow-repository"], { encoding: "utf8" }).trim() !== "false";
+    }
+    if (!shallow) {
+      const lines = execFileSync(
+        "git",
+        ["log", "--format=%cI", "--", `src/app${route}/page.tsx`],
+        { encoding: "utf8" },
+      ).trim().split("\n");
+      const iso = lines[lines.length - 1];
+      if (iso) result = new Date(iso);
+    }
+  } catch {
+    result = null;
+  }
+  firstCache.set(route, result);
+  return result;
+}
+
 // "September 24, 2026", in New York time — the day the board itself runs on.
-export function formatUpdated(date: Date): string {
+// `short` = "Sep 24, 2026", for the article byline.
+export function formatUpdated(date: Date, month: "long" | "short" = "long"): string {
   return date.toLocaleDateString("en-US", {
     timeZone: "America/New_York",
-    month: "long",
+    month,
     day: "numeric",
     year: "numeric",
   });

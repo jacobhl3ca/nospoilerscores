@@ -45,66 +45,53 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
-      <DocTopBar route="privacy" />
+      <DocTopBar route="privacy" subject="Privacy" />
       <h1 className="text-2xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime={PRIVACY_UPDATED}>{PRIVACY_UPDATED}</time></p>
+      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime="2026-09-25">2026-09-25</time></p>
 
       <section className="space-y-4">
         <p>
-          HideScore is built to keep sports results off your screen. We never sell your personal information or share it for advertising. The account data we store is limited to the optional sign-in and sync information described below.
+          HideScore collects as little as it can. We never sell your data or share it for advertising.
         </p>
 
         <h2 className="text-lg font-semibold mt-6">What we collect</h2>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            <strong>Usage stats.</strong> Which pages and features get used, and whether on the website or the app. They are counted without cookies and never build a profile of you. You can <Link href="/notrack" className="underline underline-offset-2">turn them off in this browser</Link>.
+          </li>
+          <li>
+            <strong>Crash reports.</strong> When something breaks, the app sends the error and basic device details to an error-monitoring service. We use them only to fix bugs.
+          </li>
+          <li>
+            <strong>Your account, if you make one.</strong> Sign-in is optional (Apple, Google or an email code). We then store your email, sign-in record, saved settings and basic account activity, so your teams sync between devices. Your usage stats also carry a scrambled account code that cannot be turned back into your email.
+          </li>
+        </ul>
         <p>
-          HideScore has no advertising trackers, and we do not place cookies to track you across sites.
-        </p>
-        <p>
-          For basic usage statistics we use privacy-friendly, cookieless analytics (GoatCounter and a self-hosted Umami instance). These record only aggregate page views &mdash; which pages are visited and rough totals. They do not set cookies, do not build a profile of you, and do not track you across other sites.
-        </p>
-        <p>
-          You can also <Link href="/notrack" className="underline underline-offset-2">turn off self-hosted analytics in this browser</Link>. The choice stays on this device until you clear HideScore&rsquo;s browser data.
-        </p>
-        <p>
-          If you are signed in, we also tag your analytics session with a random, scrambled account code and whether you are using the website or mobile app, so we can tell how many real accounts &mdash; rather than how many devices &mdash; use each one. That code is derived from your account with a one-way key we keep private: it cannot be turned back into your email or sign-in identifier, and it is only ever sent to our own self-hosted Umami, never to a third party.
-        </p>
-        <p>
-          To find and fix crashes, HideScore uses Sentry, a third-party error-monitoring service. When the app hits an unexpected error, it sends Sentry a technical report &mdash; the error message and stack trace, along with basic browser and device details and a small sample of anonymous performance data. We use this only to diagnose and fix bugs. It is not tied to your identity, is never used for advertising, and is not sold or shared.
-        </p>
-        <p>
-          HideScore works fully without an account. You can optionally sign in with Apple, Google, or a six-digit code sent to your email so your favorite teams and settings sync across your devices. If you choose to sign in, we store the associated email address, provider or internal identity record, session, saved preferences, and basic account timestamps and website/mobile-app usage. We use this data only to provide and secure your account and sync. You can sign out at any time, and deleting your account from Settings &rarr; Account erases the server copy of this data.
-        </p>
-        <p>
-          If you are not signed in, your favorite-team selections and view preferences are stored only in your browser&apos;s local storage on your device and are never transmitted to us. If you sign in, those same preferences are also synced to our server so they follow you across your devices.
+          Without an account, your teams and settings stay on your device. The services that handle our stats and crash reports get only this data and must protect it to the same standard.
         </p>
 
-        <h2 className="text-lg font-semibold mt-6">Network requests</h2>
+        <h2 className="text-lg font-semibold mt-6">Deleting your data</h2>
         <p>
-          When you use HideScore, your device fetches publicly available scores, schedules, news headlines, and video metadata from third-party sports sources, including ESPN, MLB.com, NBA.com, NHL.com, Reddit, YouTube, and others. These services may receive your IP address and standard request information as a normal part of any web request. HideScore does not see, log, or store these requests on our servers.
+          Settings &rarr; Account &rarr; Delete account erases your synced data from our servers. Email us to delete anything else.
+        </p>
+
+        <h2 className="text-lg font-semibold mt-6">Sports data</h2>
+        <p>
+          Your device loads scores, schedules and videos straight from public sports sites. Those sites see a normal web request, including your IP address. We do not log these requests.
         </p>
 
         <h2 className="text-lg font-semibold mt-6">Children</h2>
         <p>
-          HideScore is not directed at children under 13, and we do not knowingly collect personal information from children under 13. If you believe a child has provided us personal information, contact us and we will delete it.
+          HideScore is not for children under 13, and we do not knowingly collect their data. Tell us and we will delete it.
         </p>
 
-        <h2 className="text-lg font-semibold mt-6">Third-party content</h2>
+        <h2 className="text-lg font-semibold mt-6">Changes and contact</h2>
         <p>
-          HideScore links to and embeds publicly available content from third-party sports providers and broadcasters. HideScore is not affiliated with, endorsed by, or sponsored by ESPN, MLB, NBA, NHL, NFL, the NCAA, FIFA, or any team, league, or broadcaster. All trademarks and logos belong to their respective owners.
+          Changes are posted here with a new date. Questions: <EmailLink />
         </p>
 
-        <h2 className="text-lg font-semibold mt-6">Changes</h2>
-        <p>
-          If this policy changes in the future, the updated version will be posted at this URL with a new &ldquo;Last updated&rdquo; date.
-        </p>
-
-        <h2 className="text-lg font-semibold mt-6">Contact</h2>
-        <p>
-          Questions: <EmailLink />
-        </p>
-
-        <h2 className="text-lg font-semibold mt-6">Credits</h2>
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          The HideScore monkey icon is derived from <a href="https://github.com/twitter/twemoji" className="underline underline-offset-2" target="_blank" rel="noopener noreferrer">Twemoji</a>, copyright Twitter, Inc. and other contributors, licensed under CC-BY 4.0.
+          HideScore is not affiliated with any team, league or broadcaster. Trademarks belong to their owners. The monkey icon is derived from <a href="https://github.com/twitter/twemoji" className="underline underline-offset-2" target="_blank" rel="noopener noreferrer">Twemoji</a> (CC-BY 4.0).
         </p>
       </section>
 

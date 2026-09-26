@@ -81,7 +81,7 @@ export const metadata: Metadata = {
 export default function SpoilerFreeSportsPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
-      <DocTopBar route="spoiler-free-sports" />
+      <DocTopBar route="spoiler-free-sports" subject="Spoiler-free guide" />
       <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
         HideScore
       </p>

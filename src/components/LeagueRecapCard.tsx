@@ -32,11 +32,11 @@ import type { ShareCardMeta } from "@/lib/shareCard";
 // keep the same top offset.
 //
 // `onShowPlayoffs`: the same row on TODAY's MLB column during the playoff
-// window holds a "Playoffs" pill with three text buttons — Bracket, Odds,
+// window holds a "Playoff" pill with three text buttons — Bracket, Odds,
 // Picks — each opening the playoff picture on that tab (Jacob 9/25: "just have
 // playoff word, then 3 selectable things"). Same pill and button box model, so
 // it lines up with a sibling's recap exactly as a recap does, and on a phone it
-// stacks the same way: "Playoffs" on top, the three buttons in a row under it.
+// stacks the same way: "Playoff" on top, the three buttons in a row under it.
 // When the day also has a recap, the recap keeps the heading and a bracket
 // icon joins its buttons, last.
 
@@ -188,7 +188,7 @@ export default function LeagueRecapCard({
           className="flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate"
           style={{ color: "var(--text)" }}
         >
-          Playoffs
+          Playoff
         </span>
         <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
           {PLAYOFFS_TABS.map((t) => (

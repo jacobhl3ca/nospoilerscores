@@ -90,7 +90,7 @@ const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
 export default function FaqPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
-      <DocTopBar route="faq" />
+      <DocTopBar route="faq" subject="FAQ" />
       <h1 className="text-2xl font-bold mb-6">Frequently asked questions</h1>
 
       <section className="space-y-6">

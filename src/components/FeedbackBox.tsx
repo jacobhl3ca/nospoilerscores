@@ -28,7 +28,15 @@ const BUILD = (process.env.NEXT_PUBLIC_BUILD_SHA || "dev").slice(0, 8);
 // immediately reopen it). Bumping the counter means "open now"; the box closes
 // itself normally afterwards. `prefill` seeds the message so a request that
 // arrived from a specific place in the UI is identifiable in the inbox.
-export default function FeedbackBox({ openSignal, prefill }: { openSignal?: number; prefill?: string } = {}) {
+// `label` renames the collapsed trigger and `seed` starts the message when that
+// trigger is tapped (2026-09-25: the articles' "Report an error" link seeds the
+// page path, since a submission carries no URL of its own).
+export default function FeedbackBox({
+  openSignal,
+  prefill,
+  label = "Feedback",
+  seed,
+}: { openSignal?: number; prefill?: string; label?: string; seed?: string } = {}) {
   const [text, setText] = useState("");
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
@@ -172,18 +180,15 @@ export default function FeedbackBox({ openSignal, prefill }: { openSignal?: numb
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen(true)}
-        // Opens the centered role="dialog" feedback form below, so declare
-        // aria-haspopup="dialog" alongside aria-expanded — the same pairing
-        // every other dialog-opener in the app uses (GameCard, HomeContent,
-        // NewsColumn…). Without it a screen reader announces this as a plain
-        // expandable button rather than one that summons a dialog.
-        aria-haspopup="dialog"
+        onClick={() => {
+          if (seed) setText(seed);
+          setOpen(true);
+        }}
         aria-expanded="false"
         className="underline underline-offset-2 cursor-pointer hover:opacity-80"
         style={{ color: "var(--text-muted)" }}
       >
-        Feedback
+        {label}
       </button>
     );
   }
@@ -235,7 +240,7 @@ export default function FeedbackBox({ openSignal, prefill }: { openSignal?: numb
             className="underline underline-offset-2 cursor-pointer hover:opacity-80"
             style={{ color: "var(--text-muted)" }}
           >
-            Feedback
+            {label}
           </button>
           <div
             // z-[70] clears Settings (z-[60]), the highest overlay in the app:

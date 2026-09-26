@@ -8,6 +8,7 @@
 // Relative, not "@/lib/youtube": espn.ts imports this file, and the unit tests
 // load espn.ts through jiti, which does not know the "@/" alias.
 import { getApiBase } from "./youtube";
+import { isScoreSpoiler } from "./spoilers";
 
 // Keyed `${sport}:${game.id}` — game.id === the ESPN event id the prebake keys
 // on. `official` = 1st button (channel recap), `extended` = 2nd button (already
@@ -47,6 +48,11 @@ export type BakedHighlight = {
   // marks a YouTube title that prints the result, so the card says so.
   officialEmbeddable?: false;
   officialTitleScore?: true;
+  // La Liga only: ESPN's ~70 s spoiler-free "Game Highlights" mp4, baked when
+  // the official is missing or embed-blocked. Plays in-app; never its poster.
+  espnClipUrl?: string;
+  espnClipHeadline?: string;
+  espnClipSec?: number;
 };
 
 const BAKED_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000;
@@ -59,6 +65,21 @@ const BAKED_CHANNEL_KEY = {
   club: "clubChannel",
 } as const;
 
+// A fresh, official-channel record for exactly this matchup.
+function bakedRecordFits(baked: BakedHighlight | null | undefined, expectedAway: string, expectedHome: string): baked is BakedHighlight {
+  if (!baked || baked.sourcePolicy !== "official-channel") return false;
+  if (!Number.isFinite(baked.t) || Date.now() - Number(baked.t) >= BAKED_MAX_AGE_MS) return false;
+  const normalizeTeam = (name: string) => name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const expectedMatchup = [normalizeTeam(expectedAway), normalizeTeam(expectedHome)].sort().join("|");
+  return !!baked.matchup && baked.matchup === expectedMatchup;
+}
+
 // A policy label alone is not proof: older manifests carried stale or unscoped
 // IDs while still saying "official-channel". Trust a prebaked slot only when it
 // names the exact channel the current caller expects. Legacy records safely fall
@@ -70,17 +91,7 @@ export function getChannelVerifiedBakedId(
   expectedAway: string,
   expectedHome: string,
 ): string | null {
-  if (!baked || baked.sourcePolicy !== "official-channel" || !expectedChannel) return null;
-  if (!Number.isFinite(baked.t) || Date.now() - Number(baked.t) >= BAKED_MAX_AGE_MS) return null;
-  const normalizeTeam = (name: string) => name
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-  const expectedMatchup = [normalizeTeam(expectedAway), normalizeTeam(expectedHome)].sort().join("|");
-  if (!baked.matchup || baked.matchup !== expectedMatchup) return null;
+  if (!expectedChannel || !bakedRecordFits(baked, expectedAway, expectedHome)) return null;
   const actualChannel = baked[BAKED_CHANNEL_KEY[slot]];
   const videoId = baked[slot];
   if (!videoId || actualChannel?.toLowerCase() !== expectedChannel.toLowerCase()) return null;
@@ -90,6 +101,21 @@ export function getChannelVerifiedBakedId(
   const duplicated = (Object.keys(BAKED_CHANNEL_KEY) as (keyof typeof BAKED_CHANNEL_KEY)[])
     .some((otherSlot) => otherSlot !== slot && baked[otherSlot] === videoId);
   return duplicated ? null : videoId;
+}
+
+// The baked ESPN clip for this game, or null. Only when the official YouTube
+// cut cannot play in our player (missing or embed-blocked), only a direct mp4
+// on ESPN's CDN, and only if its headline passes the score check again here.
+export function getVerifiedEspnClip(
+  baked: BakedHighlight | null | undefined,
+  expectedAway: string,
+  expectedHome: string,
+): { url: string; durationSec: number | null } | null {
+  if (!bakedRecordFits(baked, expectedAway, expectedHome) || !baked.espnClipUrl) return null;
+  if (baked.official && baked.officialEmbeddable !== false) return null;
+  if (!/^https:\/\/[a-z0-9.-]+\.akamaized\.net\/.+\.mp4(\?|$)/i.test(baked.espnClipUrl)) return null;
+  if (!baked.espnClipHeadline || isScoreSpoiler(baked.espnClipHeadline)) return null;
+  return { url: baked.espnClipUrl, durationSec: Number.isFinite(baked.espnClipSec) ? (baked.espnClipSec as number) : null };
 }
 
 // Fetched once per session and shared across every card (one small static

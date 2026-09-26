@@ -241,6 +241,22 @@ function publishedBeforeGame(publishedText, gameMs, nowMs) {
   return latest < gameMs - AGE_GATE_SLACK_MS;
 }
 
+// A videoRenderer block's running time ("8:46", "1:02:15") in seconds, or null
+// when the block has none (live streams, premieres). Returned beside the id so
+// a button the client resolves live can show minutes like a baked one does —
+// before this, a game the bake missed read "UCL" while its neighbour read "9m"
+// (Roma–Fenerbahce vs Shakhtar–PSV, UCL 2026-09-10).
+function blockLengthSec(block) {
+  // lengthText nests an accessibility label before simpleText, so read a short
+  // window after the key rather than matching braces.
+  const at = block.indexOf('"lengthText":{');
+  if (at < 0) return null;
+  const m = block.slice(at, at + 400).match(/"simpleText":"(\d{1,2}(?::\d{2}){1,2})"/);
+  if (!m) return null;
+  const sec = m[1].split(":").reduce((acc, part) => acc * 60 + Number(part), 0);
+  return sec > 0 ? sec : null;
+}
+
 // WEEK TOKEN — shared by the gridiron week gate below. Reads both digit
 // ("Week 15", "Wk 15") and spelled-out ("WEEK ONE" … "WEEK TWENTY-ONE")
 // forms. TSN spells CFL weeks 1–5 out in full ("CFL WEEK ONE: …", "CFL WEEK
@@ -869,8 +885,10 @@ export default {
 
         // Split HTML into videoRenderer blocks and parse each one individually
         const blocks = html.split('"videoRenderer":{').slice(1);
+        const lengthById = new Map();
         const videos = blocks.map((block) => {
           const idMatch = block.match(/^"videoId":"([a-zA-Z0-9_-]{11})"/);
+          if (idMatch && !lengthById.has(idMatch[1])) lengthById.set(idMatch[1], blockLengthSec(block));
           const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
           const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
           const publishedMatch = block.match(/"publishedTimeText":\{"simpleText":"(.*?)"/);
@@ -2241,6 +2259,7 @@ export default {
               let chExtendedId = null;
               for (const block of chBlocks) {
                 const idMatch = block.match(/^"videoId":"([a-zA-Z0-9_-]{11})"/);
+                if (idMatch && !lengthById.has(idMatch[1])) lengthById.set(idMatch[1], blockLengthSec(block));
                 if (!idMatch || excludeSet.has(idMatch[1])) continue;
                 const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
                 const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
@@ -2288,7 +2307,8 @@ export default {
           });
         }
 
-        return new Response(JSON.stringify({ videoId }), {
+        const lengthSec = lengthById.get(videoId) ?? null;
+        return new Response(JSON.stringify(lengthSec ? { videoId, lengthSec } : { videoId }), {
           headers: {
             "Content-Type": "application/json",
             "Cache-Control": "public, max-age=300",

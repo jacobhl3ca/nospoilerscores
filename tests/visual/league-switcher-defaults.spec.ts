@@ -8,7 +8,11 @@ const OPT_IN_LEAGUES = ["Liga MX", "NWSL", "Libertadores", "F1", "NASCAR", "Indy
 
 async function openSwitcherSettings(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Open settings", exact: true }).click();
-  await expect(page.getByText("Leagues in the switcher", { exact: true })).toBeVisible();
+  // The catalog sits in a closed fold since 9/25; open it and show every row
+  // (the fold starts with offseason rows hidden).
+  await page.locator("summary", { hasText: /leagues in the switcher · Edit/ }).click();
+  const hide = page.getByRole("checkbox", { name: /Hide offseason/ });
+  if (await hide.isChecked()) await hide.uncheck();
 }
 
 test.beforeEach(async ({ page }) => {
