@@ -135,6 +135,7 @@ export default function NflHighlightsWithoutSpoilersPage() {
       ctaLabel="Open the NFL without spoilers"
       ctaHref="/yesterday"
       links={[
+        { href: "/teams#nfl", label: "NFL teams" },
         { href: "/nhl-highlights-without-spoilers", label: "NHL highlights" },
         { href: "/nba-scores-without-spoilers", label: "NBA" },
         { href: "/mlb-highlights-without-spoilers", label: "MLB highlights" },

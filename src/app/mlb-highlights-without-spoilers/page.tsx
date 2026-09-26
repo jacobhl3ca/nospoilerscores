@@ -85,6 +85,7 @@ export default function MlbHighlightsWithoutSpoilersPage() {
       ctaLabel="Open MLB highlights"
       ctaHref="/yesterday"
       links={[
+        { href: "/teams#mlb", label: "MLB teams" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },
         { href: "/redzone-for-every-sport", label: "Big Inning and other whip-around shows" },
