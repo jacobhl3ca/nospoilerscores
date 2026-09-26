@@ -352,9 +352,13 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // Highlights - September 18, 2026 | #ECACHockey"), 3/3 strict on the 9/18-9/19
 // opening weekend with a `women` title token, no score in the title. Lit
 // WITHOUT a fixed channel, like ncaavb: a game with an ECAC school uses the
-// conference chain, every other game stays dark. The channel probe (AHA prints
-// scores, Hockey East/WCHA/NEWHA post no per-game cut) is in
-// lib/collegeHighlights.ts, with the men's re-probe and what ncaah still needs.
+// conference chain, every other game stays dark. Atlantic Hockey America
+// joined the chain 2026-09-26: one cut per AHA women's game, score in every
+// title (covered by `maskTitle`, the title bar stays masked) and no gender
+// word (its own empty `channelTitleTokens` list, flagged `ownTokens`, replaces
+// the sport-wide `women` token for that channel only). The channel probe
+// (Hockey East/WCHA/NEWHA post no per-game cut) is in lib/collegeHighlights.ts,
+// with the men's re-probe and what ncaah still needs.
 //
 // ufl (UFL spring football, added 2026-09-14): probed against the LIVE worker
 // with strict=1 on 5 completed 2026 fixtures (May 3, May 16, May 29, Jun 7
@@ -401,6 +405,14 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 //     round-of-16 tie), i.e. the wrong-match class again.
 // Re-probe once the 2026-27 knockouts exist; any relight needs ≥4/5 and a
 // competition title token.
+//
+// ncaawsoc / ncaamsoc (NCAA soccer, added 2026-09-26, both DARK). The cut
+// Jacob found for Penn State at Ohio State (women's, 9/10) is on "Real Woso
+// Fan", a fan channel, not an uploader the app can trust; no conference or
+// network channel has been probed for either sport yet. Regular-season matches
+// stream on ESPN+ with no official upload. Light either the way ncaavb was:
+// a per-school conference chain in collegeHighlightChannels.json once a
+// conference channel measures ≥4/5 strict with a title token.
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "copadelrey",
   "cricket",
@@ -412,7 +424,10 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   // competition title token. See OFFICIAL_CHANNELS above.
   "ncaah",
   "ncaabase",
+  // Both college soccer feeds: no trusted uploader yet (see the note above).
+  "ncaamsoc",
   "ncaasoft",
+  "ncaawsoc",
   "rugbychamp",
   "rugbytest",
   "ufl",
@@ -655,7 +670,9 @@ const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   // ncaawh: ECAC Hockey posts the men's and the women's cut of the same two
   // schools, often the same weekend. "women" is in every women's title and in
   // no men's title. The reverse token must be "ncaa men": "men" alone is a
-  // substring of "women s" once punctuation folds to spaces.
+  // substring of "women s" once punctuation folds to spaces. Atlantic Hockey
+  // America's titles carry neither word, so that channel opts out through its
+  // own empty list in collegeHighlightChannels.json (`ownTokens`).
   ncaawh: ["women"],
 };
 

@@ -44,7 +44,11 @@ export type PollRankCompetitor = { curatedRank?: { current?: number } };
 //
 // NCAA WOMEN'S VOLLEYBALL (2026-09-14): curatedRank is the AVCA Top 25 on the
 // event (1, 2, 3, 4, 8 seen on the 2026-09-12 slate; 99 = unranked).
-const POLL_RANK_SPORTS = new Set<Sport>(["ncaaf", "ncaah", "ncaawh", "ncaavb", "ncaabase", "ncaasoft"]);
+//
+// NCAA SOCCER (2026-09-26): curatedRank is the United Soccer Coaches poll on
+// the event (1 North Carolina, 6 Stanford, 16 Virginia on the 2026-09-25
+// women's slate; 99 = unranked). Both feeds carry it.
+const POLL_RANK_SPORTS = new Set<Sport>(["ncaaf", "ncaah", "ncaawh", "ncaavb", "ncaawsoc", "ncaamsoc", "ncaabase", "ncaasoft"]);
 
 // Returns null for every sport but the college poll leagues above, and for the two shapes ESPN uses to
 // mean "not ranked": the sentinel 99, and an absent curatedRank.

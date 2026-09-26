@@ -31,6 +31,9 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   ncaawh: "/hockey/womens-college-hockey",
   // Probed 2026-09-14: 200, 6 articles (ESPN "Game Highlights" clips).
   ncaavb: "/volleyball/womens-college-volleyball",
+  // Probed 2026-09-26: 200, 6 articles each.
+  ncaawsoc: "/soccer/usa.ncaa.w.1",
+  ncaamsoc: "/soccer/usa.ncaa.m.1",
   golf: "/golf/pga",
   // ESPN has no bare /tennis/news feed (404) — the ATP league feed carries the
   // marquee tennis news (Slams, both tours' headlines), so route tennis there.
@@ -321,6 +324,9 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   ncaawh: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
   // ESPN's own league mark for women's college volleyball (leagues[0].logos, 2026-09-14).
   ncaavb: "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/sports-volleyball-solid.png",
+  // ESPN's own league mark for both college soccer feeds (leagues[0].logos, 2026-09-26).
+  ncaawsoc: "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/sports-soccer-solid.png",
+  ncaamsoc: "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/sports-soccer-solid.png",
   // The current CFL shield (2016 mark) on en.wikipedia — the Commons
   // CFL_logo.svg is the old 250×41 wordmark, unreadable at 40px. Verified 200
   // image/png, 250×229, 2026-09-13.
@@ -581,6 +587,7 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   // when they're active they're the biggest story in the sport.
   "euro", "afcon", "ligamx", "nwsl", "efl", "libertadores", "saudi",
   "uecl", "facup", "copadelrey", "dfbpokal",
+  "ncaawsoc", "ncaamsoc",
   "cricket",
   "ufc", "boxing", "f1", "nascar", "indycar", "poker",
 ];

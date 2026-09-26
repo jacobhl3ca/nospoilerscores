@@ -1800,6 +1800,7 @@ export default function HomeContent({
     // ── soccer block, bottom ──
     "epl", "ucl", "uel", "uecl", "laliga", "seriea", "bundesliga", "ligue1",
     "mls", "ligamx", "nwsl", "efl", "libertadores", "saudi",
+    "ncaawsoc", "ncaamsoc",
     "facup", "copadelrey", "dfbpokal",
     "fifa", "euro", "afcon",
   ];

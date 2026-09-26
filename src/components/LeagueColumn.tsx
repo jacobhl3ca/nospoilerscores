@@ -1389,6 +1389,7 @@ export default function LeagueColumn({
     "fifa", "epl", "mls", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
     "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi",
     "uecl", "facup", "copadelrey", "dfbpokal",
+    "ncaawsoc", "ncaamsoc",
   ]);
   const getLosses = (record: string): number => {
     const parts = record.split("-");

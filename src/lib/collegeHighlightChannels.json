@@ -147,7 +147,8 @@
       "women"
     ],
     "conferences": {
-      "ecac": "ECAC Hockey"
+      "ecac": "ECAC Hockey",
+      "aha": "Atlantic Hockey America"
     },
     "teamConferences": {
       "225": "ecac",
@@ -161,8 +162,21 @@
       "2528": "ecac",
       "2779": "ecac",
       "2785": "ecac",
-      "43": "ecac"
+      "43": "ecac",
+      "2815": "aha",
+      "2385": "aha",
+      "213": "aha",
+      "178": "aha",
+      "2523": "aha",
+      "183": "aha",
+      "48": "aha"
     },
+    "channelTitleTokens": {
+      "Atlantic Hockey America": []
+    },
+    "maskTitle": [
+      "Atlantic Hockey America"
+    ],
     "networks": []
   },
   "efl": {

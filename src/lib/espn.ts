@@ -129,6 +129,20 @@ const SPORT_PATHS: Record<Sport, string> = {
   // 2026-09-14: 200, calendar 2026-08-21 → 2026-11-29 (regular season only),
   // 159 games on a Saturday, curatedRank = AVCA Top 25, records[0] = overall.
   ncaavb: "/volleyball/womens-college-volleyball/scoreboard",
+  // NCAA women's and men's soccer (added 2026-09-26, after Jacob found the
+  // per-game cuts on YouTube). Standard ESPN soccer shape (status.clock counts
+  // up to 5400, STATUS_FULL_TIME, two halves), so parseGame reads them as is
+  // and both sit in SOCCER_SPORTS. Probed live 2026-09-26: 200, league abbr
+  // CWSOC / CMSOC, 40 and 60 games on a Friday, calendars 2026-08-12 →
+  // 12-30 (padded past the College Cup) and 2026-08-20 → 11-08 (tournament
+  // not yet listed). curatedRank = United Soccer Coaches poll (1, 6, 16 seen;
+  // 99 = unranked). Team ids are SOCCER-specific (ETSU 20606), but every
+  // event carries team.logo pointing at the school mark (ncaa/500/2193.png),
+  // which parseTeam takes first. records[0] is "6-1-3" (W-L-T). `links` is
+  // empty on every event and notes are empty even in the tournament, so
+  // isPlayoff never flips here (see the ncaavb note in parseGame).
+  ncaawsoc: "/soccer/usa.ncaa.w.1/scoreboard",
+  ncaamsoc: "/soccer/usa.ncaa.m.1/scoreboard",
   // CFL (added 2026-09-13). ESPN stopped serving the CFL after 2023 (its
   // calendar is frozen there and every date returns 0 events), so this is NOT
   // an ESPN path: it is our own worker route (public/_worker.js), which
@@ -489,6 +503,16 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // semifinals 12-18, national final 12-21. Opt-in (excludeFromAuto), like
   // NCAAW and NCAA Hockey, so it never takes a column from NCAAF or the NFL.
   { sport: "ncaavb", label: "NCAA Volleyball", startDate: "08-21", endDate: "12-21", championshipDate: "12-21", verifiedFor: 2026, excludeFromAuto: true },
+  // ── NCAA soccer (mid Aug–mid Dec) ──
+  // Women: ESPN's 2026 calendar opens 08-12 (read 2026-09-26). The finale is
+  // the College Cup, read from the 2025 tournament (?dates=20251205 /
+  // 20251208: semifinals 12-05, final 12-08); 2026's is set for Dec 4 and 7.
+  // Men: 2026 calendar opens 08-20; the 2025 College Cup ran 12-12 → 12-15
+  // (final on the Monday). 12-15 keeps the 2026 final inside the window
+  // whether it lands on the 14th or the 15th — re-read once ESPN lists it.
+  // Both opt-in (excludeFromAuto), like every other college add since NCAAW.
+  { sport: "ncaawsoc", label: "NCAAW Soccer", startDate: "08-12", endDate: "12-08", championshipDate: "12-07", verifiedFor: 2026, excludeFromAuto: true },
+  { sport: "ncaamsoc", label: "NCAA Soccer", startDate: "08-20", endDate: "12-15", championshipDate: "12-14", verifiedFor: 2026, excludeFromAuto: true },
   // ── CFL (Jun–Nov) ──
   // 2026: regular season Thu Jun 4 → Sat Oct 24 (21 weeks), division
   // semi-finals Oct 31, division finals Nov 7, 113th Grey Cup Sun Nov 15 in
@@ -819,7 +843,7 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 // listed falls back to a neutral marker rather than getting a wrong icon.
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", ncaabase: "⚾", ncaasoft: "🥎", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
-  nfl: "🏈", ncaaf: "🏈", ufl: "🏈", cfl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", ncaavb: "🏐", golf: "⛳", tennis: "🎾",
+  nfl: "🏈", ncaaf: "🏈", ufl: "🏈", cfl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", ncaavb: "🏐", ncaawsoc: "⚽", ncaamsoc: "⚽", golf: "⛳", tennis: "🎾",
   sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
@@ -874,6 +898,7 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   epl: "soccer", ucl: "soccer", uel: "soccer", laliga: "soccer",
   seriea: "soccer", bundesliga: "soccer", ligue1: "soccer", mls: "soccer",
   ligamx: "soccer", nwsl: "soccer", efl: "soccer", libertadores: "soccer",
+  ncaawsoc: "soccer", ncaamsoc: "soccer",
   saudi: "soccer", fifa: "soccer", euro: "soccer", afcon: "soccer",
   uecl: "soccer", facup: "soccer", copadelrey: "soccer", dfbpokal: "soccer",
   golf: "majors", tennis: "majors",
@@ -1451,6 +1476,11 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   ligamx:       { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   nwsl:         { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   efl:          { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  // NCAA soccer: two 45-minute halves like every other soccer league. The
+  // regular season has no overtime (ties stand since 2022); the tournament
+  // plays two 10-minute periods then kicks, which is the same OT shape.
+  ncaawsoc:     { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  ncaamsoc:     { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   saudi:        { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   libertadores: { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   // Conference League + the three domestic cups (2026-09-14): knockout ties go
@@ -1515,6 +1545,7 @@ const SOCCER_SPORTS = new Set<Sport>([
   "epl", "mls", "ucl", "uel", "fifa", "laliga", "seriea", "bundesliga", "ligue1",
   "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi",
   "uecl", "facup", "copadelrey", "dfbpokal",
+  "ncaawsoc", "ncaamsoc",
 ]);
 const FULL_MATCH_SECONDS = 5400;
 
@@ -2846,6 +2877,10 @@ export function espnGameUrl(game: Game): string {
     case "facup":
     case "copadelrey":
     case "dfbpokal":
+    // College soccer: the events carry no links, but ESPN's league-agnostic
+    // match page answers 200 for a college gameId (401889506, 2026-09-26).
+    case "ncaawsoc":
+    case "ncaamsoc":
       return `https://www.espn.com/soccer/match/_/gameId/${game.id}`;
     // ESPN serves cricket off its India edition; 8048 is the IPL series id
     // (same id as SPORT_PATHS). The /scorecard/ path is the per-match page.
@@ -2945,6 +2980,10 @@ export function sportStreamFallback(sport: Sport): string {
     // league's own watch page is the only destination that covers every match.
     case "nwsl": return "https://www.nwslsoccer.com/watch";
     case "efl": return "https://plus.espn.com/";
+    // ESPN+ carries nearly every college soccer match (every 9/25 event's
+    // broadcast was ESPN+); the College Cup airs on the ESPN networks.
+    case "ncaawsoc": return "https://www.espn.com/watch/";
+    case "ncaamsoc": return "https://www.espn.com/watch/";
     case "libertadores": return "https://www.beinsports.com/en-us/";
     case "afcon": return "https://www.beinsports.com/en-us/";
     case "euro": return "https://www.foxsports.com/soccer/uefa-european-championship";

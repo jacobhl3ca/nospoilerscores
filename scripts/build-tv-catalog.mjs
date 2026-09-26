@@ -94,6 +94,7 @@ const SUPPORTED = new Set([
   "epl", "mls", "ucl", "uel", "fifa", "laliga", "seriea", "bundesliga", "ligue1",
   "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi",
   "uecl", "facup", "copadelrey", "dfbpokal",
+  "ncaawsoc", "ncaamsoc",
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
 ]);
 

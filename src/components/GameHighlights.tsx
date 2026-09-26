@@ -6,6 +6,7 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
+import type { FallbackChannel } from "@/lib/collegeHighlights";
 import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, hasNoTrustedHighlightSource, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolvedLengthSec, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId, getVerifiedEspnClip } from "@/lib/highlights";
 import { isDuplicateHighlightId } from "@/lib/highlightDedupe";
@@ -53,7 +54,7 @@ const BASEBALL_SPORTS = new Set<string>(["mlb", "ncaabase", "ncaasoft"]);
 const NEVER_RESERVE_SPORTS = new Set<string>(["ncaavb"]);
 
 const highlightBufferHours: Record<string, number> = {
-  nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5, ncaawh: 4.5, ncaavb: 3, mlb: 5, ufl: 4,
+  nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5, ncaawh: 4.5, ncaavb: 3, ncaawsoc: 3, ncaamsoc: 3, mlb: 5, ufl: 4,
   // CFL: TSN posts the full-highlights cut on the same timeline as NFL recaps.
   cfl: 5,
   // College baseball runs MLB-long; softball's seven innings finish an hour sooner.
@@ -85,7 +86,7 @@ const highlightBufferHours: Record<string, number> = {
 // of 2 made otPeriods = 4 - 2 = 2 for EVERY regulation game, adding a phantom
 // 1-hour double-OT buffer that delayed the highlight buttons. ncaam stays 2
 // (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
-const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, cfl: 4, ncaawh: 3, ncaavb: 5, mlb: 9, ncaabase: 9, ncaasoft: 7, nfl: 4, ufl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, uecl: 2, facup: 2, copadelrey: 2, dfbpokal: 2, cricket: 2, golf: 4, tennis: 4,
+const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, cfl: 4, ncaawh: 3, ncaavb: 5, mlb: 9, ncaabase: 9, ncaasoft: 7, nfl: 4, ufl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, uecl: 2, facup: 2, copadelrey: 2, dfbpokal: 2, ncaawsoc: 2, ncaamsoc: 2, cricket: 2, golf: 4, tennis: 4,
   // Two 40-minute halves. Without these the default of 4 made rawOt negative
   // for every finished rugby match — clamped to 0 by the Math.max, so the
   // buffer was right by accident; stating it keeps that an intent, not luck.
@@ -395,7 +396,15 @@ export default function GameHighlights({
     () => getCompetitionTitleTokens(game.sport, { preseason: game.isPreseason, playoff: game.isPlayoff, playoffLabel: game.playoffLabel }),
     [game.sport, game.isPreseason, game.isPlayoff, game.playoffLabel],
   );
-  const compGateParam = compTokens.length ? `&nss_comp=${encodeURIComponent(compTokens.join("|"))}` : "";
+  // A chain channel with its own token list (`ownTokens`, the AHA women's
+  // hockey case) overrides the sport-wide tokens for ITS lookups and its modal
+  // retry; every other channel keeps the sport-wide list, then its own.
+  const tokensFor = useCallback(
+    (f: FallbackChannel | undefined) => (f?.ownTokens ? f.titleTokens : compTokens.length ? compTokens : (f?.titleTokens ?? [])),
+    [compTokens],
+  );
+  const primaryTokens = useMemo(() => (chainIsPrimary ? tokensFor(gameChain[0]) : compTokens), [chainIsPrimary, tokensFor, gameChain, compTokens]);
+  const compGateParam = primaryTokens.length ? `&nss_comp=${encodeURIComponent(primaryTokens.join("|"))}` : "";
   const modalFallbackUrl = (channels: (string | null | undefined)[], compParam = compGateParam) => {
     if (!highlightUrl) return null;
     if (noSearchFallback) return `${highlightUrl}&nss_no_fallback=1${weekGateParam}${compParam}`;
@@ -411,22 +420,22 @@ export default function GameHighlights({
   const officialModalFallbackUrl = fotmobModalFallbackUrl
     ? `${fotmobModalFallbackUrl}&nss_mask_title=1${officialFotmobHandOff}`
     : officialFallback
-    ? modalFallbackUrl([officialFallback.channel], `&nss_comp=${encodeURIComponent((compTokens.length ? compTokens : officialFallback.titleTokens).join("|"))}`)
+    ? modalFallbackUrl([officialFallback.channel], `&nss_comp=${encodeURIComponent(tokensFor(officialFallback).join("|"))}`)
     : modalFallbackUrl([primaryChannel]);
   // Primary channel first, then the fallback chain. Resolves to the first hit
   // and the channel it came from.
   const resolveOfficial = useCallback(async (): Promise<{ id: string; channel: string } | null> => {
-    const primaryId = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, compTokens);
+    const primaryId = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, primaryTokens);
     if (primaryId && primaryChannel) return { id: primaryId, channel: primaryChannel };
     // A searchOnly chain (efl, ligamx) is bake-only: the card trusts its baked
     // id but never asks those channels live (see lib/collegeHighlights.ts).
     for (const f of fallbackChannels) {
       if (f.searchOnly) continue;
-      const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, f.channel, undefined, competition, false, weekNumber, compTokens.length ? compTokens : f.titleTokens);
+      const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, f.channel, undefined, competition, false, weekNumber, tokensFor(f));
       if (id) return { id, channel: f.channel };
     }
     return null;
-  }, [hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, competition, weekNumber, compTokens, fallbackChannels]);
+  }, [hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, competition, weekNumber, primaryTokens, tokensFor, fallbackChannels]);
   const secondaryModalFallbackUrl = modalFallbackUrl([secondaryChannel]);
   // The club channel rides the strict gate too: leadChannelBlocksEmbeds knows
   // every club name, so VideoModal opens on the hand-off card at once.
@@ -719,7 +728,7 @@ export default function GameHighlights({
                   setOfficialFotmobHandOff("");
                   setOfficialStatus("found");
                   const fb = fallbackChannels.find((f) => f.channel === hit.channel);
-                  playHl(hit.id, (fb ? modalFallbackUrl([fb.channel], `&nss_comp=${encodeURIComponent((compTokens.length ? compTokens : fb.titleTokens).join("|"))}`) : modalFallbackUrl([primaryChannel]))!, shareCard);
+                  playHl(hit.id, (fb ? modalFallbackUrl([fb.channel], `&nss_comp=${encodeURIComponent(tokensFor(fb).join("|"))}`) : modalFallbackUrl([primaryChannel]))!, shareCard);
                 } else {
                   setOfficialStatus("missing");
                 }

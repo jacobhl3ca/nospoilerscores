@@ -37,14 +37,34 @@
 //     Ice Hockey"); `women` refused one and `ncaa men` refused a women's cut.
 //     ESPN names RPI "Rensselaer": 0/2 under that name, so TEAM_NAME_ALIASES
 //     in youtube.ts queries "RPI".
-//   Atlantic Hockey America: NOT lit. Every title prints the final score
-//     ("Mercyhurst 3, RPI 0 - Sept. 19, 2026"; spoiler judge: SPOILER).
+//   Atlantic Hockey America (@atlantichockeyamerica): LIT 2026-09-26. One
+//     cut per women's game, titled "Ohio State 2, Penn State 1 OT - Sept. 24,
+//     2026" (winner first, then the date). Every title prints the final
+//     score, which kept it dark on 9/23; the `maskTitle` mechanism the efl and
+//     ligamx chains brought on 9/25 covers that, so the channel is listed
+//     there and the modal keeps its title bar masked. Its titles carry no
+//     gender word (the channel posts the men's cuts the same way from
+//     October), so it gets its own EMPTY token list via `channelTitleTokens`
+//     — the sport-wide `women` token would refuse every AHA cut. The worker's
+//     date gate does the disambiguation: "Sept. 24" and "Sept. 25" cuts of the
+//     same pair (Ohio State–Penn State played both nights) differ only by
+//     date, and the long-form date regex in public/_worker.js accepts the
+//     abbreviated month with a period. Feed read 2026-09-26: 9 per-game cuts
+//     over 9/18–9/25, every AHA women's game covered; the exhibition
+//     ("Robert Morris 8, Post 3") carries no date and is left to the date
+//     gate. Members 2026-27 (ESPN ids): Lindenwood 2815, Mercyhurst 2385,
+//     Penn State 213, RIT 178, Robert Morris 2523, Syracuse 183, Delaware 48.
 //   Hockey East: no per-game cut since ~2016 (weekly plays, podcast clips).
-//   WCHA: no 2026-27 game posted yet (first game 9/25). Its old per-game
-//     format printed the score, so the title mask must cover it before it is
-//     lit. Re-probe once it posts.
+//     Re-checked 2026-09-26: still none.
+//   WCHA: re-checked 2026-09-26 after its 9/25 opener — only "2026 WCHA
+//     Media Day" posted, no per-game cut. Its old per-game format printed the
+//     score, so `maskTitle` would cover it; re-probe once it posts.
 //   NEWHA: channel inactive since 2021. Big Ten Network: no hockey cuts.
-// A game with no ECAC school has an empty chain and stays dark.
+// A game with no ECAC or AHA school has an empty chain and stays dark. When
+// a game has both (RIT at Clarkson), the chain puts the channel whose titles
+// are CLEAN first: `maskTitle` channels sort behind the unmasked ones, home /
+// away order kept within each group, so the ECAC cut with its readable title
+// wins whenever it exists and the masked AHA cut is the fallback.
 //
 // Men's hockey (ncaah) stays dark. Probed 2026-09-23 on 2025-26 games:
 // ECAC Hockey 5/6 with `comp=ncaa men` (the miss is the RPI name, now
@@ -94,7 +114,11 @@ export type CollegeHighlightConfig = {
   maskTitle?: string[];
 };
 
-export type FallbackChannel = { channel: string; titleTokens: string[]; searchOnly?: boolean };
+// `ownTokens` marks a channel whose `channelTitleTokens` entry overrides the
+// sport-wide competition tokens (getCompetitionTitleTokens) — the AHA case,
+// whose titles carry no gender word. Absent, the sport-wide tokens win, as
+// they always did.
+export type FallbackChannel = { channel: string; titleTokens: string[]; searchOnly?: boolean; ownTokens?: boolean };
 
 // The parts of a team the chain needs. `id` may carry the app's sport prefix
 // ("ncaavb-158"); only the trailing ESPN id is used.
@@ -127,11 +151,19 @@ export function buildCollegeFallbackChain(
   for (const name of broadcasts ?? []) {
     add(config.networks.find((n) => n.names.includes(name))?.channel);
   }
-  return channels.map((channel) => ({
-    channel,
-    titleTokens: config.channelTitleTokens?.[channel] ?? config.titleTokens,
-    ...(config.searchOnly ? { searchOnly: true } : {}),
-  }));
+  // Clean-title channels before masked ones (stable, so home / away / network
+  // order survives within each group) — see the ncaawh note above.
+  const masked = new Set(config.maskTitle ?? []);
+  const ordered = [...channels.filter((c) => !masked.has(c)), ...channels.filter((c) => masked.has(c))];
+  return ordered.map((channel) => {
+    const own = config.channelTitleTokens?.[channel];
+    return {
+      channel,
+      titleTokens: own ?? config.titleTokens,
+      ...(config.searchOnly ? { searchOnly: true } : {}),
+      ...(own ? { ownTokens: true } : {}),
+    };
+  });
 }
 
 // Every channel any chain lists as printing the result in its titles.

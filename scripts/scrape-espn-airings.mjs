@@ -43,6 +43,8 @@ const SPORT_PATHS = {
   ncaabase: "/baseball/college-baseball/scoreboard",
   ncaasoft: "/baseball/college-softball/scoreboard",
   ncaavb: "/volleyball/womens-college-volleyball/scoreboard",
+  ncaawsoc: "/soccer/usa.ncaa.w.1/scoreboard",
+  ncaamsoc: "/soccer/usa.ncaa.m.1/scoreboard",
   mlb: "/baseball/mlb/scoreboard",
   nfl: "/football/nfl/scoreboard",
   ufl: "/football/ufl/scoreboard",

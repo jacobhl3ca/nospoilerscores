@@ -296,15 +296,21 @@ check(
 );
 // NCAA women's hockey was lit 2026-09-23 from the ECAC Hockey conference
 // chain, like ncaavb: no fixed channel, a `women` title token (the channel
-// also posts the men's cuts), and RPI queried by the name its titles use. A
-// game with no ECAC school stays dark. Still unmonitored: the monitor models
-// fixed-channel leagues only.
+// also posts the men's cuts), and RPI queried by the name its titles use.
+// Atlantic Hockey America joined 2026-09-26: score in every title (masked),
+// no gender word (its own empty token list, `ownTokens`), sorted behind the
+// clean-title ECAC channel when a game has both. A game with no ECAC or AHA
+// school stays dark. Still unmonitored: the monitor models fixed-channel
+// leagues only.
 check(
-  "NCAAWH lights from the ECAC Hockey chain behind the women token, unmonitored",
+  "NCAAWH lights from the ECAC Hockey + AHA chain, ECAC first, AHA with its own empty tokens, unmonitored",
   youtube.highlightPrimaryFromChain("ncaawh") === true &&
     JSON.stringify(youtube.getHighlightFallbackChannels("ncaawh", null, { id: "ncaawh-2385" }, { id: "ncaawh-2528" }, []))
-      === JSON.stringify([{ channel: "ECAC Hockey", titleTokens: ["women"] }]) &&
-    youtube.getHighlightFallbackChannels("ncaawh", null, { id: "ncaawh-430" }, { id: "ncaawh-2815" }, []).length === 0 &&
+      === JSON.stringify([{ channel: "ECAC Hockey", titleTokens: ["women"] }, { channel: "Atlantic Hockey America", titleTokens: [], ownTokens: true }]) &&
+    JSON.stringify(youtube.getHighlightFallbackChannels("ncaawh", null, { id: "ncaawh-213" }, { id: "ncaawh-194" }, []))
+      === JSON.stringify([{ channel: "Atlantic Hockey America", titleTokens: [], ownTokens: true }]) &&
+    youtube.channelAlwaysMasksTitle(["Atlantic Hockey America"]) === true &&
+    youtube.getHighlightFallbackChannels("ncaawh", null, { id: "ncaawh-127962" }, { id: "ncaawh-430" }, []).length === 0 &&
     JSON.stringify(youtube.getCompetitionTitleTokens("ncaawh")) === JSON.stringify(["women"]) &&
     youtube.getYouTubeSearchUrl("Rensselaer", "Mercyhurst", "Sep 18, 2026").includes("RPI%20vs%20Mercyhurst") &&
     !monitor.includes('ncaawh: "/hockey/womens-college-hockey/scoreboard"'),
@@ -502,6 +508,16 @@ check(
       !youtube.channelAlwaysMasksTitle(["CBS Sports Golazo - Europe"]),
   );
 }
+// NCAA women's and men's soccer (added 2026-09-26) are dark: the only cut
+// found for the 9/10 Penn State–Ohio State women's game was on a fan channel,
+// and no conference channel has been probed. Never scanned.
+check(
+  "NCAA soccer (both feeds) stays dark and unmonitored",
+  youtube.hasNoTrustedHighlightSource("ncaawsoc") === true &&
+    youtube.hasNoTrustedHighlightSource("ncaamsoc") === true &&
+    !monitor.includes("usa.ncaa.w.1") &&
+    !monitor.includes("usa.ncaa.m.1"),
+);
 check(
   "prebaker bakes NCAA volleyball from each match's conference chain behind the volleyball token",
   prebake.includes('{ sport: "ncaavb",') &&

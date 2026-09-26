@@ -32,12 +32,13 @@ const STORAGE_KEY = "nss-preferences";
 // both checked free against every code in the map.
 // Added 2026-09-14: ncaawh→hw (women's college hockey), collision-free.
 // Added 2026-09-14: ncaavb→vb (women's college volleyball), collision-free.
+// Added 2026-09-26: ncaawsoc→ws, ncaamsoc→ms (college soccer), collision-free.
 // Added 2026-09-14: uecl→cl, facup→fa, copadelrey→cr, dfbpokal→dp. All four
 // checked collision-free against every code above ("c" is ncaam, "ch" chess,
 // "cf" ncaaf, "cw" ncaaw, "ck" cricket — none of these two-letter forms).
 // Added 2026-09-14: cfl→ca ("cl" went to uecl first; "cf" is ncaaf, "ch" chess).
 // Added 2026-09-23: best→by (the Best of yesterday column), collision-free.
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", ncaah: "hc", cfl: "ca", ncaawh: "hw", ncaavb: "vb", nfl: "f", ufl: "uf", llws: "lw", ncaabase: "cb", ncaasoft: "cs", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", uecl: "cl", facup: "fa", copadelrey: "cr", dfbpokal: "dp", cricket: "ck", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es", top: "tp", best: "by" };
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", ncaah: "hc", cfl: "ca", ncaawh: "hw", ncaavb: "vb", ncaawsoc: "ws", ncaamsoc: "ms", nfl: "f", ufl: "uf", llws: "lw", ncaabase: "cb", ncaasoft: "cs", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", uecl: "cl", facup: "fa", copadelrey: "cr", dfbpokal: "dp", cricket: "ck", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es", top: "tp", best: "by" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;

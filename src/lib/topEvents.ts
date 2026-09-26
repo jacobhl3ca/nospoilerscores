@@ -54,6 +54,8 @@ export const HEADER_SLUG_TO_SPORT: Record<string, Sport> = {
   "mens-college-basketball": "ncaam",
   "womens-college-basketball": "ncaaw",
   "womens-college-volleyball": "ncaavb",
+  "usa.ncaa.w.1": "ncaawsoc",
+  "usa.ncaa.m.1": "ncaamsoc",
   nhl: "nhl",
   "eng.1": "epl",
   "eng.2": "efl",
@@ -85,6 +87,7 @@ export const TOP_EVENTS_GAME_SPORTS: readonly Sport[] = [
   "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1", "mls",
   "ligamx", "nwsl", "efl", "libertadores", "saudi", "fifa", "euro", "afcon",
   "uecl", "facup", "copadelrey", "dfbpokal",
+  "ncaawsoc", "ncaamsoc",
 ];
 const GAME_SPORT_SET = new Set<Sport>(TOP_EVENTS_GAME_SPORTS);
 export function isTopEventsGameSport(sport: Sport): boolean {
@@ -155,7 +158,7 @@ export interface TopEventScore {
 const NATIONAL_TV = /^(espn2?|espnu|espn\+|abc|fox|fs1|nbc|cbs|tnt|tbs|trutv|peacock|prime video|amazon prime video|amazon|apple tv\+?|netflix|paramount\+|cbs sports network|nfl network|nba tv|mlb network|nhl network|usa network)$/i;
 
 const HOUR_MS = 3_600_000;
-const POLL_RANKED_SPORTS = new Set<Sport>(["ncaaf", "ncaam", "ncaaw", "ncaavb"]);
+const POLL_RANKED_SPORTS = new Set<Sport>(["ncaaf", "ncaam", "ncaaw", "ncaavb", "ncaawsoc", "ncaamsoc"]);
 
 export function scoreGame(game: Game, ctx: TopEventsContext): TopEventScore {
   let score = 0;
