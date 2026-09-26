@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { TEAM_PICKER_SKIP, logoForTeam, isPlaceholderTeam, ncaaSchoolLogo } from "../src/lib/teamLogos.ts";
+import { TEAM_PICKER_SKIP, logoForTeam, logoOverride, isPlaceholderTeam, ncaaSchoolLogo } from "../src/lib/teamLogos.ts";
+import { LOGO_OVERRIDES, ncaaComLogo } from "../src/lib/teamLogoOverrides.ts";
 
 test("individual-competitor sports never get a team tab", () => {
   for (const s of ["golf", "tennis", "poker", "chess", "boxing", "ufc", "f1", "nascar", "indycar"] as const) {
@@ -64,4 +65,24 @@ test("bracket placeholders are not teams", () => {
   assert.ok(isPlaceholderTeam("999", "tbd"));
   assert.ok(!isPlaceholderTeam("610", "Seattle University"));
   assert.ok(!isPlaceholderTeam("1", "TBDs United")); // a real name that merely starts with the letters
+});
+
+test("teams ESPN has no art for get the override, keyed per sport", () => {
+  // Maryville (Mo): no logo on the hockey event, and ncaa/500/132633 404s.
+  assert.equal(logoForTeam("ncaah", "132633", "MAR"), ncaaComLogo("maryville-mo"));
+  assert.equal(logoOverride("ncaah", "132633"), ncaaComLogo("maryville-mo"));
+  // 133847 is Missouri S&T in volleyball but an amateur club in the Copa del
+  // Rey — the sport in the key keeps one from taking the other's logo.
+  assert.equal(logoOverride("ncaavb", "133847"), ncaaComLogo("missouri-snt"));
+  assert.equal(logoOverride("copadelrey", "133847"), undefined);
+  assert.equal(logoForTeam("copadelrey", "133847", "ACA"), "https://a.espncdn.com/i/teamlogos/soccer/500/133847.png");
+  // Everyone else still follows the CDN convention.
+  assert.equal(logoForTeam("ncaah", "2779", "USL"), ncaaSchoolLogo("2779"));
+});
+
+test("every override key is a real sport + numeric id and every value is https", () => {
+  for (const [key, url] of Object.entries(LOGO_OVERRIDES)) {
+    assert.match(key, /^(ncaah|ncaawh|ncaavb|ncaam|ncaaw|ncaaf|ncaabase|ncaasoft|saudi)-\d+$/, key);
+    assert.match(url, /^https:\/\//, key);
+  }
 });

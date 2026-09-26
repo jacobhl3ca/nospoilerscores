@@ -12,6 +12,7 @@
 //     constructors under names like "LP" and "JK".
 
 import type { Sport } from "./types";
+import { LOGO_OVERRIDES } from "./teamLogoOverrides.ts";
 
 // Sports with no teams to favorite — every one is a field of individual
 // competitors. ESPN has no team list for UFC / NASCAR / IndyCar, boxing and
@@ -33,6 +34,11 @@ export function ncaaSchoolLogo(schoolId: string): string {
   return `https://a.espncdn.com/i/teamlogos/ncaa/500/${schoolId}.png`;
 }
 
+// Hand-kept logos for the teams ESPN has none for (see teamLogoOverrides.ts).
+export function logoOverride(sport: Sport, rawId: string): string | undefined {
+  return LOGO_OVERRIDES[`${sport}-${rawId}`];
+}
+
 // Little League World Series: ESPN's own scoreboard draws a country flag, not a
 // team logo — countries/500/<ISO3>.png for an international champion, usa.png
 // for every US regional (whose abbreviation is a state, "N CA", "NCAL", "TXW").
@@ -50,6 +56,8 @@ function llwsFlag(abbreviation: string): string | undefined {
 // leagues use abbreviation; college uses the school id; soccer, cricket and
 // rugby use the team id under their own path.
 export function logoForTeam(sport: Sport, rawId: string, abbreviation: string, guid?: string): string | undefined {
+  const override = logoOverride(sport, rawId);
+  if (override) return override;
   const abbr = abbreviation.toLowerCase();
   if (RUGBY.has(sport)) return `https://a.espncdn.com/i/teamlogos/rugby/teams/500/${rawId}.png`;
   switch (sport) {
