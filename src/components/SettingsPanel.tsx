@@ -6,6 +6,7 @@ import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortR
 import { TEAM_PICKER_SKIP } from "@/lib/teamLogos";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
+import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { ALL_RECORD_LEAGUES, FREQUENT_RECORD_LEAGUES, WEEKLY_RECORD_LEAGUES, toggleAllRecordLeagues, toggleRecordLeague, upcomingRecordLeagues, type RecordLeague } from "@/lib/upcomingRecords";
 import {
   Preferences,
@@ -1731,6 +1732,52 @@ export default function SettingsPanel({
               <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-muted)" }}>
                 Example: raycast://script-commands/timer?arguments={"{minutes}"}m%20{"{title}"}
               </p>
+            </div>
+            {/* TV channel links — personal, off by default (lib/tvChannelLinks.ts).
+                A listed network's chip opens the user's own stream in IINA/VLC
+                instead of the network's site. The list syncs; the player is
+                per device. Reset to defaults leaves both alone: the list is
+                pasted data, not a preference. */}
+            <div className="pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+              <Field
+                label="TV channel links"
+                hint="One line per network: ESPN = your stream link. Tapping that network then opens your own player instead of its website. Leave blank to turn off."
+              >
+                <textarea
+                  rows={4}
+                  value={prefs.tvChannelLinks ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    updatePrefs({ tvChannelLinks: v.trim() ? v : undefined });
+                  }}
+                  placeholder={"ESPN = http://…\nFS1, FOX Sports 1 = http://…"}
+                  aria-label="TV channel links"
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="off"
+                  className="w-full rounded-lg px-3 py-2 text-xs font-mono"
+                  style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+                />
+              </Field>
+              {prefs.tvChannelLinks && (
+                <div className="mt-3">
+                <Field label="Open channels in" hint="This device only">
+                  <select
+                    value={prefs.tvPlayer ?? "auto"}
+                    onChange={(e) => updatePrefs({ tvPlayer: e.target.value === "auto" ? undefined : (e.target.value as TvPlayer) })}
+                    aria-label="Open channels in"
+                    className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
+                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                  >
+                    <option value="auto">Auto — IINA on a Mac, VLC on iPhone/iPad</option>
+                    <option value="iina">IINA</option>
+                    <option value="vlc">VLC</option>
+                    <option value="raw">The link as written</option>
+                  </select>
+                </Field>
+                </div>
+              )}
             </div>
             </div>
           </details>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Game } from "@/lib/types";
-import { openExternal, handleExternalClick } from "@/lib/openExternal";
+import { openExternal, watchLinkProps } from "@/lib/openExternal";
 import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { type ShareCardMeta } from "@/lib/shareCard";
@@ -278,13 +278,9 @@ export default function GameDetailModal({
     return (
       <a
         key={key}
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
+        {...watchLinkProps(name, href)}
         className="underline underline-offset-2 hover:opacity-80 transition-opacity"
         style={{ color: "var(--accent)" }}
-        title={`Watch on ${name}`}
-        onClick={handleExternalClick(href)}
       >
         {name}
       </a>
