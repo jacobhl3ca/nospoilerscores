@@ -10,7 +10,7 @@ import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } fr
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { fetchCuratedBoxingEvent } from "./boxing";
-import { logoForTeam, ncaaSchoolLogo, isPlaceholderTeam } from "./teamLogos";
+import { logoForTeam, logoOverride, ncaaSchoolLogo, isPlaceholderTeam } from "./teamLogos";
 import {
   chessEventState,
   buildChessEventUrl,
@@ -1344,7 +1344,9 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
     shortDisplayName: competitor.team?.shortDisplayName ?? "",
     ...(competitor.team?.location ? { location: competitor.team.location } : {}),
     ...(competitor.team?.conferenceId != null ? { conferenceId: String(competitor.team.conferenceId) } : {}),
-    logo: competitor.team?.logo ?? "",
+    // ESPN has no artwork for some one-off opponents (mostly D2/D3 schools);
+    // teamLogoOverrides.ts fills those in.
+    logo: competitor.team?.logo || logoOverride(sport, String(rawId)) || "",
     color: competitor.team?.color ?? "666666",
     score: formatScore(competitor.score ?? "0", sport),
     winner: competitor.winner ?? false,

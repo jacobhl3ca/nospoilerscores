@@ -188,15 +188,12 @@ function formatTime(t: string | null | undefined): string {
   return (t ?? "").replace(/(\d)\s+([AP]M)\b/i, "$1$2");
 }
 
-// 1–2 letter fallback for the no-logo tile below. Audited 2026-09-25 across
-// every team-sport league on the board (29-day window either side of today):
-// the ~27 real teams that render with no logo (DFB-Pokal/Copa del Rey early
-// rounds, Dillard + 5 others in NCAA women's volleyball, Maryville (Mo) in
-// NCAA men's hockey — all D2/NAIA/JUCO or amateur-cup hosts) have no logo
-// under ESPN's own field OR any alt CDN path/size/dark-variant probed, so
-// there is nothing to fetch — initials are the only content this tile can
-// ever show. Prefers the abbreviation ESPN already gives every competitor;
-// falls back to the display name for the rare case that's blank too.
+// 1–2 letter fallback for the no-logo tile below. It shows for the teams no
+// source draws: NAIA schools (Dillard, Southern-New Orleans) and Copa del Rey
+// / DFB-Pokal amateur hosts. D2 schools ESPN lacks get their NCAA.com logo
+// instead (lib/teamLogoOverrides.ts). Prefers the abbreviation ESPN
+// already gives every competitor; falls back to the display name for the rare
+// case that's blank too.
 function teamInitials(team: { abbreviation?: string; displayName?: string; shortDisplayName?: string }): string {
   const source = team.abbreviation || team.shortDisplayName || team.displayName || "";
   return source.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
@@ -504,16 +501,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     ) : !team.logo ? (
       // No logo on the event at all (ESPN has none for the amateur hosts in the
       // DFB-Pokal / Copa del Rey early rounds — 5 of 11 first-round cards on
-      // 2026-08-22, nor for Maryville (Mo) in NCAA hockey, 2026-09-23, nor for
-      // Dillard + 5 others in NCAA women's volleyball). An <img src=""> never
-      // reaches onError, so it rendered as an empty bordered box; a same-size
-      // muted tile keeps the row aligned. `block`/`flex` is load-bearing: an
-      // inline <span> ignores w-/h-, so without it the tile was zero-wide and
-      // the bare name sat flush-left under a logo'd opponent. Initials added
-      // 2026-09-25 after an exhaustive audit of every team-sport league found
-      // none of these teams has a logo under ANY probed ESPN CDN path/size/
-      // dark variant — there's nothing left to fetch, so the tile shows the
-      // team's own abbreviation instead of a bare blank square.
+      // 2026-08-22 — nor for NAIA opponents like Dillard in NCAA women's
+      // volleyball). An <img src=""> never reaches onError, so it rendered as
+      // an empty bordered box; a same-size muted tile keeps the row aligned.
+      // `block`/`flex` is load-bearing: an inline <span> ignores w-/h-, so
+      // without it the tile was zero-wide and the bare name sat flush-left
+      // under a logo'd opponent. The tile shows the team's own abbreviation
+      // (2026-09-25) rather than a bare blank square.
       <span aria-hidden="true" className="flex items-center justify-center w-4 h-4 sm:w-6 sm:h-6 rounded shrink-0 text-[7px] sm:text-[9px] font-semibold leading-none" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
         {teamInitials(team)}
       </span>
