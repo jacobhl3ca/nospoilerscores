@@ -47,18 +47,48 @@ test("volleyball finds the conference from the ESPN team id and gates on volleyb
   assert.deepEqual(buildCollegeFallbackChain(NCAAVB, null, { id: "ncaavb-2335" }, { id: "ncaavb-2226" }, []), []);
 });
 
-test("women's hockey lights ECAC games only, behind the women token", () => {
+test("women's hockey lights ECAC and AHA games, ECAC's clean title first", () => {
   const NCAAWH = CONFIG.ncaawh;
   assert.equal(NCAAWH.primaryFromChain, true);
-  // Rensselaer (2528, ECAC) at Mercyhurst (2385, Atlantic Hockey America): the
-  // ECAC school alone puts the game on the ECAC Hockey channel.
+  // Rensselaer (2528, ECAC) at Mercyhurst (2385, Atlantic Hockey America):
+  // Mercyhurst is home, so AHA would come first by home/away order — but AHA
+  // titles print the score (maskTitle), so the ECAC cut with its readable
+  // title leads and AHA is the fallback. AHA carries its OWN empty token list
+  // (no gender word in its titles) and says so with `ownTokens`.
   const chain = buildCollegeFallbackChain(NCAAWH, null, { id: "ncaawh-2385" }, { id: "ncaawh-2528" }, []);
-  assert.deepEqual(chain, [{ channel: "ECAC Hockey", titleTokens: ["women"] }]);
-  // Lindenwood at Post: no lit conference, no lookups.
-  assert.deepEqual(buildCollegeFallbackChain(NCAAWH, null, { id: "ncaawh-430" }, { id: "ncaawh-2815" }, []), []);
-  // All twelve ECAC schools are mapped, and nothing else is.
-  assert.equal(Object.keys(NCAAWH.teamConferences ?? {}).length, 12);
-  assert.deepEqual(Object.values(NCAAWH.conferences), ["ECAC Hockey"]);
+  assert.deepEqual(chain, [
+    { channel: "ECAC Hockey", titleTokens: ["women"] },
+    { channel: "Atlantic Hockey America", titleTokens: [], ownTokens: true },
+  ]);
+  // Ohio State (194, WCHA, dark) at Penn State (213, AHA): the AHA cut alone —
+  // the 9/24 and 9/25 games Jacob linked.
+  assert.deepEqual(buildCollegeFallbackChain(NCAAWH, null, { id: "ncaawh-213" }, { id: "ncaawh-194" }, []), [
+    { channel: "Atlantic Hockey America", titleTokens: [], ownTokens: true },
+  ]);
+  // Lindenwood (2815, AHA) at Merrimack (2771, Hockey East, dark): the away
+  // school's conference lights it.
+  assert.deepEqual(buildCollegeFallbackChain(NCAAWH, null, { id: "ncaawh-2771" }, { id: "ncaawh-2815" }, []).map((f) => f.channel), ["Atlantic Hockey America"]);
+  // Post (430, NEWHA) at Assumption (127962, NEWHA): no lit conference, no lookups.
+  assert.deepEqual(buildCollegeFallbackChain(NCAAWH, null, { id: "ncaawh-127962" }, { id: "ncaawh-430" }, []), []);
+  // Twelve ECAC schools + seven AHA schools are mapped, and nothing else is.
+  assert.equal(Object.keys(NCAAWH.teamConferences ?? {}).length, 19);
+  assert.equal(Object.values(NCAAWH.teamConferences ?? {}).filter((c) => c === "aha").length, 7);
+  assert.deepEqual(Object.values(NCAAWH.conferences), ["ECAC Hockey", "Atlantic Hockey America"]);
+  assert.deepEqual(NCAAWH.maskTitle, ["Atlantic Hockey America"]);
+  assert.deepEqual(NCAAWH.channelTitleTokens, { "Atlantic Hockey America": [] });
+});
+
+test("the worker's long-form date gate reads AHA's abbreviated month with a period", () => {
+  // Same regex as public/_worker.js (longTok). "Sept. 24, 2026" must parse as
+  // an explicit date so the 9/24 and 9/25 Ohio State–Penn State cuts cannot
+  // serve for each other.
+  const longTok = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),\s+(\d{4})\b/i;
+  const m = "Ohio State 2, Penn State 1 OT - Sept. 24, 2026".match(longTok);
+  assert.ok(m);
+  assert.deepEqual([m![1].slice(0, 3).toLowerCase(), parseInt(m![2], 10), m![3]], ["sep", 24, "2026"]);
+  assert.ok("RPI at Mercyhurst | Highlights - September 18, 2026".match(longTok));
+  assert.equal("Robert Morris 8, Post 3".match(longTok), null);
+  assert.ok(String(readFileSync(new URL("../public/_worker.js", import.meta.url), "utf8")).includes(String.raw`[a-z]*\.?\s+(\d{1,2}),\s+(\d{4})`));
 });
 
 test("the women token cannot match a men's cut, and plain men would match a women's one", () => {

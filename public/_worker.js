@@ -65,6 +65,19 @@ const CARD_REV = 4;
 // Keep this narrow. An unscoped result-bearing upload must still be rejected.
 const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"]);
 
+// Atlantic Hockey America (NCAA women's hockey chain, lit 2026-09-26) titles
+// every per-game cut as a bare scoreline with the date and nothing else:
+// "Ohio State 2, Penn State 1 OT - Sept. 24, 2026". No "highlights", and the
+// score is in the title. The client keeps that channel's title bar masked
+// (`maskTitle` in collegeHighlightChannels.json), so — like the combat
+// channels — the title may carry the result. This regex is the ONLY shape
+// accepted from it: winner, score, loser, score, optional OT/SO, a dash, a
+// month with an optional period, day, year. The date gate below then has to
+// agree with the query, which is what separates the 9/24 and 9/25 cuts of the
+// same pair; an undated exhibition ("Robert Morris 8, Post 3") never matches.
+const AHA_CHANNEL = "atlantic hockey america";
+const AHA_SCORELINE_RX = /^\s*\S.*?\s\d{1,2},\s\S.*?\s\d{1,2}(?:\s(?:\d?OT|SO))?\s-\s(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s\d{1,2},\s\d{4}\s*$/i;
+
 // Chess organizers who post the ROUND itself as a full broadcast VOD, with no
 // "highlights"/"recap" keyword in the title. Lowercased YouTube author_name —
 // mirrors CHESS_ORGANIZER_CHANNELS in src/lib/espn.ts, keep the two in step.
@@ -1045,11 +1058,20 @@ export default {
             queryWeek !== null &&
             titleWeek === queryWeek &&
             /^cfl\s+week\b/i.test(titleLower.trim());
+          // See AHA_SCORELINE_RX. Strict + the channel + both teams + the
+          // house scoreline shape; the explicit-date gate below still applies.
+          const isStrictAhaScoreline =
+            strictChannelParam &&
+            isFromChannel &&
+            preferChannelLower === AHA_CHANNEL &&
+            queryHasSpecificTeams &&
+            AHA_SCORELINE_RX.test(title);
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
             isStrictBareCflWeek ||
+            isStrictAhaScoreline ||
             roundOnlyTitleOk ||
             isStrictBareWnbaRecap ||
             isChessRoundBroadcast ||
@@ -1143,7 +1165,10 @@ export default {
             // which slipped past the slash-only regex and let a 2016 NYCFC
             // upload win a 2026 NYCFC query.
             const shortTok = title.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/);
-            const longTok = title.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),\s+(\d{4})\b/i);
+            // "[a-z]*\.?" — Atlantic Hockey America abbreviates with a period
+            // ("Sept. 24, 2026"); without the optional period the title read as
+            // undated and a same-pair cut from the night before could serve.
+            const longTok = title.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),\s+(\d{4})\b/i);
             if (shortTok) {
               titleHasExplicitDate = true;
               const tM = parseInt(shortTok[1], 10);
@@ -1822,6 +1847,7 @@ export default {
           if (
             !isOfficialWorldCupUpload &&
             !isMaskedOfficialCombatUpload &&
+            !isStrictAhaScoreline &&
             (SCORE_RX.test(title) || SPOILER_RX.test(title) || isTeamScoreSpoiler(title))
           )
             continue;

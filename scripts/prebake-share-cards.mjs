@@ -32,6 +32,8 @@ const LEAGUE_PATHS = {
   ncaabase: "/baseball/college-baseball/scoreboard",
   ncaasoft: "/baseball/college-softball/scoreboard",
   ncaavb: "/volleyball/womens-college-volleyball/scoreboard",
+  ncaawsoc: "/soccer/usa.ncaa.w.1/scoreboard",
+  ncaamsoc: "/soccer/usa.ncaa.m.1/scoreboard",
   uecl: "/soccer/uefa.europa.conf/scoreboard",
   facup: "/soccer/eng.fa/scoreboard",
   copadelrey: "/soccer/esp.copa_del_rey/scoreboard",
