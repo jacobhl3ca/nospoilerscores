@@ -38,7 +38,7 @@ import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
-import { getRecapsFor, getRecapsForSync, loadBakedRecaps } from "@/lib/recaps";
+import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
@@ -1335,14 +1335,15 @@ export default function HomeContent({
           prefsRef.current.hiddenLeagues,
         ),
         loadBakedHighlights(),
-        // Recaps too, so the "Best of day" / "Week N" pill is in the board's
-        // first paint. Without this the pill's fetch only started once the
+        // Recaps too (plus the archive month for a day older than
+        // recaps.json reaches), so the "Best of day" / "Week N" pill is in the
+        // board's first paint. Without this the pill's fetch only started once the
         // columns had rendered — one extra round trip after every card was
         // already up, and the sibling columns' first cards jumped down when
         // the row got reserved (Jacob 9/26). The loader never rejects; the
         // race caps what a stalled R2 read can cost the board — past it the
         // pill falls back to landing when the file does, as before.
-        Promise.race([loadBakedRecaps(), new Promise<void>((r) => setTimeout(r, 1500))]),
+        Promise.race([preloadRecapsFor(date), new Promise<void>((r) => setTimeout(r, 1500))]),
       ]);
       // A newer fetch started while we awaited — discard this now-stale result
       // rather than paint the wrong day's board over the current one.

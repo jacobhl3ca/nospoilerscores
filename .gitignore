@@ -32,6 +32,8 @@ yarn-error.log*
 
 # live data files — written by cron, uploaded directly to R2 (not git)
 public/news/*.json
+# the recap archive's month files + its upload queue (scripts/upload-recap-archive.sh)
+public/news/recaps/
 # bake bookkeeping that must NOT be uploaded (the mini uploads public/news/*.json)
 /.bake-state/
 

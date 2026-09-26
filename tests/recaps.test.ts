@@ -24,6 +24,14 @@ import {
   eplSeasonYear,
   top5SlugForDate,
   ODDITIES_ROUNDUP_RX,
+  RECAP_TTL_DAYS,
+  RECAP_ARCHIVE_START,
+  monthsBetween,
+  recapMonths,
+  recapInMainFile,
+  splitEmptyByMonth,
+  recapEmptyIsFinal,
+  recapFileBody,
 } from "../scripts/lib/recaps.mjs";
 import { createJiti } from "jiti";
 import type { RecapRecord } from "../src/lib/recaps.ts";
@@ -42,6 +50,8 @@ const {
   rowRecapHeadings,
   recapButtonText,
   RECAP_STACK_MAX_PX,
+  RECAP_MAIN_DAYS,
+  recapFileForDay,
 } = (await jiti.import("../src/lib/recaps.ts")) as {
   RECAP_EXPECTED_CHANNELS: Record<string, Record<string, string>>;
   selectRecaps: (all: Record<string, RecapRecord[]> | null | undefined, sport: string, ymd: string, todayYmd?: string) => RecapRecord[];
@@ -53,6 +63,8 @@ const {
   rowRecapHeadings: (heading: string) => string[];
   recapButtonText: (rec: Pick<RecapRecord, "sport" | "key">, stacked?: boolean) => string | null;
   RECAP_STACK_MAX_PX: number;
+  RECAP_MAIN_DAYS: number;
+  recapFileForDay: (ymd: string, todayYmd: string) => string | null;
 };
 
 type Series = {
@@ -290,6 +302,15 @@ test("MLB weekday slug → the most recent ET day with that weekday", () => {
   // FastCast dated by its upload day: a Sunday cut uploaded Monday 9/21 → 9/20.
   assert.equal(weekdayCoversDate("sunday", "20260921"), "20260920");
   assert.equal(weekdayCoversDate("friday", "20260905"), "20260904");
+});
+
+test("a carried record is never dropped for age, only before the archive floor", () => {
+  const today = "20260926";
+  const june = { sport: "mlb", key: "fastcast", cadence: "daily", coversDate: "20260615", published: "2026-06-16T09:00:00Z" };
+  assert.equal(keepCarriedRecap(june, RECAP_ARCHIVE_START.mlb, today), true);
+  assert.equal(keepCarriedRecap({ ...june, coversDate: "20260320" }, RECAP_ARCHIVE_START.mlb, today), false);
+  // No floor (a sport with no archive start) keeps everything dated.
+  assert.equal(keepCarriedRecap({ ...june, sport: "nba", key: "top10" }, "", today), true);
 });
 
 test("a carried record needs an upload time when its window came from one", () => {
@@ -557,4 +578,57 @@ test("narrow-column heading: Week N → WN; other headings change only past the 
   assert.deepEqual(rowRecapHeadings("Top plays"), ["Top plays"]);
   // The stack gate sits between the md column (225px) and the xl column (280px).
   assert.ok(RECAP_STACK_MAX_PX > 225 && RECAP_STACK_MAX_PX <= 280);
+});
+
+// ── Archive files ────────────────────────────────────────────────────────────
+
+test("recaps.json and the client agree on how far back the main file reaches", () => {
+  assert.equal(RECAP_MAIN_DAYS, RECAP_TTL_DAYS);
+  const today = "20260926";
+  const daily = (coversDate: string) => ({ sport: "mlb", key: "top5", cadence: "daily", coversDate });
+  // The bake keeps the last RECAP_TTL_DAYS days in recaps.json…
+  assert.equal(recapInMainFile(daily("20260905"), today), true);
+  assert.equal(recapInMainFile(daily("20260904"), today), false);
+  // …and the client reads a day from it only one day inside that, so a clock a
+  // day ahead of the bake never looks in the main file for a day it lacks.
+  assert.equal(recapFileForDay("20260925", today), null);
+  assert.equal(recapFileForDay("20260906", today), null);
+  assert.equal(recapFileForDay("20260905", today), "2026-09");
+  assert.equal(recapFileForDay("20260901", today), "2026-09");
+  assert.equal(recapFileForDay("20260826", today), "2026-08");
+  assert.equal(recapFileForDay("20260731", today), "2026-07");
+  assert.equal(recapFileForDay("2026-07-31", today), null);
+  // A weekly window counts by its end: Week 1's window runs to 9/26.
+  assert.equal(recapInMainFile({ sport: "nfl", key: "top15", cadence: "weekly", windowStart: "20260801", windowEnd: "20260910" }, today), true);
+});
+
+test("a weekly window lands in every month it touches, a daily cut in its day's", () => {
+  assert.deepEqual(monthsBetween("20261115", "20270201"), ["2026-11", "2026-12", "2027-01", "2027-02"]);
+  assert.deepEqual(monthsBetween("20260901", "20260801"), []);
+  assert.deepEqual(recapMonths({ cadence: "weekly", windowStart: "20260728", windowEnd: "20260803" }), ["2026-07", "2026-08"]);
+  assert.deepEqual(recapMonths({ cadence: "daily", coversDate: "20260615" }), ["2026-06"]);
+  assert.deepEqual(recapMonths({ cadence: "daily" }), []);
+});
+
+test("a dated-slug miss is recorded as empty only once the day is 3+ days old", () => {
+  const today = "20260926";
+  assert.equal(recapEmptyIsFinal("20260925", today), false);
+  assert.equal(recapEmptyIsFinal("20260924", today), false);
+  assert.equal(recapEmptyIsFinal("20260923", today), true);
+  assert.equal(recapEmptyIsFinal("20260922", today), true);
+  assert.equal(recapEmptyIsFinal("", today), false);
+  const byMonth = splitEmptyByMonth({ "mlb:top5": ["20260910", "20260715", "20260901"] });
+  assert.deepEqual(byMonth.get("2026-09"), { "mlb:top5": ["20260901", "20260910"] });
+  assert.deepEqual(byMonth.get("2026-07"), { "mlb:top5": ["20260715"] });
+});
+
+test("a file body serializes the same whatever order its records arrive in", () => {
+  const a = { sport: "mlb", key: "top5", cadence: "daily", coversDate: "20260602", durationSec: 60 };
+  const b = { sport: "mlb", key: "fastcast", cadence: "daily", coversDate: "20260601", durationSec: 900 };
+  const c = { sport: "epl", key: "everygoal", cadence: "weekly", coversWeek: 1, windowStart: "20260810", windowEnd: "20260816", durationSec: 240 };
+  const one = JSON.stringify(recapFileBody([a, b, c], { "mlb:top5": ["20260603", "20260601"] }));
+  const two = JSON.stringify(recapFileBody([c, b, a], { "mlb:top5": ["20260601", "20260603", "20260601"] }));
+  assert.equal(one, two);
+  assert.deepEqual(Object.keys(recapFileBody([a, b, c], {}).recaps), ["epl", "mlb"]);
+  assert.equal("empty" in recapFileBody([a], { "mlb:top5": [] }), false);
 });

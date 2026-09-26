@@ -66,6 +66,27 @@ export function recapCoversDay(rec: RecapRecord, ymd: string): boolean {
   return rec.coversDate === ymd;
 }
 
+// How many days back /news/recaps.json reaches. ⚠️ Keep equal to RECAP_TTL_DAYS
+// in scripts/lib/recaps.mjs — tests/recaps.test.ts compares the two. Older
+// days live in /news/recaps/<YYYY-MM>.json, one complete file per month.
+export const RECAP_MAIN_DAYS = 21;
+
+function shiftYmd(ymd: string, days: number): string {
+  const d = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8), 12));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+// Which file holds the records for a board on `ymd`: null = recaps.json, else
+// the archive month ("2026-07"). One day of margin inside RECAP_MAIN_DAYS, so a
+// device whose "today" runs a day ahead of the last bake still finds the day
+// in the main file; any older day reads its month file, which is complete.
+export function recapFileForDay(ymd: string, todayYmd: string): string | null {
+  if (!/^\d{8}$/.test(ymd) || !/^\d{8}$/.test(todayYmd)) return null;
+  if (ymd >= shiftYmd(todayYmd, -(RECAP_MAIN_DAYS - 1))) return null;
+  return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}`;
+}
+
 // Fetched once per session (one small static request); on any miss the
 // promise is cleared so the next card retries instead of caching an empty map
 // for the page's whole lifetime — same idiom as loadBakedHighlights.
@@ -153,17 +174,63 @@ function recapButtonRank(rec: Pick<RecapRecord, "sport" | "key">): number {
   return RECAP_BUTTON_TEXT[rec.sport]?.[rec.key]?.rank ?? 0;
 }
 
-export async function getRecapsFor(sport: string, ymd: string): Promise<RecapRecord[]> {
-  // Same "today" the date nav uses, so the gate agrees with the board.
-  return selectRecaps(await loadBakedRecaps(), sport, ymd, toYmd(getEtServiceDate()));
+// Archive months, same once-per-session idiom as recaps.json. A 404 is a
+// month with nothing baked (before the season) and is kept as empty; any other
+// miss clears the promise so the next card retries.
+const monthPromises = new Map<string, Promise<Record<string, RecapRecord[]>>>();
+const monthCache = new Map<string, Record<string, RecapRecord[]>>();
+
+function loadRecapMonth(month: string): Promise<Record<string, RecapRecord[]>> {
+  let p = monthPromises.get(month);
+  if (!p) {
+    p = (async () => {
+      try {
+        const res = await fetch(`${getApiBase()}/news/recaps/${month}.json`);
+        if (res.status === 404) {
+          monthCache.set(month, {});
+          return {};
+        }
+        const data = res.ok ? await res.json() : null;
+        if (!data?.recaps || typeof data.recaps !== "object") {
+          monthPromises.delete(month);
+          return {};
+        }
+        monthCache.set(month, data.recaps as Record<string, RecapRecord[]>);
+        return monthCache.get(month)!;
+      } catch {
+        monthPromises.delete(month);
+        return {};
+      }
+    })();
+    monthPromises.set(month, p);
+  }
+  return p;
 }
 
-// The same selection without awaiting: the records when recaps.json has
-// already loaded this session, null when it has not (callers then fall back to
-// getRecapsFor). Lets a component seed its state in the render that mounts it.
+// recaps.json, plus the archive month when `ymd` is older than it reaches —
+// what HomeContent starts with the scores so the pill is in the first paint.
+export function preloadRecapsFor(ymd: string): Promise<unknown> {
+  const month = recapFileForDay(ymd, toYmd(getEtServiceDate()));
+  return Promise.all([loadBakedRecaps(), month ? loadRecapMonth(month) : null]);
+}
+
+export async function getRecapsFor(sport: string, ymd: string): Promise<RecapRecord[]> {
+  // Same "today" the date nav uses, so the gate agrees with the board.
+  const today = toYmd(getEtServiceDate());
+  const month = recapFileForDay(ymd, today);
+  return selectRecaps(await (month ? loadRecapMonth(month) : loadBakedRecaps()), sport, ymd, today);
+}
+
+// The same selection without awaiting: the records when the file that holds
+// `ymd` has already loaded this session, null when it has not (callers then
+// fall back to getRecapsFor). Lets a component seed its state in the render
+// that mounts it.
 export function getRecapsForSync(sport: string, ymd: string): RecapRecord[] | null {
-  if (!recapsCache) return null;
-  return selectRecaps(recapsCache, sport, ymd, toYmd(getEtServiceDate()));
+  const today = toYmd(getEtServiceDate());
+  const month = recapFileForDay(ymd, today);
+  const all = month ? monthCache.get(month) : recapsCache;
+  if (!all) return null;
+  return selectRecaps(all, sport, ymd, today);
 }
 
 // "▶ 8m" — whole minutes, rounded; under a minute reads in seconds; unknown

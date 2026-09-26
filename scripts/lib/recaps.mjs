@@ -15,7 +15,21 @@
 // an id and a window. See stripRecapRecord().
 
 export const RECAP_OUT_NAME = "recaps";
+// How far back a NORMAL run looks for cuts, and how many days recaps.json (the
+// file every board load fetches) holds. Not an age limit: a found cut is never
+// deleted, it moves to its month's archive file (recaps/<YYYY-MM>.json).
 export const RECAP_TTL_DAYS = 21;
+
+// The first day each sport's archive covers — this season's first game day
+// with a league-wide cut. A record older than this is never written, and the
+// one-time --recap-backfill run walks back to it. A sport not listed has no
+// archive floor (NBA / NHL: offseason, nothing baked yet).
+export const RECAP_ARCHIVE_START = { mlb: "20260326", nfl: "20260910", epl: "20260815", mls: "20260221" };
+
+// A dated-slug probe (MLB Top 5) that finds nothing for a day at least this
+// many days old records the day as empty and never probes it again. A younger
+// miss is retried: the cut can still post (Top 5 goes up ~2–3 am ET).
+export const RECAP_EMPTY_MIN_AGE_DAYS = 3;
 
 // Per sport, in the order the buttons should be tried. `heading` is what the
 // card prints on the left; `label` is the button's title/aria-label. `{n}` is
@@ -83,6 +97,9 @@ export const RECAP_SERIES = {
       titleRx: /^Best Plays From Sunday!?\s*\|/i,
       weekRx: NFL_WEEK_RX, seasonRx: NFL_SEASON_RX, seasonRequired: true,
       searchQuery: "Best Plays From Sunday",
+      // --recap-backfill asks for one week at a time. The other series append
+      // the number to searchQuery; this title puts "Week" after the season.
+      backfillQuery: "Best Plays From Sunday Week {n}",
     },
   ],
   mlb: [
@@ -91,12 +108,16 @@ export const RECAP_SERIES = {
       heading: "Best of the day", label: "Best of the day",
       topicUrl: "https://www.mlb.com/video/topic/fastcast",
       slugRx: /^fastcast-(\w+?)-s-best-in-15-minutes/i, weekdayGroup: 1,
+      // The topic page reaches ~3 weeks; the Film Room tag reaches the whole
+      // season, a month at a time (--recap-backfill only).
+      archiveTag: "fastcast",
     },
     {
       key: "realfast", enabled: true, source: "mlbcom", cadence: "daily",
       heading: "Best of the day", label: "60 seconds",
       topicUrl: "https://www.mlb.com/video/topic/real-fast",
       slugRx: /^real-fast-(\w+?)-s-best-in-60-seconds/i, weekdayGroup: 1,
+      archiveTag: "real-fast",
     },
     // "Top 5 Plays of the Day", 60s, up about 2–3 am ET the next morning. It
     // runs every game day through the World Series (2025 Film Room archive).
@@ -535,14 +556,15 @@ export function stripRecapRecord(rec) {
   return out;
 }
 
-// Does a record carried from the prior file stay? Not once its coverage ends
-// before `cutoff`. Not without an upload time when the upload time is what
-// dated it: a weekly window with no `published` was built from the bake clock
-// (2025's MLS Matchday 31 sat on 2026's 9/14–9/20 boards), and a daily record
-// dated today or later with none is the premature "Best of the day" pill.
-export function keepCarriedRecap(rec, cutoff, todayYmd) {
-  const end = rec?.cadence === "weekly" ? rec.windowEnd : rec?.coversDate;
-  if (!end || end < cutoff) return false;
+// Does a record carried from the prior file stay? Not when it is dated before
+// the sport's archive floor (`floor`, RECAP_ARCHIVE_START; "" = none) — age
+// alone never drops one. Not without an upload time when the upload time is
+// what dated it: a weekly window with no `published` was built from the bake
+// clock (2025's MLS Matchday 31 sat on 2026's 9/14–9/20 boards), and a daily
+// record dated today or later with none is the premature "Best of the day" pill.
+export function keepCarriedRecap(rec, floor, todayYmd) {
+  const end = recapEndYmd(rec);
+  if (!end || (floor && end < floor)) return false;
   if (rec.published) return true;
   return rec.cadence === "weekly" ? false : rec.coversDate < todayYmd;
 }
@@ -588,4 +610,87 @@ export function pickShorterClub(candidates) {
     const b = Number.isFinite(c.durationSec) ? c.durationSec : Infinity;
     return b < a ? c : best;
   }, null);
+}
+
+// ── Archive files (one per month) ────────────────────────────────────────────
+
+// The last day a record covers: the window's end (weekly) or the day (daily).
+export function recapEndYmd(rec) {
+  return (rec?.cadence === "weekly" ? rec.windowEnd : rec?.coversDate) ?? "";
+}
+
+// "20260615" → "2026-06".
+export function ymdMonth(ymd) {
+  const m = String(ymd ?? "").match(/^(\d{4})(\d{2})\d{2}$/);
+  return m ? `${m[1]}-${m[2]}` : "";
+}
+
+// Every month from `fromYmd`'s to `toYmd`'s, inclusive, oldest first.
+export function monthsBetween(fromYmd, toYmd) {
+  const a = ymdMonth(fromYmd);
+  const b = ymdMonth(toYmd);
+  if (!a || !b || a > b) return [];
+  const out = [];
+  let [y, m] = a.split("-").map(Number);
+  for (;;) {
+    const key = `${y}-${String(m).padStart(2, "0")}`;
+    out.push(key);
+    if (key === b) return out;
+    if (++m > 12) { m = 1; y++; }
+  }
+}
+
+// The months a record belongs to: the day's month (daily), or every month its
+// window touches (weekly), so a board on either side of a month break finds a
+// window that spans it in its own month's file.
+export function recapMonths(rec) {
+  if (rec?.cadence === "weekly") return monthsBetween(rec.windowStart || rec.windowEnd, rec.windowEnd);
+  const m = ymdMonth(rec?.coversDate);
+  return m ? [m] : [];
+}
+
+// recaps.json keeps what a board of the last RECAP_TTL_DAYS days can show — the
+// same file, same size, as before the archive, so an app build that never
+// heard of the archive keeps working. Every record also lands in its month's
+// file (complete, so the client can read any older day from that one file).
+export function recapInMainFile(rec, todayYmd) {
+  const end = recapEndYmd(rec);
+  return !!end && end >= shiftYmd(todayYmd, -RECAP_TTL_DAYS);
+}
+
+// { "mlb:top5": ["20260910", …] } → the same shape per month.
+export function splitEmptyByMonth(empty) {
+  const out = new Map();
+  for (const [key, days] of Object.entries(empty ?? {})) {
+    for (const ymd of Array.isArray(days) ? days : []) {
+      const month = ymdMonth(ymd);
+      if (!month) continue;
+      if (!out.has(month)) out.set(month, {});
+      (out.get(month)[key] ??= []).push(ymd);
+    }
+  }
+  for (const byKey of out.values()) for (const list of Object.values(byKey)) list.sort();
+  return out;
+}
+
+// Is a miss on `ymd` old enough to record as "no cut that day"?
+export function recapEmptyIsFinal(ymd, todayYmd) {
+  return /^\d{8}$/.test(String(ymd)) && ymd <= shiftYmd(todayYmd, -RECAP_EMPTY_MIN_AGE_DAYS);
+}
+
+// One file's body, in a stable order (sport, then shortest first, then day), so
+// two runs with the same records serialize to the same bytes and an unchanged
+// month is not rewritten. `fetchedAt` is left out — the caller adds it.
+export function recapFileBody(records, empty) {
+  const recaps = {};
+  for (const rec of records) (recaps[rec.sport] ??= []).push(rec);
+  const sorted = {};
+  for (const sport of Object.keys(recaps).sort()) {
+    sorted[sport] = recaps[sport].sort((a, b) => (a.durationSec ?? Infinity) - (b.durationSec ?? Infinity)
+      || a.key.localeCompare(b.key) || recapEndYmd(a).localeCompare(recapEndYmd(b)));
+  }
+  const body = { recaps: sorted };
+  const emptyKeys = Object.keys(empty ?? {}).filter((k) => empty[k]?.length).sort();
+  if (emptyKeys.length) body.empty = Object.fromEntries(emptyKeys.map((k) => [k, [...new Set(empty[k])].sort()]));
+  return body;
 }
