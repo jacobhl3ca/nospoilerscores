@@ -132,6 +132,9 @@ async function fetchRange(path, range) {
 // Madness and the National Championship — has never actually been checked.
 // Fall back to per-day requests for those, capped in flight so the walk stays
 // polite. Monthly job, three leagues; the request count is affordable.
+// The UEFA Conference League (uefa.europa.conf) rejects a range with a 400
+// rather than a 404 (read 2026-09-26), which left it "unverifiable" on every
+// run — so a 400 takes the same per-day walk.
 const DAY_CONCURRENCY = 8;
 
 async function fetchByDay(path, range) {
@@ -155,7 +158,7 @@ async function fetchByDay(path, range) {
 
 async function fetchDays(path, range, preseason = false) {
   let first = await fetchRange(path, range);
-  if (first.error === "HTTP 404" && range.includes("-")) first = await fetchByDay(path, range);
+  if ((first.error === "HTTP 404" || first.error === "HTTP 400") && range.includes("-")) first = await fetchByDay(path, range);
   if (first.error) return first;
 
   let events = first.events;

@@ -31,7 +31,7 @@ const FAQ = [
   },
   {
     q: "Which soccer leagues does HideScore cover?",
-    a: "The Premier League, MLS, Champions League and Europa League, La Liga, Serie A, Bundesliga and Ligue 1, plus Liga MX, the NWSL, the EFL Championship, Copa Libertadores and the Saudi Pro League. The Euros and the Africa Cup of Nations appear in their tournament years.",
+    a: "The Premier League, MLS, the Champions League, Europa League and Conference League, La Liga, Serie A, Bundesliga and Ligue 1, plus Liga MX, the NWSL, the EFL Championship, Copa Libertadores, the Saudi Pro League and the UEFA Nations League. The Euros and the Africa Cup of Nations appear in their tournament years.",
   },
   {
     q: "Is women's soccer covered?",
@@ -118,6 +118,10 @@ export default function SoccerHighlightsWithoutSpoilersPage() {
         { href: "/champions-league-without-spoilers", label: "Champions League" },
         { href: "/la-liga-without-spoilers", label: "La Liga" },
         { href: "/mls-highlights-without-spoilers", label: "MLS" },
+        // Added 2026-09-26 — the other three UEFA competition routes.
+        { href: "/europa-league-without-spoilers", label: "Europa League" },
+        { href: "/conference-league-without-spoilers", label: "Conference League" },
+        { href: "/nations-league-without-spoilers", label: "Nations League" },
         { href: "/redzone-for-every-sport", label: "Is there a soccer RedZone?" },
         { href: "/liga-mx-scores-without-spoilers", label: "Liga MX" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },

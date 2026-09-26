@@ -36,6 +36,7 @@ const LEAGUE_PATHS = {
   facup: "/soccer/eng.fa/scoreboard",
   copadelrey: "/soccer/esp.copa_del_rey/scoreboard",
   dfbpokal: "/soccer/ger.dfb_pokal/scoreboard",
+  nations: "/soccer/uefa.nations/scoreboard",
   fifa: "/soccer/fifa.world/scoreboard",
   epl: "/soccer/eng.1/scoreboard",
   mls: "/soccer/usa.1/scoreboard",

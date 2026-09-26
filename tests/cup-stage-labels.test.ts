@@ -54,3 +54,24 @@ test("cup altGameNote rounds resolve ahead of the slug", () => {
   assert.equal(parseGame(event("league-phase", "UEFA Conference League, League Phase"), "uecl").stage, "League Phase");
   assert.equal(parseGame(event("qualifying-round", "Copa del Rey, Qualifying Round"), "copadelrey").stage, "Qualifying Round");
 });
+
+// Nations League (added 2026-09-26). Notes read live off uefa.nations the same
+// day: league phase "UEFA Nations League, Group A2" (League A, group 2) with
+// slug league-phase; the 2024-25 knockouts "…, Quarterfinals" /
+// "…, Relegation Playoffs" / "…, Semifinals" / "…, Final", third place under
+// slug 3rd-place-match.
+test("Nations League groups and knockout rounds resolve to a stage line", () => {
+  assert.equal(parseGame(event("league-phase", "UEFA Nations League, Group A2"), "nations").stage, "Group A2");
+  assert.equal(parseGame(event("league-phase", "UEFA Nations League, Group D1"), "nations").stage, "Group D1");
+  assert.equal(parseGame(event("quarterfinals", "UEFA Nations League, Quarterfinals"), "nations").stage, "Quarterfinals");
+  assert.equal(parseGame(event("relegation-playoffs", "UEFA Nations League, Relegation Playoffs"), "nations").stage, "Relegation Playoffs");
+  assert.equal(parseGame(event("3rd-place-match", "UEFA Nations League, 3rd-Place Match"), "nations").stage, "Third Place");
+  assert.equal(parseGame(event("final", "UEFA Nations League, Final"), "nations").stage, "Final");
+});
+
+// The group arm is League A–D × group 1–4 only. A score-shaped or out-of-range
+// segment must not pass through as a stage line.
+test("Nations League group arm stays narrow", () => {
+  assert.equal(parseGame(event("regular-season", "UEFA Nations League, Group E9"), "nations").stage ?? null, null);
+  assert.equal(parseGame(event("regular-season", "Germany 2-1 Netherlands"), "nations").stage ?? null, null);
+});

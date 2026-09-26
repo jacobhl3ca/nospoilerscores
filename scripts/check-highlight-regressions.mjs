@@ -324,6 +324,8 @@ for (const [sport, path] of [
   ["uecl", '/soccer/uefa.europa.conf/scoreboard'],
   ["copadelrey", '/soccer/esp.copa_del_rey/scoreboard'],
   ["dfbpokal", '/soccer/ger.dfb_pokal/scoreboard'],
+  // Nations League (2026-09-26): dark from day one — see the note in youtube.ts.
+  ["nations", '/soccer/uefa.nations/scoreboard'],
 ]) {
   check(
     `${sport} stays dark and unmonitored`,

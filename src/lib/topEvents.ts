@@ -75,6 +75,7 @@ export const HEADER_SLUG_TO_SPORT: Record<string, Sport> = {
   "eng.fa": "facup",
   "esp.copa_del_rey": "copadelrey",
   "ger.dfb_pokal": "dfbpokal",
+  "uefa.nations": "nations",
 };
 
 // Sports the column can draw from at all (two-team game cards). Kept as a
@@ -84,7 +85,7 @@ export const TOP_EVENTS_GAME_SPORTS: readonly Sport[] = [
   "nfl", "ncaaf", "ufl", "mlb", "nba", "wnba", "ncaam", "ncaaw", "ncaavb", "nhl", "llws", "ncaabase", "ncaasoft",
   "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1", "mls",
   "ligamx", "nwsl", "efl", "libertadores", "saudi", "fifa", "euro", "afcon",
-  "uecl", "facup", "copadelrey", "dfbpokal",
+  "uecl", "facup", "copadelrey", "dfbpokal", "nations",
 ];
 const GAME_SPORT_SET = new Set<Sport>(TOP_EVENTS_GAME_SPORTS);
 export function isTopEventsGameSport(sport: Sport): boolean {
