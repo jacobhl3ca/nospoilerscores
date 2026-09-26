@@ -302,6 +302,28 @@ export function NewsColumnTitle({
                 >
                   Auto
                 </button>
+                {/* Top news = ESPN's cross-sport headlines feed. It leads the
+                    list like Best of yesterday leads the scores switcher
+                    (Jacob 9/26), and re-adds the column if it was gone. Absent
+                    when turned off in Settings. */}
+                {onPickEspn && (
+                  <button
+                    type="button"
+                    onClick={() => { onPickEspn(); setSwapOpen(false); }}
+                    aria-current={espnActive ? "true" : undefined}
+                    className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                    style={{
+                      color: espnActive ? "var(--accent)" : "var(--text)",
+                      fontWeight: espnActive || autoIsEspn ? 600 : 400,
+                    }}
+                    title={autoIsEspn ? "What Auto picks for this column" : "Show ESPN's top headlines in this column"}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    Top news (ESPN)
+                    {autoIsEspn && !espnActive && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
+                  </button>
+                )}
                 {swappableOptions!.map((opt) => {
                   const isCurrent = opt.sport === selectedSport;
                   const elsewhere = isCurrent ? undefined : shownElsewhere?.find((e) => e.sport === opt.sport);
@@ -334,28 +356,6 @@ export function NewsColumnTitle({
                     </button>
                   );
                 })}
-                {/* Top news = ESPN's cross-sport headlines feed. Sits in its
-                    own group so it reads as a distinct choice from the leagues
-                    and is always reachable (re-adds the column if it was gone). */}
-                {onPickEspn && (
-                  <button
-                    type="button"
-                    onClick={() => { onPickEspn(); setSwapOpen(false); }}
-                    aria-current={espnActive ? "true" : undefined}
-                    className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                    style={{
-                      color: espnActive ? "var(--accent)" : "var(--text)",
-                      fontWeight: espnActive || autoIsEspn ? 600 : 400,
-                      borderTop: "1px solid var(--border)",
-                    }}
-                    title={autoIsEspn ? "What Auto picks for this column" : "Show ESPN's top headlines in this column"}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    Top news (ESPN)
-                    {autoIsEspn && !espnActive && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
-                  </button>
-                )}
                 {/* Remove col hides the column entirely (matches the scores-view
                     behavior). User re-adds via the + button on scores or via
                     the focus pill. */}

@@ -3403,10 +3403,30 @@ export default function HomeContent({
           // Top news. Old blobs have no newsTopNews; a set newsGenericSlot
           // means they picked Top news (only that pick writes it).
           const topNewsPicked = prefs.newsTopNews ?? (prefs.newsGenericSlot !== undefined);
+          // Top news turned off in Settings (Jacob 9/26): a col 3 that would
+          // fall back to it takes the most relevant league not already in
+          // cols 1-2, the way a scores column skips a turned-off league.
+          const topNewsOff = !!prefs.topNewsHidden;
+          const nextNewsSport = topNewsOff
+            ? switcherSportsByRelevance.find((s) => s !== "top" && s !== "best"
+                && s !== scoreSlotSports[0] && s !== scoreSlotSports[1])
+            : undefined;
+          const nextNewsEntry = nextNewsSport ? {
+            slotIdx: 2,
+            sport: nextNewsSport,
+            id: nextNewsSport as string,
+            label: thirdLeagueOptions.find((o) => o.sport === nextNewsSport)?.label ?? nextNewsSport.toUpperCase(),
+            orderedCascade: leagueSourceCascade(nextNewsSport),
+          } : null;
+          const topNewsFallback = topNewsOff ? nextNewsEntry : espnEntry;
           const thirdColEntry = prefs.newsGenericHidden
             ? null
-            : thirdLeagueEntry ?? (topNewsPicked ? espnEntry : thirdMirrorEntry ?? espnEntry);
-          const thirdColMirrors = thirdColEntry !== null && thirdColEntry === thirdMirrorEntry;
+            : thirdLeagueEntry ?? (topNewsPicked && !topNewsOff ? espnEntry : thirdMirrorEntry ?? topNewsFallback);
+          // What Auto gives col 3: the mirror, else the fallback above.
+          const thirdAutoSport = thirdMirrorEntry?.sport ?? nextNewsEntry?.sport;
+          const thirdAutoIsEspn = !thirdMirrorEntry && !topNewsOff;
+          // The league that stands in for a turned-off Top news stays last too.
+          const thirdColMirrors = thirdColEntry !== null && (thirdColEntry === thirdMirrorEntry || thirdColEntry === nextNewsEntry);
           // Mobile (single stacked column): lead with News, then the two score
           // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
           // 3-across order: the two leagues, then the News/3rd-league column.
@@ -3478,7 +3498,7 @@ export default function HomeContent({
                     newsFocusLeague: prefs.newsFocusLeague === thirdColEntry?.id ? undefined : prefs.newsFocusLeague,
                   });
                 } else {
-                  setNewsThirdLeague(s as Sport | undefined, thirdMirrorEntry?.sport ?? "espn");
+                  setNewsThirdLeague(s as Sport | undefined, thirdAutoSport ?? "espn");
                 }
                 return;
               }
@@ -3669,10 +3689,10 @@ export default function HomeContent({
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
-                            onPickEspn={() => pickEspn(idx)}
+                            onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                             espnActive={isEspn}
-                            autoSport={entry.slotIdx === 2 ? thirdMirrorEntry?.sport : autoSlotSports[entry.slotIdx]}
-                            autoIsEspn={entry.slotIdx === 2 && !thirdMirrorEntry}
+                            autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
+                            autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                             removable={renderedEntries.length > 1}
                           />
                         </div>
@@ -3732,10 +3752,10 @@ export default function HomeContent({
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
-                      onPickEspn={() => pickEspn(idx)}
+                      onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                       espnActive={isEspn}
-                      autoSport={entry.slotIdx === 2 ? thirdMirrorEntry?.sport : autoSlotSports[entry.slotIdx]}
-                      autoIsEspn={entry.slotIdx === 2 && !thirdMirrorEntry}
+                      autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
+                      autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}

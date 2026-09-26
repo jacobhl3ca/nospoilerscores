@@ -102,9 +102,9 @@ const EXPECTED = ["Patriots at Seahawks", "Lions at Bears", "Liberty at Aces", "
 const NEVER = ["Sun at Dream", "Brighton at Burnley", "Galaxy at Sounders"];
 const SCORES = ["37", "34", "41", "38", "88", "86", "95", "71"];
 
-async function seed(page: Page, { showRatings = false } = {}) {
+async function seed(page: Page, { showRatings = false, extra = {} as Record<string, unknown> } = {}) {
   await page.clock.setFixedTime(NOW);
-  await page.addInitScript((ratings) => localStorage.setItem("nss-preferences", JSON.stringify({
+  await page.addInitScript(({ ratings, extra }) => localStorage.setItem("nss-preferences", JSON.stringify({
     favoriteLeagues: [],
     favoriteTeams: [],
     theme: "light",
@@ -122,7 +122,8 @@ async function seed(page: Page, { showRatings = false } = {}) {
     hiddenLeagues: ["mls"],
     defaultDateMode: "today",
     defaultLandingView: "scores",
-  })), showRatings);
+    ...extra,
+  })), { ratings: showRatings, extra });
   await page.route("**/apis/site/v2/sports/**", (route: Route) => {
     const url = new URL(route.request().url());
     const m = /\/sports\/(.+)\/scoreboard$/.exec(url.pathname);
@@ -258,4 +259,30 @@ test("Best of yesterday is a today-board column: the yesterday board keeps its A
   await page.goto("/yesterday");
   await expect(page.locator('[data-league-column="nfl"]')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('[data-league-column="best"]')).toHaveCount(0);
+});
+
+// Turned off in Settings' switcher list (Jacob 9/26): it leaves the switcher,
+// it no longer takes the Auto column, and a column pinned to it shows a league.
+test("Best of yesterday turned off: Auto keeps its league and the switcher drops it", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { extra: { hiddenLeagues: ["mls", "best"] } });
+  await page.goto("/");
+  const autoCol = page.locator(`[data-league-column="${AUTO_LAST}"]`);
+  await expect(autoCol).toBeVisible({ timeout: 30_000 });
+  await expect(autoCol.getByRole("button", { name: TODAY_GAME })).toHaveCount(1, { timeout: 15_000 });
+  await expect(page.locator('[data-league-column="best"]')).toHaveCount(0);
+  await page.locator('button[title="Switch league"]').first().click();
+  const menu = page.getByRole("dialog", { name: "Switch league" }).first();
+  await expect(menu.getByRole("button", { name: "Auto" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /Best of yesterday/ })).toHaveCount(0);
+});
+
+test("a column pinned to Best of yesterday shows a league once it is turned off", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { extra: { thirdLeague: "best", hiddenLeagues: ["mls", "best"] } });
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="nfl"]')).toBeVisible({ timeout: 30_000 });
+  const order = await page.locator("[data-league-column]").evaluateAll((els) => els.map((e) => e.getAttribute("data-league-column")));
+  expect(order).toHaveLength(3);
+  expect(order).not.toContain("best");
 });
