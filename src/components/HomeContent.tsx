@@ -26,6 +26,8 @@ import EventDetailModal from "@/components/EventDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import SlamBracketModal from "@/components/SlamBracketModal";
 import PlayoffPictureModal from "@/components/PlayoffPictureModal";
+import MlbSeasonReviewModal from "@/components/MlbSeasonReviewModal";
+import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
@@ -660,6 +662,11 @@ export default function HomeContent({
   const [playoffPictureOpen, setPlayoffPictureOpen] = useState(false);
   // The recap-row "Playoffs" pill opens the playoff picture on the tab it names.
   const [playoffPictureTab, setPlayoffPictureTab] = useState<PlayoffsTab | undefined>(undefined);
+  // The offseason "2026 in review" pill (same row, today's MLB column) and the
+  // section its dialog opens at. The file is read only in the offseason months.
+  const [mlbReview, setMlbReview] = useState<MlbReview | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewSection, setReviewSection] = useState<MlbReviewSection | null>(null);
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
@@ -2573,13 +2580,40 @@ export default function HomeContent({
   // Today's MLB column puts a "Playoffs" pill in the same row during
   // the playoff-picture window (LeagueRecapCard onShowPlayoffs), so it reserves
   // the row on sibling columns exactly as a recap does.
-  const bracketPillDue = isToday && playoffPictureInWindow("mlb", selectedDate);
-  const bracketPillShown = bracketPillDue && sortedLeagues
+  // After the World Series the "2026 in review" pill takes the same row and
+  // wins over the Playoffs pill where their windows overlap (the bracket is
+  // over). Only fetched Oct–Feb: in season it can never show. Any board, not
+  // just today's: yesterday's Top 5 clip carries the "All 2026 cuts" link.
+  const reviewMonth = Number(selectedDate.slice(4, 6));
+  const reviewFetchDue = reviewMonth >= 10 || reviewMonth <= 2;
+  useEffect(() => {
+    if (!reviewFetchDue) return;
+    let alive = true;
+    getMlbReview().then((r) => { if (alive) setMlbReview(r); }).catch(() => {});
+    return () => { alive = false; };
+  }, [reviewFetchDue]);
+  const reviewPillDue = mlbReviewPillDue(selectedDate, mlbReview, isToday);
+  // The clip modal's "All 2026 cuts" link: same window, keyed on today's date.
+  const reviewLinkDue = mlbReviewLinkDue(getDateString(0), mlbReview);
+  const reviewSections: MlbReviewSection[] = mlbReview
+    ? [
+        ...(mlbReview.months.some((m) => m.top25 || m.oddities) ? ["months" as const] : []),
+        ...(mlbReview.rounds.some((r) => r.top10 || r.oddities) || mlbReview.postseasonTop25 ? ["playoffs" as const] : []),
+        ...(mlbReview.teams.length ? ["teams" as const] : []),
+      ]
+    : [];
+  const bracketPillDue = isToday && !reviewPillDue && playoffPictureInWindow("mlb", selectedDate);
+  const mlbColumnShown = sortedLeagues
     .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
     .some((l) => l.sport === "mlb");
+  const bracketPillShown = bracketPillDue && mlbColumnShown;
+  const reviewPillShown = reviewPillDue && mlbColumnShown;
+  // Nov 2 on the MLB column is off the board (ALL_LEAGUES endDate), so the
+  // pill gets its own strip above the columns while no MLB column shows.
+  const reviewStripShown = reviewPillDue && !mlbColumnShown;
   const anyRecap = (recapSportsSync
     ? recapSportsSync.size > 0
-    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown;
+    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown;
 
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
@@ -3856,10 +3890,33 @@ export default function HomeContent({
                   onShowPlayoffs={bracketPillDue && league.sport === "mlb"
                     ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
                     : null}
+                  onShowReview={reviewPillDue && league.sport === "mlb"
+                    ? (section) => { setReviewSection(section); setReviewOpen(true); }
+                    : null}
+                  reviewSeason={mlbReview?.season ?? null}
+                  reviewSections={reviewSections}
                   onPlayList={playNewsVideo}
                 />
               )
               : undefined;
+            // Offseason home for the review pill (no MLB column to sit in).
+            const reviewStrip = reviewStripShown ? (
+              <div data-review-strip className="flex justify-center">
+                <div className="w-full max-w-[560px]">
+                  <LeagueRecapCard
+                    sport="mlb"
+                    date={selectedDate}
+                    lastPlayedDate={null}
+                    reserveSlot={false}
+                    onShowPlayoffs={null}
+                    onShowReview={(section) => { setReviewSection(section); setReviewOpen(true); }}
+                    reviewSeason={mlbReview?.season ?? null}
+                    reviewSections={reviewSections}
+                    onPlayList={playNewsVideo}
+                  />
+                </div>
+              </div>
+            ) : null;
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
               // `idx` is the raw slot (0-4), but empty slots collapse, so the
@@ -4195,6 +4252,7 @@ export default function HomeContent({
               return (
                 <>
                 {topBanner}
+                {reviewStrip}
                 <div className={boardRowCls}>
                   {/* Invisible leading spacer balances the trailing + button so
                       the columns stay centered when a slot has been emptied
@@ -4226,6 +4284,7 @@ export default function HomeContent({
             return (
               <>
               {topBanner}
+              {reviewStrip}
               <div className={boardRowCls}>
                 {/* Invisible leading spacer balances the trailing + button so
                     the columns stay centered when a slot has been emptied
@@ -4745,6 +4804,9 @@ export default function HomeContent({
           onPrev={videoModal.siblings && (videoModal.sibIndex ?? 0) > 0 ? () => stepVideo(-1) : undefined}
           onNext={videoModal.siblings && (videoModal.sibIndex ?? 0) < videoModal.siblings.length - 1 ? () => stepVideo(1) : undefined}
           alternates={videoModal.alternates}
+          extraLink={reviewLinkDue && mlbReview && videoModal.sourceLabel === "MLB.com"
+            ? { label: `All ${mlbReview.season} cuts`, onClick: () => { closeVideoModal("explicit"); setReviewOpen(true); } }
+            : null}
           onClose={closeVideoModal}
         />
       )}
@@ -4785,6 +4847,21 @@ export default function HomeContent({
       {slamBracketOpen && <SlamBracketModal onClose={() => setSlamBracketOpen(false)} />}
 
       {playoffPictureOpen && <PlayoffPictureModal initialTab={playoffPictureTab} onClose={() => setPlayoffPictureOpen(false)} />}
+
+      {/* Hidden while a video plays from it, back at the same section when the
+          video closes (VideoModal must be the only dialog on top). */}
+      {reviewOpen && mlbReview && !videoModal && (
+        <MlbSeasonReviewModal
+          review={mlbReview}
+          favoriteTeams={prefs.favoriteTeams}
+          initialSection={reviewSection}
+          onPlay={(rec, section) => {
+            setReviewSection(section);
+            openEmbedModal("", rec.pageUrl, "MLB.com", null, rec.playbackUrl, rec.poster ?? null);
+          }}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
 
       {/* Bottom-right keyboard guide. Sits outside every modal so it can say
           what the post-modal keys are WHILE that modal is open (Jacob 9/8). */}

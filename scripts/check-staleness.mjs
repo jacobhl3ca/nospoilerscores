@@ -123,6 +123,10 @@ const FEEDS = [
   // day or once a week, so only fetchedAt is watched, loosely. Not in
   // NEWS_HOURLY because it is not an `items` feed (no content-age check).
   { path: "/news/recaps.json", warnH: 24, critH: 72 },
+  // MLB season in review (prebake bakeMlbSeasonReview, same cadence). The
+  // records change monthly at most, but fetchedAt moves every run; loose
+  // anyway, since a missed week only delays a new month's cut.
+  { path: "/news/mlb-review.json", warnH: 7 * 24, critH: 30 * 24 },
   { path: "/espn-airings.json", warnH: 6, critH: 24 },           // GHA every 2h
   // prime-asins is a best-effort nicety: it deep-links Prime broadcasts to the
   // exact game page, and scrape-prime-asins.mjs is explicitly non-fatal — if
