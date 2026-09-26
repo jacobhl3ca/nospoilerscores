@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CHANNEL_SEARCH_HANDLES, channelSearchHandle, pickChannelSearchCards, titleHasCompToken, NOT_FIRST_TEAM_RX,
+  CHANNEL_SEARCH_HANDLES, channelSearchHandle, channelSearchMinSec, pickChannelSearchCards, titleDateYmd, titleHasCompToken, NOT_FIRST_TEAM_RX,
 } from "../scripts/lib/channel-search.mjs";
 
 const DAY = 86400e3;
@@ -63,4 +63,32 @@ test("only listed channels have a search page", () => {
   assert.equal(channelSearchHandle("ESPN FC"), null);
   assert.equal(channelSearchHandle(null), null);
   for (const handle of Object.values(CHANNEL_SEARCH_HANDLES)) assert.match(handle, /^[A-Za-z0-9_.-]+$/);
+});
+
+test("AHA: each night of a series gets its own cut, and a 59 s recap counts", () => {
+  // The @atlantichockeyamerica search page for "Ohio State Penn State",
+  // 2026-09-26, in page order. The 9/25 cut sits first for both nights.
+  const now = Date.parse("2026-09-26T18:00Z");
+  const cards = [
+    { videoId: "tJMVNYbn0Ks", title: "Ohio State 2, Penn State 1 - Sept. 25, 2026", durationSec: 161, publishedMs: now - 19 * 3600e3 },
+    { videoId: "52d7bwEdWl4", title: "Ohio State 2, Penn State 1 OT - Sept. 24, 2026", durationSec: 92, publishedMs: now - 22 * 3600e3 },
+    { videoId: "G5w5xc6YQW0", title: "9.20.22 Syracuse Season Preview", durationSec: 116, publishedMs: now - 4 * 365 * DAY },
+  ];
+  const opts = { titleHasTeams: teams("ohio state", "penn state"), minSec: channelSearchMinSec("Atlantic Hockey America") };
+  assert.deepEqual(pickChannelSearchCards(cards, { ...opts, gameMs: Date.parse("2026-09-24T23:00Z") }).map((c) => c.videoId), ["52d7bwEdWl4"]);
+  assert.deepEqual(pickChannelSearchCards(cards, { ...opts, gameMs: Date.parse("2026-09-25T23:00Z") }).map((c) => c.videoId), ["tJMVNYbn0Ks"]);
+  const cuse = [{ videoId: "VrJ0_8gHZs0", title: "Syracuse 3, Stonehill 0 - Sept. 25, 2026", durationSec: 59, publishedMs: now - 19 * 3600e3 }];
+  assert.equal(pickChannelSearchCards(cuse, { titleHasTeams: teams("syracuse", "stonehill"), gameMs: Date.parse("2026-09-25T23:00Z"), minSec: 45 }).length, 1);
+  assert.equal(pickChannelSearchCards(cuse, { titleHasTeams: teams("syracuse", "stonehill"), gameMs: Date.parse("2026-09-25T23:00Z") }).length, 0);
+  assert.equal(channelSearchHandle("Atlantic Hockey America"), "atlantichockeyamerica");
+});
+
+test("a title's own date: long, short and West Coast night forms", () => {
+  assert.equal(titleDateYmd("Ohio State 2, Penn State 1 OT - Sept. 24, 2026"), "20260924");
+  assert.equal(titleDateYmd("Highlights: Orlando City vs. New England Revolution | September 27, 2017"), "20170927");
+  assert.equal(titleDateYmd("3.10.23 AHA Semifinals Game 1: Holy Cross vs. RIT Highlights"), "20230310");
+  assert.equal(titleDateYmd("West Brom v Birmingham | Highlights"), "");
+  // 10:30 pm PT on 9/24 is 9/25 in ET; a title naming 9/24 still fits.
+  const late = [{ videoId: "w", title: "LA Galaxy vs. Seattle | September 24, 2026", durationSec: 300, publishedMs: null }];
+  assert.equal(pickChannelSearchCards(late, { titleHasTeams: teams("galaxy", "seattle"), gameMs: Date.parse("2026-09-25T05:30Z") }).length, 1);
 });

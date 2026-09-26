@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
+import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
+import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
@@ -25,6 +26,8 @@ import EventDetailModal from "@/components/EventDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import SlamBracketModal from "@/components/SlamBracketModal";
 import PlayoffPictureModal from "@/components/PlayoffPictureModal";
+import MlbSeasonReviewModal from "@/components/MlbSeasonReviewModal";
+import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
@@ -68,13 +71,13 @@ function migrateLegacySwitcherPreferences(prefs: Preferences): Preferences {
 
 function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>): Preferences {
   const merged = {
-    ...local,
-    ...remote,
-    // These arrays use omission to mean the default. Because the account copy
-    // is canonical, an omitted remote array must clear a device-only override
-    // instead of accidentally inheriting it through the object spread.
+    // Defaults + the account copy, NOT this device's blob: a key the account
+    // omits means default, so a stale device must not keep it — see
+    // accountPrefsBase. The arrays below were the first keys fixed this way.
+    ...accountPrefsBase(defaultPreferences(), remote),
     hiddenLeagues: remote.hiddenLeagues,
     shownLeagues: remote.shownLeagues,
+    // Not the defaults' 2: a missing marker is what flags a legacy account.
     switcherDefaultsVersion: remote.switcherDefaultsVersion,
     // Dismissals only ever accumulate, so they merge as a UNION — never a
     // pick. The reconcile lands 1-3 s after first paint; a banner dismissed
@@ -659,6 +662,11 @@ export default function HomeContent({
   const [playoffPictureOpen, setPlayoffPictureOpen] = useState(false);
   // The recap-row "Playoffs" pill opens the playoff picture on the tab it names.
   const [playoffPictureTab, setPlayoffPictureTab] = useState<PlayoffsTab | undefined>(undefined);
+  // The offseason "2026 in review" pill (same row, today's MLB column) and the
+  // section its dialog opens at. The file is read only in the offseason months.
+  const [mlbReview, setMlbReview] = useState<MlbReview | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewSection, setReviewSection] = useState<MlbReviewSection | null>(null);
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
@@ -999,7 +1007,7 @@ export default function HomeContent({
         if (!remote || !alive || Object.keys(remote).length === 0) return;
         const local = loadPreferences();
         const merged = mergeRemotePreferences(local, remote);
-        if (JSON.stringify(merged) === JSON.stringify(local)) return; // no change → don't disturb
+        if (samePrefs(merged, local)) return; // no change → don't disturb
         savePreferences(merged);
         setPrefs(merged);
         document.documentElement.setAttribute("data-theme", getResolvedTheme(merged.theme));
@@ -1514,12 +1522,16 @@ export default function HomeContent({
     if (!prefs.skipNewsExplainer) setNewsNotice(true);
   };
 
-  const setNewsThirdLeague = (sport: Sport | undefined) => {
+  // A pick in news column 3's own switcher. A league overrides the column;
+  // undefined (Auto) hands it back to scores column 3. `autoId` is the column
+  // Auto lands on, so a one-column Focus view can follow it.
+  const setNewsThirdLeague = (sport: Sport | undefined, autoId: Sport | "espn" = "espn") => {
     updatePrefs({
       newsThirdLeague: sport,
+      newsTopNews: false,
       newsGenericHidden: false,
       // Keep a one-column Focus view pointed at the replacement column.
-      newsFocusLeague: prefs.newsFocusLeague ? (sport ?? "espn") : undefined,
+      newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
     });
   };
 
@@ -2573,13 +2585,40 @@ export default function HomeContent({
   // Today's MLB column puts a "Playoffs" pill in the same row during
   // the playoff-picture window (LeagueRecapCard onShowPlayoffs), so it reserves
   // the row on sibling columns exactly as a recap does.
-  const bracketPillDue = isToday && playoffPictureInWindow("mlb", selectedDate);
-  const bracketPillShown = bracketPillDue && sortedLeagues
+  // After the World Series the "2026 in review" pill takes the same row and
+  // wins over the Playoffs pill where their windows overlap (the bracket is
+  // over). Only fetched Oct–Feb: in season it can never show. Any board, not
+  // just today's: yesterday's Top 5 clip carries the "All 2026 cuts" link.
+  const reviewMonth = Number(selectedDate.slice(4, 6));
+  const reviewFetchDue = reviewMonth >= 10 || reviewMonth <= 2;
+  useEffect(() => {
+    if (!reviewFetchDue) return;
+    let alive = true;
+    getMlbReview().then((r) => { if (alive) setMlbReview(r); }).catch(() => {});
+    return () => { alive = false; };
+  }, [reviewFetchDue]);
+  const reviewPillDue = mlbReviewPillDue(selectedDate, mlbReview, isToday);
+  // The clip modal's "All 2026 cuts" link: same window, keyed on today's date.
+  const reviewLinkDue = mlbReviewLinkDue(getDateString(0), mlbReview);
+  const reviewSections: MlbReviewSection[] = mlbReview
+    ? [
+        ...(mlbReview.months.some((m) => m.top25 || m.oddities) ? ["months" as const] : []),
+        ...(mlbReview.rounds.some((r) => r.top10 || r.oddities) || mlbReview.postseasonTop25 ? ["playoffs" as const] : []),
+        ...(mlbReview.teams.length ? ["teams" as const] : []),
+      ]
+    : [];
+  const bracketPillDue = isToday && !reviewPillDue && playoffPictureInWindow("mlb", selectedDate);
+  const mlbColumnShown = sortedLeagues
     .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
     .some((l) => l.sport === "mlb");
+  const bracketPillShown = bracketPillDue && mlbColumnShown;
+  const reviewPillShown = reviewPillDue && mlbColumnShown;
+  // Nov 2 on the MLB column is off the board (ALL_LEAGUES endDate), so the
+  // pill gets its own strip above the columns while no MLB column shows.
+  const reviewStripShown = reviewPillDue && !mlbColumnShown;
   const anyRecap = (recapSportsSync
     ? recapSportsSync.size > 0
-    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown;
+    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown;
 
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
@@ -3310,8 +3349,8 @@ export default function HomeContent({
                 ? () => fetchLeagueNews(c.sport!, 10)
                 : () => fetchPrebaked(c.key),
             }));
-          // Build visible news entries. The first two mirror scores columns;
-          // the generic News/optional third-news-league column is independent.
+          // Build visible news entries. Each of the three mirrors its scores
+          // column; column 3 can also be set on its own (see thirdColEntry).
           // Type/hidden filters are applied at render-time so the dropdown
           // can still display + re-enable hidden sources.
           // Col-3 fallback = hidescore.com's "News" feed. Use GENERIC_CASCADE,
@@ -3333,36 +3372,66 @@ export default function HomeContent({
           // slot is trailing; an empty slot BEFORE a populated one would shift
           // each later league's index down and drop/mislabel its news column.
           const newsLeagueQueue = [...sortedLeagues];
-          const leagueEntries = [0, 1].map((slotIdx) => {
-            if (selectedSlotLeagues[slotIdx] === "empty") return null;
-            const queued = newsLeagueQueue.shift();
-            const sport: Sport | undefined = queued?.sport;
+          const scoreSlotSports = [0, 1, 2].map((slotIdx): Sport | undefined =>
+            selectedSlotLeagues[slotIdx] === "empty" ? undefined : newsLeagueQueue.shift()?.sport);
+          const mirrorEntryFor = (slotIdx: number) => {
+            const sport = scoreSlotSports[slotIdx];
             if (!sport) return null;
             // A Top events / Best of yesterday score column has no news feed
             // of its own (it is a cross-league pick, not a league). The board
-            // keeps its other mirror plus the News column rather than an
+            // keeps its other mirrors plus the News column rather than an
             // empty "Top events".
             if (sport === "top" || sport === "best") return null;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             const orderedCascade = leagueSourceCascade(sport);
             return { slotIdx, sport, id: sport as string, label, orderedCascade };
-          }).filter((e): e is NonNullable<typeof e> => e !== null);
+          };
+          const leagueEntries = [0, 1].map(mirrorEntryFor)
+            .filter((e): e is NonNullable<typeof e> => e !== null);
+          // Scores column 3's league, when it has one with news. Phones keep
+          // their News-first merged feed (Jacob 5/30), so only the column
+          // board mirrors it.
+          const thirdMirrorEntry = isMobile ? null : mirrorEntryFor(2);
           const thirdLeagueEntry = prefs.newsThirdLeague ? (() => {
             const sport = prefs.newsThirdLeague!;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             return { slotIdx: 2, sport, id: sport as string, label, orderedCascade: leagueSourceCascade(sport) };
           })() : null;
-          // Match hidescore.com's default column order: the two scores leagues
-          // fill cols 1-2, and col 3 is the chosen 3rd news league if set, else
-          // the ESPN/general feed — NOT a forced ESPN first column. (Reverted the
-          // 5/28 ESPN-first default per Jacob 5/29; ESPN stays reachable as the
-          // col-3 fallback and the focus/order controls are unchanged.)
+          // Default column order matches the scores board 1 for 1: news cols
+          // 1-3 follow scores cols 1-3 (Jacob 9/25: "shouldn't it match 1 for 1
+          // with my leagues on homepage unless manually set there"). Col 3
+          // falls back to the ESPN/general feed when scores col 3 has no league
+          // with news (Empty, Top events, Best of yesterday). Before 9/25, col 3
+          // was always that feed unless a 3rd news league was picked.
           const firstTwoEntries = leagueEntries.filter((e) => e.slotIdx === 0 || e.slotIdx === 1);
-          // Col 3 naturally exists even when scores slot 3 is Empty. It can be
-          // swapped to a league or explicitly removed without touching scores.
+          // A pick in col 3's own switcher overrides the mirror: a league, or
+          // Top news. Old blobs have no newsTopNews; a set newsGenericSlot
+          // means they picked Top news (only that pick writes it).
+          const topNewsPicked = prefs.newsTopNews ?? (prefs.newsGenericSlot !== undefined);
+          // Top news turned off in Settings (Jacob 9/26): a col 3 that would
+          // fall back to it takes the most relevant league not already in
+          // cols 1-2, the way a scores column skips a turned-off league.
+          const topNewsOff = !!prefs.topNewsHidden;
+          const nextNewsSport = topNewsOff
+            ? switcherSportsByRelevance.find((s) => s !== "top" && s !== "best"
+                && s !== scoreSlotSports[0] && s !== scoreSlotSports[1])
+            : undefined;
+          const nextNewsEntry = nextNewsSport ? {
+            slotIdx: 2,
+            sport: nextNewsSport,
+            id: nextNewsSport as string,
+            label: thirdLeagueOptions.find((o) => o.sport === nextNewsSport)?.label ?? nextNewsSport.toUpperCase(),
+            orderedCascade: leagueSourceCascade(nextNewsSport),
+          } : null;
+          const topNewsFallback = topNewsOff ? nextNewsEntry : espnEntry;
           const thirdColEntry = prefs.newsGenericHidden
             ? null
-            : thirdLeagueEntry ?? espnEntry;
+            : thirdLeagueEntry ?? (topNewsPicked && !topNewsOff ? espnEntry : thirdMirrorEntry ?? topNewsFallback);
+          // What Auto gives col 3: the mirror, else the fallback above.
+          const thirdAutoSport = thirdMirrorEntry?.sport ?? nextNewsEntry?.sport;
+          const thirdAutoIsEspn = !thirdMirrorEntry && !topNewsOff;
+          // The league that stands in for a turned-off Top news stays last too.
+          const thirdColMirrors = thirdColEntry !== null && (thirdColEntry === thirdMirrorEntry || thirdColEntry === nextNewsEntry);
           // Mobile (single stacked column): lead with News, then the two score
           // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
           // 3-across order: the two leagues, then the News/3rd-league column.
@@ -3371,7 +3440,10 @@ export default function HomeContent({
           // column's switcher (newsGenericSlot). The league columns shift
           // right around it — nothing is dropped. Mobile keeps its fixed
           // news-first stack (Jacob 5/30) regardless.
-          const genericPos = Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length);
+          // A mirrored col 3 stays last, in its scores position.
+          const genericPos = thirdColMirrors
+            ? firstTwoEntries.length
+            : Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length);
           const visibleNewsEntries = isMobile
             ? [...(thirdColEntry ? [thirdColEntry] : []), ...firstTwoEntries]
             : thirdColEntry
@@ -3420,18 +3492,18 @@ export default function HomeContent({
           const renderSourcesFor = (entry: typeof visibleNewsEntries[number]): NewsSource[] =>
             cascadeToSources(orderedColumnSourcesFor(entry));
 
-          // News col 3 is independent; the first two league columns continue to
-          // mirror their matching score slots.
+          // News cols 1-2 ARE their score slots, so a pick there changes the
+          // scores board too. A pick in col 3 changes the news board only.
           const newsSwapFor = (slotIdx: number) =>
             (s: Sport | "empty" | undefined) => {
               if (slotIdx === 2) {
                 if (s === "empty") {
                   updatePrefs({
                     newsGenericHidden: true,
-                    newsFocusLeague: prefs.newsFocusLeague === (prefs.newsThirdLeague ?? "espn") ? undefined : prefs.newsFocusLeague,
+                    newsFocusLeague: prefs.newsFocusLeague === thirdColEntry?.id ? undefined : prefs.newsFocusLeague,
                   });
                 } else {
-                  setNewsThirdLeague(s as Sport | undefined);
+                  setNewsThirdLeague(s as Sport | undefined, thirdAutoSport ?? "espn");
                 }
                 return;
               }
@@ -3446,6 +3518,7 @@ export default function HomeContent({
           const pickEspn = (position?: number) => {
             updatePrefs({
               newsThirdLeague: undefined,
+              newsTopNews: true,
               newsGenericHidden: false,
               newsGenericSlot: position === undefined
                 ? prefs.newsGenericSlot
@@ -3553,15 +3626,16 @@ export default function HomeContent({
 
           const wideCol = "flex-1 min-w-0 max-w-[420px] xl:max-w-[520px]";
           const narrowCol = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
-          // News + button restores the natural News column first when removed;
-          // otherwise it refills one of the two score-linked league columns.
+          // News + button restores column 3 first when removed (with whatever
+          // it showed: the mirror, a picked league, or Top news); otherwise it
+          // refills one of the two score-linked league columns.
           const newsFirstEmptySlot = [0, 1].find((i) => selectedSlotLeagues[i] === "empty");
           const newsAddEligibleSport = switcherOptions.find(
             (o) => !visibleNewsEntries.some((e) => e.sport === o.sport),
           )?.sport;
           const newsOnAddColumn = visibleNewsEntries.length < 3 && (prefs.newsGenericHidden || newsFirstEmptySlot !== undefined)
             ? () => {
-                if (prefs.newsGenericHidden) pickEspn();
+                if (prefs.newsGenericHidden) updatePrefs({ newsGenericHidden: false });
                 else if (newsFirstEmptySlot !== undefined && newsAddEligibleSport) setSlotLeague(newsFirstEmptySlot, newsAddEligibleSport);
               }
             : undefined;
@@ -3620,10 +3694,10 @@ export default function HomeContent({
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
-                            onPickEspn={() => pickEspn(idx)}
+                            onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                             espnActive={isEspn}
-                            autoSport={entry.slotIdx === 2 ? undefined : autoSlotSports[entry.slotIdx]}
-                            autoIsEspn={entry.slotIdx === 2}
+                            autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
+                            autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                             removable={renderedEntries.length > 1}
                           />
                         </div>
@@ -3683,10 +3757,10 @@ export default function HomeContent({
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
-                      onPickEspn={() => pickEspn(idx)}
+                      onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                       espnActive={isEspn}
-                      autoSport={entry.slotIdx === 2 ? undefined : autoSlotSports[entry.slotIdx]}
-                      autoIsEspn={entry.slotIdx === 2}
+                      autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
+                      autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}
@@ -3841,10 +3915,33 @@ export default function HomeContent({
                   onShowPlayoffs={bracketPillDue && league.sport === "mlb"
                     ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
                     : null}
+                  onShowReview={reviewPillDue && league.sport === "mlb"
+                    ? (section) => { setReviewSection(section); setReviewOpen(true); }
+                    : null}
+                  reviewSeason={mlbReview?.season ?? null}
+                  reviewSections={reviewSections}
                   onPlayList={playNewsVideo}
                 />
               )
               : undefined;
+            // Offseason home for the review pill (no MLB column to sit in).
+            const reviewStrip = reviewStripShown ? (
+              <div data-review-strip className="flex justify-center">
+                <div className="w-full max-w-[560px]">
+                  <LeagueRecapCard
+                    sport="mlb"
+                    date={selectedDate}
+                    lastPlayedDate={null}
+                    reserveSlot={false}
+                    onShowPlayoffs={null}
+                    onShowReview={(section) => { setReviewSection(section); setReviewOpen(true); }}
+                    reviewSeason={mlbReview?.season ?? null}
+                    reviewSections={reviewSections}
+                    onPlayList={playNewsVideo}
+                  />
+                </div>
+              </div>
+            ) : null;
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
               // `idx` is the raw slot (0-4), but empty slots collapse, so the
@@ -4180,6 +4277,7 @@ export default function HomeContent({
               return (
                 <>
                 {topBanner}
+                {reviewStrip}
                 <div className={boardRowCls}>
                   {/* Invisible leading spacer balances the trailing + button so
                       the columns stay centered when a slot has been emptied
@@ -4211,6 +4309,7 @@ export default function HomeContent({
             return (
               <>
               {topBanner}
+              {reviewStrip}
               <div className={boardRowCls}>
                 {/* Invisible leading spacer balances the trailing + button so
                     the columns stay centered when a slot has been emptied
@@ -4741,6 +4840,9 @@ export default function HomeContent({
           onPrev={videoModal.siblings && (videoModal.sibIndex ?? 0) > 0 ? () => stepVideo(-1) : undefined}
           onNext={videoModal.siblings && (videoModal.sibIndex ?? 0) < videoModal.siblings.length - 1 ? () => stepVideo(1) : undefined}
           alternates={videoModal.alternates}
+          extraLink={reviewLinkDue && mlbReview && videoModal.sourceLabel === "MLB.com"
+            ? { label: `All ${mlbReview.season} cuts`, onClick: () => { closeVideoModal("explicit"); setReviewOpen(true); } }
+            : null}
           onClose={closeVideoModal}
         />
       )}
@@ -4781,6 +4883,21 @@ export default function HomeContent({
       {slamBracketOpen && <SlamBracketModal onClose={() => setSlamBracketOpen(false)} />}
 
       {playoffPictureOpen && <PlayoffPictureModal initialTab={playoffPictureTab} onClose={() => setPlayoffPictureOpen(false)} />}
+
+      {/* Hidden while a video plays from it, back at the same section when the
+          video closes (VideoModal must be the only dialog on top). */}
+      {reviewOpen && mlbReview && !videoModal && (
+        <MlbSeasonReviewModal
+          review={mlbReview}
+          favoriteTeams={prefs.favoriteTeams}
+          initialSection={reviewSection}
+          onPlay={(rec, section) => {
+            setReviewSection(section);
+            openEmbedModal("", rec.pageUrl, "MLB.com", null, rec.playbackUrl, rec.poster ?? null);
+          }}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
 
       {/* Bottom-right keyboard guide. Sits outside every modal so it can say
           what the post-modal keys are WHILE that modal is open (Jacob 9/8). */}

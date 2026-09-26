@@ -5677,7 +5677,11 @@ export async function fetchAllLeagues(
     if (sport === "top") return TOP_EVENTS_ENABLED ? TOP_EVENTS_CONFIG : null;
     // "Yesterday" is the day before TODAY, so a "best" pin is a today-board
     // column. Any other date gets the slot's Auto league instead.
-    if (sport === "best") return BEST_YESTERDAY_ENABLED && isTodayView ? BEST_YESTERDAY_CONFIG : null;
+    // Turned off in Settings, it is filled like any turned-off league.
+    if (sport === "best") {
+      if (!BEST_YESTERDAY_ENABLED || !isTodayView) return null;
+      return hidden.includes("best") ? "hidden" : BEST_YESTERDAY_CONFIG;
+    }
     // A pin on a league the user has since turned off. Still a pin (the
     // column stays out of Auto), but it is filled below by nextUnusedLeague.
     if (hidden.includes(sport)) return "hidden";
@@ -5771,7 +5775,7 @@ export async function fetchAllLeagues(
   // it needs BEST_YESTERDAY_MIN_GAMES qualifying games, or the Auto league
   // keeps the column.
   const pinnedBest = final.some((cfg) => cfg.sport === "best");
-  const bestAuto = BEST_YESTERDAY_ENABLED && isTodayView && autoLast !== null && !pinnedBest;
+  const bestAuto = BEST_YESTERDAY_ENABLED && isTodayView && autoLast !== null && !pinnedBest && !hidden.includes("best");
 
   // Keep duplicate manual slots. Replacing one of them with an unrelated auto
   // league made the grey "already shown" option misleading: the UI said a

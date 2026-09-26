@@ -69,3 +69,57 @@ test("the switcher marks what Auto resolves to and dates upcoming leagues as M/D
   expect(rows.some((r) => /\d{1,2}\/\d{1,2}$/.test(r.trim()))).toBe(true);
   expect(rows.some((r) => /starts \w{3} \d{1,2}/.test(r))).toBe(false);
 });
+
+// Top news leads the news switcher, the way Best of yesterday leads the scores
+// one (Jacob 9/26): straight after Auto, not under a divider at the bottom.
+test("Top news (ESPN) is the first row after Auto in a news switcher", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
+  await seedPrefs(page, { firstLeague: "mlb", secondLeague: "nfl", thirdLeague: "empty", fourthLeague: "empty", fifthLeague: "empty" });
+  await page.goto("/");
+  const titles = page.locator('button[title="Switch news league"]');
+  await expect(titles).toHaveCount(3);
+  await titles.nth(0).click();
+  const rows = await page.getByRole("dialog", { name: "Switch news league" }).getByRole("button").allTextContents();
+  expect(rows[0]).toBe("Auto");
+  expect(rows[1]).toMatch(/^Top news \(ESPN\)/);
+});
+
+// Turned off in Settings: gone from every news switcher, and the column that
+// fell back to it takes a league instead.
+test("Top news turned off: column 3 shows a league and no switcher offers it", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
+  await seedPrefs(page, {
+    firstLeague: "mlb", secondLeague: "nfl", thirdLeague: "empty", fourthLeague: "empty", fifthLeague: "empty",
+    topNewsHidden: true,
+  });
+  await page.goto("/");
+  const titles = page.locator('button[title="Switch news league"]');
+  await expect(titles).toHaveCount(3);
+  const labels = await titles.allTextContents();
+  expect(labels[0]).toBe("MLB");
+  expect(labels[1]).toMatch(/^NFL/); // "NFL Preseason" on 8/7
+  expect(labels[2]).not.toBe("News");
+  expect(labels[2]).not.toMatch(/^(MLB|NFL)/);
+  console.log("col 3 with Top news off:", labels[2]);
+  await titles.nth(2).click();
+  const menu = page.getByRole("dialog", { name: "Switch news league" });
+  await expect(menu.getByRole("button", { name: "Auto" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /Top news/ })).toHaveCount(0);
+});
+
+test("Settings lists both cross-league columns and unticking them saves the prefs", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
+  await seedPrefs(page, { showNews: false, defaultLandingView: "scores" });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Settings$/ }).first().click();
+  await page.getByText(/leagues in the switcher · Edit/).click();
+  const best = page.getByRole("checkbox", { name: "Best of yesterday" });
+  const top = page.getByRole("checkbox", { name: "Top news (ESPN)" });
+  await expect(best).toBeChecked();
+  await expect(top).toBeChecked();
+  await best.uncheck();
+  await top.uncheck();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+  expect(saved.hiddenLeagues).toContain("best");
+  expect(saved.topNewsHidden).toBe(true);
+});
