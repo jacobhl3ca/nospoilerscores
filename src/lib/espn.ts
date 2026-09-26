@@ -1201,8 +1201,12 @@ export function getActiveLeagueCandidates(viewDate?: Date): {
 // documented rules. Returns leagues in slot order — the first three follow the
 // [left, center, right] pin rules; slots beyond 3 (the wide-viewport 5-column
 // board) fill from the remaining pool by LEAGUE_PRIORITY.
-export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES): LeagueConfig[] {
-  const eligible = ALL_LEAGUES.filter((l) => isLeagueAutoEligible(l, viewDate) && !l.excludeFromAuto);
+//
+// `hidden` = the leagues the user turned off in Settings' switcher list. They
+// never win an Auto column: the next league down the ranking takes it, the
+// same way it would if the hidden one were out of season (Jacob 9/26).
+export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES, hidden: readonly Sport[] = []): LeagueConfig[] {
+  const eligible = ALL_LEAGUES.filter((l) => isLeagueAutoEligible(l, viewDate) && !l.excludeFromAuto && !hidden.includes(l.sport));
 
   const mustInclude = eligible.filter((l) => l.mustInclude && !l.backfillOnly);
   const firstPref   = eligible.filter((l) => effectiveFirstPref(l, viewDate) && !l.mustInclude && !l.backfillOnly);
@@ -1249,6 +1253,17 @@ export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES
   }
 
   return slots.filter((l): l is LeagueConfig => l !== null);
+}
+
+// The league that takes a column whose PINNED league the user has since turned
+// off (Jacob 9/26: F1 unticked in Settings, still on the board). The switcher's
+// own relevance order — firstPref pins, then LEAGUE_PRIORITY — minus hidden
+// leagues and minus leagues already on the board, so the column becomes the
+// top league the user could have switched to rather than a duplicate. null when
+// every ranked league is taken; the caller then uses the slot's Auto pick.
+export function nextUnusedLeague(viewDate: Date, hidden: readonly Sport[], used: ReadonlySet<Sport>): LeagueConfig | null {
+  const { firstPref, rest } = getActiveLeagueCandidates(viewDate);
+  return [...firstPref, ...rest].find((l) => !hidden.includes(l.sport) && !used.has(l.sport)) ?? null;
 }
 
 // Resolves the display label for a league at a given date — NCAAM swaps to
@@ -5502,6 +5517,9 @@ export async function fetchAllLeagues(
   topOpts?: TopEventsOptions,
   // Only read on the today board — see fetchBestYesterday.
   bestOpts?: BestYesterdayOptions,
+  // Leagues turned off in Settings' switcher list. An Auto column skips them
+  // (pickAndAssignLeagues); a column pinned to one shows nextUnusedLeague.
+  hidden: readonly Sport[] = [],
 ): Promise<LeagueData[]> {
   // Parse viewed date so league visibility matches the day being viewed, not today
   const viewDate = date
@@ -5520,14 +5538,14 @@ export async function fetchAllLeagues(
   // Resolved slot order from the layout rules. The first three follow
   // [left, center, right] order — see the "FULL YEAR SCHEDULE" comment up top;
   // slots 4-5 (wide viewports) fill from the remaining pool by priority.
-  const auto = pickAndAssignLeagues(viewDate, slotCount);
+  const auto = pickAndAssignLeagues(viewDate, slotCount, hidden);
 
   // Per-slot overrides: each slot independently swappable to any active league.
   // "empty" hides the slot entirely (no auto fallback). Falls back to legacy
   // thirdLeagueSport when slotOverrides.third is unset to preserve old share URLs.
   // Returns LeagueConfig for a sport, "empty" to keep the slot explicitly hidden,
   // or null when unset (which then triggers the auto fallback downstream).
-  const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | null => {
+  const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | "hidden" | null => {
     if (sport === "empty") return "empty";
     if (!sport) return null;
     // A "top" pin saved while the column was on reads as Auto while it is off.
@@ -5535,6 +5553,9 @@ export async function fetchAllLeagues(
     // "Yesterday" is the day before TODAY, so a "best" pin is a today-board
     // column. Any other date gets the slot's Auto league instead.
     if (sport === "best") return BEST_YESTERDAY_ENABLED && isTodayView ? BEST_YESTERDAY_CONFIG : null;
+    // A pin on a league the user has since turned off. Still a pin (the
+    // column stays out of Auto), but it is filled below by nextUnusedLeague.
+    if (hidden.includes(sport)) return "hidden";
     const configs = ALL_LEAGUES.filter((l) => l.sport === sport);
     if (!configs.length) return null;
     // Several sports have more than one seasonal config (NFL regular season +
@@ -5588,13 +5609,21 @@ export async function fetchAllLeagues(
     // unset (null) → fall back to that slot's auto pick.
     const resolveFinal = (cfg: LeagueConfig | "empty" | null, slotIdx: number): LeagueConfig | null =>
       cfg === "empty" ? null : (cfg ?? nextAutoForSlot(slotIdx));
-    const slots: (LeagueConfig | null)[] = [slot1Cfg, slot2Cfg, slot3Cfg, slot4Cfg, slot5Cfg]
-      .slice(0, slotCount)
-      .map((cfg, slotIdx) => resolveFinal(cfg, slotIdx));
+    const picked = [slot1Cfg, slot2Cfg, slot3Cfg, slot4Cfg, slot5Cfg].slice(0, slotCount);
+    const slots: (LeagueConfig | null)[] = picked.map((cfg, slotIdx) => (cfg === "hidden" ? null : resolveFinal(cfg, slotIdx)));
+    // Columns pinned to a turned-off league, left to right, each take the top
+    // league not already on the board.
+    const used = new Set(slots.flatMap((cfg) => (cfg ? [cfg.sport] : [])));
+    picked.forEach((cfg, slotIdx) => {
+      if (cfg !== "hidden") return;
+      const next = nextUnusedLeague(viewDate, hidden, used) ?? nextAutoForSlot(slotIdx);
+      slots[slotIdx] = next;
+      if (next) used.add(next.sport);
+    });
     // Drop both empty slots and any null auto-fallback misses.
     final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
     if (lastOnAuto) autoLast = slots[slotCount - 1] ? "filled" : "open";
-  } else if (slot3Cfg && slot3Cfg !== "empty" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
+  } else if (slot3Cfg && slot3Cfg !== "empty" && slot3Cfg !== "hidden" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
     // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen
     // league. Slice at slotCount, NOT MAX_LEAGUES: `auto` holds up to slotCount
     // configs, so on a wide (5-column) board MAX_LEAGUES-1 (2) kept only the
