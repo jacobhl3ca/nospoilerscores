@@ -61,9 +61,101 @@ export const CHANNEL_SEARCH_HANDLES = {
   // Women's college hockey (the ncaawh chain, added 2026-09-26). YouTube's
   // global results for "Ohio State vs Penn State highlights" are 20 football
   // cuts, so the /api/youtube lookup never sees this channel's video; its own
-  // search page puts it first.
+  // search page puts it first. ECAC's pairs carry the same risk (Yale–Harvard,
+  // Cornell–Princeton are football names too); its titles print the date
+  // ("Highlights - September 25, 2026"), so the title-date check below keeps
+  // the two nights of a weekend series apart.
   "Atlantic Hockey America": "atlantichockeyamerica",
+  "ECAC Hockey": "ECACHockeyLeague",
 };
+
+// Channel id (UC…) per channel, for its uploads feed
+// (youtube.com/feeds/videos.xml?channel_id=). Read off each @handle page
+// 2026-09-26. The bake reads the feed BEFORE the search page: it holds the 15
+// newest uploads with their exact upload times, and YouTube does not throttle
+// it the way it throttles results pages, so a game the feed already holds
+// costs none of the bake's 30 search pages. Feed depth measured 2026-09-26:
+// MLS and Bundesliga ~6 days, West Brom ~10, ECAC and AHA a full weekend.
+export const CHANNEL_FEED_IDS = {
+  "Major League Soccer": "UCSZbXT5TLLW_i-5W8FZpFsg",
+  "Bundesliga": "UC6UL29enLNe4mqwTfAyeNuw",
+  "EFL": "UCCmo_NIuQR5eU4AvBa6sEQQ",
+  "CBS Sports Golazo": "UCET00YnetHT7tOpu12v8jxg",
+  "CBS Sports Golazo - Europe": "UCf8YPuOWXlpTS7RibaJlP4g",
+  "TUDN USA": "UCSo19KhHogXxu3sFsOpqrcQ",
+  "LIGA BBVA MX": "UCq8BPLXtFeiSFOvmJrknWGg",
+  "Birmingham City Football Club": "UCW1HMToSBse9JgQtsm2vMsQ",
+  "Blackburn Rovers Football Club": "UCg4185wSpo9swSCSUEYUGTg",
+  "Bolton Wanderers FC": "UC6oTkDRXLR6GO53l44i0LFw",
+  "Bristol City": "UCq_5VYwAoOvaL4lyGkwoboQ",
+  "Burnley Football Club": "UChvUXuSDeEFSQZS8GcPMtkg",
+  "Cardiff City FC": "UCfBVy8PAMwyNbac6D0Mk8gQ",
+  "Charlton Athletic Football Club": "UC99akEsugT_s4tv_r2oxuOQ",
+  "Derby County Football Club": "UCsOKCDfSRPwRhnbCqBO8CQw",
+  "Lincoln City FC": "UCCLmGW0zE-1Gdagxg52G7sA",
+  "Middlesbrough FC": "UCdXWsJhkXzx5hFJGcxjy_5Q",
+  "Millwall FC": "UCPyLfjCylafteypHYuYvGbQ",
+  "Norwich City Football Club": "UCzdkZv6--BWsUQ9rKUtQ1TQ",
+  "Portsmouth FC": "UC2pUjr6WECIEprPQxcD51OA",
+  "Preston North End FC": "UCWSRYI78ApCEDssqg5UjXKw",
+  "QPR FC": "UCiegSQxYwraPK5efklvTO5w",
+  "Sheffield United FC": "UCVER_UoBt84YUrA6s402Q-g",
+  "Southampton FC": "UCxvXjfiIHQ2O6saVx_ZFqnw",
+  "Stoke City FC": "UCmFPjHUFr0hyE6eFGvCm7IA",
+  "Swansea City AFC": "UCSMZZFBE92Yn-_XYdDiiANA",
+  "Watford FC": "UCptKljTrbdMTgmuekGKhRug",
+  "West Bromwich Albion": "UCnDBNo0zLm11TTXPVXvEN1g",
+  "West Ham United FC": "UCCNOsmurvpEit9paBOzWtUg",
+  "Wolves": "UCQ7Lqg5Czh5djGK6iOG53KQ",
+  "Wrexham AFC": "UCS7BAYpqOSaYy-pZp6oO4PA",
+  "Atlantic Hockey America": "UC0x7S4TIeXr86mei-ni-kYQ", // gitleaks:allow (public channel id; "Hockey" reads as "key")
+  "ECAC Hockey": "UCjUTtbKNR2Gf2GziiKf74TQ", // gitleaks:allow
+};
+
+export function channelFeedId(channel) {
+  return (channel && CHANNEL_FEED_IDS[channel]) || null;
+}
+
+function decodeXml(s) {
+  return String(s ?? "")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;|&#0?39;|&#x27;/gi, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
+    .replace(/&amp;/g, "&");
+}
+
+// Uploads feed XML → { cards, oldestMs }. `cards` are in the shape
+// pickChannelSearchCards takes, newest first. Shorts are dropped (their link
+// is /shorts/…); the feed carries no length, so `durationSec` is unknown and
+// the bake reads it off the watch page for the pick instead. `oldestMs` is the
+// oldest upload in the feed, Shorts included: every upload since then is in
+// it, so for a game that started after it the feed is the whole answer and
+// the search page could show nothing more (see feedCoversGame).
+export function parseChannelFeed(xml) {
+  const cards = [];
+  let oldestMs = null;
+  for (const [, block] of String(xml ?? "").matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
+    const videoId = (block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/) || [])[1]?.trim();
+    const title = decodeXml((block.match(/<title>([\s\S]*?)<\/title>/) || [])[1]).trim();
+    const link = (block.match(/<link rel="alternate" href="([^"]+)"/) || [])[1] ?? "";
+    const publishedMs = Date.parse((block.match(/<published>([^<]+)<\/published>/) || [])[1] ?? "");
+    if (!videoId) continue;
+    if (Number.isFinite(publishedMs)) oldestMs = oldestMs === null ? publishedMs : Math.min(oldestMs, publishedMs);
+    if (!title || /\/shorts\//.test(link)) continue;
+    cards.push({ videoId, title, publishedMs: Number.isFinite(publishedMs) ? publishedMs : null, durationSec: null });
+  }
+  return { cards, oldestMs };
+}
+
+// Whether the feed reaches back to the game's start, so it already holds any
+// cut of it. When it does and holds none, the cut is not posted yet and a
+// results page would be spent for nothing.
+export function feedCoversGame(feed, gameMs) {
+  return Number.isFinite(feed?.oldestMs) && Number.isFinite(gameMs) && feed.oldestMs <= gameMs;
+}
 
 // Channels whose game cut runs under a minute. AHA posts a scoreline recap
 // per game at 59–161 s ("Syracuse 3, Stonehill 0 - Sept. 25, 2026" is 59 s).
@@ -83,6 +175,15 @@ export function channelSearchHandle(channel) {
 // two club names ("Albion Women 3-1 Birmingham City Women"). None of those is
 // the ESPN game on the card.
 export const NOT_FIRST_TEAM_RX = /\b(women|womens|ladies|lionesses|u-?1[5-9]|u-?2[0-3]|under[- ]?(?:1[5-9]|2[0-3])|academy|reserves?|pl2|premier league 2|youth|fa youth cup)\b/i;
+
+// Women's leagues: their own cuts say "Women's" ("RPI at Mercyhurst | NCAA
+// Women's Ice Hockey | …"), so the filter above would refuse the very game on
+// the card. It is skipped for these sports.
+const WOMENS_SPORTS = new Set(["ncaawh", "ncaaw", "ncaavb", "wnba", "nwsl"]);
+
+export function isWomensSport(sport) {
+  return WOMENS_SPORTS.has(sport);
+}
 
 // A goal clip, a reaction or a Short is not the game's highlight package.
 const MIN_HIGHLIGHT_SEC = 60;
@@ -123,16 +224,17 @@ const EARLY_SLACK_MS = 3 * 86400e3;
 const LATE_SLACK_MS = 16 * 86400e3;
 
 // The cards worth checking, best first, from one channel search page.
-// `cards` are parseYtVideoRenderers() rows with `publishedMs` added. A card
-// passes when it names both teams (`titleHasTeams`), carries the competition
-// token when one is required (`compOk`), is not a women's / youth fixture,
+// `cards` are parseYtVideoRenderers() rows with `publishedMs` added, or
+// parseChannelFeed() rows. A card passes when it names both teams
+// (`titleHasTeams`), carries the competition token when one is required
+// (`compOk`), is not a women's / youth fixture (unless `womensGame`),
 // runs at least `minSec` (a minute by default), is not excluded, names no
 // other date than the game's own, and its age fits the game date. The date in
 // the title matters for a series: AHA played Ohio State–Penn State on 9/24 and
 // 9/25, and the 9/25 cut sits first on the page for both nights. A
 // card whose age did not parse is kept but ranked after every dated one — the
 // bake's watch-page date gate decides it.
-export function pickChannelSearchCards(cards, { titleHasTeams, compOk = () => true, gameMs, exclude = [], limit = 2, minSec = MIN_HIGHLIGHT_SEC }) {
+export function pickChannelSearchCards(cards, { titleHasTeams, compOk = () => true, gameMs, exclude = [], limit = 2, minSec = MIN_HIGHLIGHT_SEC, womensGame = false }) {
   const skip = new Set(exclude.filter(Boolean));
   const days = gameDays(gameMs);
   const dated = [];
@@ -140,7 +242,7 @@ export function pickChannelSearchCards(cards, { titleHasTeams, compOk = () => tr
   for (const card of Array.isArray(cards) ? cards : []) {
     const title = String(card?.title ?? "");
     if (!card?.videoId || skip.has(card.videoId) || !title) continue;
-    if (NOT_FIRST_TEAM_RX.test(title)) continue;
+    if (!womensGame && NOT_FIRST_TEAM_RX.test(title)) continue;
     if (Number.isFinite(card.durationSec) && card.durationSec < minSec) continue;
     if (!titleHasTeams(title) || !compOk(title)) continue;
     const named = titleDateYmd(title);

@@ -785,6 +785,11 @@ const TEAM_NAME_ALIASES: Record<string, string> = {
   // ESPN names RPI by its full name; the ECAC Hockey titles say "RPI" ("RPI at
   // Mercyhurst | NCAA Women's Ice Hockey | …"). 0/2 strict without this.
   "Rensselaer": "RPI",
+  // Same shape, 2026-09-26: ECAC titles "Union at Franklin Pierce", AHA titles
+  // "Robert Morris 8, Post 3". ESPN's "Union (NY)" and "Post University" kept
+  // both games dark.
+  "Union (NY)": "Union",
+  "Post University": "Post",
 };
 
 function aliasTeam(name: string): string {
