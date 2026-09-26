@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getRecapsFor, formatRecapDuration, recapButtonText, rowRecapHeadings, stackedRecapHeadings, RECAP_STACK_MAX_PX, RECAP_COMPACT_MAX_PX, type RecapRecord } from "@/lib/recaps";
+import { getRecapsFor, getRecapsForSync, formatRecapDuration, recapButtonText, rowRecapHeadings, stackedRecapHeadings, RECAP_STACK_MAX_PX, RECAP_COMPACT_MAX_PX, type RecapRecord } from "@/lib/recaps";
 import { leadChannelBlocksEmbeds } from "@/lib/youtube";
 import type { PlayHandler, PlayOpts } from "@/components/NewsColumn";
 
@@ -87,7 +87,11 @@ export default function LeagueRecapCard({
   onPlayList?: PlayHandler;
 }) {
   const ymd = lastPlayedDate || date;
-  const [records, setRecords] = useState<RecapRecord[]>([]);
+  // Seeded from the session cache when recaps.json already landed — HomeContent
+  // fetches it with the scores — so the pill is in the column's first paint.
+  // Only a cold cache (a direct deep link before that fetch resolves) waits for
+  // the effect below.
+  const [records, setRecords] = useState<RecapRecord[]>(() => getRecapsForSync(sport, ymd) ?? []);
   const [prevKey, setPrevKey] = useState(`${sport}|${ymd}`);
   // Stacked (narrow) until measured — the phone is the case that breaks, so
   // the first paint must not be the one-row layout. A callback ref rather
@@ -140,7 +144,7 @@ export default function LeagueRecapCard({
   // as WorldCupMattersCard does) so the previous day's buttons never flash.
   if (`${sport}|${ymd}` !== prevKey) {
     setPrevKey(`${sport}|${ymd}`);
-    setRecords([]);
+    setRecords(getRecapsForSync(sport, ymd) ?? []);
   }
 
   useEffect(() => {

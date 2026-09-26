@@ -70,6 +70,11 @@ export function recapCoversDay(rec: RecapRecord, ymd: string): boolean {
 // promise is cleared so the next card retries instead of caching an empty map
 // for the page's whole lifetime — same idiom as loadBakedHighlights.
 let recapsPromise: Promise<Record<string, RecapRecord[]>> | null = null;
+// The resolved map, for synchronous reads (getRecapsForSync) once the fetch
+// HomeContent starts with the scores has landed — so LeagueRecapCard and the
+// row-reserve logic can render the pill in the board's FIRST paint instead of
+// one fetch + one effect later (Jacob 9/26: "best of day loads a little late").
+let recapsCache: Record<string, RecapRecord[]> | null = null;
 
 export function loadBakedRecaps(): Promise<Record<string, RecapRecord[]>> {
   if (!recapsPromise) {
@@ -85,7 +90,8 @@ export function loadBakedRecaps(): Promise<Record<string, RecapRecord[]>> {
           recapsPromise = null;
           return {};
         }
-        return data.recaps as Record<string, RecapRecord[]>;
+        recapsCache = data.recaps as Record<string, RecapRecord[]>;
+        return recapsCache;
       } catch {
         recapsPromise = null;
         return {};
@@ -150,6 +156,14 @@ function recapButtonRank(rec: Pick<RecapRecord, "sport" | "key">): number {
 export async function getRecapsFor(sport: string, ymd: string): Promise<RecapRecord[]> {
   // Same "today" the date nav uses, so the gate agrees with the board.
   return selectRecaps(await loadBakedRecaps(), sport, ymd, toYmd(getEtServiceDate()));
+}
+
+// The same selection without awaiting: the records when recaps.json has
+// already loaded this session, null when it has not (callers then fall back to
+// getRecapsFor). Lets a component seed its state in the render that mounts it.
+export function getRecapsForSync(sport: string, ymd: string): RecapRecord[] | null {
+  if (!recapsCache) return null;
+  return selectRecaps(recapsCache, sport, ymd, toYmd(getEtServiceDate()));
 }
 
 // "▶ 8m" — whole minutes, rounded; under a minute reads in seconds; unknown
