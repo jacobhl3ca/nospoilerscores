@@ -12,7 +12,9 @@
 
 **Proof:** tsc clean, eslint 0 errors, test:unit 637/637 (new `ncaa-soccer-leagues` on a real 9/25 Stanford–SMU event, `youtube-aha-scoreline` through the real worker handler, chain tests extended), `highlights:check` all pass, `tv:catalog:check` up to date (44 leagues). Live worker before deploy: AHA lookups "No results" for all four linked games, ECAC control hit — the carve-out is what lights them.
 
-- [ ] **Deploy + read-back**: after merge, `/api/youtube?q=Ohio State vs Penn State highlights Sep 24, 2026&channel=Atlantic Hockey America&strict=1` must return a video id; the 9/25 query a different one; then the mini bake writes them.
+- [x] **Deploy + read-back** (#177): Lindenwood–Merrimack 9/24 and 9/25 return two different AHA ids live. Ohio State–Penn State and Stonehill–Syracuse stayed "No results": YouTube's global page for that pair is 20 football cuts.
+- [x] **AHA channel search** (9/26): `Atlantic Hockey America` → `@atlantichockeyamerica` in `CHANNEL_SEARCH_HANDLES`. Its own search page puts the game first. Two guards came with it: a card whose title names another date is refused (the 9/25 Ohio State–Penn State cut sits first for both nights; the game's ET and PT days both count, for West Coast night games), and a per-channel minimum length (AHA 45 s; Syracuse–Stonehill is 59 s). Local `--hl-sports=ncaawh --hl-days=4` bake: Ohio State–Penn State 9/24 `52d7bwEdWl4` + 9/25 `tJMVNYbn0Ks`, Stonehill–Syracuse `VrJ0_8gHZs0`, Delaware–Holy Cross `VqQcZU28c9k`, 6 pages, 0 failures.
+- [ ] **AHA men's season (early Oct)**: Mercyhurst, RIT and RMU play in both AHA leagues. The title-date + both-teams gates keep a men's cut off a women's card unless both sides play the same pair on the same day. Check the first men's weekend's titles.
 - [ ] **College soccer clips**: probe conference channels (ACC Digital Network, Big Ten, SEC) with a `soccer` token the way ncaavb was lit; the Real Woso Fan channel is not a trusted uploader.
 - [ ] **Men's College Cup 2026 dates**: window ends 12-15; re-read ESPN's calendar once the tournament is listed.
 
