@@ -32,7 +32,7 @@ import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
@@ -1496,6 +1496,7 @@ export default function HomeContent({
     updatePrefs({
       newsThirdLeague: sport,
       newsTopNews: false,
+      newsFrontPage: false,
       newsGenericHidden: false,
       // Keep a one-column Focus view pointed at the replacement column.
       newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
@@ -3331,6 +3332,16 @@ export default function HomeContent({
             label: "News",
             orderedCascade: GENERIC_CASCADE,
           };
+          // "ESPN front page" (Jacob 9/26): espn.com's Top Headlines, then its
+          // homepage clips, nothing else. Picked from a news switcher, or the
+          // Auto news column under an ESPN front page scores column.
+          const frontPageEntryFor = (slotIdx: number) => ({
+            slotIdx,
+            sport: undefined as Sport | undefined,
+            id: "espn-front",
+            label: ESPN_FRONT_PAGE_LABEL,
+            orderedCascade: ESPN_FRONT_PAGE_CASCADE,
+          });
           // fetchAllLeagues collapses empty slots out of the returned array, so
           // walk it as a shifting queue — one pull per non-empty slot — exactly
           // like the scores view (see leagueQueue below) and setSlotLeague. A
@@ -3343,11 +3354,13 @@ export default function HomeContent({
           const mirrorEntryFor = (slotIdx: number) => {
             const sport = scoreSlotSports[slotIdx];
             if (!sport) return null;
-            // An ESPN front page / Best of yesterday score column has no news feed
-            // of its own (it is a cross-league pick, not a league). The board
-            // keeps its other mirrors plus the News column rather than an
-            // empty "ESPN front page".
-            if (sport === "top" || sport === "best") return null;
+            // An ESPN front page score column's news is espn.com's own front
+            // page: its headlines and homepage clips (Jacob 9/26).
+            if (sport === "top") return frontPageEntryFor(slotIdx);
+            // Best of yesterday has no news feed of its own (it is a
+            // cross-league pick, not a league). The board keeps its other
+            // mirrors plus the News column rather than an empty column.
+            if (sport === "best") return null;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             const orderedCascade = leagueSourceCascade(sport);
             return { slotIdx, sport, id: sport as string, label, orderedCascade };
@@ -3390,9 +3403,12 @@ export default function HomeContent({
             orderedCascade: leagueSourceCascade(nextNewsSport),
           } : null;
           const topNewsFallback = topNewsOff ? nextNewsEntry : espnEntry;
+          // An ESPN front page pick takes the same column Top news would.
           const thirdColEntry = prefs.newsGenericHidden
             ? null
-            : thirdLeagueEntry ?? (topNewsPicked && !topNewsOff ? espnEntry : thirdMirrorEntry ?? topNewsFallback);
+            : prefs.newsFrontPage
+              ? frontPageEntryFor(2)
+              : thirdLeagueEntry ?? (topNewsPicked && !topNewsOff ? espnEntry : thirdMirrorEntry ?? topNewsFallback);
           // What Auto gives col 3: the mirror, else the fallback above.
           const thirdAutoSport = thirdMirrorEntry?.sport ?? nextNewsEntry?.sport;
           const thirdAutoIsEspn = !thirdMirrorEntry && !topNewsOff;
@@ -3423,6 +3439,9 @@ export default function HomeContent({
             ? visibleNewsEntries.filter((e) => e.id === newsFocusLeague)
             : visibleNewsEntries;
           const orderedColumnSourcesFor = (entry: typeof visibleNewsEntries[number]): ColumnSource[] => {
+            // ESPN front page IS its two ESPN cards: the funnel (Reddit-only
+            // by default) and hidden labels would otherwise blank it.
+            if (entry.id === "espn-front") return entry.orderedCascade;
             const visible = entry.orderedCascade.filter((s) => !newsHiddenSources.includes(s.label));
             const typeMatched = visible.filter((s) => newsTypeFilters.includes(classifySource(s) as NewsSourceType));
             // Not every league has a source of every type — NWSL and cricket
@@ -3485,11 +3504,22 @@ export default function HomeContent({
             updatePrefs({
               newsThirdLeague: undefined,
               newsTopNews: true,
+              newsFrontPage: false,
               newsGenericHidden: false,
               newsGenericSlot: position === undefined
                 ? prefs.newsGenericSlot
                 : (Math.max(0, Math.min(2, position)) as 0 | 1 | 2),
               newsFocusLeague: prefs.newsFocusLeague ? "espn" : undefined,
+            });
+          };
+          // Same move for ESPN front page: it takes the generic column's place.
+          const pickFrontPage = (position: number) => {
+            updatePrefs({
+              newsThirdLeague: undefined,
+              newsTopNews: false,
+              newsFrontPage: true,
+              newsGenericHidden: false,
+              newsGenericSlot: Math.max(0, Math.min(2, position)) as 0 | 1 | 2,
             });
           };
 
@@ -3545,6 +3575,9 @@ export default function HomeContent({
           // News, then higher-priority league A, then league B. This replaces
           // the old interleaving that put B Reddit before B video.
           const MOBILE_SOURCE_RANK: Record<string, number> = {
+            // ESPN front page leads the phone feed: headlines, then clips.
+            "front:espn": 0,
+            "front:topvideos": 0.5,
             "news:topvideos": 1,
             "news:espn": 2,
             "news:reddit": 3,
@@ -3566,9 +3599,9 @@ export default function HomeContent({
             // Sort the score-league entries by the fixed global priority so role
             // A is always the higher-priority league (MLB ahead of NBA), not
             // whatever sits in scores column 1.
-            const newsEntry = renderedEntries.filter((e) => e.id === "espn");
+            const newsEntry = renderedEntries.filter((e) => e.id === "espn" || e.id === "espn-front");
             const leagueEntries = renderedEntries
-              .filter((e) => e.id !== "espn")
+              .filter((e) => e.id !== "espn" && e.id !== "espn-front")
               .sort((a, b) => {
                 const ra = a.sport ? MOBILE_NEWS_LEAGUE_ORDER.indexOf(a.sport) : -1;
                 const rb = b.sport ? MOBILE_NEWS_LEAGUE_ORDER.indexOf(b.sport) : -1;
@@ -3579,7 +3612,9 @@ export default function HomeContent({
               const leagueIdx = leagueEntries.indexOf(entry);
               const role = entry.id === "espn"
                 ? "news"
-                : leagueIdx === 0 ? "A" : leagueIdx === 1 ? "B" : "C";
+                : entry.id === "espn-front"
+                  ? "front"
+                  : leagueIdx === 0 ? "A" : leagueIdx === 1 ? "B" : "C";
               return orderedColumnSourcesFor(entry).map((cs, subIdx) => ({
                 cs,
                 rank: MOBILE_SOURCE_RANK[`${role}:${classifySource(cs)}`] ?? 900 + subIdx,
@@ -3662,6 +3697,8 @@ export default function HomeContent({
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
                             onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                             espnActive={isEspn}
+                            onPickFrontPage={() => pickFrontPage(idx)}
+                            frontPageActive={entry.id === "espn-front"}
                             autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
                             autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                             removable={renderedEntries.length > 1}
@@ -3725,6 +3762,8 @@ export default function HomeContent({
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
                       onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                       espnActive={isEspn}
+                      onPickFrontPage={() => pickFrontPage(idx)}
+                      frontPageActive={entry.id === "espn-front"}
                       autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
                       autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                       hideTitle={stripActive}
