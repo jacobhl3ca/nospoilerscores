@@ -37,9 +37,14 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // the default "auto" mode forces them off before noon ET). The "hidden until
 // you tap" wording was removed from this page on 2026-09-20; do not put it
 // back.
-const TITLE = "NHL Highlights Without Spoilers: Find the Best Games | HideScore";
+// Retitled 2026-09-26. Search Console, 28 days to Sep 24: "spoiler free nhl
+// highlights" = 220 impressions, 0 clicks, position 4.5. That is a title
+// problem, not a ranking one: the query's own words "spoiler free" were not in
+// the old title ("NHL Highlights Without Spoilers: Find the Best Games"). Title
+// and description now lead with them. The H1 did not change.
+const TITLE = "Spoiler-Free NHL Highlights: No Score in the Title | HideScore";
 const DESC =
-  "Watch NHL highlights without seeing who won. No score is printed, and games can be rated for excitement so you know which ones to watch. Free, no account.";
+  "Spoiler-free NHL highlights: no score printed, no winner named. An optional rating on each finished game tells you which recap to watch first. Free, no account.";
 const CANONICAL = "/nhl-highlights-without-spoilers";
 
 const FAQ = [
