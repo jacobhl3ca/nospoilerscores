@@ -56,7 +56,7 @@ test("news column 3 follows scores column 3 by default", async ({ page }) => {
 });
 
 test("a league picked in news column 3 overrides the mirror, and Auto hands it back", async ({ page }) => {
-  await seedPrefs(page, { newsThirdLeague: "cfl" });
+  await seedPrefs(page, { newsThirdLeague: "cfl", shownLeagues: ["cfl"] });
   await page.goto("/");
   const titles = page.locator('button[title="Switch news league"]');
   await expect(titles).toHaveText(["MLB", "NFL", "CFL"], LOAD);
@@ -69,6 +69,26 @@ test("a league picked in news column 3 overrides the mirror, and Auto hands it b
   expect(p.newsTopNews).toBe(false);
   // The scores board was not touched.
   expect(p.thirdLeague).toBe("wnba");
+});
+
+// Jacob 9/26: "still see cfl as a news item when its not my league on mobile
+// app". A stored pick only counts while that league is in the user's switcher.
+test("a stored pick of a league not in the switcher falls back to the mirror", async ({ page }) => {
+  await seedPrefs(page, { newsThirdLeague: "cfl" });
+  await page.goto("/");
+  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["MLB", "NFL", "WNBA"], LOAD);
+});
+
+test("phone: a stored pick of a league not in the switcher shows Top news, not that league", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedPrefs(page, { newsThirdLeague: "cfl" });
+  await page.goto("/");
+  // Phones stack one column with no title switchers: News, then the two
+  // score leagues. Each source card is headed by its label.
+  const main = page.locator("main");
+  await expect(main.getByText("r/sports", { exact: true })).toBeVisible(LOAD);
+  await expect(main.getByText("r/baseball", { exact: true })).toBeVisible();
+  await expect(main).not.toContainText(/CFL/i);
 });
 
 test("Top news picked in column 3 stays, even with a league in scores column 3", async ({ page }) => {
@@ -87,7 +107,12 @@ test("Top news picked in column 3 stays, even with a league in scores column 3",
 test("an older Top news pick (newsGenericSlot, no newsTopNews) is kept", async ({ page }) => {
   await seedPrefs(page, { newsGenericSlot: 0 });
   await page.goto("/");
-  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["News", "MLB", "NFL"], LOAD);
+  // Phones stack one column with no title switchers: News, then the two
+  // score leagues. Each source card is headed by its label.
+  const main = page.locator("main");
+  await expect(main.getByText("r/sports", { exact: true })).toBeVisible(LOAD);
+  await expect(main.getByText("r/baseball", { exact: true })).toBeVisible();
+  await expect(main).not.toContainText(/CFL/i);
 });
 
 test("scores column 3 Empty: news column 3 is Top news", async ({ page }) => {
