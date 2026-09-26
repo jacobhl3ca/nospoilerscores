@@ -193,6 +193,17 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/champions-league-without-spoilers" className="underline underline-offset-2">
             Champions League
           </Link>
+          {/* 2026-09-26: the other three UEFA competition routes, linked here on
+              their first day for the same orphan reason as the batch above. */}
+          <Link href="/europa-league-without-spoilers" className="underline underline-offset-2">
+            Europa League
+          </Link>
+          <Link href="/conference-league-without-spoilers" className="underline underline-offset-2">
+            Conference League
+          </Link>
+          <Link href="/nations-league-without-spoilers" className="underline underline-offset-2">
+            Nations League
+          </Link>
           <Link href="/la-liga-without-spoilers" className="underline underline-offset-2">
             La Liga
           </Link>

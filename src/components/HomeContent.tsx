@@ -1798,7 +1798,7 @@ export default function HomeContent({
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket",
     "chess", "poker", "esports",
     // ── soccer block, bottom ──
-    "epl", "ucl", "uel", "uecl", "laliga", "seriea", "bundesliga", "ligue1",
+    "epl", "ucl", "uel", "uecl", "nations", "laliga", "seriea", "bundesliga", "ligue1",
     "mls", "ligamx", "nwsl", "efl", "libertadores", "saudi",
     "facup", "copadelrey", "dfbpokal",
     "fifa", "euro", "afcon",
@@ -4335,6 +4335,9 @@ export default function HomeContent({
               <a href="/soccer-highlights-without-spoilers" style={{ textDecoration: "underline" }}>soccer highlights</a> — including the{" "}
               <a href="/premier-league-without-spoilers" style={{ textDecoration: "underline" }}>Premier League</a>,{" "}
               <a href="/champions-league-without-spoilers" style={{ textDecoration: "underline" }}>Champions League</a>,{" "}
+              <a href="/europa-league-without-spoilers" style={{ textDecoration: "underline" }}>Europa League</a>,{" "}
+              <a href="/conference-league-without-spoilers" style={{ textDecoration: "underline" }}>Conference League</a>,{" "}
+              <a href="/nations-league-without-spoilers" style={{ textDecoration: "underline" }}>Nations League</a>,{" "}
               <a href="/la-liga-without-spoilers" style={{ textDecoration: "underline" }}>La Liga</a>,{" "}
               <a href="/mls-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLS</a>,{" "}
               <a href="/liga-mx-scores-without-spoilers" style={{ textDecoration: "underline" }}>Liga MX</a> and{" "}

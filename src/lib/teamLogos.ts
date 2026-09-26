@@ -111,6 +111,9 @@ export function logoForTeam(sport: Sport, rawId: string, abbreviation: string, g
     case "facup":
     case "copadelrey":
     case "dfbpokal":
+    // National teams resolve on the same soccer/500 path (Armenia 579, Latvia
+    // 456, Germany 481 all 200 on 2026-09-26).
+    case "nations":
       return `https://a.espncdn.com/i/teamlogos/soccer/500/${rawId}.png`;
     default:
       return undefined;

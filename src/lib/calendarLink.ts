@@ -36,7 +36,7 @@ const DURATION_MIN: Record<string, number> = {
   epl: 120, mls: 120, ucl: 120, uel: 120, fifa: 120, laliga: 120, seriea: 120,
   bundesliga: 120, ligue1: 120, ligamx: 120, nwsl: 120, efl: 120,
   libertadores: 120, euro: 120, afcon: 120, saudi: 120,
-  uecl: 120, facup: 120, copadelrey: 120, dfbpokal: 120,
+  uecl: 120, facup: 120, copadelrey: 120, dfbpokal: 120, nations: 120,
 };
 const DEFAULT_DURATION_MIN = 150;
 
