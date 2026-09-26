@@ -607,6 +607,15 @@ export const GENERIC_CASCADE: ColumnSource[] = [
   { label: "ESPN", key: "espn-top", kind: "prebaked", logoUrl: ESPN_BRAND_LOGO },
 ];
 
+// The "ESPN front page" news column (Jacob 9/26: "separate espn card where i
+// just see front page"): only what espn.com's homepage carries. Its Top
+// Headlines list leads, then its homepage clips. No Reddit, and the source
+// funnel does not apply to it (see HomeContent orderedColumnSourcesFor).
+export const ESPN_FRONT_PAGE_CASCADE: ColumnSource[] = [
+  { label: "ESPN Top Headlines", key: "espn-top", kind: "prebaked", logoUrl: ESPN_BRAND_LOGO },
+  { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN", logoUrl: ESPN_BRAND_LOGO },
+];
+
 // Classify a news source by its origin for the funnel source filter.
 //  - reddit:    `reddit-*` keys (r/sports, r/nba, …)
 //  - topvideos: any `*-videos` feed (NBA Top Videos, MLB Most Popular, ESPN Videos)

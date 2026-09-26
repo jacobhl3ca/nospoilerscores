@@ -737,6 +737,7 @@ export default function SettingsPanel({
       fifthLeague: undefined,
       newsThirdLeague: undefined,
       newsTopNews: undefined,
+      newsFrontPage: undefined,
       newsGenericHidden: undefined,
       topNewsHidden: undefined,
       newsGenericSlot: undefined,

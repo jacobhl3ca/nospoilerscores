@@ -287,6 +287,11 @@ export interface Preferences {
   // 9/25: a set newsGenericSlot then stands in for it, because only that
   // switcher pick ever wrote newsGenericSlot.
   newsTopNews?: boolean;
+  // True when the user picked "ESPN front page" from a news switcher (Jacob
+  // 9/26): the generic column shows only espn.com's Top Headlines + homepage
+  // clips instead of Top news. Uses the same column (and newsGenericSlot
+  // position) as Top news, so the two are either/or.
+  newsFrontPage?: boolean;
   // News column 3 is on the board by default, even when scores column 3 is
   // Empty (it then shows Top news). True means the user removed it.
   newsGenericHidden?: boolean;
