@@ -4,7 +4,7 @@ import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, u
 import { LeagueData, Sport } from "@/lib/types";
 import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortRank } from "@/lib/espn";
 import { TEAM_PICKER_SKIP } from "@/lib/teamLogos";
-import { isTopEventsGameSport, TOP_EVENTS_DEFAULT_COUNT, TOP_EVENTS_ENABLED, type TopEventsMode, type TopEventsCount } from "@/lib/topEvents";
+import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
 import { ALL_RECORD_LEAGUES, FREQUENT_RECORD_LEAGUES, WEEKLY_RECORD_LEAGUES, toggleAllRecordLeagues, toggleRecordLeague, upcomingRecordLeagues, type RecordLeague } from "@/lib/upcomingRecords";
 import {
@@ -122,16 +122,6 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "dark", label: "Dark" },
 ];
 
-const TOP_MODE_OPTIONS: { value: TopEventsMode; label: string; hint: string }[] = [
-  { value: "auto", label: "Auto", hint: "What espn.com is featuring right now, plus your starred teams" },
-  { value: "manual", label: "Manual", hint: "Only the leagues you tick below" },
-];
-const TOP_COUNT_OPTIONS: { value: "5" | "8" | "12"; label: string; hint: string }[] = [
-  { value: "5", label: "5", hint: "Just the headliners" },
-  { value: "8", label: "8", hint: "Default" },
-  { value: "12", label: "12", hint: "A full column" },
-];
-
 const SWITCHER_MODE_OPTIONS: { value: "dropdown" | "arrows" | "both" | "off"; label: string; hint: string }[] = [
   { value: "dropdown", label: "Dropdown", hint: "Tap a header to pick from a list" },
   { value: "arrows", label: "Arrows", hint: "‹ › cycle the unused leagues, most relevant first" },
@@ -213,7 +203,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   chess: "Chess",
   poker: "Poker",
   esports: "Esports",
-  top: "Top events",
+  top: "ESPN front page",
   best: "Best of yesterday",
 };
 
@@ -616,8 +606,6 @@ export default function SettingsPanel({
         return options.length ? [{ ...group, options }] : [];
       })
     : groupedLeagueOptions;
-  // Manual pool for the Top events column: every game-card league, catalog
-  // order, offseason ones marked (they contribute nothing until they return).
   const switcherCheckedCount = leagueOptions.filter(isSwitcherChecked).length;
   // Team-picker chips show in-season leagues first; the catalog options carry
   // the season flag (the team list itself does not).
@@ -625,7 +613,6 @@ export default function SettingsPanel({
     () => new Set(leagueOptions.filter((option) => !option.offseason).map((option) => option.sport)),
     [leagueOptions],
   );
-  const topEventsLeagueRows = groupedLeagueOptions.flatMap((group) => group.options.filter((option) => isTopEventsGameSport(option.sport)));
 
   const optionText = (option: LeagueOption) =>
     `${SPORT_LABEL[option.sport] ?? option.label}${option.offseason ? " · offseason" : option.upcomingLabel ? ` · starts ${option.upcomingLabel}` : ""}`;
@@ -777,9 +764,6 @@ export default function SettingsPanel({
       // season-kickoff banner too, so clear the per-kickoff dismissal list.
       // Read as `?? []`, so undefined restores the fresh-install "none dismissed".
       kickoffBannersDismissed: undefined,
-      topEventsMode: undefined,
-      topEventsLeagues: undefined,
-      topEventsCount: undefined,
       leagueSwitcherMode: undefined,
       hiddenLeagues: undefined,
       shownLeagues: undefined,
@@ -1285,15 +1269,15 @@ export default function SettingsPanel({
             {(isWideBoard ? [0, 1, 2, 3, 4] : [0, 1, 2]).map((idx) => {
               const fallbackLabel = displayedLeagues[idx]?.label ?? "—";
               const saved = slotValues[idx];
-              // A "top" pin from before the column was switched off reads as
-              // Auto here, which is what resolveSlot makes of it on the board.
+              // A "top" or "best" pin while that column is switched off reads
+              // as Auto here, which is what resolveSlot makes of it.
               const value = (saved === "top" && !TOP_EVENTS_ENABLED) || (saved === "best" && !BEST_YESTERDAY_ENABLED) ? undefined : saved;
               const selectedOption = value && value !== "empty"
                 ? leagueOptions.find((option) => option.sport === value)
                 : undefined;
               const hint = value === "empty"
                 ? "Hidden"
-                : value === "best"
+                : value === "best" || value === "top"
                   ? "Today's board only · other days show the Auto league"
                 : selectedOption?.offseason
                   ? `Offseason · saved for its return${fallbackLabel !== "—" ? `; showing ${fallbackLabel}` : ""}`
@@ -1317,8 +1301,8 @@ export default function SettingsPanel({
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
                     <option value="">Auto</option>
-                    {TOP_EVENTS_ENABLED && <option value="top">⭐ Top events</option>}
                     {BEST_YESTERDAY_ENABLED && <option value="best">{BEST_YESTERDAY_LABEL}</option>}
+                    {TOP_EVENTS_ENABLED && <option value="top">{ESPN_FRONT_PAGE_LABEL}</option>}
                     {slotDropdownGroups(value).map((group) => (
                       <optgroup key={group.key} label={group.label}>
                         {group.options.map((option) => (
@@ -1378,8 +1362,8 @@ export default function SettingsPanel({
                       </span>
                     </label>
                   )}
-                  {/* The two cross-league columns (Jacob 9/26): on by
-                      default, and unticking one takes it out of every
+                  {/* The cross-league columns and the news feed (Jacob 9/26):
+                      on by default, and unticking one takes it out of every
                       switcher and off the board, like a league. */}
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>Across leagues</p>
@@ -1398,6 +1382,22 @@ export default function SettingsPanel({
                             className="cursor-pointer accent-[var(--accent)]"
                           />
                           <span>{BEST_YESTERDAY_LABEL}</span>
+                        </label>
+                      )}
+                      {TOP_EVENTS_ENABLED && (
+                        <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
+                          <input
+                            type="checkbox"
+                            checked={!(prefs.hiddenLeagues ?? []).includes("top")}
+                            onChange={(event) => {
+                              const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
+                              if (event.target.checked) hiddenLeagues.delete("top");
+                              else hiddenLeagues.add("top");
+                              updatePrefs({ hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined });
+                            }}
+                            className="cursor-pointer accent-[var(--accent)]"
+                          />
+                          <span>{ESPN_FRONT_PAGE_LABEL}</span>
                         </label>
                       )}
                       <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
@@ -1437,64 +1437,6 @@ export default function SettingsPanel({
             </details>
           </Section>
 
-          {/* Top events (Jacob 9/4): the cross-league column's knobs. The pill
-              itself lives in the column switcher, the slot dropdowns above and
-              the first-run picker; this is where "set it manually" happens.
-              Hidden while the column is off (TOP_EVENTS_ENABLED, 9/5). */}
-          {TOP_EVENTS_ENABLED && (
-          <Section title="Top events column">
-            <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
-              Pick <em>⭐ Top events</em> for any column (tap a column header, or a slot above) to get the biggest games across every league in one column.
-              Auto ranks your starred teams first, then what espn.com is featuring on its homepage right now, live games, playoffs, ranked matchups and national TV.
-              No score is printed, same as everywhere else.
-            </p>
-            <Field label="Which leagues" hint="Auto follows ESPN's homepage plus your teams; Manual uses only the leagues you tick">
-              <RadioGroup
-                label="Which leagues"
-                value={prefs.topEventsMode ?? "auto"}
-                options={TOP_MODE_OPTIONS}
-                onChange={(v) => updatePrefs({ topEventsMode: v === "auto" ? undefined : v })}
-              />
-            </Field>
-            {(prefs.topEventsMode ?? "auto") === "manual" && (
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mb-3">
-                {topEventsLeagueRows.map((option) => {
-                  const checked = (prefs.topEventsLeagues ?? []).includes(option.sport);
-                  return (
-                    <label key={option.sport} className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          const next = new Set(prefs.topEventsLeagues ?? []);
-                          if (event.target.checked) next.add(option.sport);
-                          else next.delete(option.sport);
-                          updatePrefs({ topEventsLeagues: next.size ? [...next] : undefined });
-                        }}
-                        className="cursor-pointer accent-[var(--accent)]"
-                      />
-                      <span>
-                        {SPORT_LABEL[option.sport] ?? option.label}
-                        {option.offseason && <em style={{ color: "var(--text-muted)" }}> · offseason</em>}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-            <Field label="How many games" hint="Across all leagues, at most three per league unless one of your teams is playing">
-              <RadioGroup
-                label="How many games"
-                value={String(prefs.topEventsCount ?? TOP_EVENTS_DEFAULT_COUNT) as "5" | "8" | "12"}
-                options={TOP_COUNT_OPTIONS}
-                onChange={(v) => {
-                  const n = Number(v) as TopEventsCount;
-                  updatePrefs({ topEventsCount: n === TOP_EVENTS_DEFAULT_COUNT ? undefined : n });
-                }}
-              />
-            </Field>
-          </Section>
-          )}
 
           {/* News — one toggle (Jacob 9/25: "idk if 2 checkboxes needed"). It used to
               have "Also hide wrecks nobody got hurt in" nested under it; now

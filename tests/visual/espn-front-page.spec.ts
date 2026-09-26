@@ -1,0 +1,208 @@
+import { expect, test, type Page, type Route } from "@playwright/test";
+
+// "ESPN front page" (Jacob 9/26): the cross-league column that shows the games
+// espn.com is featuring in its scores strip, in ESPN's own order. The strip
+// (site.web.api.espn.com/apis/v2/scoreboard/header) and today's boards are
+// mocked so the pool is exact:
+//   strip   NCAAF c2, c1 · golf (skipped, no game cards) · NHL h1 · MLB m1
+//   boards  NCAAF c1 c2 c3 · MLB m1 m2 · NHL h1
+// = 4 cards. The column keeps the board's live / upcoming / final sections,
+// and inside each one ESPN's order wins over start time: h1 (7 pm) sits
+// above m1 (4:05 pm). c3 + m2 — on ESPN's boards but not its front page —
+// stay out.
+
+const NOW = new Date("2026-09-26T14:00:00-04:00"); // Sat 2 pm ET
+const TODAY = "20260926";
+
+type TeamSpec = { id: string; name: string; abbr: string; score: string };
+type Status = "final" | "live" | "scheduled";
+
+function event(id: string, away: TeamSpec, home: TeamSpec, iso: string, status: Status = "scheduled") {
+  const competitor = (t: TeamSpec, side: "home" | "away") => ({
+    homeAway: side,
+    team: { id: t.id, displayName: t.name, shortDisplayName: t.name, abbreviation: t.abbr, logo: "", color: "666666" },
+    score: t.score,
+    winner: status === "final" && Number(t.score) > Number((side === "home" ? away : home).score),
+    records: [{ summary: "3-0" }],
+  });
+  return {
+    id,
+    date: iso,
+    name: `${away.name} at ${home.name}`,
+    shortName: `${away.abbr} @ ${home.abbr}`,
+    season: { type: 2, year: 2026 },
+    status: status === "final"
+      ? { displayClock: "0:00", period: 4, type: { name: "STATUS_FINAL", state: "post", detail: "Final", shortDetail: "Final", completed: true } }
+      : status === "live"
+        ? { displayClock: "8:12", period: 2, type: { name: "STATUS_IN_PROGRESS", state: "in", detail: "8:12 - 2nd Quarter", shortDetail: "8:12 - 2nd", completed: false } }
+        : { displayClock: "0:00", period: 0, type: { name: "STATUS_SCHEDULED", state: "pre", detail: "Sat, September 26th at 7:30 PM EDT", shortDetail: "9/26 - 7:30 PM EDT", completed: false } },
+    competitions: [{
+      competitors: [competitor(home, "home"), competitor(away, "away")],
+      broadcasts: [],
+      headlines: [],
+      notes: [],
+    }],
+  };
+}
+
+// Scores picked to be unmistakable if any of them ever reached the page.
+const T = (id: string, name: string, abbr: string, score = ""): TeamSpec => ({ id, name, abbr, score });
+const BOARDS: Record<string, unknown[]> = {
+  "football/college-football": [
+    event("c1", T("1", "Texas", "TEX", "47"), T("2", "Tennessee", "TENN", "44"), "2026-09-26T16:00:00Z", "final"),
+    event("c2", T("3", "Oklahoma", "OU", "17"), T("4", "Georgia", "UGA", "13"), "2026-09-26T17:30:00Z", "live"),
+    event("c3", T("5", "Akron", "AKR"), T("6", "Toledo", "TOL"), "2026-09-26T19:00:00Z"),
+  ],
+  "baseball/mlb": [
+    event("m1", T("11", "Dodgers", "LAD"), T("12", "Giants", "SF"), "2026-09-26T20:05:00Z"),
+    event("m2", T("13", "Rockies", "COL"), T("14", "White Sox", "CHW"), "2026-09-26T23:10:00Z"),
+  ],
+  "hockey/nhl": [
+    event("h1", T("21", "Hurricanes", "CAR"), T("22", "Predators", "NSH"), "2026-09-26T23:00:00Z"),
+  ],
+};
+const STRIP = {
+  sports: [
+    { slug: "football", leagues: [{ slug: "college-football", events: [{ id: "c2", priority: 0 }, { id: "c1", priority: 1 }] }] },
+    { slug: "golf", leagues: [{ slug: "pga", events: [{ id: "g1", priority: 2 }] }] },
+    { slug: "hockey", leagues: [{ slug: "nhl", events: [{ id: "h1", priority: 3 }] }] },
+    { slug: "baseball", leagues: [{ slug: "mlb", events: [{ id: "m1", priority: 4 }] }] },
+  ],
+};
+
+// Live, then upcoming in ESPN's order, then final.
+const EXPECTED = ["Oklahoma at Georgia", "Hurricanes at Predators", "Dodgers at Giants", "Texas at Tennessee"];
+const NEVER = ["Akron at Toledo", "Rockies at White Sox"];
+const SCORES = ["47", "44", "17", "13"];
+
+async function seed(page: Page, extra: Record<string, unknown> = {}) {
+  await page.clock.setFixedTime(NOW);
+  await page.addInitScript((extra) => localStorage.setItem("nss-preferences", JSON.stringify({
+    favoriteLeagues: [],
+    favoriteTeams: [],
+    theme: "light",
+    showRatings: false,
+    skipExplainer: true,
+    skipNewsExplainer: true,
+    showNews: false,
+    leaguesOnboarded: true,
+    firstLeague: "mlb",
+    secondLeague: "nfl",
+    thirdLeague: "top",
+    fourthLeague: "empty",
+    fifthLeague: "empty",
+    hiddenLeagues: ["best"],
+    defaultDateMode: "today",
+    defaultLandingView: "scores",
+    ...extra,
+  })), extra);
+  await page.route("**/apis/v2/scoreboard/header**", (route: Route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(STRIP) }));
+  await page.route("**/apis/site/v2/sports/**", (route: Route) => {
+    const url = new URL(route.request().url());
+    const m = /\/sports\/(.+)\/scoreboard$/.exec(url.pathname);
+    if (!m) return route.fallback();
+    const events = url.searchParams.get("dates") === TODAY ? (BOARDS[m[1]] ?? []) : [];
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ events }) });
+  });
+  await page.route("**/api/youtube?**", (route) =>
+    route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"No results"}' }));
+}
+
+const cardNames = (page: Page) =>
+  page.locator('[data-league-column="top"]').getByRole("button", { name: / — game details$/ })
+    .evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").replace(/ — game details$/, "")));
+
+for (const { name, width, height } of [
+  { name: "phone", width: 390, height: 844 },
+  { name: "desktop", width: 1180, height: 820 },
+]) {
+  test(`ESPN front page shows ESPN's picks in ESPN's order (${name} ${width}px)`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    await seed(page);
+    await page.goto("/");
+
+    const col = page.locator('[data-league-column="top"]');
+    await expect(col).toBeVisible({ timeout: 30_000 });
+    const heading = col.getByRole("heading").first();
+    await expect(heading).toHaveText(width < 640 ? "ESPN.com" : "ESPN front page");
+    const headingBox = await heading.boundingBox();
+    expect(headingBox!.height, "the column title wrapped onto a second line").toBeLessThan(32);
+
+    await expect(col.locator("[data-league-tag]")).toHaveCount(4, { timeout: 15_000 });
+    expect(await cardNames(page)).toEqual(EXPECTED);
+    for (const matchup of NEVER) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(0);
+
+    // No score anywhere in the column's DOM, final and live games included.
+    const dom = await col.evaluate((el) => el.outerHTML);
+    for (const s of SCORES) expect(dom, `score ${s} leaked into the column`).not.toMatch(new RegExp(`>\\s*${s}\\s*<|\\b${s}\\s*[-–]\\s*\\d|\\d\\s*[-–]\\s*${s}\\b`));
+
+    const shot = await page.screenshot({ fullPage: false });
+    await testInfo.attach(`espn-front-page-${width}`, { body: shot, contentType: "image/png" });
+    if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/espn-front-page-${width}.png` });
+  });
+}
+
+test("ratings mode keeps ESPN's order instead of re-sorting by rating", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { showRatings: true });
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="top"] [data-league-tag]')).toHaveCount(4, { timeout: 30_000 });
+  expect(await cardNames(page)).toEqual(EXPECTED);
+});
+
+test("the column switcher offers ESPN front page on today's board", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { thirdLeague: undefined, hiddenLeagues: [] });
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
+  await page.locator('button[title="Switch league"]').first().click();
+  const menu = page.getByRole("dialog", { name: "Switch league" }).first();
+  const rows = await menu.getByRole("button").allTextContents();
+  const best = rows.findIndex((r) => r.startsWith("Best of yesterday"));
+  const front = rows.findIndex((r) => r.startsWith("ESPN front page"));
+  expect(front, `no ESPN front page row in ${rows.join(" | ")}`).toBeGreaterThan(-1);
+  // Best of yesterday still leads (Jacob 9/26); ESPN front page comes next.
+  expect(front).toBe(best + 1);
+});
+
+test("ESPN front page is a today-board column: the yesterday board shows the Auto league", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page);
+  await page.goto("/yesterday");
+  await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-league-column="top"]')).toHaveCount(0);
+  await expect(page.locator("[data-league-column]")).toHaveCount(3);
+});
+
+// Turned off in Settings' switcher list: it leaves the switcher and a column
+// pinned to it shows a league instead, same as Best of yesterday.
+test("ESPN front page turned off: the pinned column shows a league and the switcher drops it", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { hiddenLeagues: ["best", "top"] });
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-league-column="top"]')).toHaveCount(0);
+  await expect(page.locator("[data-league-column]")).toHaveCount(3);
+  await page.locator('button[title="Switch league"]').first().click();
+  const menu = page.getByRole("dialog", { name: "Switch league" }).first();
+  await expect(menu.getByRole("button", { name: "Auto" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /ESPN front page/ })).toHaveCount(0);
+});
+
+test("Settings: the Across leagues list turns ESPN front page off and on", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page);
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="top"]')).toBeVisible({ timeout: 30_000 });
+  await page.locator('[aria-label="Open settings"]').first().click();
+  await page.getByText(/leagues in the switcher · Edit/).click();
+  const box = page.getByRole("checkbox", { name: "ESPN front page" });
+  await expect(box).toBeChecked();
+  await box.uncheck();
+  await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}").hiddenLeagues))
+    .toContain("top");
+  await box.check();
+  await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}").hiddenLeagues ?? []))
+    .not.toContain("top");
+});

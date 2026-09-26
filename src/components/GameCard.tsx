@@ -32,7 +32,7 @@ interface GameCardProps {
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   leagueLabel?: string;
   // Small chip naming the game's league, for a column that MIXES leagues
-  // (Top events). Every single-league column leaves it unset — its header
+  // (ESPN front page, Best of yesterday). Every single-league column leaves it unset — its header
   // already says it, and a chip on all sixteen NFL cards would be noise.
   leagueTag?: string;
   useAbbreviations?: boolean;
@@ -672,7 +672,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         const showFinal = isFinished && !isPastDate && !teamView;
         // Series state now renders as a top banner above the card (see above),
         // not in the status bar's middle cell, so it's gone from showBar here.
-        // A Top events card carries its league chip in this row, so the row
+        // A cross-league card carries its league chip in this row, so the row
         // renders for the chip alone (a finished game on a past date has no
         // status, rating or network text to show otherwise).
         const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView || !!leagueTag;
@@ -719,7 +719,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 Ratings mode makes it ONE flex-1 cell, the twin of the network
                 cell, so the chips count toward the left share and the badge
                 stays at the true row center. Without that, a Best of yesterday
-                or Top events card's "MLB" chip sat outside the pair and pushed
+                or cross-league card's "MLB" chip sat outside the pair and pushed
                 GREAT right by half its width (Jacob 9/25). No min-w-0 on
                 purpose: chips + time are this cell's floor, so on a column too
                 narrow for them + a centered badge (a 3-column phone board) the

@@ -396,9 +396,9 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   chess: "/chess.svg",
   poker: "/poker.svg",
   esports: "/esports.svg",
-  // Top events: an inline star so the picker pill and switcher never hotlink
-  // anything for a column that has no league behind it.
-  top: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f5a524' d='M12 2l2.9 6.6 7.1.7-5.4 4.8 1.6 7L12 17.3 5.8 21l1.6-7L2 9.3l7.1-.7z'/%3E%3C/svg%3E",
+  // ESPN front page: the ESPN mark (same file as ESPN_BRAND_LOGO below), since
+  // the column is ESPN's own picks.
+  top: "https://a.espncdn.com/i/espn/misc_logos/500/espn.png",
   // Best of yesterday: an inline play mark, for the same reason.
   best: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f5a524' d='M7 4.5v15l12.5-7.5z'/%3E%3C/svg%3E",
 };
