@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Fragment } from "react";
 import DocTopBar from "@/components/DocTopBar";
 
 const FAQ_TITLE = "FAQ — Spoiler-Free Sports Scores | HideScore";
@@ -36,9 +37,11 @@ export const metadata: Metadata = {
   },
 };
 
-// `link` renders as an inline anchor at the end of the answer (and is folded
-// into the answer text for the FAQPage schema, which takes plain text only).
-const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
+// `links` render as inline anchors at the end of the answer, joined with "and"
+// (and are folded into the answer text for the FAQPage schema, which takes plain
+// text only).
+type FaqLink = { href: string; text: string };
+const FAQ: { q: string; a: string; links?: FaqLink[] }[] = [
   {
     q: "What is HideScore?",
     a: "HideScore is a free way to follow sports without spoilers. It prints no NBA, MLB, NHL, NFL, soccer or golf score anywhere, and it keeps highlight titles and news headlines blurred until you choose to reveal them, so you can watch games on your own schedule.",
@@ -69,7 +72,14 @@ const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
   },
   {
     q: "Is there a HideScore app?",
-    a: "Yes. HideScore is a free app on the App Store and on Google Play, and it also works in any web browser at hidescore.com.",
+    // Store links + one plain line about ratings added 2026-09-26. A link to the
+    // listing is all the store rules allow: no "do you like it?" pre-question
+    // and no reward. Keep it that way.
+    a: "Yes. HideScore is a free app for iPhone and Android, and it also works in any web browser at hidescore.com. If it helps you, a rating on the store is what helps other fans find it. Get it on",
+    links: [
+      { href: "https://apps.apple.com/app/hidescore/id6766885311", text: "the App Store" },
+      { href: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore", text: "Google Play" },
+    ],
   },
   // Added 2026-09-20. These two match the shape of the prompts assistants are
   // actually sending — Search Console shows LLM-written queries reaching the
@@ -79,7 +89,7 @@ const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
   {
     q: "What is the best app to follow teams without spoilers?",
     a: "For breadth, HideScore: it covers over 50 competitions on one board, hides standings as well as scores, and is free with no account. Pick your teams once and their games surface with the result covered. Other options are narrower — DTMTS covers the four big American leagues on the web, No Spoiler Sports adds soccer and college football, and joyavo is an iPhone app with a paid tier. There is an honest comparison of all of them at",
-    link: { href: "/best-spoiler-free-sports-sites", text: "the best spoiler-free sports sites" },
+    links: [{ href: "/best-spoiler-free-sports-sites", text: "the best spoiler-free sports sites" }],
   },
   {
     q: "What is the best game recap app without spoilers?",
@@ -99,23 +109,29 @@ export default function FaqPage() {
             <h2 className="text-lg font-semibold mb-1">{item.q}</h2>
             <p>
               {item.a}
-              {item.link && (
+              {item.links && (
                 <>
                   {" "}
-                  {/* rel="me" — both sites are the same author, so this is the
-                      identity link Google/IndieWeb consumers read to tie the
-                      HideScore author to the jacobhl.com Person entity. It is
-                      scoped to OFF-SITE links: since 2026-09-20 an answer can
-                      also point at one of our own pages, and rel="me" on an
-                      internal link would assert that hidescore.com is a second
-                      identity of the same person, which is not what it means. */}
-                  <a
-                    href={item.link.href}
-                    rel={item.link.href.startsWith("/") ? undefined : "me"}
-                    className="underline underline-offset-2"
-                  >
-                    {item.link.text}
-                  </a>
+                  {item.links.map((link, i) => (
+                    <Fragment key={link.href}>
+                      {i > 0 && " and "}
+                      {/* rel="me" — both sites are the same author, so this is the
+                          identity link Google/IndieWeb consumers read to tie the
+                          HideScore author to the jacobhl.com Person entity. It is
+                          scoped to jacobhl.com: since 2026-09-20 an answer can
+                          point at one of our own pages, and since 2026-09-26 at
+                          the app stores, and rel="me" on either would assert
+                          that the target is a second identity of the same
+                          person, which is not what it means. */}
+                      <a
+                        href={link.href}
+                        rel={link.href.startsWith("https://jacobhl.com") ? "me" : undefined}
+                        className="underline underline-offset-2"
+                      >
+                        {link.text}
+                      </a>
+                    </Fragment>
+                  ))}
                   .
                 </>
               )}
@@ -195,7 +211,7 @@ export default function FaqPage() {
               // back in — otherwise the structured answer would end mid-sentence.
               acceptedAnswer: {
                 "@type": "Answer",
-                text: item.link ? `${item.a} ${item.link.text}.` : item.a,
+                text: item.links ? `${item.a} ${item.links.map((l) => l.text).join(" and ")}.` : item.a,
               },
             })),
           }).replace(/</g, "\\u003c"),
