@@ -79,16 +79,45 @@ test("a stored pick of a league not in the switcher falls back to the mirror", a
   await expect(page.locator('button[title="Switch news league"]')).toHaveText(["MLB", "NFL", "WNBA"], LOAD);
 });
 
-test("phone: a stored pick of a league not in the switcher shows Top news, not that league", async ({ page }) => {
+// Jacob 9/27: "r/sports on single column makes no sense" next to an MLB / NFL /
+// NCAAF board. Phones stack one column with no title switchers, so each source
+// card's label is the check: the phone follows scores column 3 like the board.
+test("phone: the single column follows scores column 3, not Top news", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedPrefs(page);
+  await page.goto("/");
+  const main = page.locator("main");
+  await expect(main.getByText("r/wnba", { exact: true })).toBeVisible(LOAD);
+  await expect(main.getByText("r/baseball", { exact: true })).toBeVisible(LOAD);
+  await expect(main.getByText("r/sports", { exact: true })).toHaveCount(0);
+});
+
+test("phone: a stored pick of a league not in the switcher shows the mirror, not that league", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seedPrefs(page, { newsThirdLeague: "cfl" });
   await page.goto("/");
-  // Phones stack one column with no title switchers: News, then the two
-  // score leagues. Each source card is headed by its label.
+  const main = page.locator("main");
+  await expect(main.getByText("r/wnba", { exact: true })).toBeVisible(LOAD);
+  await expect(main).not.toContainText(/CFL/i);
+});
+
+test("phone: a Top news pick still shows Top news", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedPrefs(page, { newsTopNews: true });
+  await page.goto("/");
   const main = page.locator("main");
   await expect(main.getByText("r/sports", { exact: true })).toBeVisible(LOAD);
   await expect(main.getByText("r/baseball", { exact: true })).toBeVisible(LOAD);
-  await expect(main).not.toContainText(/CFL/i);
+  await expect(main.getByText("r/wnba", { exact: true })).toHaveCount(0);
+});
+
+test("phone: scores column 3 Empty still falls back to Top news", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedPrefs(page, { thirdLeague: "empty" });
+  await page.goto("/");
+  const main = page.locator("main");
+  await expect(main.getByText("r/sports", { exact: true })).toBeVisible(LOAD);
+  await expect(main.getByText("r/baseball", { exact: true })).toBeVisible(LOAD);
 });
 
 test("Top news picked in column 3 stays, even with a league in scores column 3", async ({ page }) => {
