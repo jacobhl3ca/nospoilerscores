@@ -141,7 +141,9 @@ test("an empty Yesterday slate shows the league's last played games with highlig
   await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
   await page.route("**/football/nfl/scoreboard?**", route => {
     const dates = new URL(route.request().url()).searchParams.get("dates") ?? "";
-    const events = dates.includes("-") ? [{
+    // The lookback walks back one day per request now (ESPN 400s some date
+    // ranges), so serve the game on its own day as well as inside a range.
+    const events = dates.includes("-") || dates === "20260804" ? [{
       id: "past-game",
       date: "2026-08-04T23:10:00Z",
       name: "Away Club at Home Club",

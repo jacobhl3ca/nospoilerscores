@@ -296,8 +296,9 @@ test("the 3-column phone tile wraps the whole name at MLB card height", async ({
       .find((el) => /Super High Roller/.test(el.textContent ?? ""));
     if (!title) return null;
     const card = title.closest<HTMLElement>("div.rounded-lg");
-    const mlb = [...document.querySelectorAll<HTMLElement>("div.rounded-lg")]
-      .find((el) => el.style.background.includes("--bg-card") && el.querySelector(".team-name"));
+    // A game card in the MLB column. (It used to be found by a .team-name
+    // class the card no longer carries, so the test found no MLB card at all.)
+    const mlb = document.querySelector<HTMLElement>('[data-league-column="mlb"] div.ns-card-focus');
     return {
       text: title.textContent ?? "",
       full: title.getAttribute("title") ?? "",
