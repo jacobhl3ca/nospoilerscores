@@ -811,6 +811,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   }
   const headlinePeek = peeked && peekedFor === postKey;
   const toggleHeadlinePeek = useCallback(() => setPeeked((p) => !p), []);
+  // Only the clip / picture footer headline blurs; a text post's shows in the
+  // clear, so H has nothing to peek there and the legend drops its row.
+  const hasBlurredHeadline = !!headline && !textMode;
   // The dialog root's data-player-state, so a click-through test (and anything
   // else outside the cross-origin iframe) can read play/pause without asking
   // YouTube. Reveals nothing — not the position, not the duration.
@@ -1382,7 +1385,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         galleryCanStep: isGallery && dir !== 0 && galAt + dir >= 0 && galAt + dir < galLen,
         hasPrev: !!onPrev,
         hasNext: !!onNext,
-        hasHeadline: !!headline,
+        hasHeadline: hasBlurredHeadline,
       });
       if (!action) return;
       // preventDefault ONLY once we've decided to act — an unhandled ↓ has to
@@ -1408,7 +1411,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, seekToPct, togglePlay, toggleMute, toggleHeadlinePeek, headline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen, toggleKeyHints]);
+  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, seekToPct, togglePlay, toggleMute, toggleHeadlinePeek, hasBlurredHeadline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen, toggleKeyHints]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
@@ -2040,9 +2043,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       galleryCanStep: isGallery,
       hasPrev: !!onPrev,
       hasNext: !!onNext,
-      hasHeadline: !!headline,
+      hasHeadline: hasBlurredHeadline,
     }),
-    [ytMode, hlsMode, isGallery, onPrev, onNext, headline]
+    [ytMode, hlsMode, isGallery, onPrev, onNext, hasBlurredHeadline]
   );
   // Not in fullscreen, either kind. The fake one paints over this z-index
   // anyway, and in the native one the corner belongs to YouTube's own
@@ -2411,8 +2414,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
               )}
+              {/* Never blurred, whatever the Headlines toggle says (Jacob 9/27):
+                  on a text post the headline IS the post, so a blurred one
+                  leaves an empty card. Opening it was the reveal. Clip and
+                  picture headlines (the footer below) still blur. */}
               {headline && (
-                <PeekBlur key={`h-${postKey}`} peek={headlinePeek} onToggle={toggleHeadlinePeek} keyShortcut="h" tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>
+                <h2 data-modal-headline className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</h2>
               )}
               <ArticleMeta byline={byline} published={published} className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }} />
               {body && (

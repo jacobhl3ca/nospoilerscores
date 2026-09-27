@@ -21,6 +21,10 @@ const BASE_PREFS = {
   switcherDefaultsVersion: 2,
   defaultLandingView: "news",
   defaultDateMode: "today",
+  // Clips only. A text post's modal headline never blurs (Jacob 9/27), so
+  // there is nothing to peek or re-hide on one; paging onto one would fail
+  // this probe for the wrong reason.
+  newsVideosOnly: true,
 };
 
 const HEADLINE = 'button[aria-label="Open post"]:has(.news-title)';

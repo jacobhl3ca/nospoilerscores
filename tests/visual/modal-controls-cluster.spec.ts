@@ -100,6 +100,9 @@ const SIZES = [
   { name: "phone", width: 390, height: 844 },
   { name: "desktop", width: 1280, height: 800 },
 ];
+// A text post's headline is plain text (never blurred); a clip's or a
+// picture's is the blurred .news-title under the media.
+const MODAL_HEADLINE = "[data-modal-headline], .news-title";
 const POSTS = [
   { kind: "text", headline: "Text post: what a finish" },
   { kind: "image", headline: "Image post: the sideline view" },
@@ -159,7 +162,7 @@ for (const size of SIZES) {
       const dialog = page.getByRole("dialog");
       const media = post.kind === "youtube"
         ? dialog.locator("iframe").first()
-        : post.kind === "image" ? dialog.locator("img").first() : dialog.locator(".news-title").first();
+        : post.kind === "image" ? dialog.locator("img").first() : dialog.locator(MODAL_HEADLINE).first();
       const mb = (await media.boundingBox())!;
       for (const b of boxes) expect(overlaps(b, mb), `control overlaps the ${post.kind} media`).toBe(false);
       if (post.kind === "youtube") {
@@ -174,9 +177,9 @@ for (const size of SIZES) {
       await page.screenshot({ path: `test-results/modal-controls-${post.kind}-${size.width}.png` });
 
       // The cluster actually drives the modal.
-      const before = await dialog.locator(".news-title").first().textContent();
+      const before = await dialog.locator(MODAL_HEADLINE).first().textContent();
       await cluster.getByRole("button", { name: "Next post" }).click();
-      await expect.poll(() => dialog.locator(".news-title").first().textContent()).not.toBe(before);
+      await expect.poll(() => dialog.locator(MODAL_HEADLINE).first().textContent()).not.toBe(before);
       await cluster.getByRole("button", { name: "Close" }).click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
     });
