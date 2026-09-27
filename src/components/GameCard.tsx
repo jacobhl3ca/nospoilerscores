@@ -5,7 +5,7 @@ import { Game, Sport, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName, sportGroup } from "@/lib/espn";
-import { recordLeagueFor, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
+import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick } from "@/lib/openExternal";
@@ -55,7 +55,7 @@ interface GameCardProps {
   // sort can't reorder anything.
   showStars?: boolean;
   // Leagues whose upcoming cards show the italic current W-L (Settings picks
-  // them) — see lib/upcomingRecords.ts for why only pre-game.
+  // them) — see lib/upcomingRecords.ts for why pre-game and live only.
   upcomingRecordLeagues?: ReadonlySet<RecordLeague>;
 }
 
@@ -1158,13 +1158,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 team-schedule view + the Settings team picker. */}
             {showStars ? star(team.id, team.displayName, favoriteTeams.includes(team.id), isTBD) : null}
             <span className="flex-1 min-w-0" />
-            {/* Current W-L on upcoming cards, for the leagues picked in
-                Settings (Jacob 9/24 NFL, 9/25 per league). Italic marks it as
-                the record going in, not a live number. Gated on isFuture +
-                !effectivePastDate so it never reaches a live, finished or
-                past-date card; 0-0 / 0-0-0 is ESPN's pre-season placeholder
-                and says nothing, so it is skipped. */}
-            {recordKey && isFuture && !effectivePastDate && !isTBD && team.record && !/^0-0(-0)?$/.test(team.record) ? (
+            {/* Current W-L on upcoming and live cards, for the leagues picked
+                in Settings (Jacob 9/24 NFL, 9/25 per league, 9/26 live too).
+                Italic marks it as the record going in, not a live number.
+                Gated on recordShowsForState + !effectivePastDate so it never
+                reaches a finished or past-date card; 0-0 / 0-0-0 is ESPN's
+                pre-season placeholder and says nothing, so it is skipped. */}
+            {recordKey && recordShowsForState(game.state) && !effectivePastDate && !isTBD && team.record && !/^0-0(-0)?$/.test(team.record) ? (
               <span className="text-[10px] sm:text-xs italic tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }} title={recordTitle(recordKey)}>{team.record}</span>
             ) : null}
           </div>

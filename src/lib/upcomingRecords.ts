@@ -3,8 +3,13 @@ import type { Sport } from "./types";
 // Italic W-L records on upcoming game cards, picked per league (Jacob 9/25).
 // It grew out of the NFL-only switch from 9/24 (`hideUpcomingRecords`).
 //
-// GameCard only ever shows a record on a game that has not started, and never
-// on a past date. What still differs by league is how fresh the newest result
+// GameCard shows a record on a game that has not started or is still live, and
+// never on a finished game or a past date. Live is safe because ESPN holds the
+// going-in record until the game goes final: at 7:55 PM 9/26, MIN (76-84) and
+// TEX (79-81) were in the 6th with 160 games each on the books, while every
+// finished game already carried 161 (Jacob 9/26: "y no records 4 in progress").
+// Record and state come in the same payload, so the record that includes this
+// game's result only ever arrives on a card that is already "post". What still differs by league is how fresh the newest result
 // inside the record is. A weekly league's record last changed days ago. A
 // league that plays most days changed it last night, so the number can give
 // away a result the viewer has not watched yet. So only the weekly leagues
@@ -28,6 +33,12 @@ export const FREQUENT_RECORD_LEAGUES: readonly RecordLeague[] = [
 export const ALL_RECORD_LEAGUES: readonly RecordLeague[] = [...WEEKLY_RECORD_LEAGUES, ...FREQUENT_RECORD_LEAGUES];
 
 const DEFAULT_RECORD_LEAGUES = WEEKLY_RECORD_LEAGUES;
+
+// The game states whose card may carry a record: before the start and while
+// live. A finished game's record already counts its own result.
+export function recordShowsForState(state: "pre" | "in" | "post"): boolean {
+  return state === "pre" || state === "in";
+}
 
 export interface RecordPrefs {
   upcomingRecordLeagues?: RecordLeague[];
