@@ -98,6 +98,8 @@ button rather than serving a re-upload whose title gives the result away.
 - https://hidescore.com/cricket-highlights-without-spoilers
 - https://hidescore.com/nrl-highlights-without-spoilers
 - https://hidescore.com/rugby-without-spoilers
+- https://hidescore.com/afl-without-spoilers
+- https://hidescore.com/cfl-without-spoilers
 - https://hidescore.com/watch-world-cup-without-spoilers
 
 ## MLB postseason pages

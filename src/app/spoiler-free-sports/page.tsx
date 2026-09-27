@@ -214,6 +214,12 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/rugby-without-spoilers" className="underline underline-offset-2">
             Rugby
           </Link>
+          <Link href="/afl-without-spoilers" className="underline underline-offset-2">
+            AFL
+          </Link>
+          <Link href="/cfl-without-spoilers" className="underline underline-offset-2">
+            CFL
+          </Link>
           <Link href="/mls-highlights-without-spoilers" className="underline underline-offset-2">
             MLS
           </Link>
