@@ -310,4 +310,8 @@ export interface LeagueData {
   // ESPN returning a genuinely empty schedule. Lets the column show an
   // "unavailable" message instead of falling back to the next game day.
   fetchFailed?: boolean;
+  // ESPN front page only: `${sport}:${id}` of the games espn.com's homepage
+  // body features (lib/topEvents.ts espnFeaturedKeys). They lead their league
+  // block, ahead of its live games.
+  espnFeatured?: string[];
 }

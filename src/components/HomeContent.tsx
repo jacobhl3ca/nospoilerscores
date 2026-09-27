@@ -3405,12 +3405,13 @@ export default function HomeContent({
           // which leads with ESPN Videos (a video) — so all 3 columns lead with
           // video and the AlignedVideoStrip activates → clean aligned grid like
           // live. ESPN top headlines fill the tail below (useEspnTopTail).
-          // Labeled "News" (swappable to a 3rd league) to match hidescore.com.
+          // Labeled "Top news", the same name its switcher row and Settings
+          // toggle use (Jacob 9/26; the header said "News" before).
           const espnEntry = {
             slotIdx: 2,
             sport: undefined as Sport | undefined,
             id: "espn" as const,
-            label: "News",
+            label: "Top news",
             orderedCascade: GENERIC_CASCADE,
           };
           // "ESPN front page" (Jacob 9/26): espn.com's Top Headlines, then its
@@ -3508,7 +3509,7 @@ export default function HomeContent({
           // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
           // 3-across order: the two leagues, then the News/3rd-league column.
           // Desktop position of the generic column: last by default, but the
-          // user can pull it left by picking "Top news (ESPN)" from any
+          // user can pull it left by picking "Top news" from any
           // column's switcher (newsGenericSlot). The league columns shift
           // right around it — nothing is dropped. Mobile keeps its fixed
           // news-first stack (Jacob 5/30) regardless.

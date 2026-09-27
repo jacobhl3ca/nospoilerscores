@@ -14,6 +14,7 @@ import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
 import { etWallToUtc, formatInZone, getWhiparoundShow, parseEtTime, whiparoundStartsLater, whiparoundSubtitle } from "@/lib/whiparound";
 import { isDemoModeActive } from "@/lib/demoMode";
+import { groupEspnFrontPage } from "@/lib/topEvents";
 import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
 import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
@@ -1423,7 +1424,7 @@ export default function LeagueColumn({
     return Number.isNaN(t) ? 8.64e15 : t;
   };
 
-  const sorted = [...league.games].sort((a, b) => {
+  const sortedGames = [...league.games].sort((a, b) => {
     // ESPN front page arrives in ESPN's own strip order — that order IS the
     // column, in both modes. Array.prototype.sort is stable, so 0 keeps it.
     // See lib/topEvents.ts.
@@ -1493,6 +1494,11 @@ export default function LeagueColumn({
 
     return chronoMs(a.date) - chronoMs(b.date);
   });
+  // ESPN front page lays out the way espn.com does: a block per league, the
+  // homepage's featured games then live games first inside each (Jacob 9/26).
+  // Every other column keeps its live / upcoming / final sections below.
+  const espnGroups = league.sport === "top" ? groupEspnFrontPage(sortedGames, league.espnFeatured) : null;
+  const sorted = espnGroups ? espnGroups.flatMap((g) => g.games) : sortedGames;
 
   // Split into sections
   const liveGames = sorted.filter((g) => g.state === "in");
@@ -1536,6 +1542,47 @@ export default function LeagueColumn({
   // lookahead, no Final separator), best-first via `sorted`. 6+ games collapse
   // to the top 3 with a "Show N more" toggle; ≤5 show in full. `pastDate` flows
   // to the cards so a past tab still hides records + shows highlights.
+  // ESPN front page body: a block per league, each under a small league
+  // label the way espn.com's strip labels its blocks. The label stands in for
+  // the per-card league chip (off since 9/26), so demo mode drops it too.
+  const renderEspnGroups = (games: Game[]) => (
+    <div className="flex flex-col gap-2.5 sm:gap-3">
+      {groupEspnFrontPage(games, league.espnFeatured).map((group) => {
+        const label = cardLeagueLabel(group.games[0]);
+        return (
+          <div key={group.sport} className="flex flex-col gap-1.5 sm:gap-2" data-espn-league={group.sport}>
+            {!isDemoModeActive() && (
+              <div className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+                <span className="text-[11px] font-semibold uppercase tracking-wide">{(narrowColumn && SHORT_LEAGUE_LABELS[label]) || label}</span>
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              </div>
+            )}
+            {group.games.map((game) => (
+              <GameCard
+                key={game.id}
+                game={game}
+                favoriteTeams={favoriteTeams}
+                onToggleFavoriteTeam={onToggleFavoriteTeam}
+                showRatings={showRatings}
+                leagueLabel={cardLeagueLabel(game)}
+                leagueTag={cardLeagueTag(game)}
+                onPlayHighlight={onPlayHighlight}
+                onPlayEmbed={onPlayEmbed}
+                isPastDate={isPastDate}
+                isToday={isToday}
+                useAbbreviations={useAbbreviations}
+                onSelectTeam={setTeamViewTeam}
+                onShowDetails={onShowDetails}
+                showStars={cardStars}
+                upcomingRecordLeagues={upcomingRecordLeagues}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+
   const CONDENSE_LIMIT = 3;
   const renderCondensed = (games: Game[], pastDate: boolean) => {
     const collapsible = games.length > 5;
@@ -1568,15 +1615,19 @@ export default function LeagueColumn({
     );
     return (
       <div className="flex flex-col gap-1.5 sm:gap-2">
-        {(splitFinal ? nonFinished : visible).map(card)}
-        {splitFinal && (
-          <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
-            <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-            <span className="text-[9px] uppercase tracking-wide">Final</span>
-            <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-          </div>
+        {espnGroups ? renderEspnGroups(visible) : (
+          <>
+            {(splitFinal ? nonFinished : visible).map(card)}
+            {splitFinal && (
+              <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+                <span className="text-[9px] uppercase tracking-wide">Final</span>
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              </div>
+            )}
+            {splitFinal && finished.map(card)}
+          </>
         )}
-        {splitFinal && finished.map(card)}
         {collapsible && (
           <button
             type="button"
@@ -2103,6 +2154,8 @@ export default function LeagueColumn({
         ) : null
       ) : condense ? (
         renderCondensed(sorted, isPastDate)
+      ) : espnGroups ? (
+        renderEspnGroups(sorted)
       ) : isPastDate ? (
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {sorted.map((game) => (

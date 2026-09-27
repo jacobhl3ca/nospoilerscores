@@ -22,7 +22,12 @@ test("Boxing yesterday keeps the recent major, matches MLB height, and resolves 
   const card = title.locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]");
   await expect(card).toContainText("DAZN");
   await expect(card).not.toContainText(/winner|won|defeats|decision|knockout/i);
-  expect((await card.boundingBox())?.height).toBe(111);
+  // Same height as an MLB card on the same board — measured, not a number:
+  // the MLB card itself moved from 111 to 112px (9/26) and the old constant
+  // failed while the two still matched.
+  const mlbCard = page.locator('[data-league-column="mlb"] div.rounded-lg').filter({ has: page.locator(".team-name") }).first();
+  await expect(mlbCard).toBeVisible();
+  expect((await card.boundingBox())?.height).toBe((await mlbCard.boundingBox())?.height);
   await expect(card).not.toContainText("Final");
 
   await page.getByRole("button", { name: "DAZN highlights" }).click();
@@ -68,7 +73,10 @@ test("Boxing Today keeps carried-forward replay compact and loads Reddit plus ES
   const scoreCard = page.getByText("Roach vs. Zepeda", { exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]");
   await expect(scoreCard).toBeVisible();
   await expect(scoreCard).not.toContainText("Final");
-  expect((await scoreCard.boundingBox())?.height).toBe(111);
+  // Compact = one game card tall (112px on 9/26, which the test above holds
+  // equal to an MLB card). A carried-forward replay that grew a row would
+  // add ~20px, so a 2px margin still catches it.
+  expect((await scoreCard.boundingBox())?.height).toBeLessThanOrEqual(114);
 
   await page.getByRole("button", { name: "News" }).click();
   await expect(page.getByText("r/Boxing", { exact: true })).toBeVisible();

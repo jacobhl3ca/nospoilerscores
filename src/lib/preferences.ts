@@ -284,7 +284,7 @@ export interface Preferences {
   // column follows scores column 3, the same way news columns 1-2 follow
   // theirs (Jacob 9/25). Before 9/25, Auto meant the Top news feed.
   newsThirdLeague?: Sport;
-  // True when the user picked "Top news (ESPN)" from a news switcher, so the
+  // True when the user picked "Top news" from a news switcher, so the
   // generic feed stays even though a league sits in scores column 3. False
   // once they pick a league or Auto there. Undefined on blobs from before
   // 9/25: a set newsGenericSlot then stands in for it, because only that
@@ -293,13 +293,13 @@ export interface Preferences {
   // News column 3 is on the board by default, even when scores column 3 is
   // Empty (it then shows Top news). True means the user removed it.
   newsGenericHidden?: boolean;
-  // True when the user turned "Top news (ESPN)" off in Settings' switcher
+  // True when the user turned "Top news" off in Settings' switcher
   // list (Jacob 9/26). It leaves every news switcher, and a news column 3 that
   // would fall back to it takes the next league instead. Best of yesterday is
   // turned off the same way, through hiddenLeagues ("best" is a Sport).
   topNewsHidden?: boolean;
   // Which POSITION the generic "Top news" column occupies on the news board
-  // (0-2, default 2 = last). Picking "Top news (ESPN)" from any column's
+  // (0-2, default 2 = last). Picking "Top news" from any column's
   // switcher moves the column here rather than doing nothing — before this,
   // the action only ever targeted col 3, so choosing it from a league column
   // silently no-op'd (Jacob 8/9). The two league columns close ranks around

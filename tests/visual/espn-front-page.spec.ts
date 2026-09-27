@@ -5,12 +5,13 @@ import { SHOW_CARD_LEAGUE_CHIP } from "../../src/lib/leagueLabels";
 // espn.com is featuring in its scores strip, in ESPN's own order. The strip
 // (site.web.api.espn.com/apis/v2/scoreboard/header) and today's boards are
 // mocked so the pool is exact:
-//   strip   NCAAF c2, c1 · golf (skipped, no game cards) · NHL h1 · MLB m1
+//   strip   NCAAF c1, c2 · golf (skipped, no game cards) · NHL h1 · MLB m1
 //   boards  NCAAF c1 c2 c3 · MLB m1 m2 · NHL h1
-// = 4 cards. The column keeps the board's live / upcoming / final sections,
-// and inside each one ESPN's order wins over start time: h1 (7 pm) sits
-// above m1 (4:05 pm). c3 + m2 — on ESPN's boards but not its front page —
-// stay out.
+// = 4 cards, laid out the way espn.com lays out its strip (Jacob 9/26): a
+// block per league in strip order, each under a league label, and the live
+// games first inside a block. So live c2 leads its final c1 (the feed lists
+// finals first, like ESPN's does), and NHL h1 (7 pm) sits above MLB m1
+// (4:05 pm). c3 + m2 — on ESPN's boards but not its front page — stay out.
 
 const NOW = new Date("2026-09-26T14:00:00-04:00"); // Sat 2 pm ET
 const TODAY = "20260926";
@@ -64,15 +65,17 @@ const BOARDS: Record<string, unknown[]> = {
 };
 const STRIP = {
   sports: [
-    { slug: "football", leagues: [{ slug: "college-football", events: [{ id: "c2", priority: 0 }, { id: "c1", priority: 1 }] }] },
+    { slug: "football", leagues: [{ slug: "college-football", events: [{ id: "c1", priority: 0 }, { id: "c2", priority: 1 }] }] },
     { slug: "golf", leagues: [{ slug: "pga", events: [{ id: "g1", priority: 2 }] }] },
     { slug: "hockey", leagues: [{ slug: "nhl", events: [{ id: "h1", priority: 3 }] }] },
     { slug: "baseball", leagues: [{ slug: "mlb", events: [{ id: "m1", priority: 4 }] }] },
   ],
 };
 
-// Live, then upcoming in ESPN's order, then final.
-const EXPECTED = ["Oklahoma at Georgia", "Hurricanes at Predators", "Dodgers at Giants", "Texas at Tennessee"];
+// League blocks in strip order, live first inside a block.
+const EXPECTED = ["Oklahoma at Georgia", "Texas at Tennessee", "Hurricanes at Predators", "Dodgers at Giants"];
+const BLOCKS = ["ncaaf", "nhl", "mlb"];
+const BLOCK_LABELS = ["NCAAF", "NHL", "MLB"];
 const NEVER = ["Akron at Toledo", "Rockies at White Sox"];
 const SCORES = ["47", "44", "17", "13"];
 
@@ -144,6 +147,11 @@ for (const { name, width, height } of [
     await expect(cards(page)).toHaveCount(4, { timeout: 15_000 });
     await expect(col.locator("[data-league-tag]")).toHaveCount(CHIPS);
     expect(await cardNames(page)).toEqual(EXPECTED);
+    const blocks = col.locator("[data-espn-league]");
+    expect(await blocks.evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league")))).toEqual(BLOCKS);
+    for (const [i, label] of BLOCK_LABELS.entries()) {
+      await expect(blocks.nth(i).locator("span").first()).toHaveText(label);
+    }
     for (const matchup of NEVER) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(0);
 
     // No score anywhere in the column's DOM, final and live games included.
@@ -185,7 +193,7 @@ test("phone: ESPN front page cards keep one-line rows like the other columns (39
       const row = t.parentElement!.querySelector(".game-meta-row")!.getBoundingClientRect();
       return { text: t.textContent, top: tab.top, bottom: tab.bottom, cardTop: card.top, rowTop: row.top, shown: getComputedStyle(t).display !== "none" };
     }));
-    expect(tabs.map((t) => t.text)).toEqual(["NCAAF", "NHL", "MLB", "NCAAF"]);
+    expect(tabs.map((t) => t.text)).toEqual(["NCAAF", "NCAAF", "NHL", "MLB"]);
     for (const [i, t] of tabs.entries()) {
       expect(t.shown, `card ${i}: tab hidden`).toBe(true);
       expect(t.top < t.cardTop && t.bottom > t.cardTop, `card ${i}: tab is not on the card's top border`).toBe(true);
@@ -198,8 +206,9 @@ test("phone: ESPN front page cards keep one-line rows like the other columns (39
 // Jacob 9/26 ("ur not taking highlighted posts into consideration"): espn.com
 // put a big Texas A&M–LSU block above its College Football Scoreboard, and
 // the column still led with the strip's first game. The body now leads: its
-// hero (m1) and then its scoreboard module (h1) go ahead of the strip's order
-// inside each section. A story module carries no game and changes nothing.
+// hero (m1) is the first card, its scoreboard module (h1, c1) comes next, and
+// each league block puts the body's games ahead of its live ones — so final
+// c1 sits above live c2 in the NCAAF block. A story module changes nothing.
 test("ESPN's highlighted games lead the column, ahead of the strip's order", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page, {}, {
@@ -210,7 +219,9 @@ test("ESPN's highlighted games lead the column, ahead of the strip's order", asy
   });
   await page.goto("/");
   await expect(cards(page)).toHaveCount(4, { timeout: 30_000 });
-  expect(await cardNames(page)).toEqual(["Oklahoma at Georgia", "Dodgers at Giants", "Hurricanes at Predators", "Texas at Tennessee"]);
+  expect(await cardNames(page)).toEqual(["Dodgers at Giants", "Hurricanes at Predators", "Texas at Tennessee", "Oklahoma at Georgia"]);
+  expect(await page.locator('[data-league-column="top"] [data-espn-league]')
+    .evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league")))).toEqual(["mlb", "nhl", "ncaaf"]);
 });
 
 test("ratings mode keeps ESPN's order instead of re-sorting by rating", async ({ page }) => {
