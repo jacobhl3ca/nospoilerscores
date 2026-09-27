@@ -8,7 +8,7 @@ import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName, s
 import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
-import { handleExternalClick } from "@/lib/openExternal";
+import { handleExternalClick, watchLinkProps } from "@/lib/openExternal";
 import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
@@ -243,13 +243,9 @@ export function CompactUpcomingCard({
   const networkNode = network ? (
     networkHref ? (
       <a
-        href={networkHref}
-        target="_blank"
-        rel="noopener noreferrer"
+        {...watchLinkProps(network, networkHref)}
         className="text-[11px] hover:underline whitespace-nowrap"
         style={{ color: "var(--text-muted)" }}
-        title={`Watch on ${network}`}
-        onClick={handleExternalClick(networkHref)}
       >
         {shortNetwork(network)}
       </a>
@@ -937,13 +933,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   return (
                     <a
                       key={key}
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      {...watchLinkProps(name, href)}
                       className="hover:underline transition-colors whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
-                      title={`Watch on ${name}`}
-                      onClick={handleExternalClick(href)}
                     >
                       {shortNetwork(name)}
                     </a>
@@ -1037,13 +1029,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 return (
                   <a
                     key={b}
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    {...watchLinkProps(b, href)}
                     className="hover:underline whitespace-nowrap"
                     style={{ color: "var(--text-muted)" }}
-                    title={`Watch on ${b}`}
-                    onClick={handleExternalClick(href)}
                   >
                     {b}
                   </a>

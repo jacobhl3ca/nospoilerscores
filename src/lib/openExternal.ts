@@ -42,6 +42,7 @@
 // lib/youtube.ts. openExternal only runs when no specific video resolves.
 
 import { parseYouTubeId } from "./youtubeLink";
+import { tvChannelLink } from "./tvChannelLinks";
 
 // True inside the Capacitor iOS/Android wrapper. Exported for callers that
 // need to pick a native-safe link form (e.g. an https .ics instead of a data:
@@ -241,6 +242,31 @@ export function openAppScheme(url: string): void {
     return;
   }
   window.location.assign(url);
+}
+
+// `onClick` for an `<a>` whose href is an app scheme (a TV channel link:
+// iina://, vlc-x-callback://). Routes through openAppScheme so Safari leaves no
+// empty tab behind and the wrapper hands the scheme to the OS.
+export function handleAppSchemeClick(url: string): (e: React.MouseEvent) => void {
+  return (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    openAppScheme(url);
+  };
+}
+
+// Props for a network chip's `<a>`: the personal TV channel link when that
+// network is on the Settings list (lib/tvChannelLinks.ts), else the web link.
+export function watchLinkProps(network: string, webHref: string) {
+  const tv = tvChannelLink(network);
+  if (tv) return { href: tv, title: `Watch ${network} on your TV`, onClick: handleAppSchemeClick(tv) };
+  return {
+    href: webHref,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    title: `Watch on ${network}`,
+    onClick: handleExternalClick(webHref),
+  };
 }
 
 // Use as an `onClick` handler on `<a>` tags so the browser's default link
