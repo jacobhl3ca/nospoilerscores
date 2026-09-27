@@ -35,7 +35,7 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // ranking after that, so naming AP would be wrong for half the season.
 const TITLE = "College Football Highlights Without Spoilers | HideScore";
 const DESC =
-  "Watch college football highlights without seeing the final. A 65-game Saturday with no score printed anywhere, and an optional rating for which one to replay. Free.";
+  "Watch college football highlights without seeing the final. A 65-game Saturday with no score anywhere, plus an optional rating for which to replay. Free.";
 const CANONICAL = "/college-football-highlights-without-spoilers";
 
 const FAQ = [
