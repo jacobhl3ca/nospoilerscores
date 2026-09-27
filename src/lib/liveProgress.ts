@@ -13,6 +13,18 @@ function ordinal(n: number): string {
 // College baseball and softball (added 2026-09-14) share MLB's status shape.
 const BASEBALL_SPORTS = new Set<Game["sport"]>(["mlb", "ncaabase", "ncaasoft"]);
 
+// A game held before first pitch (Jacob 9/27, Orioles @ Yankees rain): ESPN
+// sends STATUS_DELAYED with state still "pre" and shortDetail "Delayed", so
+// the live-delay path above never sees it and the card showed the old start
+// time as if nothing was wrong. Returns the yellow label for the time slot, or
+// null when the game is not a delayed start. A reason word ESPN may add
+// ("Rain Delay") is kept; the bare "Delayed" stays as is.
+export function delayedStartLabel(game: Pick<Game, "state" | "statusDetail">): string | null {
+  if (game.state !== "pre" || !/delay/i.test(game.statusDetail)) return null;
+  const m = game.statusDetail.match(/(\w+)\s+delay/i);
+  return m ? `${m[1][0].toUpperCase()}${m[1].slice(1).toLowerCase()} delay` : "Delayed";
+}
+
 // `label`, when present, is a spoken form for screen readers (applied as an
 // aria-label on the live-status element). Only the baseball sports set it: the
 // ▲/▼ inning glyphs read as a meaningless "up-pointing triangle 5" otherwise.
