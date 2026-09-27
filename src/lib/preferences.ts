@@ -4,6 +4,8 @@ import { setServiceTimeZone } from "./etDay";
 import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
 
 const STORAGE_KEY = "nss-preferences";
+// For the cross-tab storage listener in HomeContent.
+export const PREFS_STORAGE_KEY = STORAGE_KEY;
 
 // Compact encoding for share URLs: mlb→m, nba→n, wnba→wn, ncaam→c, nhl→h, nfl→f, golf→g, tennis→t, fifa→w
 // The decoder regex (`[a-z]+`) and SHORT_TO_SPORT lookup handle multi-char codes,
