@@ -206,9 +206,10 @@ test("phone: ESPN front page cards keep one-line rows like the other columns (39
 // Jacob 9/26 ("ur not taking highlighted posts into consideration"): espn.com
 // put a big Texas A&M–LSU block above its College Football Scoreboard, and
 // the column still led with the strip's first game. The body now leads: its
-// hero (m1) is the first card, its scoreboard module (h1, c1) comes next, and
-// each league block puts the body's games ahead of its live ones — so final
-// c1 sits above live c2 in the NCAAF block. A story module changes nothing.
+// hero (m1) is the first card and its scoreboard module (h1, c1) sets the
+// block order. Inside a block live still leads (Jacob 9/26: "shouldnt
+// finished games be after live ones per league?"), so live c2 sits above the
+// featured final c1 in the NCAAF block. A story module changes nothing.
 test("ESPN's highlighted games lead the column, ahead of the strip's order", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page, {}, {
@@ -219,7 +220,7 @@ test("ESPN's highlighted games lead the column, ahead of the strip's order", asy
   });
   await page.goto("/");
   await expect(cards(page)).toHaveCount(4, { timeout: 30_000 });
-  expect(await cardNames(page)).toEqual(["Dodgers at Giants", "Hurricanes at Predators", "Texas at Tennessee", "Oklahoma at Georgia"]);
+  expect(await cardNames(page)).toEqual(["Dodgers at Giants", "Hurricanes at Predators", "Oklahoma at Georgia", "Texas at Tennessee"]);
   expect(await page.locator('[data-league-column="top"] [data-espn-league]')
     .evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league")))).toEqual(["mlb", "nhl", "ncaaf"]);
 });

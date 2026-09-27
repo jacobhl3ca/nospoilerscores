@@ -1495,8 +1495,9 @@ export default function LeagueColumn({
 
     return chronoMs(a.date) - chronoMs(b.date);
   });
-  // ESPN front page lays out the way espn.com does: a block per league, the
-  // homepage's featured games then live games first inside each (Jacob 9/26).
+  // ESPN front page lays out the way espn.com does: a block per league, and
+  // inside each live, then upcoming, then final, the homepage's featured
+  // games first within each state (Jacob 9/26).
   // Every other column keeps its live / upcoming / final sections below.
   const espnGroups = league.sport === "top" ? groupEspnFrontPage(sortedGames, league.espnFeatured) : null;
   const sorted = espnGroups ? espnGroups.flatMap((g) => g.games) : sortedGames;
