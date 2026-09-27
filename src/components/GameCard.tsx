@@ -13,6 +13,7 @@ import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/w
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
+import { usePairingHidden } from "@/lib/pairingMask";
 
 interface GameCardProps {
   game: Game;
@@ -329,7 +330,56 @@ export function CompactUpcomingCard({
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues }: GameCardProps) {
+// A finals card whose pairing names an earlier round's winners (the NRL Grand
+// Final is the two preliminary finals' results) shows its round, time and a
+// "Show teams" button until tapped — see lib/pairingMask. A separate component
+// so the full card's hooks never run in a different order across the reveal.
+export default function GameCard(props: GameCardProps) {
+  const { hidden, reveal } = usePairingHidden(props.game);
+  if (hidden) return <PairingMaskCard game={props.game} nextGameDate={props.nextGameDate} leagueTag={props.leagueTag} onReveal={reveal} />;
+  return <GameCardBody {...props} />;
+}
+
+function PairingMaskCard({ game, nextGameDate, leagueTag, onReveal }: { game: Game; nextGameDate?: string; leagueTag?: string; onReveal: () => void }) {
+  const round = game.playoffLabel || "Finals";
+  let time = game.state === "in" ? "Live" : game.state === "post" ? "Final" : "";
+  if (game.state === "pre") {
+    const d = new Date(game.date);
+    if (!isNaN(d.getTime())) time = formatTime(d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() }));
+  }
+  // Same three bands as a full card (meta row, then two team-row heights), so
+  // the column keeps its rhythm: the round sits where the away team would and
+  // the button where the home team would.
+  return (
+    <div
+      className="ns-card-focus rounded-lg px-2 sm:px-4 py-2 sm:py-3 relative"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      data-pairing-mask={game.id}
+    >
+      <div className="flex items-center justify-between gap-2 text-[11px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
+        <span className="whitespace-nowrap truncate">
+          {nextGameDate && <span className="font-semibold" style={{ color: "var(--text)" }}>{nextGameDate}</span>}
+          {nextGameDate && time ? " - " : ""}
+          {time}
+        </span>
+        {leagueTag && <span className="font-semibold uppercase tracking-wide truncate">{leagueTag}</span>}
+      </div>
+      <div className="mt-1.5 text-sm font-medium truncate" style={{ color: "var(--text)" }}>{round}</div>
+      <button
+        type="button"
+        onClick={onReveal}
+        className="mt-1.5 w-full text-xs rounded px-2 py-1 cursor-pointer transition-colors whitespace-nowrap"
+        style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+        aria-label={`Show teams for the ${round} (reveals who advanced)`}
+        title="The teams in this game show who won the round before"
+      >
+        Show teams
+      </button>
+    </div>
+  );
+}
+
+function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
   // before this, overlays only closed via the tiny ✕ and piled up across cards.

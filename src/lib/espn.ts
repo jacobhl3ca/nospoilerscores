@@ -2775,6 +2775,24 @@ const NRL_FINALS_WEEKS: Record<number, string> = {
   4: "Grand Final",
 };
 
+// AFL finals notes read "<round><n> - <home> vs <away>" ("QF2 - Swans vs Lions",
+// "GF - Dockers vs Lions", read 2026-09-27), and none of them hit the playoff
+// word list, so the finals carried no label at all. Only the round is kept:
+// the team half names the pairing, which lib/pairingMask hides for every round
+// after the ladder-seeded first week.
+const AFL_FINALS_ROUNDS: Record<string, string> = {
+  WC: "Wildcard Round",
+  QF: "Qualifying Final",
+  EF: "Elimination Final",
+  SF: "Semi-Final",
+  PF: "Preliminary Final",
+  GF: "Grand Final",
+};
+export function aflFinalsLabel(headline: string): string {
+  const abbr = /^\s*([A-Z]{2})\d*\s+-\s/i.exec(headline)?.[1]?.toUpperCase();
+  return (abbr && AFL_FINALS_ROUNDS[abbr]) || "Finals";
+}
+
 // NCAA baseball + softball: the two leagues whose postseason ESPN files as
 // season type 6 and whose notes name regionals (see parseGame).
 const COLLEGE_DIAMOND_SPORTS = new Set<Sport>(["ncaabase", "ncaasoft"]);
@@ -2912,6 +2930,9 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   if (sport === "nrl" && /\bfinal\b/i.test(event.season?.slug?.replace(/-/g, " ") ?? "")) {
     isPlayoff = true;
     if (!playoffLabel) playoffLabel = NRL_FINALS_WEEKS[event.week?.number ?? 0] ?? "Finals";
+  }
+  if (sport === "afl" && event.season?.type === 3) {
+    playoffLabel = aflFinalsLabel(competition?.notes?.[0]?.headline ?? "");
   }
   // College baseball/softball file the whole NCAA tournament as type 6
   // ("championship-series", read 2026-09-14 on the CWS final 2026-06-21 and the
