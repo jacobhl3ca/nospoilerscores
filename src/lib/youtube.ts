@@ -227,6 +227,20 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // 2026-09-14 (a LALIGA Elche–Betis served for the cup tie) — so La Liga ships
   // with the "laliga" token in COMPETITION_TITLE_TOKENS, same as facup.
   laliga: "ESPN FC",
+  // UEFA Nations League: FOX Sports (the US rightsholder; ESPN lists FS1/FS2)
+  // posts "Portugal vs Wales Highlights ⚽️ UEFA Nations League". Re-probed
+  // 2026-09-26 against the LIVE worker with strict=1 over 10 finished
+  // league-phase fixtures (9/24–9/26): 4/10 hits, 0 wrong (Por–Wal, Nor–Den,
+  // Ita–Bel, Eng–Spa; 588–1251 s). The misses are games FOX did not air;
+  // home-first, undated and "Turkey" query shapes change nothing. Same rule
+  // as La Liga above: 0 wrong, any hit rate, plus a required competition
+  // token, because FOX Sports also cuts the World Cup, Euro qualifiers and
+  // the Gold Cup between the same nations — so Nations League ships with the
+  // "nations league" token in COMPETITION_TITLE_TOKENS.
+  // ⛔ Not the "UEFA" channel: 2/10 hits, both WRONG — "Classic Nations League
+  // Highlights" re-uploads of older meetings. FOX Soccer, CBS Sports Golazo
+  // and ESPN FC were 0/10. ESPN summaries carry no Nations League clip.
+  nations: "FOX Sports",
   // Golf majors — each tournament has its own channel. Keys must match the
   // label-derived lookup key `golf_${label.toLowerCase().replace(/\s+/g,"")}`
   // (see getOfficialChannelName), so the PGA Championship — whose league label
@@ -406,19 +420,6 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // Re-probe once the 2026-27 knockouts exist; any relight needs ≥4/5 and a
 // competition title token.
 //
-// nations (UEFA Nations League, added 2026-09-26, DARK). Probed against the
-// LIVE worker with strict=1 on 10 completed 2026-09-24/25 league-phase
-// fixtures, bare query shape:
-//   "FOX Soccer" 1/10, and that one was WRONG — Belgium–Italy served the
-//     Women's Euro 2025 meeting.
-//   "UEFA" 1/10, also WRONG — Germany–Netherlands served a "Classic Nations
-//     League Highlights" re-upload of an older tie.
-//   "FOX Sports" (the US rightsholder; ESPN names FS1/FS2) 3/10, all three
-//     titled "… Highlights ⚽ UEFA Nations League" — right competition, but
-//     under the 4/5 gate, and the same two nations meet again in the knockouts.
-// Re-probe FOX Sports with a "nations league" title token after the
-// October matchdays; a relight needs ≥4/5 and 0 wrong.
-//
 // ncaawsoc / ncaamsoc (NCAA soccer, added 2026-09-26, both DARK). The cut
 // Jacob found for Penn State at Ohio State (women's, 9/10) is on "Real Woso
 // Fan", a fan channel, not an uploader the app can trust; no conference or
@@ -434,7 +435,8 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "esports",
   // laliga + ligue1 left this set 2026-09-19 — both now resolve against their
   // US broadcaster (ESPN FC / beIN SPORTS USA), each behind a required
-  // competition title token. See OFFICIAL_CHANNELS above.
+  // competition title token. nations followed 2026-09-27 (FOX Sports +
+  // "nations league" token). See OFFICIAL_CHANNELS above.
   "ncaah",
   "ncaabase",
   // Both college soccer feeds: no trusted uploader yet (see the note above).
@@ -445,7 +447,6 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "rugbytest",
   "ufl",
   "uecl",
-  "nations",
 ]);
 
 // True when a league has no exact approved channel. Callers must render no
@@ -672,6 +673,10 @@ export function getCompetitionName(sport: string): string | null {
 // (4/4 hits carried it). Both spellings are listed because the token match is
 // punctuation-insensitive but NOT space-insensitive — "LA LIGA Highlights"
 // normalizes to "la liga", which the bare "laliga" token would miss.
+// nations: FOX Sports cuts the World Cup, Euro qualifiers, the Gold Cup and
+// friendlies between the same national teams, so the competition name is
+// required. All 4 hits of the 2026-09-26 probe are titled
+// "… Highlights ⚽️ UEFA Nations League".
 // ligue1: beIN SPORTS USA also carries the Coupe de France, Ligue 2 and beIN's
 // other rights, so the league name is required in the title. All 7 hits are
 // titled "… | HIGHLIGHTS Ligue 1 | MM/DD/YYYY | beIN SPORTS USA".
@@ -681,6 +686,7 @@ const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   facup: ["fa cup"],
   laliga: ["laliga", "la liga"],
   ligue1: ["ligue 1"],
+  nations: ["nations league"],
   // ncaawh: ECAC Hockey posts the men's and the women's cut of the same two
   // schools, often the same weekend. "women" is in every women's title and in
   // no men's title. The reverse token must be "ncaa men": "men" alone is a

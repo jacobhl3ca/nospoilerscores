@@ -2552,6 +2552,11 @@ const HL_LEAGUES = [
   // with the "fa cup" title token below. uecl / copadelrey / dfbpokal are dark
   // and deliberately absent — see NO_HIGHLIGHT_FALLBACK in src/lib/youtube.ts.
   { sport: "facup",      path: "/soccer/eng.fa/scoreboard",                   channel: "ESPN FC" },
+  // UEFA Nations League (lit 2026-09-27): FOX Sports, 4/10 strict on the
+  // 9/24–9/26 league phase, 0 wrong, behind the "nations league" token below —
+  // FOX also cuts World Cup / Euro qualifier / Gold Cup meetings of the same
+  // nations. ⛔ Not the "UEFA" channel (old "Classic" re-uploads).
+  { sport: "nations",    path: "/soccer/uefa.nations/scoreboard",             channel: "FOX Sports" },
   // Little League World Series (added 2026-08-21). ESPN cuts a per-game
   // "Full Game Highlights" for the Williamsport rounds. The names it titles
   // with are the state/country, not ESPN's own city-based team name — see
@@ -2605,6 +2610,7 @@ const HL_COMPETITION_TOKENS = {
   facup: ["fa cup"],
   laliga: ["laliga", "la liga"],
   ligue1: ["ligue 1"],
+  nations: ["nations league"],
   ncaawh: ["women"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts. Sent per

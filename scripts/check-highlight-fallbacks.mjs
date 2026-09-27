@@ -84,6 +84,9 @@ const ESPN_PATHS = {
   afcon:        "/soccer/caf.nations/scoreboard",
   // FA Cup (added 2026-09-14) — ESPN FC, gated on an "fa cup" title token.
   facup:        "/soccer/eng.fa/scoreboard",
+  // Nations League (lit 2026-09-27) — FOX Sports, gated on a "nations league"
+  // title token. Expect ~60% misses: FOX cuts only the games it airs.
+  nations:      "/soccer/uefa.nations/scoreboard",
   // ⚠️ Rugby was ANOTHER unmonitored wave (added here 2026-08-12). The three
   // rugby competitions with an approved uploader have had OFFICIAL_CHANNELS
   // entries and buffer/period rows in this file since 8/12, but no ESPN_PATHS
@@ -103,10 +106,9 @@ const ESPN_PATHS = {
   cfl:          "/api/cfl",
   // Deliberately absent: MLB (MLB.com-native); EURO, NCAA
   // men's and women's hockey, women's volleyball, UFL, NCAA baseball, NCAA
-  // softball, the Conference League, Copa del Rey, DFB-Pokal, the Nations
-  // League, and cricket (no approved per-match uploader, so no YouTube
-  // button). ncaah / ufl / ncaabase / ncaasoft / uecl / copadelrey /
-  // dfbpokal / nations are in
+  // softball, the Conference League, Copa del Rey, DFB-Pokal, and cricket
+  // (no approved per-match uploader, so no YouTube button). ncaah / ufl /
+  // ncaabase / ncaasoft / uecl / copadelrey / dfbpokal are in
   // NO_HIGHLIGHT_FALLBACK — see src/lib/youtube.ts. ncaavb and ncaawh (lit
   // 2026-09-23) have no fixed channel: each game resolves from its schools'
   // conference chain (collegeHighlightChannels.json), which this monitor does
@@ -146,6 +148,8 @@ const OFFICIAL_CHANNELS = {
   saudi: "الدوري السعودي للمحترفين - Saudi Pro League",
   afcon: "CAF TV",
   facup: "ESPN FC",
+  // Nations League, lit 2026-09-27 — required "nations league" token below.
+  nations: "FOX Sports",
   // Little League World Series, verified 2026-08-21: ESPN strict, 8 hits and 0
   // wrong over the 11 completed 2026 fixtures — but ONLY once the query names
   // the state/country instead of ESPN's city-based team name. extractTeams now
@@ -172,6 +176,7 @@ const COMPETITION_TITLE_TOKENS = {
   facup: ["fa cup"],
   laliga: ["laliga", "la liga"],
   ligue1: ["ligue 1"],
+  nations: ["nations league"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts (per
 // event: the round from the card's playoff note). Keep in sync.
@@ -209,7 +214,7 @@ const HIGHLIGHT_BUFFER_HOURS = {
   nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5, ncaawh: 4.5, ncaavb: 3,
   nfl: 5, cfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
   seriea: 3, bundesliga: 3, laliga: 3, ligue1: 3,
-  ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3, facup: 3, ncaawsoc: 3, ncaamsoc: 3,
+  ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3, facup: 3, nations: 3, ncaawsoc: 3, ncaamsoc: 3,
   // Rugby union: 80 minutes plus stoppages, so the same 3h window soccer uses.
   sixnations: 3, superrugby: 3, rugbywc: 3, nationschamp: 3,
 };
@@ -217,7 +222,7 @@ const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5,
   nfl: 4, cfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
   seriea: 2, bundesliga: 2, laliga: 2, ligue1: 2,
-  ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2, facup: 2, ncaawsoc: 2, ncaamsoc: 2,
+  ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2, facup: 2, nations: 2, ncaawsoc: 2, ncaamsoc: 2,
   sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,
 };
 
