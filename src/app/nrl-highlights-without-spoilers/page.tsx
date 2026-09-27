@@ -135,7 +135,7 @@ export default function NrlHighlightsWithoutSpoilersPage() {
         { href: "/spoiler-free-sports", label: "Spoiler-free sports" },
         { href: "/watch-sports-highlights-without-spoilers", label: "Highlights without spoilers" },
         { href: "/cricket-highlights-without-spoilers", label: "Cricket" },
-        { href: "/f1-without-spoilers", label: "F1" },
+        { href: "/rugby-without-spoilers", label: "Rugby union" },
         { href: "/nfl-highlights-without-spoilers", label: "NFL highlights" },
       ]}
       faq={FAQ}

@@ -208,6 +208,13 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // 2026 Toyota AFL Grand Final | AFL" — no score. AFLW posts from its own
   // "AFL Women's" channel, so the byline gate keeps it out too.
   afl: "AFL",
+  // URC: "United Rugby Championship", 8/8 strict over the 2026-27 opening two
+  // rounds (Sep 25 → Sep 27), 0 wrong, once ESPN's "Cardiff Blues" and
+  // "Benetton Treviso" are aliased to the title forms (see TEAM_NAME_ALIASES).
+  // Titles read "Highlights | Leinster Rugby v Munster Rugby | Round 1 | URC
+  // 2026/27" — no score. The other four club competitions stay DARK (see
+  // NO_HIGHLIGHT_FALLBACK).
+  urc: "United Rugby Championship",
   // euro + cricket deliberately have NO entry — see the block comment below.
   //
   // ── La Liga + Ligue 1, LIT 2026-09-19. Both were dark because the LEAGUE's
@@ -461,6 +468,18 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "ncaawsoc",
   "rugbychamp",
   "rugbytest",
+  // Club rugby, probed 2026-09-27 (lib/espn.ts has the ids). Only URC lit.
+  // premrugby: "PREM Rugby" and "Premiership Rugby" both 0/5 strict; the
+  //   league's clips carry no "A v B" pairing in the title.
+  // top14: "TOP 14 - Officiel" 2 unique hits out of 20 probed, and the older
+  //   uploads print the score in the title.
+  // challengecup: no fixture played yet (pool round 1 is 2026-10-16).
+  //   RE-PROBE the EPCR channel after round 1.
+  // mlr: 4/8 with one WRONG match, and titles hint at the result.
+  "premrugby",
+  "top14",
+  "challengecup",
+  "mlr",
   "ufl",
   "uecl",
 ]);
@@ -812,6 +831,10 @@ const TEAM_NAME_ALIASES: Record<string, string> = {
   // both games dark.
   "Union (NY)": "Union",
   "Post University": "Post",
+  // URC (2026-09-27): ESPN keeps the pre-2021 club names; the URC channel uses
+  // the current ones ("Cardiff Rugby", "Benetton Rugby"). 6/8 → 8/8 strict.
+  "Cardiff Blues": "Cardiff Rugby",
+  "Benetton Treviso": "Benetton",
 };
 
 function aliasTeam(name: string): string {

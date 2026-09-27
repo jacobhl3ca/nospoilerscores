@@ -82,6 +82,7 @@ const highlightBufferHours: Record<string, number> = {
   sixnations: 3, superrugby: 3, rugbywc: 3, rugbychamp: 3, nationschamp: 3,
   // NRL: 80 minutes like union, same 3h. AFL: four ~30-minute quarters plus
   // breaks run ~2h45m of wall clock, so an hour more.
+  premrugby: 3, urc: 3, top14: 3, challengecup: 3, mlr: 3,
   nrl: 3, afl: 4,
 };
 // ncaaw is 4, not 2: women's college hoops plays four 10-min quarters (moved to
@@ -94,6 +95,7 @@ const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, n
   // for every finished rugby match — clamped to 0 by the Math.max, so the
   // buffer was right by accident; stating it keeps that an intent, not luck.
   sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2,
+  premrugby: 2, urc: 2, top14: 2, challengecup: 2, mlr: 2,
   nrl: 2, afl: 4 };
 
 // Fallback label for the official-highlight button. That button normally
@@ -113,6 +115,8 @@ const highlightBadgeLabel: Record<string, string> = {
   seriea: "SERIE A", ligamx: "LIGA MX",
   sixnations: "6 NATIONS", superrugby: "SUPER RUGBY", rugbywc: "RWC",
   rugbychamp: "CHAMPIONS", rugbytest: "TESTS", nationschamp: "NATIONS",
+  // Club rugby (2026-09-27). URC and MLR read fine uppercased.
+  premrugby: "PREM", top14: "TOP 14", challengecup: "CHALLENGE",
   // FA Cup (2026-09-14): the only lit cup; "FACUP" is not a word either.
   facup: "FA CUP",
   // NCAA volleyball (lit 2026-09-16): "NCAAVB" reads as a code, not a sport.

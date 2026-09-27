@@ -380,6 +380,11 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   superrugby: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   rugbytest: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   nationschamp: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  premrugby: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  urc: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  top14: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  challengecup: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  mlr: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   // NRL + AFL DO have marks in the `teamlogos/leagues` set, unlike union —
   // both straight off their scoreboards' `leagues[0].logos`, 200 on 2026-09-27.
   nrl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nrl.png&w=40&h=40&transparent=true",
@@ -477,6 +482,20 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   // baked snapshot — no second bake job, no second staleness entry.
   ncaawh: { key: "reddit-ncaah", label: "r/collegehockey" },
   cfl: { key: "reddit-cfl", label: "r/CFL" },
+  // 2026-09-27: r/rugbyunion is the one union sub with volume, so every union
+  // column reads the same baked snapshot (the r/collegehockey pattern). The
+  // six older union columns had no Reddit card at all until now.
+  sixnations: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  rugbywc: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  rugbychamp: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  superrugby: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  rugbytest: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  nationschamp: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  premrugby: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  urc: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  top14: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  challengecup: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  mlr: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
   // 2026-09-27: r/nrl and r/AFL, the two leagues' main subs.
   nrl: { key: "reddit-nrl", label: "r/nrl" },
   afl: { key: "reddit-afl", label: "r/AFL" },
@@ -607,6 +626,8 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "uecl", "facup", "copadelrey", "dfbpokal", "nations",
   "ncaawsoc", "ncaamsoc",
   "cricket", "nrl", "afl",
+  "sixnations", "rugbywc", "nationschamp", "rugbytest", "superrugby", "rugbychamp",
+  "urc", "premrugby", "top14", "challengecup", "mlr",
   "ufc", "boxing", "f1", "nascar", "indycar", "poker",
 ];
 

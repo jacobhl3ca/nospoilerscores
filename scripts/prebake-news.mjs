@@ -2588,6 +2588,8 @@ const HL_LEAGUES = [
   // for the strict probes (NRL 12/12, AFL 6/8, 0 wrong).
   { sport: "nrl",          path: "/rugby-league/3/scoreboard",                 channel: "NRL - National Rugby League" },
   { sport: "afl",          path: "/australian-football/afl/scoreboard",        channel: "AFL" },
+  // URC (added 2026-09-27, 8/8 strict). The other club competitions are dark.
+  { sport: "urc",          path: "/rugby/270557/scoreboard",                   channel: "United Rugby Championship" },
   // CFL (added 2026-09-13). ESPN no longer serves the CFL, so `worker: true`
   // reads the slate from our own /api/cfl route (theScore, reshaped to the
   // ESPN scoreboard — see public/_worker.js) instead of site.api.espn.com.
@@ -2677,6 +2679,8 @@ const HL_TEAM_ALIASES = {
   Rensselaer: "RPI",
   "Union (NY)": "Union",
   "Post University": "Post",
+  "Cardiff Blues": "Cardiff Rugby",
+  "Benetton Treviso": "Benetton",
 };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
 // The LLWS code->state/country table is the SAME FILE src/lib/youtube.ts reads,
@@ -5166,6 +5170,8 @@ const jobs = [
   ["reddit-cfl", () => fetchReddit("CFL", "r/CFL")],
   // 2026-09-27: NRL + AFL. Two more 45s gate slots in the reddit bake.
   ["reddit-nrl", () => fetchReddit("nrl", "r/nrl")],
+  // 2026-09-27: one shared r/rugbyunion bake for every union column.
+  ["reddit-rugbyunion", () => fetchReddit("rugbyunion", "r/rugbyunion")],
   ["reddit-afl", () => fetchReddit("AFL", "r/AFL")],
   ["reddit-ufc", () => fetchReddit("ufc", "r/ufc")],
   ["reddit-boxing", () => fetchReddit("Boxing", "r/Boxing")],

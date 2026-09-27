@@ -211,6 +211,9 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/nrl-highlights-without-spoilers" className="underline underline-offset-2">
             NRL
           </Link>
+          <Link href="/rugby-without-spoilers" className="underline underline-offset-2">
+            Rugby
+          </Link>
           <Link href="/mls-highlights-without-spoilers" className="underline underline-offset-2">
             MLS
           </Link>

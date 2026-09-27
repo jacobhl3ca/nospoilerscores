@@ -27,6 +27,7 @@ export const TEAM_PICKER_SKIP: readonly Sport[] = [
 const RUGBY: ReadonlySet<Sport> = new Set<Sport>([
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
   // NRL clubs sit on the same rugby/teams path (all 19 ids 200, 2026-09-27).
+  "premrugby", "urc", "top14", "challengecup", "mlr",
   "nrl",
 ]);
 

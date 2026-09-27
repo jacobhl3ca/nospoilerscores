@@ -1836,6 +1836,7 @@ export default function HomeContent({
     // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
     "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw", "ncaah", "cfl", "ncaawh", "ncaavb", "ufl", "ncaabase", "ncaasoft",
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket", "nrl", "afl",
+    "urc", "premrugby", "top14", "challengecup", "mlr",
     "chess", "poker", "esports",
     // ── soccer block, bottom ──
     "epl", "ucl", "uel", "uecl", "nations", "laliga", "seriea", "bundesliga", "ligue1",

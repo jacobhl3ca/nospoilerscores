@@ -60,6 +60,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/nations-league-without-spoilers",
     // Added 2026-09-27 with the NRL column, a week before the Grand Final.
     "/nrl-highlights-without-spoilers",
+    // Added 2026-09-27 with the five club rugby columns.
+    "/rugby-without-spoilers",
     "/best-spoiler-free-sports-sites",
     "/redzone-for-every-sport",
     "/faq",
@@ -141,6 +143,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // feed and the NRL's own spoiler mechanism (every game overnight in the
     // US, finals fixtures that give away the week before).
     "/nrl-highlights-without-spoilers",
+    // Same day: the rugby union hub (dated ET kickoffs per competition, and
+    // bonus-point tables as the rugby-specific spoiler).
+    "/rugby-without-spoilers",
   ]);
 
   // Build timestamp, for the boards whose rendered content really does change
