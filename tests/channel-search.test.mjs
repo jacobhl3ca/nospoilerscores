@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CHANNEL_SEARCH_HANDLES, channelSearchHandle, channelSearchMinSec, pickChannelSearchCards, titleDateYmd, titleHasCompToken, NOT_FIRST_TEAM_RX,
+  CHANNEL_FEED_IDS, CHANNEL_SEARCH_HANDLES, channelFeedId, channelSearchHandle, channelSearchMinSec, feedCoversGame, isWomensSport, parseChannelFeed,
+  pickChannelSearchCards, titleDateYmd, titleHasCompToken, NOT_FIRST_TEAM_RX,
 } from "../scripts/lib/channel-search.mjs";
 
 const DAY = 86400e3;
@@ -91,4 +92,66 @@ test("a title's own date: long, short and West Coast night forms", () => {
   // 10:30 pm PT on 9/24 is 9/25 in ET; a title naming 9/24 still fits.
   const late = [{ videoId: "w", title: "LA Galaxy vs. Seattle | September 24, 2026", durationSec: 300, publishedMs: null }];
   assert.equal(pickChannelSearchCards(late, { titleHasTeams: teams("galaxy", "seattle"), gameMs: Date.parse("2026-09-25T05:30Z") }).length, 1);
+});
+
+test("ECAC: a women's cut is kept for a women's game, each night by its own date", () => {
+  // The ECAC Hockey feed, 2026-09-26. The same pair plays Friday and Saturday.
+  const now = Date.parse("2026-09-26T20:00Z");
+  const cards = [
+    { videoId: "sat", title: "RIT at Clarkson | NCAA Women's Ice Hockey | Highlights - September 26, 2026 | #ECACHockey", durationSec: null, publishedMs: now },
+    { videoId: "_3ClIbxGMG0", title: "RIT at Clarkson | NCAA Women's Ice Hockey | Highlights - September 25, 2026 | #ECACHockey", durationSec: null, publishedMs: now - 13 * 3600e3 },
+    { videoId: "men", title: "RIT at Clarkson | NCAA Men's Ice Hockey | Highlights - September 25, 2026 | #ECACHockey", durationSec: null, publishedMs: now - 13 * 3600e3 },
+  ];
+  const opts = {
+    titleHasTeams: teams("rit", "clarkson"),
+    compOk: (t) => titleHasCompToken(t, ["women"]),
+    gameMs: Date.parse("2026-09-25T22:00Z"),
+    womensGame: isWomensSport("ncaawh"),
+  };
+  assert.deepEqual(pickChannelSearchCards(cards, opts).map((c) => c.videoId), ["_3ClIbxGMG0"]);
+  // Without the flag the club-channel filter would refuse the right cut.
+  assert.deepEqual(pickChannelSearchCards(cards, { ...opts, womensGame: false }), []);
+  assert.equal(isWomensSport("efl"), false);
+  assert.equal(channelSearchHandle("ECAC Hockey"), "ECACHockeyLeague");
+});
+
+test("the uploads feed parses to cards: Shorts dropped, entities decoded, newest first", () => {
+  const entry = (id, title, published, path = "watch?v=") => `<entry>
+  <id>yt:video:${id}</id>
+  <yt:videoId>${id}</yt:videoId>
+  <title>${title}</title>
+  <link rel="alternate" href="https://www.youtube.com/${path}${id}"/>
+  <published>${published}</published>
+  <media:group><media:title>${title}</media:title></media:group>
+ </entry>`;
+  const xml = `<?xml version="1.0"?><feed>
+ <title>Atlantic Hockey America</title>
+ ${entry("VqQcZU28c9k", "Delaware 2, Holy Cross 2 OT (Del. wins shootout) - Sept. 25, 2026", "2026-09-26T16:08:00+00:00")}
+ ${entry("aPH96oP7tOE", "The AHA Show Trailer: Sept. 24, 2026", "2026-09-24T23:56:00+00:00", "shorts/")}
+ ${entry("Ic6Nc38QpEI", "&quot;All of our buildings&quot; &amp; more", "2026-09-24T20:26:00+00:00")}
+</feed>`;
+  const feed = parseChannelFeed(xml);
+  const { cards } = feed;
+  assert.deepEqual(cards.map((c) => c.videoId), ["VqQcZU28c9k", "Ic6Nc38QpEI"]);
+  // The oldest upload counts the Short too: the feed covers everything since.
+  assert.equal(feed.oldestMs, Date.parse("2026-09-24T20:26:00Z"));
+  assert.equal(feedCoversGame(feed, Date.parse("2026-09-26T19:00Z")), true);
+  assert.equal(feedCoversGame(feed, Date.parse("2026-09-24T19:00Z")), false);
+  assert.equal(feedCoversGame(null, Date.parse("2026-09-26T19:00Z")), false);
+  assert.equal(feedCoversGame(parseChannelFeed(""), Date.parse("2026-09-26T19:00Z")), false);
+  assert.equal(cards[0].publishedMs, Date.parse("2026-09-26T16:08:00Z"));
+  assert.equal(cards[0].durationSec, null);
+  assert.equal(cards[1].title, '"All of our buildings" & more');
+  assert.deepEqual(parseChannelFeed(""), { cards: [], oldestMs: null });
+  // A feed card has no length: the pre-filter lets it through, the bake's
+  // watch-page read decides.
+  const picks = pickChannelSearchCards(cards, { titleHasTeams: teams("delaware", "holy cross"), gameMs: Date.parse("2026-09-25T22:00Z") });
+  assert.deepEqual(picks.map((c) => c.videoId), ["VqQcZU28c9k"]);
+});
+
+test("every searchable channel has a feed id, and the ids are channel ids", () => {
+  for (const channel of Object.keys(CHANNEL_SEARCH_HANDLES)) assert.ok(channelFeedId(channel), channel);
+  for (const id of Object.values(CHANNEL_FEED_IDS)) assert.match(id, /^UC[A-Za-z0-9_-]{22}$/);
+  assert.equal(new Set(Object.values(CHANNEL_FEED_IDS)).size, Object.keys(CHANNEL_FEED_IDS).length);
+  assert.equal(channelFeedId("ESPN FC"), null);
 });

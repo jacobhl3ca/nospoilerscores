@@ -20,7 +20,7 @@ import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
 } from "./lib/fotmob.mjs";
-import { channelSearchHandle, channelSearchMinSec, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
+import { channelFeedId, channelSearchHandle, channelSearchMinSec, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 import { pickEspnGameClip } from "./lib/espn-clip.mjs";
 
@@ -2665,6 +2665,8 @@ const HL_TEAM_ALIASES = {
   Tempo: "Toronto Tempo",
   Valkyries: "Golden State Valkyries",
   Rensselaer: "RPI",
+  "Union (NY)": "Union",
+  "Post University": "Post",
 };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
 // The LLWS code->state/country table is the SAME FILE src/lib/youtube.ts reads,
@@ -3335,6 +3337,15 @@ async function hlEspnClipFinish() {
 //   • off under GitHub Actions and with HL_CHANNEL_SEARCH=0 (the off switch).
 // Every hit logs HIGHLIGHT-CHANNEL-SEARCH, so a FotMob fill that still shows up
 // (HIGHLIGHT-FOTMOB) is a gap this pass has not learned yet.
+//
+// The channel's uploads feed goes first (added 2026-09-26, CHANNEL_FEED_IDS):
+// one fetch per channel per bake, shared by every game on that channel, and
+// none of the page limits above apply to it. A game the feed holds never
+// spends a results page. Nor does a game the feed reaches back past with no
+// cut in it: that cut is simply not posted yet — on the first local ECAC +
+// AHA bake (9/26) all 10 pages went to that day's games. The page is asked
+// only when the feed has rolled past the game (a busy channel) or failed. A
+// feed hit logs HIGHLIGHT-CHANNEL-FEED.
 const HL_CS_ON = process.env.HL_CHANNEL_SEARCH !== "0" && process.env.GITHUB_ACTIONS !== "true";
 const HL_CS_MAX_FETCHES = 30;
 const HL_CS_GAP_MS = 1500;
@@ -3342,7 +3353,24 @@ const HL_CS_REASK_MS = 90 * 60 * 1000;
 const HL_CS_MAX_FAILURES = 3;
 // Outside public/news for the same reason as the FotMob state file.
 const HL_CS_STATE_PATH = ".bake-state/channel-search.json";
-const hlCs = { fetches: 0, failures: 0, hits: 0, lastAt: 0, state: null };
+const hlCs = { fetches: 0, failures: 0, hits: 0, lastAt: 0, state: null, feeds: new Map(), feedFailures: 0, feedHits: 0, feedCovered: 0 };
+
+// One channel's uploads feed (parseChannelFeed), fetched once per bake. A
+// failed fetch yields null (logged once) and the search page takes over.
+function hlChannelFeed(channel) {
+  const id = channelFeedId(channel);
+  if (!id) return Promise.resolve(null);
+  if (!hlCs.feeds.has(id)) {
+    hlCs.feeds.set(id, getText(`https://www.youtube.com/feeds/videos.xml?channel_id=${id}`)
+      .then(parseChannelFeed)
+      .catch((e) => {
+        hlCs.feedFailures++;
+        console.warn(`HIGHLIGHT-CHANNEL-FEED-FAIL ${channel}: ${e?.cause?.message || e?.message || e}`);
+        return null;
+      }));
+  }
+  return hlCs.feeds.get(id);
+}
 
 async function hlCsState() {
   if (hlCs.state) return hlCs.state;
@@ -3360,10 +3388,55 @@ function hlSearchName(team) {
     .reduce((best, v) => (String(v).length > best.length ? String(v) : best), "");
 }
 
-// The id this channel's own search page holds for this game, gated, or null.
+// The first card that clears every gate an official id must clear, or null.
+// Feed cards carry no length, so theirs is read off the watch page — the same
+// cached read the upload-date gate makes.
+async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, compTokens, picks, minSec) {
+  for (const { videoId, durationSec } of picks) {
+    const sec = Number.isFinite(durationSec) ? durationSec : await fetchYtDurationSec(videoId);
+    if ((Number.isFinite(sec) && sec < minSec)
+      || !(await hlVideoMatchesChannel(videoId, channel))
+      || !(await hlVideoMatchesTeams(videoId, away, home))
+      || !(await hlVideoMatchesComp(videoId, compTokens))
+      || !(await hlVideoMatchesDate(videoId, gameIso))
+      || (await fetchYtEmbeddable(videoId)) !== true) {
+      console.warn(`${tag}-REJECT ${key} ${videoId} ${channel} (${away} vs ${home})`);
+      continue;
+    }
+    console.log(`${tag} ${key} ${videoId} ${channel}`);
+    return videoId;
+  }
+  return null;
+}
+
+// The id this channel's uploads feed or own search page holds for this game,
+// gated, or null.
 async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTokens, exclude) {
   const handle = channelSearchHandle(channel);
-  if (!HL_CS_ON || !handle || hlCs.failures >= HL_CS_MAX_FAILURES || hlCs.fetches >= HL_CS_MAX_FETCHES) return null;
+  if (!HL_CS_ON || (!handle && !channelFeedId(channel))) return null;
+  const minSec = channelSearchMinSec(channel);
+  const pickOpts = {
+    titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home),
+    compOk: (title) => titleHasCompToken(title, compTokens),
+    gameMs: Date.parse(gameIso),
+    exclude,
+    minSec,
+    womensGame: isWomensSport(key.split(":")[0]),
+  };
+  // Feed cards have no length yet, so one more candidate is let through for
+  // the watch-page length check to drop a goal clip.
+  const feed = await hlChannelFeed(channel);
+  const feedPicks = pickChannelSearchCards(feed?.cards ?? [], { ...pickOpts, limit: 3 });
+  const fromFeed = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-FEED", key, channel, away, home, gameIso, compTokens, feedPicks, minSec);
+  if (fromFeed) {
+    hlCs.feedHits++;
+    return fromFeed;
+  }
+  if (feedCoversGame(feed, pickOpts.gameMs)) {
+    hlCs.feedCovered++;
+    return null;
+  }
+  if (!handle || hlCs.failures >= HL_CS_MAX_FAILURES || hlCs.fetches >= HL_CS_MAX_FETCHES) return null;
   const state = await hlCsState();
   const askKey = `${key}|${channel}`;
   if (Date.now() - (state.asked[askKey] ?? 0) < HL_CS_REASK_MS) return null;
@@ -3381,31 +3454,13 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
     hlCs.lastAt = Date.now();
   }
   state.asked[askKey] = Date.now();
-  const picks = pickChannelSearchCards(cards, {
-    titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home),
-    compOk: (title) => titleHasCompToken(title, compTokens),
-    gameMs: Date.parse(gameIso),
-    exclude,
-    minSec: channelSearchMinSec(channel),
-  });
-  for (const { videoId } of picks) {
-    if (!(await hlVideoMatchesChannel(videoId, channel))
-      || !(await hlVideoMatchesTeams(videoId, away, home))
-      || !(await hlVideoMatchesComp(videoId, compTokens))
-      || !(await hlVideoMatchesDate(videoId, gameIso))
-      || (await fetchYtEmbeddable(videoId)) !== true) {
-      console.warn(`HIGHLIGHT-CHANNEL-SEARCH-REJECT ${key} ${videoId} ${channel} (${away} vs ${home})`);
-      continue;
-    }
-    hlCs.hits++;
-    console.log(`HIGHLIGHT-CHANNEL-SEARCH ${key} ${videoId} ${channel}`);
-    return videoId;
-  }
-  return null;
+  const id = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-SEARCH", key, channel, away, home, gameIso, compTokens, pickChannelSearchCards(cards, pickOpts), minSec);
+  if (id) hlCs.hits++;
+  return id;
 }
 
 async function hlChannelSearchFinish() {
-  console.log(`HIGHLIGHT-CHANNEL-SEARCH-REQUESTS n=${hlCs.fetches} hits=${hlCs.hits} failures=${hlCs.failures}`);
+  console.log(`HIGHLIGHT-CHANNEL-SEARCH-REQUESTS n=${hlCs.fetches} hits=${hlCs.hits} failures=${hlCs.failures} feeds=${hlCs.feeds.size} feedHits=${hlCs.feedHits} feedCovered=${hlCs.feedCovered} feedFailures=${hlCs.feedFailures}`);
   if (!hlCs.state) return;
   const cutoff = Date.now() - HL_ENTRY_TTL_MS;
   for (const [k, at] of Object.entries(hlCs.state.asked)) if (!(at > cutoff)) delete hlCs.state.asked[k];
