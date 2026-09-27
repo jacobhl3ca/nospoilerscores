@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ALL_RECORD_LEAGUES,
   recordLeagueFor,
+  recordShowsForState,
   recordTitle,
   toggleAllRecordLeagues,
   toggleRecordLeague,
@@ -63,4 +64,10 @@ test("three-number records say what the third number is", () => {
   assert.match(recordTitle("soccer"), /W-D-L/);
   assert.match(recordTitle("nhl"), /W-L-OT/);
   assert.equal(recordTitle("nfl"), "Record going into this game");
+});
+
+test("records show before the start and while live, never once final", () => {
+  assert.equal(recordShowsForState("pre"), true);
+  assert.equal(recordShowsForState("in"), true);
+  assert.equal(recordShowsForState("post"), false);
 });
