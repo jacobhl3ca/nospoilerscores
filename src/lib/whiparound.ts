@@ -63,6 +63,12 @@ export interface WhiparoundResult {
   tiers: string[];
   href?: string;
   live?: boolean;
+  /**
+   * Network name the header link looks up on the Settings TV channel links
+   * list, so a listed show (RedZone) opens the reader's own stream instead of
+   * `href`. Set only while live, the only time the subtitle links at all.
+   */
+  watchName?: string;
 }
 
 // Season bounds below are cross-checked against ALL_LEAGUES in src/lib/espn.ts
@@ -433,6 +439,7 @@ export function whiparoundSubtitle(
       tiers: [`● ${show.name} · LIVE`, `● ${short} live`, `● ${short}`],
       href: show.href,
       live: true,
+      watchName: show.name,
     };
   }
   // Past the air window: the show ended, hide the subtitle entirely.

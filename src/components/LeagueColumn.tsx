@@ -9,7 +9,7 @@ import { SHORT_LEAGUE_LABELS, HEADER_SHORT_LABEL_MAX_PX, SHOW_CARD_LEAGUE_CHIP }
 import type { ShareCardMeta } from "@/lib/shareCard";
 import type { RecordLeague } from "@/lib/upcomingRecords";
 import { displayShortName, loadBigInningSchedule, getSeasonOpener, sportDisplayLabel, BigInningSchedule } from "@/lib/espn";
-import { handleExternalClick } from "@/lib/openExternal";
+import { handleExternalClick, watchLinkProps } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
 import { etWallToUtc, formatInZone, getWhiparoundShow, parseEtTime, whiparoundStartsLater, whiparoundSubtitle } from "@/lib/whiparound";
@@ -161,6 +161,9 @@ interface SubtitleResult {
   // Green pulsing-dot treatment. Kept explicit rather than inferred from
   // `href`, so a subtitle can link somewhere without claiming to be live.
   live?: boolean;
+  // A whip-around show's name. When it is on the TV channel links list the
+  // link opens that stream in the reader's player instead of `href`.
+  watchName?: string;
 }
 
 // Promo link to the trade board, appended to the MLB/NBA column subtitle.
@@ -607,6 +610,13 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
     : [];
   const tiers = [...suffixTiers, ...baseTiers];
   const href = result?.href;
+  // 9/27: RedZone was on Jacob's TV channel links list, yet the header still
+  // opened nfl.com, because only the game-card chips read that list.
+  const hrefProps = !href
+    ? null
+    : result?.watchName
+      ? watchLinkProps(result.watchName, href)
+      : { href, target: "_blank", rel: "noopener noreferrer", onClick: handleExternalClick(href) };
   const tiersKey = tiers.join("|");
   // A tier below suffixTiers.length is a paired one, so the trailing
   // " \u00B7 <promo>" is peeled back off and rendered as its own control.
@@ -741,13 +751,10 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
       </a>
     );
     let label: React.ReactNode = null;
-    if (text && href) {
+    if (text && hrefProps) {
       label = (
         <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={handleExternalClick(href)}
+          {...hrefProps}
           className={
             isLive
               ? "text-green-500 font-medium hover:text-green-400 transition-colors hover:underline not-italic"
@@ -787,14 +794,11 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
       </span>
     );
   }
-  if (href && tiers.length) {
+  if (hrefProps && tiers.length) {
     return (
       <a
         ref={ref as React.RefObject<HTMLAnchorElement>}
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={handleExternalClick(href)}
+        {...hrefProps}
         className={isLive ? liveCls : linkCls}
         style={isLive ? baseStyle : { ...baseStyle, color: tapColor }}
       >

@@ -63,3 +63,12 @@ test("the player choice stays on this device; the list syncs", () => {
   const pushed = withoutDeviceLocalPrefs({ tvChannelLinks: `ESPN = ${ESPN}`, tvPlayer: "vlc" as const });
   assert.deepEqual(pushed, { tvChannelLinks: `ESPN = ${ESPN}` });
 });
+
+test("the RedZone header's show name matches the list line Jacob pastes", () => {
+  const RZ = "http://tuner.test:9191/proxy/ts/stream/0000-redzone";
+  setTvChannelLinks(`NFL RedZone, RedZone = ${RZ}`, "iina");
+  // whiparound.ts sends the show name, "RedZone"; ESPN's chip says "NFL RedZone".
+  assert.equal(tvChannelLink("RedZone"), `iina://weblink?url=${encodeURIComponent(RZ)}`);
+  assert.equal(tvChannelLink("NFL RedZone"), `iina://weblink?url=${encodeURIComponent(RZ)}`);
+  setTvChannelLinks("", "auto");
+});
