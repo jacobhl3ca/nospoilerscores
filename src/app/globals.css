@@ -584,7 +584,9 @@ select:focus-visible {
    the same layout: the chip + a live clock + the badge + the network don't fit
    one ~100px row, so the row wrapped and the card grew a line taller than the
    single-league cards beside it (Jacob 9/26). Here the chip moves onto the
-   card's top border (GameCard's league-tag-tab) and the row keeps one line. */
+   card's top border (GameCard's league-tag-tab) and the row keeps one line.
+   A row that holds the chip alone keeps it: GameCard renders no tab and no
+   league-tag-inline class there, so the row is never left empty (Jacob 9/26). */
 .league-tag-tab { display: none; }
 .ns-board-tight .league-tag-tab { display: block; }
 .ns-board-tight .league-tag-inline { display: none; }

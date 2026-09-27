@@ -164,6 +164,11 @@ for (const { name, width, height } of [
     const cards = col.locator("[data-league-tag]");
     await expect(cards).toHaveCount(5, { timeout: 15_000 });
     expect((await cards.allTextContents()).sort()).toEqual(["EPL", "EPL", "NFL", "NFL", "WNBA"]);
+    // Ratings off, so each card's top row holds the chip alone. The chip stays
+    // in that row even on the 3-column phone board: moving it onto the card's
+    // border left the row empty under the tab (Jacob 9/26).
+    await expect(col.locator("[data-league-tab]")).toHaveCount(0);
+    for (let i = 0; i < 5; i++) await expect(cards.nth(i)).toBeVisible();
     for (const matchup of EXPECTED) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(1);
     for (const matchup of NEVER) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(0);
     const text = (await col.innerText()).replace(/\s+/g, " ");
