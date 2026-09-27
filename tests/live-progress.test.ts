@@ -161,3 +161,30 @@ test("volleyball reads the set number, no clock", () => {
   assert.equal(short(g("ncaavb", 1, "0:00", "End of 1st Set")), "End S1");
   assert.equal(full(g("ncaavb", 3, "0:00", "Between sets")), "End of Set 3");
 });
+
+test("in-game delay reads period + reason in yellow in every league", () => {
+  const nfl = formatGameProgress(g("nfl", 2, "8:32", "Delayed"));
+  assert.equal(nfl.full, "Q2 Delay");
+  assert.equal(nfl.delayed, true);
+  assert.equal(full(g("ncaaf", 2, "8:32", "Weather Delay")), "Q2 Weather");
+  assert.equal(full(g("cfl", 1, "3:10", "Lightning Delay")), "Q1 Lightning");
+  assert.equal(full(g("nba", 3, "5:00", "Delayed")), "Q3 Delay");
+  assert.equal(full(g("nhl", 2, "12:00", "Delayed")), "P2 Delay");
+  assert.equal(full(g("ncaam", 1, "10:00", "Delayed")), "H1 Delay");
+  assert.equal(full(g("ncaavb", 2, "0:00", "Delayed")), "Set 2 Delay");
+  assert.equal(short(g("nhl", 2, "12:00", "Delayed")), "P2 Delay");
+  // Soccer and the other generic sports: the reason alone, flagged yellow.
+  const soccer = formatGameProgress(g("epl", 1, "34'", "Delayed"));
+  assert.equal(soccer.full, "Delayed");
+  assert.equal(soccer.short, "Delayed");
+  assert.equal(soccer.delayed, true);
+  assert.equal(full(g("epl", 1, "34'", "Weather Delay")), "Weather delay");
+  // Baseball unchanged by the shared helper.
+  const mlb = formatGameProgress(g("mlb", 1, "", "Rain Delay, Top 1st"));
+  assert.equal(mlb.full, "▲1 Rain");
+  assert.equal(mlb.delayed, true);
+  // A normal live card carries no delay flag.
+  const live = formatGameProgress(g("nfl", 2, "8:32", "8:32 - 2nd"));
+  assert.equal(live.full, "Q2 - 8:32");
+  assert.equal(live.delayed, undefined);
+});

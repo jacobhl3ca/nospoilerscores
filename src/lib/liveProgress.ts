@@ -25,6 +25,14 @@ export function delayedStartLabel(game: Pick<Game, "state" | "statusDetail">): s
   return m ? `${m[1][0].toUpperCase()}${m[1].slice(1).toLowerCase()} delay` : "Delayed";
 }
 
+// The delay reason word, or null when play is not held: "Rain Delay, Top 1st"
+// → "Rain", "Weather Delay" → "Weather", a bare "Delayed" → "Delay".
+function delayReason(statusDetail: string): string | null {
+  if (!/delay/i.test(statusDetail)) return null;
+  const m = statusDetail.match(/(\w+)\s+delay/i);
+  return m ? m[1][0].toUpperCase() + m[1].slice(1).toLowerCase() : "Delay";
+}
+
 // `label`, when present, is a spoken form for screen readers (applied as an
 // aria-label on the live-status element). Only the baseball sports set it: the
 // ▲/▼ inning glyphs read as a meaningless "up-pointing triangle 5" otherwise.
@@ -34,11 +42,8 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     // Delayed games arrive as "Rain Delay, Top 1st" / "Heat Delay, ..." —
     // render the inning the same compact way as live cards and append the
     // reason word (Rain/Heat/...) in proper case; the renderer recolors yellow.
-    const delayMatch = statusDetail.match(/(\w+)\s+delay/i);
-    const delayed = !!delayMatch || /delay/i.test(statusDetail);
-    const reason = delayMatch
-      ? delayMatch[1][0].toUpperCase() + delayMatch[1].slice(1).toLowerCase()
-      : delayed ? "Delay" : "";
+    const reason = delayReason(statusDetail) ?? "";
+    const delayed = !!reason;
     const m = statusDetail.match(/(Top|Bot|Bottom|Mid|End)\s+(\d+)/i);
     if (m) {
       const half = m[1].toLowerCase();
@@ -54,6 +59,12 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     if (delayed) return { full: reason, short: reason, delayed: true };
     return { full: statusDetail, short: statusDetail.slice(0, 3) };
   }
+  // An in-game delay (lightning, weather) in any other sport (Jacob 9/27): the
+  // card showed the normal green "Q2 - 8:32" as if play were on. Each branch
+  // below builds its period label, then returns it with the reason in yellow,
+  // the same way baseball reads "▲5 Rain".
+  const reason = delayReason(statusDetail);
+  const held = (label: string) => ({ full: `${label} ${reason}`, short: `${label} ${reason}`, delayed: true });
   // Timed sports between periods (Jacob 9/12): ESPN leaves displayClock at
   // "0:00" through the break, so a live card read "Q2 - 0:00" all halftime.
   // ESPN's own "Halftime" / "End of 1st" shortDetail now renders the break by
@@ -62,6 +73,7 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
   if (sport === "ncaam") {
     // NCAAM uses halves, not quarters
     const h = period <= 2 ? `H${period}` : period === 3 ? "OT" : `${period - 2}OT`;
+    if (reason) return held(h);
     const brk = periodBreak(statusDetail, period, 1, h);
     if (brk) return brk;
     if (hasRunningClock(clock)) return { full: `${h} - ${clock}`, short: h };
@@ -74,6 +86,7 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     // NCAAW card fell through to the generic status, so ESPN's "8:32 - 2nd"
     // rendered raw on desktop and truncated to "8:3" on mobile instead of "Q2".
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
+    if (reason) return held(q);
     const brk = periodBreak(statusDetail, period, 2, q);
     if (brk) return brk;
     if (hasRunningClock(clock)) return { full: `${q} - ${clock}`, short: q };
@@ -91,6 +104,7 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     // shootout rendered "2OT", a period that can't occur outside the playoffs.
     const shootout = period >= 5 && !game.isPlayoff;
     const p = period <= 3 ? `P${period}` : period === 4 ? "OT" : shootout ? "SO" : `${period - 3}OT`;
+    if (reason) return held(p);
     // A shootout has no running clock, so skip the "- 0:00" tail and just show "SO".
     if (shootout) return { full: p, short: p };
     // Hockey has no halftime — every break is an intermission ("End of P1").
@@ -105,6 +119,7 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     // being played; its between-sets detail (a "End of …" shape, like the timed
     // sports) reads "End of Set N" / "End S2". `clock` is ignored on purpose.
     const n = Math.max(1, period);
+    if (reason) return held(`Set ${n}`);
     if (/^end\b|between/i.test(statusDetail)) return { full: `End of Set ${n}`, short: `End S${n}` };
     return { full: `Set ${n}`, short: `S${n}` };
   }
@@ -121,10 +136,17 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     // College-football OT is untimed (no game clock), so the clock guard below
     // falls through to the bare "OT"/"2OT" label there, same as the NFL path.
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
+    if (reason) return held(q);
     const brk = periodBreak(statusDetail, period, 2, q);
     if (brk) return brk;
     if (hasRunningClock(clock)) return { full: `${q} - ${clock}`, short: q };
     return { full: q, short: q };
+  }
+  // Soccer, rugby, cricket and the rest: no period label, so the reason reads
+  // on its own ("Delayed" / "Rain delay") instead of a green "Del".
+  if (reason) {
+    const text = reason === "Delay" ? "Delayed" : `${reason} delay`;
+    return { full: text, short: text, delayed: true };
   }
   return { full: statusDetail, short: statusDetail.slice(0, 3) };
 }
