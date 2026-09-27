@@ -3,8 +3,11 @@ import test from "node:test";
 
 import type { Game, Sport, Team } from "../src/lib/types.ts";
 import {
+  espnFeaturedKeys,
   espnFrontPageSports,
+  groupEspnFrontPage,
   orderByEspnHeader,
+  parseEspnFrontPageFeed,
   parseEspnHeader,
   type EspnHeaderFeature,
 } from "../src/lib/topEvents.ts";
@@ -124,4 +127,137 @@ test("the live 9/26 strip shape parses into the front page's league order", () =
     game({ id: "401", sport: "ncaaf" }), game({ id: "701", sport: "nwsl" }),
   ];
   assert.deepEqual(orderByEspnHeader(games, features).map((g) => g.id), ["401", "402", "501", "601", "701", "801"]);
+});
+
+// ── ESPN homepage body (the "highlighted" games, Jacob 9/26) ───────────────
+
+// The 9/26 9 pm feed in miniature: the Texas A&M–LSU hero block, the College
+// Football Scoreboard module (a final first, as ESPN lists it), a story
+// module, then the MLB scoreboard module.
+const BODY = {
+  feed: [
+    { data: { event: { id: "702", shortName: "TA&M @ LSU" }, now: [{ type: "Module", inlines: [{ type: "Module", headline: "Collection" }] }] } },
+    { data: { now: [{ type: "Module", inlines: [
+      { type: "SportingEvent", eventId: "466" }, { type: "SportingEvent", eventId: "238" }, { type: "SportingEvent", eventId: 696 },
+    ] }] } },
+    { data: { now: [{ type: "Module", inlines: [{ type: "Module", headline: "Iowa beats Michigan" }] }] } },
+    { data: { now: [{ type: "Module", inlines: [{ type: "SportingEvent", eventId: "097" }, { type: "SportingEvent", eventId: "238" }] }] } },
+  ],
+};
+
+test("parseEspnFrontPageFeed reads game blocks and scoreboard modules top to bottom", () => {
+  assert.deepEqual(parseEspnFrontPageFeed(BODY), ["702", "466", "238", "696", "097"]);
+});
+
+test("parseEspnFrontPageFeed never throws on a reshaped payload", () => {
+  assert.deepEqual(parseEspnFrontPageFeed(null), []);
+  assert.deepEqual(parseEspnFrontPageFeed({ feed: "nope" }), []);
+  assert.deepEqual(parseEspnFrontPageFeed({ feed: [null, 7, { data: { now: "x", event: 3 } }, { data: { now: [{ inlines: [null, { type: "SportingEvent" }] }] } }] }), []);
+});
+
+test("the body's games lead, then the rest of the strip in strip order", () => {
+  const features: EspnHeaderFeature[] = [
+    { sport: "ncaaf", eventIds: ["238", "696", "702", "466", "999"], sportOrder: 0 },
+    { sport: "mlb", eventIds: ["097", "098"], sportOrder: 1 },
+  ];
+  const games = ["238", "696", "702", "466", "999"].map((id) => game({ id, sport: "ncaaf" }))
+    .concat(["097", "098"].map((id) => game({ id, sport: "mlb" })));
+  const featured = parseEspnFrontPageFeed(BODY);
+  assert.deepEqual(orderByEspnHeader(games, features, featured).map((g) => g.id), ["702", "466", "238", "696", "097", "999", "098"]);
+  // No body signal = the strip's order, as before.
+  assert.deepEqual(orderByEspnHeader(games, features).map((g) => g.id), ["238", "696", "702", "466", "999", "097", "098"]);
+});
+
+test("a body game the strip does not carry stays out, and takes its sport from the strip", () => {
+  const features: EspnHeaderFeature[] = [{ sport: "mlb", eventIds: ["b1"], sportOrder: 0 }];
+  const games = [game({ id: "x1", sport: "nfl" }), game({ id: "b1", sport: "nhl" }), game({ id: "b1", sport: "mlb" })];
+  const out = orderByEspnHeader(games, features, ["x1", "b1"]);
+  assert.deepEqual(out.map((g) => `${g.sport}:${g.id}`), ["mlb:b1"]);
+});
+
+// ── espn.com's layout: league blocks, live first inside each ─────────────────
+
+test("the front page groups by league in strip order: live, then upcoming, then final inside a league", () => {
+  // The 9/26 9:30 pm strip: the feed lists CFB finals (priority 0-10) before
+  // its live games (11-16), MLB finals before live before the late game.
+  const games = [
+    game({ id: "c0", sport: "ncaaf", state: "post" }), game({ id: "c1", sport: "ncaaf", state: "post" }),
+    game({ id: "c11", sport: "ncaaf", state: "in" }), game({ id: "c12", sport: "ncaaf", state: "in" }),
+    game({ id: "m17", sport: "mlb", state: "post" }), game({ id: "m20", sport: "mlb", state: "in" }),
+    game({ id: "m25", sport: "mlb", state: "pre" }),
+    game({ id: "s41", sport: "nwsl", state: "in" }),
+  ];
+  const groups = groupEspnFrontPage(games);
+  assert.deepEqual(groups.map((g) => g.sport), ["ncaaf", "mlb", "nwsl"]);
+  assert.deepEqual(groups.map((g) => g.games.map((x) => x.id)), [
+    ["c11", "c12", "c0", "c1"],
+    ["m20", "m25", "m17"],
+    ["s41"],
+  ]);
+});
+
+test("a league that shows up again later joins its first block", () => {
+  const groups = groupEspnFrontPage([
+    game({ id: "1", sport: "mlb" }), game({ id: "2", sport: "nhl" }), game({ id: "3", sport: "mlb", state: "in" }),
+  ]);
+  assert.deepEqual(groups.map((g) => [g.sport, g.games.map((x) => x.id)]), [["mlb", ["3", "1"]], ["nhl", ["2"]]]);
+  assert.deepEqual(groupEspnFrontPage([]), []);
+});
+
+test("ESPN's featured games lead their state inside a league block; live games still lead the block", () => {
+  const features: EspnHeaderFeature[] = [
+    { sport: "ncaaf", eventIds: ["c1", "c2", "c3"], sportOrder: 0 },
+    { sport: "mlb", eventIds: ["m1", "m2"], sportOrder: 1 },
+  ];
+  // The body's hero is a FINAL MLB game, then its CFB module lists c3.
+  const featured = espnFeaturedKeys(features, ["m2", "c3", "zz"]);
+  assert.deepEqual(featured, ["mlb:m2", "ncaaf:c3"]);
+  const games = orderByEspnHeader([
+    game({ id: "c1", sport: "ncaaf", state: "in" }), game({ id: "c2", sport: "ncaaf", state: "post" }),
+    game({ id: "c3", sport: "ncaaf", state: "post" }), game({ id: "m1", sport: "mlb", state: "in" }),
+    game({ id: "m2", sport: "mlb", state: "post" }),
+  ], features, ["m2", "c3", "zz"]);
+  const groups = groupEspnFrontPage(games, featured);
+  // The hero's league still leads the column; inside it the live game beats
+  // the final hero, and featured final c3 leads non-featured final c2.
+  assert.deepEqual(groups.map((g) => [g.sport, g.games.map((x) => x.id)]), [
+    ["mlb", ["m1", "m2"]],
+    ["ncaaf", ["c1", "c3", "c2"]],
+  ]);
+});
+
+test("the 9/26 10:18 pm column: no final sits above a live game in its league", () => {
+  // Jacob's screenshot: the body featured live TA&M–LSU (hero) plus finals
+  // WIS–PSU and CMU–MIA, and those finals sat above four live CFB games.
+  const ids = ["tam", "wis", "cmu", "sc", "ore", "miz", "most", "tex", "ill"];
+  const states: Game["state"][] = ["in", "post", "post", "in", "in", "in", "in", "post", "post"];
+  const features: EspnHeaderFeature[] = [{ sport: "ncaaf", eventIds: ids, sportOrder: 0 }];
+  const body = ["tam", "wis", "cmu"];
+  const games = orderByEspnHeader(ids.map((id, i) => game({ id, sport: "ncaaf", state: states[i] })), features, body);
+  const [block] = groupEspnFrontPage(games, espnFeaturedKeys(features, body));
+  assert.deepEqual(block.games.map((g) => g.id), ["tam", "sc", "ore", "miz", "most", "wis", "cmu", "tex", "ill"]);
+  const lastLive = block.games.map((g) => g.state).lastIndexOf("in");
+  const firstFinal = block.games.findIndex((g) => g.state === "post");
+  assert.ok(lastLive < firstFinal);
+});
+
+test("a delayed live game sits below the other live games, above upcoming and finals", () => {
+  const [block] = groupEspnFrontPage([
+    game({ id: "rain", sport: "mlb", state: "in", statusDetail: "Rain Delay" }),
+    game({ id: "fin", sport: "mlb", state: "post" }),
+    game({ id: "live", sport: "mlb", state: "in", statusDetail: "Top 5th" }),
+    game({ id: "late", sport: "mlb", state: "pre" }),
+  ], ["mlb:rain"]);
+  assert.deepEqual(block.games.map((g) => g.id), ["live", "rain", "late", "fin"]);
+});
+
+test("grouping is stable: regrouping a grouped column changes nothing", () => {
+  const games = [
+    game({ id: "a", sport: "mlb", state: "post" }), game({ id: "b", sport: "mlb", state: "pre" }),
+    game({ id: "c", sport: "nhl", state: "in" }), game({ id: "d", sport: "mlb", state: "in" }),
+  ];
+  const once = groupEspnFrontPage(games, ["mlb:a"]).flatMap((g) => g.games);
+  const twice = groupEspnFrontPage(once, ["mlb:a"]).flatMap((g) => g.games);
+  assert.deepEqual(twice.map((g) => g.id), once.map((g) => g.id));
+  assert.deepEqual(once.map((g) => g.id), ["d", "b", "a", "c"]);
 });

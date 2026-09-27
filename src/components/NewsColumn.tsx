@@ -302,7 +302,10 @@ export function NewsColumnTitle({
                 >
                   Auto
                 </button>
-                {/* Top news = ESPN's cross-sport headlines feed. It leads the
+                {/* Top news = the cross-sport feed (r/sports, then ESPN's clips
+                    and headlines, through the source funnel). Named "Top news"
+                    alone since 9/26: espn.com itself is the ESPN front page
+                    league. It leads the
                     list like Best of yesterday leads the scores switcher
                     (Jacob 9/26), and re-adds the column if it was gone. Absent
                     when turned off in Settings. */}
@@ -316,11 +319,11 @@ export function NewsColumnTitle({
                       color: espnActive ? "var(--accent)" : "var(--text)",
                       fontWeight: espnActive || autoIsEspn ? 600 : 400,
                     }}
-                    title={autoIsEspn ? "What Auto picks for this column" : "Show ESPN's top headlines in this column"}
+                    title={autoIsEspn ? "What Auto picks for this column" : "Show top news from across sports in this column"}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                   >
-                    Top news (ESPN)
+                    Top news
                     {autoIsEspn && !espnActive && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
                   </button>
                 )}

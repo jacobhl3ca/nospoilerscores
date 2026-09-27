@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
+import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
@@ -15,7 +15,7 @@ import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
 import { fromYmd } from "@/lib/etDay";
 import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
-import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
+import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
@@ -67,6 +67,15 @@ function migrateLegacySwitcherPreferences(prefs: Preferences): Preferences {
     shownLeagues: shown.size ? [...shown] : undefined,
     switcherDefaultsVersion: 2,
   };
+}
+
+// The prefs that live on <html> (set pre-paint by layout.tsx), for a change
+// that did not come from this tab's own controls.
+function applyPrefsToDocument(p: Preferences): void {
+  document.documentElement.setAttribute("data-theme", getResolvedTheme(p.theme));
+  document.documentElement.classList.toggle("reveal-news-titles", !!p.revealNewsTitles);
+  document.documentElement.classList.toggle("show-text-posts", !!p.showTextPosts);
+  document.documentElement.classList.toggle("blur-news-media", p.revealNewsMedia !== true);
 }
 
 function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>): Preferences {
@@ -730,6 +739,29 @@ export default function HomeContent({
   // Latest prefs for the stable fetchData callback (its deps are []).
   const prefsRef = useRef(prefs);
   useEffect(() => { prefsRef.current = prefs; }, [prefs]);
+
+  // Other tabs share this tab's localStorage but not its React state. A tab
+  // opened before a change kept its old prefs, and its next save put that old
+  // blob back on the device AND the account: Jacob pasted his TV channel links
+  // with three HideScore tabs open, and the list was gone after a refresh
+  // (9/26). So a write from another tab is taken into this tab's state at once
+  // (storage events never fire in the tab that wrote). showRatings stays
+  // this tab's own: a launch may have reset it for the morning without saving
+  // (applyLaunchState), and another tab's save must not flip the view here.
+  const adoptStoredPrefs = useCallback((next: Preferences) => {
+    const kept = { ...next, showRatings: prefsRef.current.showRatings };
+    if (samePrefs(kept, prefsRef.current)) return;
+    prefsRef.current = kept;
+    setPrefs(kept);
+    applyPrefsToDocument(kept);
+  }, []);
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === PREFS_STORAGE_KEY && e.newValue) adoptStoredPrefs(loadPreferences());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [adoptStoredPrefs]);
   // Whether the sign-in reconcile has had its say about this device's prefs.
   // Only the first-run league picker waits on it — see the mount effect.
   const [authSettled, setAuthSettled] = useState(false);
@@ -955,8 +987,11 @@ export default function HomeContent({
         // hands its picks token up now, so the account's other devices can
         // adopt it without anyone opening the Picks tab here (lib/picksAccount).
         void syncPicksWithAccount();
+        const mark = pullMark();
         const remote = await fetchRemotePrefs();
         if (remote && Object.keys(remote).length > 0) {
+          // A setting changed during the round trip is newer than this answer.
+          if (pullIsStale(mark)) return;
           const merged = mergeRemotePreferences(loadPreferences(), remote);
           savePreferences(merged); // persist locally (and re-affirm to server via the hook)
           applyLaunchState(merged);
@@ -1007,17 +1042,22 @@ export default function HomeContent({
         setIsSignedIn(Boolean(auth.signedIn));
         setAppAccountUse(Boolean(auth.signedIn && (auth.platforms?.ios || auth.platforms?.android)));
         if (!auth.signedIn || !alive) return;
+        const mark = pullMark();
         const remote = await fetchRemotePrefs();
         if (!remote || !alive || Object.keys(remote).length === 0) return;
+        // A setting changed during the round trip is newer than this answer.
+        if (pullIsStale(mark)) return;
         const local = loadPreferences();
         const merged = mergeRemotePreferences(local, remote);
-        if (samePrefs(merged, local)) return; // no change → don't disturb
+        if (samePrefs(merged, local)) {
+          // Storage already agrees, but this tab's state may be older: another
+          // tab wrote the change (see adoptStoredPrefs).
+          adoptStoredPrefs(merged);
+          return;
+        }
         savePreferences(merged);
         setPrefs(merged);
-        document.documentElement.setAttribute("data-theme", getResolvedTheme(merged.theme));
-        document.documentElement.classList.toggle("reveal-news-titles", !!merged.revealNewsTitles);
-        document.documentElement.classList.toggle("show-text-posts", !!merged.showTextPosts);
-        document.documentElement.classList.toggle("blur-news-media", merged.revealNewsMedia !== true);
+        applyPrefsToDocument(merged);
       } catch {
         /* best-effort; ignore transient failures */
       }
@@ -1025,7 +1065,7 @@ export default function HomeContent({
     const onVis = () => { void pull(); };
     document.addEventListener("visibilitychange", onVis);
     return () => { alive = false; document.removeEventListener("visibilitychange", onVis); };
-  }, []);
+  }, [adoptStoredPrefs]);
 
   // Track the OS color scheme in state so `resolvedTheme` re-derives live when
   // the system flips while theme === "system" (otherwise the data-theme attr
@@ -3370,12 +3410,13 @@ export default function HomeContent({
           // which leads with ESPN Videos (a video) — so all 3 columns lead with
           // video and the AlignedVideoStrip activates → clean aligned grid like
           // live. ESPN top headlines fill the tail below (useEspnTopTail).
-          // Labeled "News" (swappable to a 3rd league) to match hidescore.com.
+          // Labeled "Top news", the same name its switcher row and Settings
+          // toggle use (Jacob 9/26; the header said "News" before).
           const espnEntry = {
             slotIdx: 2,
             sport: undefined as Sport | undefined,
             id: "espn" as const,
-            label: "News",
+            label: "Top news",
             orderedCascade: GENERIC_CASCADE,
           };
           // "ESPN front page" (Jacob 9/26): espn.com's Top Headlines, then its
@@ -3473,7 +3514,7 @@ export default function HomeContent({
           // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
           // 3-across order: the two leagues, then the News/3rd-league column.
           // Desktop position of the generic column: last by default, but the
-          // user can pull it left by picking "Top news (ESPN)" from any
+          // user can pull it left by picking "Top news" from any
           // column's switcher (newsGenericSlot). The league columns shift
           // right around it — nothing is dropped. Mobile keeps its fixed
           // news-first stack (Jacob 5/30) regardless.

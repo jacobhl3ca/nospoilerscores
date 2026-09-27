@@ -100,7 +100,7 @@ test("turned on: ESPN front page is a league row in news column 3, headlines the
 
   const { menu, rows } = await rowsOf(page, 2);
   // Auto, Top news, then ESPN front page as the first league.
-  expect(rows[1]).toMatch(/^Top news \(ESPN\)/);
+  expect(rows[1]).toMatch(/^Top news/);
   expect(rows[2]).toBe("ESPN front page");
   await menu.getByRole("button", { name: "ESPN front page" }).click();
 

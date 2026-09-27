@@ -103,15 +103,40 @@ test("Feed: Videos only hides text posts, and says so when nothing is left", asy
 });
 
 // A 3-column board whose every column LEADS with a video source activates the
-// aligned strip: pin two leagues with prebaked video feeds and narrow the
+// aligned strip: pin two leagues with prebaked video feeds, keep news column 3
+// on Top news (ESPN Videos leads it; since 9/25 Auto would mirror scores
+// column 3's league instead, which may have no video feed), and narrow the
 // funnel to Top videos so nothing else can lead.
 const STRIP_PREFS = {
   firstLeague: "mlb",
   secondLeague: "mls",
+  newsTopNews: true,
   newsTypeFilters: ["topvideos"],
   newsTypeFilter: "topvideos",
 };
 const STRIP_CELL = 'button[aria-label^="Play highlight:"]';
+
+// The three video feeds the strip leads with, mocked so the test does not
+// depend on which public/news/*.json files a checkout happens to have
+// (they are gitignored; mlb-videos + espn-videos were missing locally 9/26).
+// Newest first, an hour apart, like the real feeds.
+async function mockStripFeeds(page: Page) {
+  for (const [name, section] of [["mlb-videos", "MLB Most Popular"], ["mls-videos", "MLS Top Videos"], ["espn-videos", "ESPN Videos"]]) {
+    const items = Array.from({ length: 6 }, (_, i) => {
+      const id = `${name.slice(0, 3)}vid${i}xxxx`.slice(0, 11);
+      return {
+        id, headline: `${section} clip ${i + 1}`, description: "",
+        published: new Date(Date.UTC(2026, 8, 26, 18 - i)).toISOString(),
+        imageUrl: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+        articleUrl: `https://www.youtube.com/watch?v=${id}`, byline: "", section, youtubeVideoId: id,
+      };
+    });
+    await page.route(`**/news/${name}.json`, (route) => route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({ fetchedAt: "2026-09-26T19:00:00Z", items }),
+    }));
+  }
+}
 
 // The strip is the first grid whose direct children are subgrid cards; its
 // first column's cells, in DOM order.
@@ -125,6 +150,7 @@ async function firstStripColumnHeadlines(page: Page) {
 }
 
 test("strip: Oldest first reverses the video cells with the columns", async ({ page }) => {
+  await mockStripFeeds(page);
   await gotoNews(page, { ...STRIP_PREFS, newsOldestFirst: false });
   const newest = await firstStripColumnHeadlines(page);
   expect(newest.length).toBeGreaterThan(1);

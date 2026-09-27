@@ -22,6 +22,10 @@ export interface Game {
   venue: string;
   // Game quality rating (0-100) based on score closeness
   rating: number | null;
+  // Live games only: fraction of regulation played [0,1]. Sort tiebreak — of
+  // two live games with the same rating, the later one sits higher. Never
+  // changes the badge.
+  liveProgress?: number;
   // Series info (e.g. "Game 2") for playoff games — used in YouTube search
   seriesNote: string | null;
   // Esports only: PandaScore's league name ("LCK", "LPL", "LEC"). The "esports"
@@ -310,4 +314,8 @@ export interface LeagueData {
   // ESPN returning a genuinely empty schedule. Lets the column show an
   // "unavailable" message instead of falling back to the next game day.
   fetchFailed?: boolean;
+  // ESPN front page only: `${sport}:${id}` of the games espn.com's homepage
+  // body features (lib/topEvents.ts espnFeaturedKeys). They lead their league
+  // block, ahead of its live games.
+  espnFeatured?: string[];
 }

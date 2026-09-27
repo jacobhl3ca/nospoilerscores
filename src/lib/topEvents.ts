@@ -8,9 +8,13 @@
 //   parseEspnHeader — reads ESPN's homepage scores strip
 //     (site.web.api.espn.com/apis/v2/scoreboard/header) into a per-sport list
 //     of the event ids ESPN is featuring, in the order the strip shows them.
+//   parseEspnFrontPageFeed — reads the homepage BODY under the strip
+//     (onefeed.fan.api.espn.com …/oneFeed/frontpage): the big game blocks
+//     and the league scoreboard modules, top to bottom.
 //   orderByEspnHeader — keeps the real Game objects (the same ones the league
-//     columns render) that ESPN features, in that order. It never reads a
-//     score or a margin, so 🙈 mode stays honest.
+//     columns render) that ESPN features: the body's games first, then the
+//     rest of the strip. It never reads a score or a margin, so 🙈 mode stays
+//     honest.
 //
 // No value imports from espn.ts on purpose: preferences.ts imports "./types"
 // extensionless, which `node --experimental-strip-types` cannot resolve, so
@@ -143,17 +147,58 @@ export function espnFrontPageSports(
   return out.slice(0, maxSources);
 }
 
-// The games ESPN features, in the strip's order: its first league first, and
-// inside a league the order ESPN lists them. Anything ESPN is not featuring
-// is dropped. Ids are only unique within a sport, so the key carries both.
-export function orderByEspnHeader(games: Game[], features: EspnHeaderFeature[]): Game[] {
-  const rank = new Map<string, number>();
-  for (const f of features) {
-    for (const id of f.eventIds) {
-      const key = `${f.sport}:${id}`;
-      if (!rank.has(key)) rank.set(key, rank.size);
+// The event ids espn.com's homepage body puts on show, top to bottom (Jacob
+// 9/26: "ur not taking highlighted posts into consideration" — the big
+// Texas A&M–LSU block above the College Football Scoreboard). Two shapes
+// carry a game: a game block (`data.event`, the hero and later recap blocks)
+// and a scoreboard module (`SportingEvent` inlines, in the module's order).
+// Story modules carry no game and are skipped. Tolerant like parseEspnHeader:
+// a reshaped feed means no body signal, never a throw.
+export function parseEspnFrontPageFeed(payload: unknown): string[] {
+  const out: string[] = [];
+  const push = (id: unknown) => {
+    if (typeof id !== "string" && typeof id !== "number") return;
+    const s = String(id);
+    if (s && !out.includes(s)) out.push(s);
+  };
+  const feed = (payload as { feed?: unknown[] } | null)?.feed;
+  if (!Array.isArray(feed)) return out;
+  for (const item of feed) {
+    const data = (item as { data?: { event?: { id?: unknown }; now?: unknown[] } } | null)?.data;
+    if (!data) continue;
+    push(data.event?.id);
+    for (const mod of Array.isArray(data.now) ? data.now : []) {
+      const inlines = (mod as { inlines?: unknown[] } | null)?.inlines;
+      for (const inl of Array.isArray(inlines) ? inlines : []) {
+        const e = inl as { type?: unknown; eventId?: unknown } | null;
+        if (e?.type === "SportingEvent") push(e.eventId);
+      }
     }
   }
+  return out;
+}
+
+// The games ESPN features. First the ones the homepage body puts on show, in
+// its order; then the rest of the strip in the strip's order (its first
+// league first, and inside a league the order ESPN lists them). Anything the
+// strip does not carry is dropped. Ids are only unique within a sport, so the
+// key carries both, and a body id takes its sport from the strip.
+export function orderByEspnHeader(
+  games: Game[],
+  features: EspnHeaderFeature[],
+  featured: string[] = [],
+): Game[] {
+  const rank = new Map<string, number>();
+  const put = (key: string) => {
+    if (!rank.has(key)) rank.set(key, rank.size);
+  };
+  const stripSport = new Map<string, Sport>();
+  for (const f of features) for (const id of f.eventIds) if (!stripSport.has(id)) stripSport.set(id, f.sport);
+  for (const id of featured) {
+    const sport = stripSport.get(id);
+    if (sport) put(`${sport}:${id}`);
+  }
+  for (const f of features) for (const id of f.eventIds) put(`${f.sport}:${id}`);
   const seen = new Set<string>();
   const picked: { game: Game; at: number }[] = [];
   for (const game of games) {
@@ -164,4 +209,59 @@ export function orderByEspnHeader(games: Game[], features: EspnHeaderFeature[]):
     picked.push({ game, at });
   }
   return picked.sort((a, b) => a.at - b.at).map((p) => p.game);
+}
+
+// The `${sport}:${id}` keys of the body games (parseEspnFrontPageFeed) the
+// strip carries — the ones orderByEspnHeader puts first. A body id takes its
+// sport from the strip, the same way orderByEspnHeader matches it.
+export function espnFeaturedKeys(features: EspnHeaderFeature[], featured: string[]): string[] {
+  const stripSport = new Map<string, Sport>();
+  for (const f of features) for (const id of f.eventIds) if (!stripSport.has(id)) stripSport.set(id, f.sport);
+  const out: string[] = [];
+  for (const id of featured) {
+    const sport = stripSport.get(id);
+    if (sport && !out.includes(`${sport}:${id}`)) out.push(`${sport}:${id}`);
+  }
+  return out;
+}
+
+// espn.com's own layout, read off the rendered strip on 9/26: one block per
+// league. Games arrive in orderByEspnHeader's order, so the block of the
+// league ESPN's homepage body features first leads the column. Inside a
+// block: live games, then upcoming, then finals (Jacob 9/26: "shouldnt
+// finished games be after live ones per league?" — the feed lists a league's
+// finals before its live games, and the body's featured finals had sat on top
+// of live ones). Inside each state the body's own games (featuredKeys) lead,
+// in the body's order, then the rest in ESPN's order. So the hero game is the
+// first card of its block unless a live game in that league outranks a final
+// hero. A delayed live game (rain, lightning) sits at the bottom of the live
+// games, the rule every other column follows. This only regroups. It reads
+// state, never a score.
+const isDelayed = (g: Game) => g.state === "in" && /delay/i.test(g.statusDetail);
+const PHASES: readonly ((g: Game) => boolean)[] = [
+  (g) => g.state === "in" && !isDelayed(g),
+  isDelayed,
+  (g) => g.state === "pre",
+  (g) => g.state === "post",
+];
+export interface EspnFrontPageGroup {
+  sport: Sport;
+  games: Game[];
+}
+export function groupEspnFrontPage(games: Game[], featuredKeys: readonly string[] = []): EspnFrontPageGroup[] {
+  const featured = new Set(featuredKeys);
+  const groups: EspnFrontPageGroup[] = [];
+  for (const game of games) {
+    const group = groups.find((g) => g.sport === game.sport);
+    if (group) group.games.push(game);
+    else groups.push({ sport: game.sport, games: [game] });
+  }
+  const isFeatured = (g: Game) => featured.has(`${g.sport}:${g.id}`);
+  return groups.map(({ sport, games: list }) => ({
+    sport,
+    games: PHASES.flatMap((inPhase) => {
+      const inState = list.filter(inPhase);
+      return [...inState.filter(isFeatured), ...inState.filter((g) => !isFeatured(g))];
+    }),
+  }));
 }

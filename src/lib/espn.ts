@@ -2,7 +2,7 @@ import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventC
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
-import { espnFrontPageSports, orderByEspnHeader, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
+import { espnFeaturedKeys, espnFrontPageSports, orderByEspnHeader, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_MIN_GAMES, prevYmd, rankBestYesterday } from "./bestYesterday";
 import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
@@ -1593,7 +1593,15 @@ const FULL_MATCH_SECONDS = 5400;
 
 // Minimal shape of an ESPN game's live status — the only fields this progress
 // estimate reads: the current period/inning and the (optionally numeric) clock.
-type GameStatusLike = { status?: { period?: number; clock?: number } };
+// Baseball-shaped sports also read `type.shortDetail` ("Top 2nd", "Mid 2nd",
+// "Bot 2nd", "End 2nd") for half-inning progress.
+type GameStatusLike = { status?: { period?: number; clock?: number; type?: { shortDetail?: string } } };
+
+// Innings sports: no game clock, so progress comes from the half-inning.
+const INNINGS_SPORTS: ReadonlySet<Sport> = new Set<Sport>(["mlb", "llws", "ncaabase", "ncaasoft"]);
+// Where in the inning each ESPN half-inning word sits (plus 0.125 below, the
+// middle of that quarter-inning): Top 2nd reads earlier than Bot 2nd.
+const HALF_INNING_OFFSET: Record<string, number> = { top: 0, mid: 0.25, bot: 0.5, bottom: 0.5, end: 0.75 };
 
 // Fraction of regulation elapsed, [0,1]. Uses the live game clock for smooth
 // within-period progress (so the "too early" gate trips *during* period 1, and
@@ -1617,7 +1625,13 @@ function gameProgress(game: GameStatusLike, sport: Sport, regulationPeriods: num
     const periodFraction = clamp(1 - clock / periodLen);
     return clamp((period - 1 + periodFraction) / regulationPeriods);
   }
-  // MLB (no clock) and any gap: coarse midpoint of the current period.
+  // Baseball (no clock): the half-inning in shortDetail ("Bot 2nd") when ESPN
+  // sends it; otherwise the coarse midpoint below.
+  if (INNINGS_SPORTS.has(sport) && period >= 1) {
+    const half = game.status?.type?.shortDetail?.trim().match(/^(top|mid|bot|bottom|end)\b/i)?.[1].toLowerCase();
+    if (half) return clamp((period - 1 + HALF_INNING_OFFSET[half] + 0.125) / regulationPeriods);
+  }
+  // Any gap: coarse midpoint of the current period.
   return coarse;
 }
 
@@ -1757,7 +1771,7 @@ function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined)
 // and the live status/clock (via gameProgress, whose GameStatusLike this fits).
 type RatingGame = {
   _sport?: Sport;
-  status?: { type?: { state?: string }; period?: number; clock?: number };
+  status?: { type?: { state?: string; shortDetail?: string }; period?: number; clock?: number };
   competitions?: Array<
     SoccerCompetition & { competitors?: (MarginCompetitor & { score?: string })[] }
   >;
@@ -2081,15 +2095,28 @@ function calculateRating(game: RatingGame): number | null {
 
   const raw = Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus + lateDramaBonus - lowScoringPenalty)));
 
-  // Confidence cap: a tied/scoreless game legitimately reads as "close," but
-  // early on that closeness carries little signal — it hasn't *held up* yet.
-  // Cap the max reachable rating by game progress so an early tie can't hit
-  // the top tiers no matter how close: GREAT (~85) only unlocks past ~62%
-  // elapsed, GOOD opens up around the midpoint. A blowout already rates low
-  // via the closeness factors, so the cap only bites genuinely-close games.
-  // Finished games (progress=1) are uncapped → cap = 100.
-  const cap = Math.round(60 + 40 * progress);
-  return Math.min(raw, cap);
+  return liveTimeCap(raw, progress);
+}
+
+// How much the time played limits a live rating. Jacob 9/26: "meh on any time
+// doesn't make sense … no time cap is better, I like ties, but later ties
+// ranked higher, and keep an easy revert."
+//   off        — the label comes from the score only. A tie reads GREAT from
+//                the 12% too-early gate on; MEH/SKIP mean lopsided, never
+//                "started recently". Later ties still sort first (liveProgress
+//                tiebreak in LeagueColumn), which never touches the label.
+//   good-floor — the one-word revert: a close game reads GOOD until 62.5%
+//                elapsed, then GREAT.
+//   legacy     — the old cap (60 + 40·progress): a close game read MEH until
+//                25% elapsed. Kept only for the A/B test.
+// Finished games have progress 1, so every mode leaves them uncapped.
+export type LiveTimeCapMode = "off" | "good-floor" | "legacy";
+export const LIVE_TIME_CAP: LiveTimeCapMode = "off";
+
+export function liveTimeCap(raw: number, progress: number, mode: LiveTimeCapMode = LIVE_TIME_CAP): number {
+  if (mode === "off") return raw;
+  const legacyCap = Math.round(60 + 40 * progress);
+  return Math.min(raw, mode === "good-floor" ? Math.max(70, legacyCap) : legacyCap);
 }
 
 // Tennis returns ONE event per tournament (e.g. "Roland Garros") with 0
@@ -2698,6 +2725,9 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     awayProbable,
     stage,
     rating: calculateRating(event),
+    liveProgress: event.status?.type?.state === "in"
+      ? gameProgress(event, sport, (SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba).regulationPeriods, "in")
+      : undefined,
     seriesNote,
     weekNumber: gridironWeekNumber(sport, event),
     isPlayoff,
@@ -5506,13 +5536,48 @@ async function fetchEspnHeader(): Promise<EspnHeaderFeature[]> {
   }
 }
 
+// ESPN's homepage body — the feed espn.com renders under the strip: the big
+// game block up top, then league scoreboard modules and stories. Its games
+// lead the column (see parseEspnFrontPageFeed). CORS-open, 60 s edge cache.
+// The first 10 items cover the hero and the main scoreboard modules (~80 KB
+// gzipped on 9/26), so the answer is kept 2 minutes rather than refetched on
+// every live poll. Any failure = no body signal, and the column falls back to
+// the strip's order.
+const ESPN_FRONT_PAGE_FEED_URL = "https://onefeed.fan.api.espn.com/apis/v3/cached/contentEngine/oneFeed/frontpage?source=ESPN.com+-+FAM&showfc=true&region=us&lang=en&editionKey=espn-en&isPremium=true&offset=0&limit=10";
+// The edge caches the CORS answer with the body (it varies on
+// Accept-Encoding only), so the first origin to ask owns the next 60 s: a
+// localhost test run on 9/26 got its own origin echoed back to a
+// hidescore.com request, which the browser then blocks. A per-origin param
+// gives each origin its own cache entry.
+function espnFrontPageFeedUrl(): string {
+  const host = typeof location === "undefined" ? "" : location.host;
+  return host ? `${ESPN_FRONT_PAGE_FEED_URL}&hs=${encodeURIComponent(host)}` : ESPN_FRONT_PAGE_FEED_URL;
+}
+const ESPN_FRONT_PAGE_FEED_TTL_MS = 2 * 60 * 1000;
+let espnFrontPageFeedCache: { at: number; ids: string[] } | null = null;
+
+async function fetchEspnFrontPageFeed(): Promise<string[]> {
+  if (espnFrontPageFeedCache && Date.now() - espnFrontPageFeedCache.at < ESPN_FRONT_PAGE_FEED_TTL_MS) {
+    return espnFrontPageFeedCache.ids;
+  }
+  try {
+    const res = await fetchWithRetry(espnFrontPageFeedUrl(), 1, 6000);
+    if (!res.ok) return espnFrontPageFeedCache?.ids ?? [];
+    const ids = parseEspnFrontPageFeed(await res.json());
+    espnFrontPageFeedCache = { at: Date.now(), ids };
+    return ids;
+  } catch {
+    return espnFrontPageFeedCache?.ids ?? [];
+  }
+}
+
 export async function fetchTopEvents(
   date: string | undefined,
   // Games the board already fetched for this date, by sport — a league that is
   // also a column costs nothing extra.
   prefetched: Map<Sport, Game[]>,
 ): Promise<LeagueData> {
-  const features = await fetchEspnHeader();
+  const [features, featured] = await Promise.all([fetchEspnHeader(), fetchEspnFrontPageFeed()]);
   const pools = await Promise.all(espnFrontPageSports(features).map(async (sport) => {
     const pre = prefetched.get(sport);
     if (pre) return pre;
@@ -5522,8 +5587,8 @@ export async function fetchTopEvents(
       return [] as Game[];
     }
   }));
-  const games = orderByEspnHeader(pools.flat(), features);
-  return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false };
+  const games = orderByEspnHeader(pools.flat(), features, featured);
+  return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false, espnFeatured: espnFeaturedKeys(features, featured) };
 }
 
 // ═══════════════════════════════════════════════════════════════

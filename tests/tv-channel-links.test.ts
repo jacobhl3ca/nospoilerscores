@@ -7,7 +7,7 @@ import { withoutDeviceLocalPrefs } from "../src/lib/devicePrefs.ts";
 // TV channel links (9/26): a listed network's chip opens the user's own stream
 // in IINA (Mac) or VLC (iPhone) instead of the network's website.
 
-const ESPN = "http://100.69.74.78:9191/proxy/ts/stream/d6b05494-f0ef-4328-855b-82e3590e1451";
+const ESPN = "http://tuner.test:9191/proxy/ts/stream/0000-espn";
 const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15";
 const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148";
 const WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/129.0";

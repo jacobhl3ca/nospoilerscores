@@ -6,6 +6,12 @@ const CORE_SWITCHER_LEAGUES = ["MLB", "NFL Preseason", "MLS", "WNBA"];
 // highlight source, so most of the column could never show video).
 const OPT_IN_LEAGUES = ["Liga MX", "NWSL", "Libertadores", "F1", "NASCAR", "IndyCar", "UFC", "Boxing", "Chess"];
 
+// A switcher row for a league already on the board carries a "· col N"
+// suffix in its accessible name ("WNBA · col 2"). Match the league with or
+// without it, and nothing longer.
+const switcherRow = (league: string) =>
+  new RegExp(`^${league.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( · col \\d)?$`);
+
 async function openSwitcherSettings(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Open settings", exact: true }).click();
   // The catalog sits in a closed fold since 9/25; open it and show every row
@@ -37,10 +43,10 @@ test("core leagues default on and expansion leagues default off", async ({ page 
   const switcher = page.getByRole("dialog", { name: "Switch league" });
   await expect(switcher.getByRole("button", { name: "NBA · offseason", exact: true })).toBeVisible();
   for (const league of CORE_SWITCHER_LEAGUES) {
-    await expect(switcher.getByRole("button", { name: league, exact: true })).toBeVisible();
+    await expect(switcher.getByRole("button", { name: switcherRow(league) })).toBeVisible();
   }
   for (const league of OPT_IN_LEAGUES) {
-    await expect(switcher.getByRole("button", { name: league, exact: true })).toHaveCount(0);
+    await expect(switcher.getByRole("button", { name: switcherRow(league) })).toHaveCount(0);
   }
 });
 
@@ -55,8 +61,9 @@ test("clicking NFL Preseason opens NFL instead of falling through to MLS", async
   const switcher = page.getByRole("dialog", { name: "Switch league" });
   await switcher.getByRole("button", { name: "NFL Preseason", exact: true }).click();
 
-  // The narrow score column intentionally abbreviates this heading.
-  await expect(page.getByRole("heading", { name: "NFL Pre", exact: true })).toBeVisible();
+  // The header shortens to "NFL Pre" only in a column too narrow for the full
+  // name (HEADER_SHORT_LABEL_MAX_PX); this 1280px board has room for it.
+  await expect(page.getByRole("heading", { name: /^NFL Pre(season)?$/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "MLS", exact: true })).toHaveCount(0);
 });
 

@@ -97,23 +97,23 @@ test("Top news picked in column 3 stays, even with a league in scores column 3",
   const titles = page.locator('button[title="Switch news league"]');
   await expect(titles).toHaveText(["MLB", "NFL", "WNBA"], LOAD);
   await titles.nth(2).click();
-  await page.getByRole("dialog", { name: "Switch news league" }).getByRole("button", { name: "Top news (ESPN)" }).click();
-  await expect(titles).toHaveText(["MLB", "NFL", "News"]);
+  await page.getByRole("dialog", { name: "Switch news league" }).getByRole("button", { name: "Top news" }).click();
+  await expect(titles).toHaveText(["MLB", "NFL", "Top news"]);
   expect((await saved(page)).newsTopNews).toBe(true);
   await page.reload();
-  await expect(titles).toHaveText(["MLB", "NFL", "News"], LOAD);
+  await expect(titles).toHaveText(["MLB", "NFL", "Top news"], LOAD);
 });
 
 test("an older Top news pick (newsGenericSlot, no newsTopNews) is kept", async ({ page }) => {
   await seedPrefs(page, { newsGenericSlot: 0 });
   await page.goto("/");
-  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["News", "MLB", "NFL"], LOAD);
+  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["Top news", "MLB", "NFL"], LOAD);
 });
 
 test("scores column 3 Empty: news column 3 is Top news", async ({ page }) => {
   await seedPrefs(page, { thirdLeague: "empty" });
   await page.goto("/");
-  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["MLB", "NFL", "News"], LOAD);
+  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["MLB", "NFL", "Top news"], LOAD);
 });
 
 test("signed in: a pick the account cleared does not come back from a stale device", async ({ page }) => {

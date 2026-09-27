@@ -32,23 +32,29 @@ for (const viewport of [
 
     const slot = page.getByLabel("Slot 1 league");
     await expect(slot).toHaveValue("nhl");
-    await expect(slot.locator('optgroup[label="In season"]')).toHaveCount(1);
-    await expect(slot.locator('optgroup[label="Offseason"]')).toHaveCount(1);
-    await expect(slot.locator('optgroup[label="Offseason"] option[value="nhl"]')).toHaveText("NHL · offseason");
+    // The dropdown groups by KIND of sport since 8/11 (no more "In season" /
+    // "Offseason" groups); the season rides on each row instead, and a saved
+    // offseason league keeps its row.
+    await expect(slot.locator('option[value="nhl"]')).toHaveText("NHL · offseason");
     await expect(page.getByText(/Offseason · saved for its return/)).toBeVisible();
 
+    // Every visible league is offered, plus the two cross-league columns.
     const expectedSports = [...new Set(
       ALL_LEAGUES.filter((league) => !league.hidden).map((league) => league.sport),
     )].sort();
     const listedSports = (await slot.locator("option").evaluateAll((options) =>
-      options.map((option) => (option as HTMLOptionElement).value).filter((value) => value && value !== "empty"),
+      options.map((option) => (option as HTMLOptionElement).value)
+        .filter((value) => value && value !== "empty" && value !== "best" && value !== "top"),
     )).sort();
     expect(listedSports).toEqual(expectedSports);
 
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
     expect(saved.firstLeague).toBe("nhl");
 
-    const offseasonSection = page.getByText("Offseason", { exact: true }).last().locator("xpath=..");
-    await expect(offseasonSection.getByText("NHL · offseason", { exact: true })).toBeVisible();
+    // The switcher catalog starts with offseason rows hidden (9/25), but a
+    // pinned one stays listed so it can be un-pinned.
+    await page.locator("summary", { hasText: /leagues in the switcher · Edit/ }).click();
+    await expect(page.getByRole("checkbox", { name: /Hide offseason/ })).toBeChecked();
+    await expect(page.getByRole("checkbox", { name: "NHL · offseason", exact: true })).toBeVisible();
   });
 }

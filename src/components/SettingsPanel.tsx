@@ -1416,7 +1416,7 @@ export default function SettingsPanel({
                           onChange={(event) => updatePrefs({ topNewsHidden: event.target.checked ? undefined : true })}
                           className="cursor-pointer accent-[var(--accent)]"
                         />
-                        <span>Top news (ESPN)</span>
+                        <span>Top news</span>
                       </label>
                     </div>
                   </div>

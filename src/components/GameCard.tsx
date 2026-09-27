@@ -1001,9 +1001,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           // otherwise it surfaces to assistive tech as an anonymous, role-less
           // region. Same role="dialog" + aria-label pattern the rest of the app's
           // popovers use (LeagueColumn/NewsColumn league swap, the calendar).
+          // w-max sizes the box to its longest name, capped at the card width
+          // minus the right-1 inset; the old 65% cap plus nowrap links let a
+          // long RSN ("Space City Home Network") run past the border (9/26).
           role="dialog"
           aria-label="Where to watch"
-          className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 rounded-md px-1.5 py-1 max-w-[65%] shadow-md"
+          className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 rounded-md px-1.5 py-1 w-max max-w-[calc(100%-0.5rem)] shadow-md"
           style={{ background: "var(--bg)", border: "1px solid var(--border-hover)" }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -1012,7 +1015,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 muted-metadata size — at 10px these were small and hard to hit
                 on a phone even though every row is a tappable watch link
                 (Jacob 8/4). gap-1 keeps the rows from merging into one target. */}
-            <div className="flex flex-col gap-1 text-xs sm:text-sm leading-tight">
+            <div className="min-w-0 flex flex-col gap-1 text-xs sm:text-sm leading-tight">
               {game.broadcasts.map((b) => {
                 const isPrime = /\b(amazon|prime)\b/i.test(b);
                 const isEspn = /\b(espn|abc)\b/i.test(b);
@@ -1039,7 +1042,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   <a
                     key={b}
                     {...watchLinkProps(b, href)}
-                    className="hover:underline whitespace-nowrap"
+                    className="hover:underline whitespace-normal break-words"
                     style={{ color: "var(--text-muted)" }}
                   >
                     {b}
