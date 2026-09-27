@@ -48,7 +48,7 @@ function workerOrigin(): string {
   return "https://hidescore.com";
 }
 // Sports whose scoreboard is a worker route rather than an ESPN path.
-const WORKER_SCOREBOARD_SPORTS = new Set<Sport>(["cfl"]);
+const WORKER_SCOREBOARD_SPORTS = new Set<Sport>(["cfl", "cricketintl"]);
 function scoreboardUrl(sport: Sport): URL {
   return new URL(WORKER_SCOREBOARD_SPORTS.has(sport) ? workerOrigin() + SPORT_PATHS[sport] : BASE_URL + SPORT_PATHS[sport]);
 }
@@ -208,6 +208,12 @@ const SPORT_PATHS: Record<Sport, string> = {
   // Adding any of them ungated would park a permanently empty column in the
   // switcher, which is exactly the failure the big-five block warns about.
   cricket: "/cricket/8048/scoreboard",
+  // International cricket (added 2026-09-27): every series between two ICC full
+  // members, men's and women's Tests, ODIs and T20Is. NOT an ESPN path — ESPN
+  // keys cricket by series and has no all-internationals feed, so the worker
+  // route merges the day's series scoreboards (public/_worker.js, fed by the
+  // prebake cricket-series list). The IPL keeps the `cricket` key.
+  cricketintl: "/api/cricket-intl",
   // Rugby union (added 2026-08-11). ESPN keys rugby by LEAGUE ID, not by a
   // slug — there is no `/sports/rugby/scoreboard` (404), the id is mandatory.
   // Each competition therefore needs its own Sport key, exactly like the
@@ -222,9 +228,8 @@ const SPORT_PATHS: Record<Sport, string> = {
   //   242041 Super Rugby Pacific          (cal 02-13 → 06-20)
   //   289234 International Test Match     (cal 04-03 → 11-13)
   //   17567  Nations Championship         (cal 07-04 → 11-29, added 2026-08-12)
-  // Deliberately NOT shipped: French Top 14 (270559) — real and verified, but
-  // a 10-month domestic window for the smallest US audience of the six. Its id
-  // is recorded here so nobody re-probes for it.
+  // French Top 14 (270559) was held back here on 2026-08-13; it shipped as an
+  // opt-in column on 2026-09-27 with the other club competitions below.
   //
   // ⚠️ The Nations Championship path segment is 17567, NOT the league's own id
   // (24400). ESPN's `/v2/sports/rugby/leagues` returns BOTH per league and the
@@ -234,19 +239,48 @@ const SPORT_PATHS: Record<Sport, string> = {
   //
   // ⚠️ The Nations Championship is not an ADDITIONAL competition — in 2026 it
   // REPLACED the July/November international windows. `The Rugby Championship`
-  // (path 244293) is stuck on its 2025 season for exactly that reason, and
-  // `rugbytest` (289234) returns ZERO events for every 2026 date checked on
-  // 2026-08-12, so there is no duplicate-fixture overlap between the two
-  // columns. Do not "fix" rugbytest's empty column by pointing it here — as of
-  // 2026-08-13 there IS no empty column: rugbytest is yearCycle-gated to odd
-  // years and nationschamp to even ones, so exactly one of the two is live in
-  // any given year. See their ALL_LEAGUES entries.
+  // (path 244293) is stuck on its 2025 season for exactly that reason.
+  // ⚠️ Superseded 2026-09-27: `rugbytest` (289234) is NOT empty in 2026. It
+  // carries the Aug–Oct southern-hemisphere tests (SA v NZ, Argentina v
+  // Australia, Bledisloe), which do not overlap nationschamp's July and
+  // November windows. See the rugbytest rows in ALL_LEAGUES.
   sixnations: "/rugby/180659/scoreboard",
   rugbywc: "/rugby/164205/scoreboard",
   rugbychamp: "/rugby/271937/scoreboard",
   superrugby: "/rugby/242041/scoreboard",
   rugbytest: "/rugby/289234/scoreboard",
   nationschamp: "/rugby/17567/scoreboard",
+  // Club rugby (added 2026-09-27). Same id-keyed shape, every fixture type 1,
+  // cumulative linescores like the six above. Probed live 2026-09-27; each
+  // one's `calendar` is a real list of match days, read into ALL_LEAGUES.
+  //   267979 Gallagher PREM (England)      270557 United Rugby Championship
+  //   270559 Top 14 (France)               272073 EPCR Challenge Cup
+  //   289262 Major League Rugby (US)
+  // ⚠️ NOT added: The Rugby Championship (244293). Its feed is frozen on the
+  // 2025 season (calendar 2025-08-16 → 10-04, read 2026-09-27). The 2026
+  // southern-hemisphere tests (South Africa v New Zealand Aug 22 → Sep 12,
+  // Argentina v Australia, the October Bledisloe games) are filed under
+  // rugbytest (289234) instead — see its ALL_LEAGUES rows.
+  premrugby: "/rugby/267979/scoreboard",
+  urc: "/rugby/270557/scoreboard",
+  top14: "/rugby/270559/scoreboard",
+  challengecup: "/rugby/272073/scoreboard",
+  mlr: "/rugby/289262/scoreboard",
+  // NRL (rugby league, added 2026-09-27). Same id-keyed shape as rugby union:
+  // `/rugby-league/nrl` is a 400, the numeric slug `3` is the path. It is the
+  // ONLY rugby-league id ESPN serves (core API count 1), so Super League is not
+  // reachable here. Probed live 2026-09-27: 200, two 40-minute halves, clock
+  // counts UP to 4800 like union, and the same cumulative linescores (see
+  // normalizeRugbyLinescores). ⚠️ ESPN tags the whole REGULAR season
+  // type 1 ("2026 REG NRL") and the finals type 2 ("2026-final-nrl"), so NRL
+  // sits in SEASON_TYPE_1_IS_REGULAR and its finals are read off the slug.
+  nrl: "/rugby-league/3/scoreboard",
+  // AFL (added 2026-09-27). Slug-keyed like the US leagues. Probed live
+  // 2026-09-27: 200, four quarters with the clock counting UP inside each
+  // quarter, preseason type 1 / regular 2 / finals 3 (the ordinary shape, so
+  // the preseason filter is right for it). Scores are TOTAL points; goals and
+  // behinds are not split out on the scoreboard.
+  afl: "/australian-football/afl/scoreboard",
   f1: "/racing/f1/scoreboard",
   // NASCAR Cup + IndyCar (added 2026-08-03). Both share F1's racing shape, so
   // they render through the same single-race event tile. Two differences from
@@ -497,6 +531,10 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Window is ESPN's own calendar for the competition, first date → final:
   // 2026-03-28 → 2026-05-31. Opt-in like the rest of the second wave.
   { sport: "cricket", label: "IPL", startDate: "03-28", endDate: "05-31", championshipDate: "05-31", excludeFromAuto: true },
+  // ── International cricket (added 2026-09-27) ──
+  // Year-round: there is an international series on somewhere in almost every
+  // week, so no window and no off-season marker. Opt-in like the IPL.
+  { sport: "cricketintl", label: "Cricket", excludeFromAuto: true },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
   { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-20", championshipDate: "12-18", verifiedFor: 2026 },
   // ── NCAAF (College Football, late Aug – late Jan) ──
@@ -597,7 +635,9 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // it is a run of standalone fixtures, not a competition with a final, so
   // championshipDate is deliberately absent.
   //
-  // ⚠️ ODD YEARS ONLY (gated 2026-08-13). The Nations Championship REPLACED the
+  // ⚠️ Superseded in part 2026-09-27: this row is odd years only, and even
+  // years now have their own Aug–Oct row below.
+  // ODD YEARS (gated 2026-08-13). The Nations Championship REPLACED the
   // July/November test windows in the years it runs, and it runs in even years
   // (2026, 2028 — never a World Cup or Lions year). ESPN 289234 accordingly
   // returned zero events for every 2026 date checked, on 2026-08-12 and again
@@ -615,6 +655,16 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // rugbywc and the real content is the July warm-ups. RE-VERIFY the window
   // against ESPN before the 2027 season rather than trusting 04-03 → 11-13.
   { sport: "rugbytest", label: "Rugby Tests", startDate: "04-03", endDate: "11-13", excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
+  // ⚠️ CORRECTION 2026-09-27: "no tests in even years" is WRONG for 2026. The
+  // 8/12 probe checked April, July and November only; a day-by-day scan of
+  // 289234 on 2026-09-27 found 17 fixtures from Aug 8 to Nov 14, including the
+  // whole South Africa v New Zealand series (Aug 22 → Sep 12), Argentina v
+  // Australia (Aug 29, Sep 5), Australia v South Africa (Sep 27) and the
+  // Bledisloe games (Oct 10, Oct 17). The column was hidden for all of them.
+  // Even years now get their own window: first fixture Aug 8 to Japan v Fiji
+  // on Oct 24. July and November stay with nationschamp; the one November
+  // stray (Paraguay v Brazil, Nov 14) is left out.
+  { sport: "rugbytest", label: "Rugby Tests", startDate: "08-06", endDate: "10-25", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
   // ── Nations Championship (added 2026-08-12, on request) ──
   // World Rugby's new senior international competition: the Six Nations and
   // SANZAAR sides plus Japan and Fiji, pool matches in July and the finals
@@ -644,6 +694,35 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // in-season for 3.5 empty months. Same sport, so the catalog dedupes them.
   { sport: "nationschamp", label: "Rugby Nations", startDate: "07-04", endDate: "07-19", championshipDate: "11-29", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
   { sport: "nationschamp", label: "Rugby Nations", startDate: "11-06", endDate: "11-29", championshipDate: "11-29", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
+  // ── Club rugby (added 2026-09-27) ──
+  // Windows are each competition's own ESPN calendar of match days, read live
+  // 2026-09-27: first match day → final. All opt-in, like every rugby column.
+  // PREM: 2026-09-25 → final 2027-06-19. URC: 2026-09-25 → final 2027-06-18.
+  { sport: "premrugby", label: "Prem Rugby", startDate: "09-25", endDate: "06-20", championshipDate: "06-19", verifiedFor: 2026, excludeFromAuto: true },
+  { sport: "urc", label: "URC", startDate: "09-25", endDate: "06-19", championshipDate: "06-18", verifiedFor: 2026, excludeFromAuto: true },
+  // Top 14: the feed still lists 2025-26 (opened 2025-09-06, final 2026-06-27)
+  // plus the 2026-27 opener (2026-09-13). The window spans both edges.
+  { sport: "top14", label: "Top 14", startDate: "09-05", endDate: "06-28", championshipDate: "06-27", verifiedFor: 2026, excludeFromAuto: true },
+  // Challenge Cup: pool round 1 on 2026-10-16, final 2027-05-21.
+  { sport: "challengecup", label: "Challenge Cup", startDate: "10-16", endDate: "05-22", championshipDate: "05-21", verifiedFor: 2026, excludeFromAuto: true },
+  // Major League Rugby: 2026 ran Mar 28 → final Jun 21. The 2027 season is
+  // not on the feed yet, so the opener reads "~Mar 28" until it is.
+  { sport: "mlr", label: "MLR", startDate: "03-28", endDate: "06-22", championshipDate: "06-21", verifiedFor: 2026, excludeFromAuto: true },
+  // ── NRL (rugby league, added 2026-09-27) ──
+  // Read off real fixtures, NOT ESPN's league.season object (which only spans
+  // the finals window 09-10 → 10-08). First fixture: Knights v Cowboys, Las
+  // Vegas, 2026-03-01T02:15Z = Sat Feb 28 evening ET. Grand Final: Accor
+  // Stadium, 2026-10-04T08:30Z = Sun Oct 4 4:30 am ET. endDate runs one day
+  // past it so the morning-after tab still resolves the column. Opt-in like
+  // every rugby column; it sits next to them in "Racing, combat & more".
+  { sport: "nrl", label: "NRL", startDate: "02-28", endDate: "10-05", championshipDate: "10-04", verifiedFor: 2026, excludeFromAuto: true },
+  // ── AFL (added 2026-09-27) ──
+  // Preseason (type 1, Feb 26 → Mar 1) is filtered out, so the window opens on
+  // the first REGULAR fixture: Carlton at Sydney, 2026-03-05T08:30Z. Grand
+  // Final: Brisbane Lions at Fremantle, MCG, 2026-09-26T04:30Z (Sat 12:30 am
+  // ET). Off-season from Sep 28 to ~Mar 2027; the 2027 fixture is not out, so
+  // the season-opener line reads "~Mar 5" until it is.
+  { sport: "afl", label: "AFL", startDate: "03-05", kickoffDate: "03-05", endDate: "09-27", championshipDate: "09-26", verifiedFor: 2026, excludeFromAuto: true },
   // ── F1 + UFC (single-event tiles) ──
   // UFC re-enabled 2026-07-17: its bout cards now match the game cards' look
   // (fighter names use the standard text-sm .team-name treatment + shared
@@ -877,11 +956,16 @@ const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", ncaabase: "⚾", ncaasoft: "🥎", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
   nfl: "🏈", ncaaf: "🏈", ufl: "🏈", cfl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", ncaavb: "🏐", ncaawsoc: "⚽", ncaamsoc: "⚽", golf: "⛳", tennis: "🎾",
   sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
+  premrugby: "🏉", urc: "🏉", top14: "🏉", challengecup: "🏉", mlr: "🏉",
+  nrl: "🏉",
+  // No Australian-rules emoji exists; 🏉 is the closest oval ball and the
+  // header shows the AFL league logo anyway.
+  afl: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
   uecl: "⚽", facup: "⚽", copadelrey: "⚽", dfbpokal: "⚽", nations: "⚽",
-  cricket: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
+  cricket: "🏏", cricketintl: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
   ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", esports: "🎮", top: "⭐",
 };
 
@@ -936,10 +1020,12 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   nations: "soccer",
   golf: "majors", tennis: "majors",
   f1: "other", nascar: "other", indycar: "other", ufc: "other",
-  boxing: "other", cricket: "other", chess: "other", poker: "other",
+  boxing: "other", cricket: "other", cricketintl: "other", chess: "other", poker: "other",
   esports: "other",
   sixnations: "other", rugbywc: "other", rugbychamp: "other",
   superrugby: "other", rugbytest: "other", nationschamp: "other",
+  premrugby: "other", urc: "other", top14: "other", challengecup: "other", mlr: "other",
+  nrl: "other", afl: "other",
 };
 
 export function sportGroup(sport: Sport): SportGroup {
@@ -960,6 +1046,8 @@ export function sportGroup(sport: Sport): SportGroup {
 const CATALOG_TAIL: ReadonlySet<Sport> = new Set<Sport>([
   "llws",
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
+  "premrugby", "urc", "top14", "challengecup", "mlr",
+  "nrl", "afl",
 ]);
 
 // Sort rank within a Settings group: minority events last, then in-season
@@ -1204,6 +1292,7 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   ncaaw: 25,
   wnba: 26,
   cricket: 27,
+  cricketintl: 27.5,
   // Opt-in event leagues sort to the bottom of the switcher (like WNBA).
   f1: 28,
   nascar: 29,
@@ -1214,6 +1303,13 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   poker: 34,
   esports: 35,
   cfl: 36,
+  nrl: 37,
+  afl: 38,
+  urc: 39,
+  premrugby: 40,
+  top14: 41,
+  challengecup: 42,
+  mlr: 43,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -1389,6 +1485,81 @@ type RawCompetitor = {
   curatedRank?: { current?: number };
 };
 
+// Both cricket columns: the IPL (`cricket`) and every international series
+// (`cricketintl`, added 2026-09-27). They share the score trim and the rating.
+const CRICKET_SPORTS = new Set<Sport>(["cricket", "cricketintl"]);
+
+// The fields of a cricket event that say what KIND of match it is. Read
+// 2026-09-27 off the series scoreboards: competition.class = { eventType:
+// "ODI" | "T20" | "Test", generalClassCard: "ODI" | "T20I" | "Women's ODI" |
+// "Women T20", internationalClassId }, competition.description = "2nd ODI",
+// event.endDate = the day AFTER the last scheduled day, 23:59Z, and on a
+// multi-day match status.session = "Day 1". ⛔ status.summary is the result
+// ("Titans won by 9 wkts") and is never read.
+type CricketEventLike = {
+  date?: string;
+  endDate?: string;
+  status?: { session?: string; type?: { state?: string } };
+  competitions?: Array<{ class?: { eventType?: string; generalClassCard?: string }; description?: string; competitors?: { team?: { displayName?: string } }[] }>;
+};
+
+// Scheduled days: 1 for a one-day match, 5 for a men's Test, 4 for a youth or
+// women's Test. endDate is the next day at 23:59Z, so the span rounds to N + 1.
+function cricketScheduledDays(e: CricketEventLike): number {
+  const start = Date.parse(String(e.date ?? "").slice(0, 10) + "T00:00:00Z");
+  const end = Date.parse(String(e.endDate ?? ""));
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 1;
+  return Math.max(1, Math.round((end - start) / 86400_000) - 1);
+}
+
+function isMultiDayCricket(e: CricketEventLike): boolean {
+  return e.competitions?.[0]?.class?.eventType === "Test" || cricketScheduledDays(e) > 1;
+}
+
+// { formatTag: "ODI" | "T20I" | "Test · Day 2 of 5" | "W ODI", stage: "2nd ODI"
+// | "1st Test · Day 2 of 5" }. Null fields when the feed says nothing useful.
+export function cricketMatchInfo(e: CricketEventLike, now = Date.now()): { formatTag: string | null; stage: string | null } {
+  const comp = e.competitions?.[0];
+  const cls = comp?.class ?? {};
+  const women =
+    /women/i.test(cls.generalClassCard ?? "") ||
+    (comp?.competitors ?? []).some((c) => /\sWomen$/.test(c?.team?.displayName ?? ""));
+  const base =
+    cls.eventType === "Test" ? "Test"
+    : cls.eventType === "ODI" ? "ODI"
+    : cls.eventType === "T20" ? "T20I"
+    : (cls.generalClassCard ?? "").replace(/^Women'?s?\s+/i, "") || null;
+  let day = "";
+  if (isMultiDayCricket(e)) {
+    const total = cricketScheduledDays(e);
+    const state = e.status?.type?.state;
+    if (state === "in") {
+      const fromSession = /^Day\s+(\d+)/i.exec(e.status?.session ?? "")?.[1];
+      const start = Date.parse(String(e.date ?? ""));
+      const n = fromSession ? Number(fromSession) : Number.isFinite(start) ? Math.floor((now - start) / 86400_000) + 1 : 0;
+      if (n >= 1) day = `Day ${Math.min(n, total)} of ${total}`;
+    } else if (state === "pre") {
+      day = `${total} days`;
+    }
+  }
+  const formatTag = base ? [women ? `W ${base}` : base, day].filter(Boolean).join(" · ") : null;
+  const desc = (comp?.description ?? "").replace(/\s*\(D\/N\)\s*$/, "").trim();
+  const stage = [desc, day].filter(Boolean).join(" · ") || null;
+  return { formatTag, stage };
+}
+
+// The twelve full members' ESPNcricinfo team ids (every logo 200, 2026-09-27).
+// A women's side uses its nation's mark: ESPN has no logo for some of them
+// ("Zimbabwe Women", 271866.png, 404s), so a card would show one flag and a gap.
+const CRICKET_NATION_IDS: Record<string, number> = {
+  England: 1, Australia: 2, "South Africa": 3, "West Indies": 4, "New Zealand": 5, India: 6,
+  Pakistan: 7, "Sri Lanka": 8, Zimbabwe: 9, Bangladesh: 25, Ireland: 29, Afghanistan: 40,
+};
+function cricketNationLogo(name?: string): string | null {
+  const id = CRICKET_NATION_IDS[String(name ?? "").trim().replace(/\s+Women$/, "")];
+  return id ? `https://a.espncdn.com/i/teamlogos/cricket/500/${id}.png` : null;
+}
+
 // ESPN's cricket `score` is a whole sentence, not a score:
 //   "161/5 (18/20 ov, target 156)"
 // Two problems with rendering that verbatim in a score slot sized for "4".
@@ -1397,7 +1568,7 @@ type RawCompetitor = {
 // chasing team's score tile silently reveals the OTHER side's score. Keep only
 // the "runs/wickets" head. Non-cricket scores pass through untouched.
 function formatScore(raw: string, sport: Sport): string {
-  if (sport !== "cricket") return raw;
+  if (!CRICKET_SPORTS.has(sport)) return raw;
   const head = raw.split("(")[0]?.trim();
   return head || raw;
 }
@@ -1419,12 +1590,17 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
     id: rawId ? `${sport}-${rawId}` : "",
     abbreviation: competitor.team?.abbreviation ?? "",
     displayName: competitor.team?.displayName ?? "",
-    shortDisplayName: competitor.team?.shortDisplayName ?? "",
+    // International cricket: ESPN's short names are codes ("WI-W", "ZIM-W",
+    // "SA"); the nation's name is what a US reader recognises and is still
+    // short ("West Indies Women" is the longest of the twelve).
+    shortDisplayName: sport === "cricketintl"
+      ? (competitor.team?.displayName ?? competitor.team?.shortDisplayName ?? "")
+      : (competitor.team?.shortDisplayName ?? ""),
     ...(competitor.team?.location ? { location: competitor.team.location } : {}),
     ...(competitor.team?.conferenceId != null ? { conferenceId: String(competitor.team.conferenceId) } : {}),
     // ESPN has no artwork for some one-off opponents (mostly D2/D3 schools);
     // teamLogoOverrides.ts fills those in.
-    logo: competitor.team?.logo || logoOverride(sport, String(rawId)) || "",
+    logo: (sport === "cricketintl" ? cricketNationLogo(competitor.team?.displayName) : null) || competitor.team?.logo || logoOverride(sport, String(rawId)) || "",
     color: competitor.team?.color ?? "666666",
     score: formatScore(competitor.score ?? "0", sport),
     winner: competitor.winner ?? false,
@@ -1539,6 +1715,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // field that IS still read, by gameProgress: a limited-overs match is two
   // innings, so innings 1 reads as ~25% elapsed and clears the "too early" gate.
   cricket: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 2 },
+  cricketintl: { multiplier: 1, overtimeBonus: 0, scoringDivisor: 1,   regulationPeriods: 2 },
   // Rugby union: two 40-minute halves, team totals in the 20-35 range — close
   // enough to NFL's shape that it takes NFL's calibration, with two periods
   // instead of four. Extra time is rare and only happens in knockout rugby, so
@@ -1549,6 +1726,22 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   superrugby: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   rugbytest:  { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   nationschamp: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  // Club rugby (2026-09-27): union, so union's row.
+  premrugby:    { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  urc:          { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  top14:        { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  challengecup: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  mlr:          { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  // NRL: two 40-minute halves, try 4 + conversion 2, so a converted try is 6
+  // and team totals sit in the 10-40 range — union's shape, so union's row.
+  // Golden-point extra time (regular season and finals) reads as period 3.
+  nrl:        { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  // AFL: goal 6, behind 1, team totals ~60-110, four quarters. A goal is the
+  // unit of "one score", so the straight line is scaled to it: a 6-point
+  // (one-goal) margin reads 82, two goals 64, five goals (30) 10.
+  // scoringDivisor 18: a 170-point game earns the full +10 like a 50-point
+  // NFL game does at 8. Extra time exists only in finals (two 3-min halves).
+  afl:        { multiplier: 3, overtimeBonus: 20, scoringDivisor: 18, regulationPeriods: 4 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
   // F1 / UFC render as single-event tiles (no Game objects), so these are
@@ -1590,6 +1783,76 @@ const SOCCER_SPORTS = new Set<Sport>([
   "ncaawsoc", "ncaamsoc",
 ]);
 const FULL_MATCH_SECONDS = 5400;
+// Rugby (union and league) is soccer-shaped on the clock: status.clock counts
+// UP through the whole match and reads 4800 (80') at full time (read
+// 2026-09-27 on NRL 604844 and URC 604035). Without this both fell through to
+// the coarse half midpoint, so a try in the 2nd minute and one in the 38th
+// read the same progress.
+const RUGBY_SPORTS = new Set<Sport>([
+  "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
+  "premrugby", "urc", "top14", "challengecup", "mlr",
+  "nrl",
+]);
+const RUGBY_FULL_MATCH_SECONDS = 4800;
+
+// ESPN's rugby linescores are CUMULATIVE, not per period, and carry two extra
+// rows. Read 2026-09-27: Knights (NRL, final 22) = period 1 → 6 (half-time
+// score), period 2 → 22 (full-time score), period 20 → 0, period 60 → 0; URC
+// Lions (final 27) = 17, 27, 10, 17. The two high-numbered rows are snapshots
+// that mean nothing to a per-period reader. calcRunningMargin and
+// calcFinalPeriodMargin SUM the rows, so fed raw they read 6 + 22 + 0 + 0 = 28
+// for a 22-point side and took the "margin entering the last period" off a
+// junk row. This rewrites the rows in place to real per-period points: drop
+// every row whose period is 20 or more, then difference the cumulative ones.
+// If the rows are not cumulative after all (a total that goes DOWN, or a last
+// row that is not the score) they are left as they are — the junk rows still
+// go, because they are never a period.
+//
+// Some feeds carry no half-time snapshot at all: URC round 1 (2026-09-25/26)
+// had five of eight games as 0, 19, 0, 0 against 0, 19, 0, 0 for a 19-19 draw.
+// Read as real, that is "0-0 at half-time", which the rating scores as a tight
+// game all the way through. When every half-time row AND every junk row is 0
+// but somebody scored, the rows are dropped, so the rating falls back to the
+// final margin alone (the same path a feed with no linescores takes).
+export function normalizeRugbyLinescores(
+  competitors: (MarginCompetitor & { score?: string })[],
+): void {
+  type Row = LineScore & { period?: number };
+  const kept = competitors.map((c) =>
+    ((c.linescores ?? []) as Row[]).filter((r) => typeof r.period !== "number" || r.period < 20),
+  );
+  const allRows = competitors.map((c) => (c.linescores ?? []) as Row[]);
+  const someoneScored = competitors.some((c) => Number.parseInt(c.score ?? "", 10) > 0);
+  const noHalfTime =
+    someoneScored &&
+    kept.every((rows) => rows.length > 1 && (rows[0].value ?? 0) === 0) &&
+    allRows.every((rows) => rows.every((r) => typeof r.period !== "number" || r.period < 20 || (r.value ?? 0) === 0));
+  if (noHalfTime) {
+    competitors.forEach((c) => { if (c.linescores) c.linescores = []; });
+    return;
+  }
+  const cumulative = kept.every((rows, i) => {
+    let prev = 0;
+    for (const r of rows) {
+      const v = r.value ?? 0;
+      if (v < prev) return false;
+      prev = v;
+    }
+    const score = Number.parseInt(competitors[i].score ?? "", 10);
+    return rows.length === 0 || !Number.isFinite(score) || prev === score;
+  });
+  competitors.forEach((c, i) => {
+    if (!c.linescores) return;
+    let prev = 0;
+    c.linescores = kept[i].map((r) => {
+      if (!cumulative) return r;
+      const v = r.value ?? 0;
+      const row = { ...r, value: v - prev };
+      prev = v;
+      return row;
+    });
+  });
+}
 
 // Minimal shape of an ESPN game's live status — the only fields this progress
 // estimate reads: the current period/inning and the (optionally numeric) clock.
@@ -1618,6 +1881,10 @@ function gameProgress(game: GameStatusLike, sport: Sport, regulationPeriods: num
   // Soccer: clock counts up as total elapsed match seconds.
   if (SOCCER_SPORTS.has(sport)) {
     return clock && clock > 0 ? clamp(clock / FULL_MATCH_SECONDS) : coarse;
+  }
+  // Rugby: the same count-up clock over an 80-minute match.
+  if (RUGBY_SPORTS.has(sport)) {
+    return clock && clock > 0 ? clamp(clock / RUGBY_FULL_MATCH_SECONDS) : coarse;
   }
   // Count-down timed sports: clock = seconds left in the current period.
   const periodLen = PERIOD_SECONDS[sport];
@@ -1976,7 +2243,13 @@ function calculateRating(game: RatingGame): number | null {
 
   // Cricket branches out before the shared scorer touches it — see cricketRating
   // for why runs-vs-runs is actively misleading in this sport.
-  if (game._sport === "cricket") return cricketRating(competitors, state);
+  // Multi-day matches (Tests) have no rating: four innings and a draw that can
+  // be the best possible finish do not fit the two-innings chase model, and a
+  // wrong mark on a five-day game is worse than none.
+  if (game._sport && CRICKET_SPORTS.has(game._sport)) {
+    if (isMultiDayCricket(game as CricketEventLike)) return null;
+    return cricketRating(competitors, state);
+  }
   // Volleyball branches out too: its `score` is sets, not points.
   if (game._sport === "ncaavb") return volleyballRating(competitors, game.status?.period ?? 0, state);
 
@@ -2465,6 +2738,14 @@ function gridironWeekNumber(sport: Sport, event: ScoreboardEvent): number | null
   return typeof week === "number" && week >= 1 && week <= 25 ? week : null;
 }
 
+// NRL finals weeks → the round names the NRL itself uses.
+const NRL_FINALS_WEEKS: Record<number, string> = {
+  1: "Finals Week 1",
+  2: "Semi-Final",
+  3: "Preliminary Final",
+  4: "Grand Final",
+};
+
 // NCAA baseball + softball: the two leagues whose postseason ESPN files as
 // season type 6 and whose notes name regionals (see parseGame).
 const COLLEGE_DIAMOND_SPORTS = new Set<Sport>(["ncaabase", "ncaasoft"]);
@@ -2527,6 +2808,8 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
 
   // Tag sport for rating calculation
   event._sport = sport;
+  // Rugby rows arrive cumulative with two junk rows — see normalizeRugbyLinescores.
+  if (RUGBY_SPORTS.has(sport)) normalizeRugbyLinescores(competitors);
 
   // Extract series game number and playoff round from notes
   let seriesNote: string | null = null;
@@ -2593,6 +2876,14 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   if (event.season?.type === 3) {
     isPlayoff = true;
   }
+  // NRL files its finals as type 2 under the slug "2026-final-nrl" with empty
+  // notes, and numbers the finals weeks 1-4 on event.week (read 2026-09-27:
+  // the prelim finals are week 3, the Grand Final week 4). The round is known
+  // before kickoff, so naming it spoils nothing.
+  if (sport === "nrl" && /\bfinal\b/i.test(event.season?.slug?.replace(/-/g, " ") ?? "")) {
+    isPlayoff = true;
+    if (!playoffLabel) playoffLabel = NRL_FINALS_WEEKS[event.week?.number ?? 0] ?? "Finals";
+  }
   // College baseball/softball file the whole NCAA tournament as type 6
   // ("championship-series", read 2026-09-14 on the CWS final 2026-06-21 and the
   // WCWS final 2026-06-04; a March fixture reads 2 / "regular-season"). Scoped
@@ -2604,7 +2895,10 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   // preseason filter in eventsToGames drops it for every other sport), but the
   // flag is derived generically so a future carve-out doesn't have to remember
   // to add itself here. See Game.isPreseason for why the card needs this at all.
-  const isPreseason = event.season?.type === 1;
+  // ⚠️ Rugby is the exception (2026-09-27): ESPN tags EVERY rugby fixture type 1
+  // (see SEASON_TYPE_1_IS_REGULAR), so without this every union card and every
+  // NRL regular-season card wore a "PRE" chip for a game that counts.
+  const isPreseason = event.season?.type === 1 && !RUGBY_SPORTS.has(sport);
 
   // Playoff series summary (e.g. "BOS leads series 3-1", "Series tied 2-2").
   // Only present on playoff competitions; regular-season series has no field.
@@ -2659,7 +2953,8 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   const homeProbable = sport === "mlb" ? probablePitcher(home) : null;
   const awayProbable = sport === "mlb" ? probablePitcher(away) : null;
 
-  const stage = deriveStage(competition?.altGameNote, event.season?.slug);
+  const cricketInfo = sport === "cricketintl" ? cricketMatchInfo(event as CricketEventLike) : null;
+  const stage = cricketInfo ? cricketInfo.stage : deriveStage(competition?.altGameNote, event.season?.slug);
 
   // Penalty shootout: a soccer knockout decided (or being decided) by spot
   // kicks — level after extra time, the pure tune-in moment. ESPN tags it via a
@@ -2695,6 +2990,7 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     homeProbable,
     awayProbable,
     stage,
+    formatTag: cricketInfo?.formatTag ?? null,
     rating: calculateRating(event),
     liveProgress: event.status?.type?.state === "in"
       ? gameProgress(event, sport, (SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba).regulationPeriods, "in")
@@ -2935,6 +3231,15 @@ export function espnGameUrl(game: Game): string {
     case "superrugby": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/242041`;
     case "rugbytest":  return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/289234`;
     case "nationschamp": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/17567`;
+    case "premrugby":    return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/267979`;
+    case "urc":          return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/270557`;
+    case "top14":        return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/270559`;
+    case "challengecup": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/272073`;
+    case "mlr":          return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/289262`;
+    // The event's own "Gamecast" link (read 2026-09-27) — same /league/<id>
+    // suffix rule as union.
+    case "nrl": return `https://www.espn.com/nrl/match/_/gameId/${game.id}/league/3`;
+    case "afl": return `https://www.espn.com/afl/game/_/gameId/${game.id}`;
     case "epl":
     case "mls":
     case "fifa":
@@ -2964,6 +3269,9 @@ export function espnGameUrl(game: Game): string {
     // ESPN serves cricket off its India edition; 8048 is the IPL series id
     // (same id as SPORT_PATHS). The /scorecard/ path is the per-match page.
     case "cricket": return `https://www.espn.in/cricket/series/8048/scorecard/${game.id}`;
+    // Each international series has its own id, carried on the event's own
+    // link (recapUrl). The cricket hub is the fallback.
+    case "cricketintl": return "https://www.espn.in/cricket/";
     case "golf": return `https://www.espn.com/golf/leaderboard`;
     case "tennis": return `https://www.espn.com/tennis/scoreboard`;
     // F1/UFC render as event tiles (no Game objects) — these are here only for
@@ -3033,7 +3341,19 @@ export function sportStreamFallback(sport: Sport): string {
     case "superrugby":
     case "rugbytest":
     case "nationschamp":
+    case "premrugby":
+    case "urc":
+    case "top14":
+    case "challengecup":
+    case "mlr":
       return "https://www.espn.com/rugby/";
+    // NRL + AFL: US TV is FOX (FS1/FS2/FOX Soccer Plus), but FOX has no NRL or
+    // AFL page (foxsports.com/nrl, /afl, /rugby-league/nrl all 404 on
+    // 2026-09-27). Each league's own international pass streams every match
+    // in the US and is a watch page, never a scorecard: Watch NRL and Watch
+    // AFL, both 200 on 2026-09-27.
+    case "nrl": return "https://www.watchnrl.com/";
+    case "afl": return "https://www.watchafl.com.au/";
     case "mls": return "https://tv.apple.com/us/mls";
     case "epl": return "https://www.peacocktv.com/";
     case "fifa": return "https://www.foxsports.com/soccer/fifa-world-cup";
@@ -3085,7 +3405,9 @@ export function sportStreamFallback(sport: Sport): string {
     case "dfbpokal": return "https://plus.espn.com/";
     // Willow TV holds the US broadcast rights to the IPL (and to most
     // international cricket). Verified reachable 2026-08-03.
-    case "cricket": return "https://www.willow.tv/";
+    case "cricket":
+    case "cricketintl":
+      return "https://www.willow.tv/";
     case "tennis": return "https://www.tennischannel.com/";
     case "golf": return "https://www.pgatour.com/live";
     case "f1": return "https://f1tv.formula1.com/";
@@ -4588,6 +4910,11 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
 const SEASON_TYPE_1_IS_REGULAR = new Set<Sport>([
   "nfl",
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
+  "premrugby", "urc", "top14", "challengecup", "mlr",
+  // NRL: the whole regular season is type 1 ("2026 REG NRL", read 2026-09-27);
+  // only the finals are type 2. Without this the column is empty until
+  // September.
+  "nrl",
 ]);
 
 // Map raw ESPN scoreboard events into Game[] (team-based sports). Shared by
@@ -4607,6 +4934,16 @@ export function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
       // Tournament-wrapper events with no competitors aren't real matches.
       const competitors = e.competitions?.[0]?.competitors ?? [];
       if (competitors.length < 2) return false;
+      // Rugby ghost fixtures (read 2026-09-27): the Top 14 feed keeps a second,
+      // never-updated copy of some games under alternate team ids ("Bordeaux"
+      // v "Stade Toulousain", id 604732) next to the real final (604373). The
+      // ghost has no venue and stays STATUS_SCHEDULED forever, so it would sit
+      // on the board as an upcoming game days after it was played. A rugby
+      // fixture still "pre" 6 hours after its kick-off with no venue is one.
+      if (RUGBY_SPORTS.has(sport) && e.status?.type?.state === "pre" && !e.competitions?.[0]?.venue) {
+        const start = Date.parse(e.date ?? "");
+        if (Number.isFinite(start) && Date.now() - start > 6 * 3600_000) return false;
+      }
       return true;
     })
     // A single malformed event must not take down the whole league.

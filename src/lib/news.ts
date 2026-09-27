@@ -68,12 +68,18 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   dfbpokal: "/soccer/ger.dfb_pokal",
   // Nations League (2026-09-26): /news probed 200 with 6 articles.
   nations: "/soccer/uefa.nations",
+  // NRL + AFL (2026-09-27): both /news feeds probed 200 with 6 articles
+  // (ESPN Australia's desk covers both leagues).
+  nrl: "/rugby-league/3",
+  afl: "/australian-football/afl",
   // Cricket: same league-base + /news shape. Note this feed is ESPNcricinfo's
   // GENERAL cricket wire, not IPL-only — it carries county / Hundred / Test
   // headlines too. That's still the right feed (it's the only one ESPN serves
   // for the sport) and it's the same tradeoff tennis already makes by routing
   // through the ATP feed.
   cricket: "/cricket/8048",
+  // International cricket reads the same general wire (2026-09-27).
+  cricketintl: "/cricket/8048",
   // Racing/combat leagues share ESPN's league-base + /news pattern (the path is
   // the scoreboard path minus /scoreboard — see espn.ts). Without these, the
   // "ESPN F1"/"ESPN UFC" cards that leagueSourceCascade() builds for every sport
@@ -365,6 +371,8 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   // Cricket keys its league logos by series id under its own /cricket/ path
   // (8048 = IPL), not the /soccer/ path. Verified 200 on 2026-08-03.
   cricket: "https://a.espncdn.com/i/leaguelogos/cricket/500/8048.png",
+  // No league mark for "internationals": ESPN's cricket sport icon (200, 2026-09-27).
+  cricketintl: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-cricket.png",
   // Rugby has no `leaguelogos/rugby/500/<id>.png` set at all (8323 and 8337
   // both 404, checked 2026-08-11) — ESPN's own rugby scoreboards serve the
   // redesign sport icon as `leagues[0].logos[0]`, identically for all five
@@ -376,6 +384,15 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   superrugby: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   rugbytest: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   nationschamp: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  premrugby: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  urc: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  top14: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  challengecup: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  mlr: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  // NRL + AFL DO have marks in the `teamlogos/leagues` set, unlike union —
+  // both straight off their scoreboards' `leagues[0].logos`, 200 on 2026-09-27.
+  nrl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nrl.png&w=40&h=40&transparent=true",
+  afl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/afl.png&w=40&h=40&transparent=true",
   // Racing has no entry in the `teamlogos/leagues` set (nascar/indycar/irl all
   // 404 there). NASCAR does have one in ESPN's redesign sport-icon set; IndyCar
   // has neither, so it falls back to Wikimedia exactly like NCAAM and tennis
@@ -457,6 +474,8 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   // deliberately not an IPL-only sub. One more feed costs one more 45s gate
   // slot in the reddit bake; see the batch/cooldown notes in prebake-news.mjs.
   cricket: { key: "reddit-cricket", label: "r/Cricket" },
+  // r/Cricket is mostly internationals, so it suits this column even better.
+  cricketintl: { key: "reddit-cricket", label: "r/Cricket" },
   ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
   ncaah: { key: "reddit-ncaah", label: "r/collegehockey" },
   // r/UFL is the University of Florida (checked 2026-09-14); the league's live
@@ -469,6 +488,23 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   // baked snapshot — no second bake job, no second staleness entry.
   ncaawh: { key: "reddit-ncaah", label: "r/collegehockey" },
   cfl: { key: "reddit-cfl", label: "r/CFL" },
+  // 2026-09-27: r/rugbyunion is the one union sub with volume, so every union
+  // column reads the same baked snapshot (the r/collegehockey pattern). The
+  // six older union columns had no Reddit card at all until now.
+  sixnations: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  rugbywc: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  rugbychamp: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  superrugby: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  rugbytest: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  nationschamp: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  premrugby: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  urc: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  top14: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  challengecup: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  mlr: { key: "reddit-rugbyunion", label: "r/rugbyunion" },
+  // 2026-09-27: r/nrl and r/AFL, the two leagues' main subs.
+  nrl: { key: "reddit-nrl", label: "r/nrl" },
+  afl: { key: "reddit-afl", label: "r/AFL" },
   ufc: { key: "reddit-ufc", label: "r/ufc" },
   boxing: { key: "reddit-boxing", label: "r/Boxing" },
   f1: { key: "reddit-f1", label: "r/formula1" },
@@ -595,7 +631,9 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "euro", "afcon", "ligamx", "nwsl", "efl", "libertadores", "saudi",
   "uecl", "facup", "copadelrey", "dfbpokal", "nations",
   "ncaawsoc", "ncaamsoc",
-  "cricket",
+  "cricketintl", "cricket", "nrl", "afl",
+  "sixnations", "rugbywc", "nationschamp", "rugbytest", "superrugby", "rugbychamp",
+  "urc", "premrugby", "top14", "challengecup", "mlr",
   "ufc", "boxing", "f1", "nascar", "indycar", "poker",
 ];
 

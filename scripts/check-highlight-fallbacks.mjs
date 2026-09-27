@@ -100,6 +100,10 @@ const ESPN_PATHS = {
   superrugby:   "/rugby/242041/scoreboard",
   rugbywc:      "/rugby/164205/scoreboard",
   nationschamp: "/rugby/17567/scoreboard",
+  // NRL + AFL (added 2026-09-27), monitored from day one.
+  nrl:          "/rugby-league/3/scoreboard",
+  afl:          "/australian-football/afl/scoreboard",
+  urc:          "/rugby/270557/scoreboard",
   // CFL (added 2026-09-13): NOT an ESPN path. ESPN stopped serving the CFL
   // after 2023, so fetchScoreboard reads this one from our own worker route
   // (theScore reshaped to the ESPN scoreboard — public/_worker.js).
@@ -164,6 +168,9 @@ const OFFICIAL_CHANNELS = {
   superrugby: "Super Rugby Pacific",
   rugbywc: "World Rugby",
   nationschamp: "World Rugby",
+  nrl: "NRL - National Rugby League",
+  afl: "AFL",
+  urc: "United Rugby Championship",
 };
 
 // Mirrors COMPETITION_TITLE_TOKENS in src/lib/youtube.ts. Keep in sync.
@@ -217,6 +224,7 @@ const HIGHLIGHT_BUFFER_HOURS = {
   ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3, facup: 3, nations: 3, ncaawsoc: 3, ncaamsoc: 3,
   // Rugby union: 80 minutes plus stoppages, so the same 3h window soccer uses.
   sixnations: 3, superrugby: 3, rugbywc: 3, nationschamp: 3,
+  nrl: 3, afl: 4, urc: 3,
 };
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5,
@@ -224,6 +232,7 @@ const REGULATION_PERIODS = {
   seriea: 2, bundesliga: 2, laliga: 2, ligue1: 2,
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2, facup: 2, nations: 2, ncaawsoc: 2, ncaamsoc: 2,
   sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,
+  nrl: 2, afl: 4, urc: 2,
 };
 
 // Matches TEAM_NAME_ALIASES in src/lib/youtube.ts. Keep in sync.
@@ -232,6 +241,10 @@ const TEAM_NAME_ALIASES = {
   "Tempo": "Toronto Tempo",
   "Valkyries": "Golden State Valkyries",
   "Rensselaer": "RPI",
+  "Union (NY)": "Union",
+  "Post University": "Post",
+  "Cardiff Blues": "Cardiff Rugby",
+  "Benetton Treviso": "Benetton",
 };
 const aliasTeam = (n) => TEAM_NAME_ALIASES[n] ?? n;
 

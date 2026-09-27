@@ -1,0 +1,238 @@
+{
+ "id": "603453",
+ "uid": "s:8088~l:8370~e:603453",
+ "date": "2026-09-05T05:00Z",
+ "name": "Warriors vs Sea Eagles",
+ "shortName": "NEW VS MAN",
+ "season": {
+  "year": 2026,
+  "type": 1,
+  "slug": "2026-reg-nrl"
+ },
+ "week": {
+  "number": 27
+ },
+ "competitions": [
+  {
+   "id": "603453",
+   "uid": "s:8088~l:8370~e:603453~c:603453",
+   "date": "2026-09-05T05:00Z",
+   "attendance": 0,
+   "timeValid": true,
+   "neutralSite": false,
+   "conferenceCompetition": false,
+   "playByPlayAvailable": false,
+   "recent": false,
+   "venue": {
+    "id": "289228",
+    "fullName": "Go Media Stadium",
+    "address": {
+     "city": "Auckland",
+     "state": "New Zealand"
+    },
+    "indoor": false
+   },
+   "competitors": [
+    {
+     "id": "289201",
+     "uid": "s:8088~l:8370~t:289201",
+     "type": "team",
+     "order": 0,
+     "homeAway": "home",
+     "winner": true,
+     "team": {
+      "id": "289201",
+      "uid": "s:8088~t:289201",
+      "name": "Warriors",
+      "abbreviation": "NEW",
+      "displayName": "Warriors",
+      "shortDisplayName": "Warriors",
+      "isActive": true,
+      "venue": {
+       "id": "289228"
+      },
+      "links": [
+       {
+        "rel": [
+         "clubhouse",
+         "desktop",
+         "team"
+        ],
+        "href": "https://www.espn.com/nrl/fixtures/_/league/3",
+        "text": "Clubhouse",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "logo": "https://a.espncdn.com/i/teamlogos/rugby/teams/500/289201.png"
+     },
+     "score": "31",
+     "linescores": [
+      {
+       "value": 20.0,
+       "displayValue": "20",
+       "period": 1
+      },
+      {
+       "value": 31.0,
+       "displayValue": "31",
+       "period": 2
+      },
+      {
+       "value": 0.0,
+       "displayValue": "0",
+       "period": 20
+      },
+      {
+       "value": 0.0,
+       "displayValue": "0",
+       "period": 60
+      }
+     ],
+     "form": "LLWWW",
+     "records": [
+      {
+       "name": "overall",
+       "abbreviation": "Total",
+       "type": "total",
+       "summary": "LLWWW"
+      }
+     ]
+    },
+    {
+     "id": "289196",
+     "uid": "s:8088~l:8370~t:289196",
+     "type": "team",
+     "order": 1,
+     "homeAway": "away",
+     "winner": false,
+     "team": {
+      "id": "289196",
+      "uid": "s:8088~t:289196",
+      "name": "Sea Eagles",
+      "abbreviation": "MAN",
+      "displayName": "Sea Eagles",
+      "shortDisplayName": "Sea Eagles",
+      "isActive": true,
+      "venue": {
+       "id": "289215"
+      },
+      "links": [
+       {
+        "rel": [
+         "clubhouse",
+         "desktop",
+         "team"
+        ],
+        "href": "https://www.espn.com/nrl/fixtures/_/league/3",
+        "text": "Clubhouse",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "logo": "https://a.espncdn.com/i/teamlogos/rugby/teams/500/289196.png"
+     },
+     "score": "30",
+     "linescores": [
+      {
+       "value": 12.0,
+       "displayValue": "12",
+       "period": 1
+      },
+      {
+       "value": 30.0,
+       "displayValue": "30",
+       "period": 2
+      },
+      {
+       "value": 0.0,
+       "displayValue": "0",
+       "period": 20
+      },
+      {
+       "value": 0.0,
+       "displayValue": "0",
+       "period": 60
+      }
+     ],
+     "form": "LWWLL",
+     "records": [
+      {
+       "name": "overall",
+       "abbreviation": "Total",
+       "type": "total",
+       "summary": "LWWLL"
+      }
+     ]
+    }
+   ],
+   "notes": [],
+   "status": {
+    "clock": 4800.0,
+    "displayClock": "80'",
+    "period": 2,
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final",
+     "shortDetail": "Final"
+    }
+   },
+   "broadcasts": [],
+   "format": {
+    "regulation": {
+     "periods": 2
+    }
+   },
+   "startDate": "2026-09-05T05:00Z",
+   "broadcast": "",
+   "geoBroadcasts": [],
+   "highlights": []
+  }
+ ],
+ "links": [
+  {
+   "language": "en-US",
+   "rel": [
+    "summary",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nrl/match/_/gameId/603453/league/3",
+   "text": "Gamecast",
+   "shortText": "Gamecast",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "match",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nrl/match/_/gameId/603453/league/3",
+   "text": "Match",
+   "shortText": "Match",
+   "isExternal": false,
+   "isPremium": false
+  }
+ ],
+ "status": {
+  "clock": 4800.0,
+  "displayClock": "80'",
+  "period": 2,
+  "type": {
+   "id": "3",
+   "name": "STATUS_FINAL",
+   "state": "post",
+   "completed": true,
+   "description": "Final",
+   "detail": "Final",
+   "shortDetail": "Final"
+  }
+ }
+}

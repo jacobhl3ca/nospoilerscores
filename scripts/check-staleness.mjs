@@ -29,6 +29,7 @@ const NEWS_HOURLY = [
   "reddit-cfl", "reddit-mls", "reddit-nba", "reddit-ncaabase", "reddit-ncaaf", "reddit-ncaah", "reddit-ncaam", "reddit-ncaaw",
   "reddit-f1", "reddit-indycar", "reddit-nascar", "reddit-nfl", "reddit-nhl", "reddit-nwsl", "reddit-soccer", "reddit-tennis",
   "reddit-ucl", "reddit-uel", "reddit-ufc", "reddit-ufl", "reddit-wnba",
+  "reddit-nrl", "reddit-afl", "reddit-rugbyunion",
   // thescore-cfl is NOT here on purpose: api.thescore.com/cfl/articles returns
   // [] (theScore publishes no CFL news), and writeFeed never writes an empty
   // feed, so the file has 404'd since the CFL shipped 2026-09-13. Listing it
@@ -91,6 +92,9 @@ const SEASONAL_REDDIT = new Set([
   "reddit-ufl", "reddit-ncaabase",
   // r/CFL goes quiet from the Grey Cup (mid-Nov) to the May preseason.
   "reddit-cfl",
+  // r/nrl and r/AFL go quiet between their October / September grand finals
+  // and the February preseason.
+  "reddit-nrl", "reddit-afl",
 ]);
 
 const FEEDS = [
@@ -127,6 +131,10 @@ const FEEDS = [
   // records change monthly at most, but fetchedAt moves every run; loose
   // anyway, since a missed week only delays a new month's cut.
   { path: "/news/mlb-review.json", warnH: 7 * 24, critH: 30 * 24 },
+  // International cricket series list (prebake bakeCricketSeries, every bake).
+  // The /api/cricket-intl worker reads it; a stuck file only misses NEW series,
+  // since kept ones stay listed until their last day, so it is loose.
+  { path: "/news/cricket-series.json", warnH: 24, critH: 72 },
   { path: "/espn-airings.json", warnH: 6, critH: 24 },           // GHA every 2h
   // prime-asins is a best-effort nicety: it deep-links Prime broadcasts to the
   // exact game page, and scrape-prime-asins.mjs is explicitly non-fatal — if

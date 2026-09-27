@@ -777,6 +777,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 Pre
               </span>
             )}
+            {/* Cricket format chip (cricketintl): "ODI", "T20I", "W ODI",
+                "Test · Day 2 of 5". A column mixes all three formats, and a
+                Test that is on day 3 is not a game that starts at 5:00 AM. */}
+            {game.formatTag && (
+              <span
+                className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none whitespace-nowrap"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                data-format-tag={game.formatTag}
+              >
+                {game.formatTag}
+              </span>
+            )}
             {/* Date/time never shrinks or clips (shrink-0) so the time always
                 shows in full — including the ":00". When it + a wide network
                 ("Sun 12:00PM" + "FS1 +2") can't share one line on a narrow mobile

@@ -3,7 +3,7 @@
 // Both are deliberately absent from ALL_LEAGUES, so nothing that walks the catalog
 // (season windows, news feeds, prebake scripts) ever sees them — they exist as a
 // Sport only so a slot pref, a switcher row and a LeagueData can carry them.
-export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "ufl" | "nhl" | "ncaah" | "cfl" | "ncaawh" | "ncaavb" | "ncaawsoc" | "ncaamsoc" | "llws" | "ncaabase" | "ncaasoft" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "ligamx" | "nwsl" | "efl" | "libertadores" | "euro" | "afcon" | "saudi" | "uecl" | "facup" | "copadelrey" | "dfbpokal" | "nations" | "cricket" | "sixnations" | "rugbywc" | "rugbychamp" | "superrugby" | "rugbytest" | "nationschamp" | "f1" | "nascar" | "indycar" | "ufc" | "boxing" | "chess" | "poker" | "esports" | "top" | "best";
+export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "ufl" | "nhl" | "ncaah" | "cfl" | "ncaawh" | "ncaavb" | "ncaawsoc" | "ncaamsoc" | "llws" | "ncaabase" | "ncaasoft" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "ligamx" | "nwsl" | "efl" | "libertadores" | "euro" | "afcon" | "saudi" | "uecl" | "facup" | "copadelrey" | "dfbpokal" | "nations" | "cricket" | "cricketintl" | "sixnations" | "rugbywc" | "rugbychamp" | "superrugby" | "rugbytest" | "nationschamp" | "premrugby" | "urc" | "top14" | "challengecup" | "mlr" | "nrl" | "afl" | "f1" | "nascar" | "indycar" | "ufc" | "boxing" | "chess" | "poker" | "esports" | "top" | "best";
 
 export interface Game {
   id: string;
@@ -142,6 +142,11 @@ export interface Game {
   // the notes array, which leaks results ("PSG win 4-3 on penalties"). Null for
   // league play (the US-sports playoff label lives in `playoffLabel`).
   stage?: string | null;
+  // International cricket (cricketintl): the match format as a short chip,
+  // "ODI" / "T20I" / "Test" / "W ODI", plus "· Day 2 of 5" while a multi-day
+  // match is on. Read off competition.class — never the status summary, which
+  // is the result sentence ("LIONS won by 8 runs").
+  formatTag?: string | null;
 }
 
 export interface Team {

@@ -1,0 +1,578 @@
+{
+ "sports": [
+  {
+   "id": "200",
+   "name": "Cricket",
+   "leagues": [
+    {
+     "id": "8052",
+     "name": "County Championship Division One",
+     "events": [
+      {
+       "id": "1513394",
+       "date": "2026-09-24T09:30:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "4",
+        "generalClassCard": "First-class",
+        "name": "First-class matches",
+        "eventType": "Test"
+       },
+       "description": "69th Match, County Championship Division One at Cardiff, Sep 24-27 2026",
+       "competitors": [
+        {
+         "displayName": "Glamorgan"
+        },
+        {
+         "displayName": "Essex"
+        }
+       ]
+      },
+      {
+       "id": "1513395",
+       "date": "2026-09-24T09:30:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "4",
+        "generalClassCard": "First-class",
+        "name": "First-class matches",
+        "eventType": "Test"
+       },
+       "description": "70th Match, County Championship Division One at Taunton, Sep 24-27 2026",
+       "competitors": [
+        {
+         "displayName": "Somerset"
+        },
+        {
+         "displayName": "Surrey"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "24377",
+     "name": "Australia Under-19s tour of India 2026/27",
+     "events": [
+      {
+       "id": "1535684",
+       "date": "2026-09-27T04:00:00Z",
+       "endDate": "2026-10-01T23:59:00Z",
+       "status": "in",
+       "class": {
+        "internationalClassId": "14",
+        "generalClassId": "11",
+        "generalClassCard": "Youth Test",
+        "name": "Youth Test matches",
+        "eventType": "Test"
+       },
+       "description": "1st Youth Test, Australia Under-19s tour of India at Rajkot, Sep 27-30 2026",
+       "competitors": [
+        {
+         "displayName": "India Under-19s"
+        },
+        {
+         "displayName": "Australia Under-19s"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "8836",
+     "name": "President's Trophy",
+     "events": [
+      {
+       "id": "1553786",
+       "date": "2026-09-24T05:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "4",
+        "generalClassCard": "First-class",
+        "name": "First-class matches",
+        "eventType": "Test"
+       },
+       "description": "10th Match, President's Trophy Grade-I at Abbottabad, Sep 24-27 2026",
+       "competitors": [
+        {
+         "displayName": "Khan Research Laboratories"
+        },
+        {
+         "displayName": "Oil & Gas Development Company Limited"
+        }
+       ]
+      },
+      {
+       "id": "1553787",
+       "date": "2026-09-24T05:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "4",
+        "generalClassCard": "First-class",
+        "name": "First-class matches",
+        "eventType": "Test"
+       },
+       "description": "11th Match, President's Trophy Grade-I at Peshawar, Sep 24-27 2026",
+       "competitors": [
+        {
+         "displayName": "Markhor IT Solutions"
+        },
+        {
+         "displayName": "Sui Northern Gas Pipelines Limited"
+        }
+       ]
+      },
+      {
+       "id": "1553785",
+       "date": "2026-09-24T05:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "4",
+        "generalClassCard": "First-class",
+        "name": "First-class matches",
+        "eventType": "Test"
+       },
+       "description": "9th Match, President's Trophy Grade-I at Islamabad, Sep 24-27 2026",
+       "competitors": [
+        {
+         "displayName": "Ghani"
+        },
+        {
+         "displayName": "State Bank of Pakistan"
+        }
+       ]
+      },
+      {
+       "id": "1553788",
+       "date": "2026-09-24T05:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "4",
+        "generalClassCard": "First-class",
+        "name": "First-class matches",
+        "eventType": "Test"
+       },
+       "description": "12th Match, President's Trophy Grade-I at Islamabad, Sep 24-27 2026",
+       "competitors": [
+        {
+         "displayName": "Hyderabad Kingsmen Academy"
+        },
+        {
+         "displayName": "Pakistan Television"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "24203",
+     "name": "Australia tour of South Africa 2026/27",
+     "events": [
+      {
+       "id": "1525656",
+       "date": "2026-09-27T08:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "2",
+        "generalClassId": "5",
+        "generalClassCard": "ODI",
+        "name": "One-Day Internationals",
+        "eventType": "ODI"
+       },
+       "description": "2nd ODI, Australia tour of South Africa at Johannesburg, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "South Africa"
+        },
+        {
+         "displayName": "Australia"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "19482",
+     "name": "Hong Kong Premier League One-Day Tournament",
+     "events": [
+      {
+       "id": "1555408",
+       "date": "2026-09-27T02:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "12",
+        "generalClassCard": "Other OD",
+        "name": "Other one-day/limited-overs matches",
+        "eventType": "ODI"
+       },
+       "description": "1st Match, Hong Kong Premier League One-Day Tournament at Kowloon, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "Kowloon Cricket Club"
+        },
+        {
+         "displayName": "United Services Recreation Club"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "8204",
+     "name": "County Championship Division Two",
+     "events": [
+      {
+       "id": "1513451",
+       "date": "2026-09-24T09:30:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "4",
+        "generalClassCard": "First-class",
+        "name": "First-class matches",
+        "eventType": "Test"
+       },
+       "description": "56th Match, County Championship Division Two at Manchester, Sep 24-27 2026",
+       "competitors": [
+        {
+         "displayName": "Lancashire"
+        },
+        {
+         "displayName": "Durham"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "24796",
+     "name": "West Indies Women tour of Zimbabwe 2026",
+     "events": [
+      {
+       "id": "1554976",
+       "date": "2026-09-27T07:30:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "9",
+        "generalClassId": "12",
+        "generalClassCard": "Women's ODI",
+        "name": "Women's One-Day Internationals",
+        "eventType": "ODI"
+       },
+       "description": "2nd ODI, West Indies Women tour of Zimbabwe at Harare, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "Zimbabwe Women"
+        },
+        {
+         "displayName": "West Indies Women"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "23802",
+     "name": "Sri Lanka tour of England 2026",
+     "events": [
+      {
+       "id": "1496590",
+       "date": "2026-09-27T09:30:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "2",
+        "generalClassId": "5",
+        "generalClassCard": "ODI",
+        "name": "One-Day Internationals",
+        "eventType": "ODI"
+       },
+       "description": "3rd ODI, Sri Lanka tour of England at London, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "England"
+        },
+        {
+         "displayName": "Sri Lanka"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "24289",
+     "name": "West Indies tour of India 2026/27",
+     "events": [
+      {
+       "id": "1529227",
+       "date": "2026-09-27T08:30:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "2",
+        "generalClassId": "5",
+        "generalClassCard": "ODI",
+        "name": "One-Day Internationals",
+        "eventType": "ODI"
+       },
+       "description": "1st ODI (D/N), West Indies tour of India at Thiruvananthapuram, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "India"
+        },
+        {
+         "displayName": "West Indies"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "1554562",
+     "name": "Nigeria Quadrangular T20 Series",
+     "events": [
+      {
+       "id": "1554593",
+       "date": "2026-09-27T09:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "13",
+        "generalClassCard": "Other T20",
+        "name": "Other Twenty20 matches",
+        "eventType": "T20"
+       },
+       "description": "11th Match, Nigeria Quadrangular T20 Series at Lagos, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "Nigeria A"
+        },
+        {
+         "displayName": "Ghana"
+        }
+       ]
+      },
+      {
+       "id": "1554594",
+       "date": "2026-09-27T13:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "3",
+        "generalClassId": "6",
+        "generalClassCard": "T20I",
+        "name": "Twenty20 Internationals",
+        "eventType": "T20"
+       },
+       "description": "12th Match, Nigeria Quadrangular T20 Series at Lagos, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "Nigeria"
+        },
+        {
+         "displayName": "Sierra Leone"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "18940",
+     "name": "South American Women's Championships",
+     "events": [
+      {
+       "id": "1555261",
+       "date": "2026-09-27T12:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "13",
+        "generalClassCard": "Other T20",
+        "name": "Other Twenty20 matches",
+        "eventType": "T20"
+       },
+       "description": "Final, South American Women's Championships at Minas Gerias, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "Brazil A Women"
+        },
+        {
+         "displayName": "Costa Rica Women"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "22547",
+     "name": "Asian Games Men's Cricket Competition",
+     "events": [
+      {
+       "id": "1552772",
+       "date": "2026-09-28T00:00:00Z",
+       "endDate": "2026-09-29T23:59:00Z",
+       "status": "pre",
+       "class": {
+        "internationalClassId": "3",
+        "generalClassId": "6",
+        "generalClassCard": "T20I",
+        "name": "Twenty20 Internationals",
+        "eventType": "T20"
+       },
+       "description": "1st Quarter-Final, Asian Games Men's Cricket Competition at Nisshin, Sep 28 2026",
+       "competitors": [
+        {
+         "displayName": "Hong Kong"
+        },
+        {
+         "displayName": "Pakistan"
+        }
+       ]
+      },
+      {
+       "id": "1552773",
+       "date": "2026-09-28T05:00:00Z",
+       "endDate": "2026-09-29T23:59:00Z",
+       "status": "pre",
+       "class": {
+        "internationalClassId": "3",
+        "generalClassId": "6",
+        "generalClassCard": "T20I",
+        "name": "Twenty20 Internationals",
+        "eventType": "T20"
+       },
+       "description": "2nd Quarter-Final, Asian Games Men's Cricket Competition at Nisshin, Sep 28 2026",
+       "competitors": [
+        {
+         "displayName": "Afghanistan"
+        },
+        {
+         "displayName": "India"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "23315",
+     "name": "North America T20 Cup",
+     "events": [
+      {
+       "id": "1552801",
+       "date": "2026-09-27T18:30:00Z",
+       "endDate": "2026-09-29T23:59:00Z",
+       "status": "pre",
+       "class": {
+        "internationalClassId": "3",
+        "generalClassId": "6",
+        "generalClassCard": "T20I",
+        "name": "Twenty20 Internationals",
+        "eventType": "T20"
+       },
+       "description": "Final, North America Cup at George Town, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "Cayman Islands"
+        },
+        {
+         "displayName": "Bermuda"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "8656",
+     "name": "South Africa Domestic T20/Pro20",
+     "events": [
+      {
+       "id": "1551836",
+       "date": "2026-09-27T11:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "6",
+        "generalClassCard": "Twenty20",
+        "name": "Twenty20 matches",
+        "eventType": "T20"
+       },
+       "description": "Pool A, CSA T20 Challenge at Durban, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "Dolphins"
+        },
+        {
+         "displayName": "Lions"
+        }
+       ]
+      },
+      {
+       "id": "1551838",
+       "date": "2026-09-27T11:00:00Z",
+       "endDate": "2026-09-28T23:59:00Z",
+       "status": "post",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "6",
+        "generalClassCard": "Twenty20",
+        "name": "Twenty20 matches",
+        "eventType": "T20"
+       },
+       "description": "Pool B, CSA T20 Challenge at White River, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "Mpumalanga"
+        },
+        {
+         "displayName": "Titans"
+        }
+       ]
+      },
+      {
+       "id": "1551837",
+       "date": "2026-09-27T16:00:00Z",
+       "endDate": "2026-09-29T23:59:00Z",
+       "status": "in",
+       "class": {
+        "internationalClassId": "0",
+        "generalClassId": "6",
+        "generalClassCard": "Twenty20",
+        "name": "Twenty20 matches",
+        "eventType": "T20"
+       },
+       "description": "Pool B (N), CSA T20 Challenge at Cape Town, Sep 27 2026",
+       "competitors": [
+        {
+         "displayName": "Western Province"
+        },
+        {
+         "displayName": "Knights"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -1178,6 +1178,174 @@
         "soccer": false,
         "closenessCurve": null
       }
+    },
+    {
+      "key": "premrugby",
+      "label": "Prem Rugby",
+      "path": "/rugby/267979/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "preseasonIsRegular": true,
+      "season": {
+        "start": "09-25",
+        "end": "06-20",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
+      "key": "urc",
+      "label": "URC",
+      "path": "/rugby/270557/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "preseasonIsRegular": true,
+      "season": {
+        "start": "09-25",
+        "end": "06-19",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
+      "key": "top14",
+      "label": "Top 14",
+      "path": "/rugby/270559/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "preseasonIsRegular": true,
+      "season": {
+        "start": "09-05",
+        "end": "06-28",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
+      "key": "challengecup",
+      "label": "Challenge Cup",
+      "path": "/rugby/272073/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "preseasonIsRegular": true,
+      "season": {
+        "start": "10-16",
+        "end": "05-22",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
+      "key": "mlr",
+      "label": "MLR",
+      "path": "/rugby/289262/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "preseasonIsRegular": true,
+      "season": {
+        "start": "03-28",
+        "end": "06-22",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
+      "key": "nrl",
+      "label": "NRL",
+      "path": "/rugby-league/3/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nrl.png&w=200&h=200&transparent=true",
+      "defaultOn": false,
+      "preseasonIsRegular": true,
+      "season": {
+        "start": "02-28",
+        "end": "10-05",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
+      "key": "afl",
+      "label": "AFL",
+      "path": "/australian-football/afl/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/afl.png&w=200&h=200&transparent=true",
+      "defaultOn": false,
+      "preseasonIsRegular": false,
+      "season": {
+        "start": "03-05",
+        "end": "09-27",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 3,
+        "overtimeBonus": 20,
+        "scoringDivisor": 18,
+        "regulationPeriods": 4,
+        "periodSeconds": null,
+        "soccer": false,
+        "closenessCurve": null
+      }
     }
   ]
 }

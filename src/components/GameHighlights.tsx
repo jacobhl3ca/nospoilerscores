@@ -72,6 +72,9 @@ const highlightBufferHours: Record<string, number> = {
   // until roughly four hours in even on a fast turnaround. A 3-hour buffer would
   // surface the button while the second innings is still being bowled.
   cricket: 7,
+  // International cricket is dark (no button), so this only matters once a
+  // channel is lit: an ODI runs ~8 hours, so 9 before a package can exist.
+  cricketintl: 9,
   // Rugby union: 80 minutes of play in two halves, so the same 3-hour
   // post-kickoff buffer every 90-minute soccer league uses. These five were
   // absent until 2026-08-12 and silently took the 4h default, which both
@@ -80,17 +83,23 @@ const highlightBufferHours: Record<string, number> = {
   // i.e. the audit could flag a "missing" button during the hour the app was
   // still deliberately hiding it.
   sixnations: 3, superrugby: 3, rugbywc: 3, rugbychamp: 3, nationschamp: 3,
+  // NRL: 80 minutes like union, same 3h. AFL: four ~30-minute quarters plus
+  // breaks run ~2h45m of wall clock, so an hour more.
+  premrugby: 3, urc: 3, top14: 3, challengecup: 3, mlr: 3,
+  nrl: 3, afl: 4,
 };
 // ncaaw is 4, not 2: women's college hoops plays four 10-min quarters (moved to
 // quarters in 2015-16), so a finished regulation game reports period 4. A value
 // of 2 made otPeriods = 4 - 2 = 2 for EVERY regulation game, adding a phantom
 // 1-hour double-OT buffer that delayed the highlight buttons. ncaam stays 2
 // (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
-const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, cfl: 4, ncaawh: 3, ncaavb: 5, mlb: 9, ncaabase: 9, ncaasoft: 7, nfl: 4, ufl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, uecl: 2, facup: 2, copadelrey: 2, dfbpokal: 2, ncaawsoc: 2, ncaamsoc: 2, nations: 2, cricket: 2, golf: 4, tennis: 4,
+const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, cfl: 4, ncaawh: 3, ncaavb: 5, mlb: 9, ncaabase: 9, ncaasoft: 7, nfl: 4, ufl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, uecl: 2, facup: 2, copadelrey: 2, dfbpokal: 2, ncaawsoc: 2, ncaamsoc: 2, nations: 2, cricket: 2, cricketintl: 2, golf: 4, tennis: 4,
   // Two 40-minute halves. Without these the default of 4 made rawOt negative
   // for every finished rugby match — clamped to 0 by the Math.max, so the
   // buffer was right by accident; stating it keeps that an intent, not luck.
-  sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2 };
+  sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2,
+  premrugby: 2, urc: 2, top14: 2, challengecup: 2, mlr: 2,
+  nrl: 2, afl: 4 };
 
 // Fallback label for the official-highlight button. That button normally
 // reads the clip's LENGTH ("9m") - the league name is redundant beside a card
@@ -109,6 +118,8 @@ const highlightBadgeLabel: Record<string, string> = {
   seriea: "SERIE A", ligamx: "LIGA MX",
   sixnations: "6 NATIONS", superrugby: "SUPER RUGBY", rugbywc: "RWC",
   rugbychamp: "CHAMPIONS", rugbytest: "TESTS", nationschamp: "NATIONS",
+  // Club rugby (2026-09-27). URC and MLR read fine uppercased.
+  premrugby: "PREM", top14: "TOP 14", challengecup: "CHALLENGE",
   // FA Cup (2026-09-14): the only lit cup; "FACUP" is not a word either.
   facup: "FA CUP",
   // NCAA volleyball (lit 2026-09-16): "NCAAVB" reads as a code, not a sport.

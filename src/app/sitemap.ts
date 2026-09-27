@@ -58,6 +58,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/europa-league-without-spoilers",
     "/conference-league-without-spoilers",
     "/nations-league-without-spoilers",
+    // Added 2026-09-27 with the NRL column, a week before the Grand Final.
+    "/nrl-highlights-without-spoilers",
+    // Added 2026-09-27 with the five club rugby columns.
+    "/rugby-without-spoilers",
+    // Added 2026-09-27: AFL (column shipped the same day) and CFL (column live
+    // since 2026-09-13, no page until now).
+    "/afl-without-spoilers",
+    "/cfl-without-spoilers",
     "/best-spoiler-free-sports-sites",
     "/redzone-for-every-sport",
     "/faq",
@@ -135,6 +143,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/europa-league-without-spoilers",
     "/conference-league-without-spoilers",
     "/nations-league-without-spoilers",
+    // Added 2026-09-27. Same specificity gate: dated ET kickoffs off the ESPN
+    // feed and the NRL's own spoiler mechanism (every game overnight in the
+    // US, finals fixtures that give away the week before).
+    "/nrl-highlights-without-spoilers",
+    // Same day: the rugby union hub (dated ET kickoffs per competition, and
+    // bonus-point tables as the rugby-specific spoiler).
+    "/rugby-without-spoilers",
+    // Same day: AFL (dated ET bounce times, the top-ten finals that give away
+    // the week before) and CFL (ET kickoffs + US channel per game, the Grey Cup
+    // date, the crossover rule as the standings spoiler).
+    "/afl-without-spoilers",
+    "/cfl-without-spoilers",
   ]);
 
   // Build timestamp, for the boards whose rendered content really does change

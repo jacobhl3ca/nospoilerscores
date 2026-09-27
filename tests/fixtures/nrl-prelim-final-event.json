@@ -1,0 +1,238 @@
+{
+ "id": "604844",
+ "uid": "s:8088~l:8370~e:604844",
+ "date": "2026-09-27T06:00Z",
+ "name": "Panthers vs Knights",
+ "shortName": "PEN VS NEW",
+ "season": {
+  "year": 2026,
+  "type": 2,
+  "slug": "2026-final-nrl"
+ },
+ "week": {
+  "number": 3
+ },
+ "competitions": [
+  {
+   "id": "604844",
+   "uid": "s:8088~l:8370~e:604844~c:604844",
+   "date": "2026-09-27T06:00Z",
+   "attendance": 0,
+   "timeValid": true,
+   "neutralSite": false,
+   "conferenceCompetition": false,
+   "playByPlayAvailable": false,
+   "recent": true,
+   "venue": {
+    "id": "289224",
+    "fullName": "Accor Stadium",
+    "address": {
+     "city": "Sydney",
+     "state": "Australia"
+    },
+    "indoor": false
+   },
+   "competitors": [
+    {
+     "id": "289199",
+     "uid": "s:8088~l:8370~t:289199",
+     "type": "team",
+     "order": 0,
+     "homeAway": "home",
+     "winner": false,
+     "team": {
+      "id": "289199",
+      "uid": "s:8088~t:289199",
+      "name": "Panthers",
+      "abbreviation": "PEN",
+      "displayName": "Panthers",
+      "shortDisplayName": "Panthers",
+      "isActive": true,
+      "venue": {
+       "id": "289222"
+      },
+      "links": [
+       {
+        "rel": [
+         "clubhouse",
+         "desktop",
+         "team"
+        ],
+        "href": "https://www.espn.com/nrl/fixtures/_/league/3",
+        "text": "Clubhouse",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "logo": "https://a.espncdn.com/i/teamlogos/rugby/teams/500/289199.png"
+     },
+     "score": "14",
+     "linescores": [
+      {
+       "value": 14.0,
+       "displayValue": "14",
+       "period": 1
+      },
+      {
+       "value": 14.0,
+       "displayValue": "14",
+       "period": 2
+      },
+      {
+       "value": 0.0,
+       "displayValue": "0",
+       "period": 20
+      },
+      {
+       "value": 0.0,
+       "displayValue": "0",
+       "period": 60
+      }
+     ],
+     "form": "WWWWL",
+     "records": [
+      {
+       "name": "overall",
+       "abbreviation": "Total",
+       "type": "total",
+       "summary": "WWWWL"
+      }
+     ]
+    },
+    {
+     "id": "289207",
+     "uid": "s:8088~l:8370~t:289207",
+     "type": "team",
+     "order": 1,
+     "homeAway": "away",
+     "winner": true,
+     "team": {
+      "id": "289207",
+      "uid": "s:8088~t:289207",
+      "name": "Knights",
+      "abbreviation": "NEW",
+      "displayName": "Knights",
+      "shortDisplayName": "Knights",
+      "isActive": true,
+      "venue": {
+       "id": "289227"
+      },
+      "links": [
+       {
+        "rel": [
+         "clubhouse",
+         "desktop",
+         "team"
+        ],
+        "href": "https://www.espn.com/nrl/fixtures/_/league/3",
+        "text": "Clubhouse",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "logo": "https://a.espncdn.com/i/teamlogos/rugby/teams/500/289207.png"
+     },
+     "score": "22",
+     "linescores": [
+      {
+       "value": 6.0,
+       "displayValue": "6",
+       "period": 1
+      },
+      {
+       "value": 22.0,
+       "displayValue": "22",
+       "period": 2
+      },
+      {
+       "value": 0.0,
+       "displayValue": "0",
+       "period": 20
+      },
+      {
+       "value": 0.0,
+       "displayValue": "0",
+       "period": 60
+      }
+     ],
+     "form": "WWLLW",
+     "records": [
+      {
+       "name": "overall",
+       "abbreviation": "Total",
+       "type": "total",
+       "summary": "WWLLW"
+      }
+     ]
+    }
+   ],
+   "notes": [],
+   "status": {
+    "clock": 4800.0,
+    "displayClock": "80'",
+    "period": 2,
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final",
+     "shortDetail": "Final"
+    }
+   },
+   "broadcasts": [],
+   "format": {
+    "regulation": {
+     "periods": 2
+    }
+   },
+   "startDate": "2026-09-27T06:00Z",
+   "broadcast": "",
+   "geoBroadcasts": [],
+   "highlights": []
+  }
+ ],
+ "links": [
+  {
+   "language": "en-US",
+   "rel": [
+    "summary",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nrl/match/_/gameId/604844/league/3",
+   "text": "Gamecast",
+   "shortText": "Gamecast",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en-US",
+   "rel": [
+    "match",
+    "desktop",
+    "event"
+   ],
+   "href": "https://www.espn.com/nrl/match/_/gameId/604844/league/3",
+   "text": "Match",
+   "shortText": "Match",
+   "isExternal": false,
+   "isPremium": false
+  }
+ ],
+ "status": {
+  "clock": 4800.0,
+  "displayClock": "80'",
+  "period": 2,
+  "type": {
+   "id": "3",
+   "name": "STATUS_FINAL",
+   "state": "post",
+   "completed": true,
+   "description": "Final",
+   "detail": "Final",
+   "shortDetail": "Final"
+  }
+ }
+}
