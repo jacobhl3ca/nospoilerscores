@@ -63,7 +63,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!team || !meta) return {};
 
   const title = `${team.name} Games Without Spoilers: Schedule, No Scores | HideScore`;
-  const description = `${team.name} ${meta.label} schedule without spoilers: recent and upcoming games with no score, record or standings shown, spoiler-safe highlights and opt-in ratings.`;
+  // Kept under Google's ~155-char SERP truncation limit for every one of the
+  // 144 team names (the longest, "Wolverhampton Wanderers Premier League",
+  // lands at 151). The prior wording ran 152–176 chars, so 136 of the 144
+  // descriptions truncated mid-sentence in results. Trimmed "with … shown",
+  // "record" (already implied by "no … standings") and "opt-in" to fit while
+  // keeping the schedule / no-score / highlights / ratings promise intact.
+  const description = `${team.name} ${meta.label} schedule without spoilers: recent and upcoming games, no score or standings, spoiler-safe highlights and ratings.`;
   const canonical = teamPagePath(team);
 
   return {
