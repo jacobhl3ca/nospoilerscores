@@ -11,8 +11,8 @@
 //   2. The bar to get in. A card here exists to be played, so only a game with
 //      a clip behind it qualifies. A finished game with no play button is left
 //      out rather than shown with nothing to press.
-//   3. The order. The game's final rating (calculateRating: 60 + 40·progress,
-//      so a finished game can reach 100) — how close it was, never who won. It
+//   3. The order. The game's final rating (calculateRating; a finished game is
+//      never time-capped, so it can reach 100) — how close it was, never who won. It
 //      reads closeness, not the score, which is what lets the column say which
 //      games are worth the replay without saying how any of them ended.
 //
