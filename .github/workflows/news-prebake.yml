@@ -47,3 +47,5 @@ jobs:
               sleep $((attempt * 10))
             done
           done
+          # The recap archive's month files the bake changed (news/recaps/*.json).
+          scripts/upload-recap-archive.sh

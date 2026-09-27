@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { SHOW_CARD_LEAGUE_CHIP } from "../../src/lib/leagueLabels";
 
 // "ESPN front page" (Jacob 9/26): the cross-league column that shows the games
 // espn.com is featuring in its scores strip, in ESPN's own order. The strip
@@ -109,6 +110,10 @@ async function seed(page: Page, extra: Record<string, unknown> = {}) {
     route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"No results"}' }));
 }
 
+const cards = (page: Page) => page.locator('[data-league-column="top"]').getByRole("button", { name: / — game details$/ });
+// The league chip is off for now (SHOW_CARD_LEAGUE_CHIP): 4 chips when on, 0 when off.
+const CHIPS = SHOW_CARD_LEAGUE_CHIP ? 4 : 0;
+
 const cardNames = (page: Page) =>
   page.locator('[data-league-column="top"]').getByRole("button", { name: / — game details$/ })
     .evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").replace(/ — game details$/, "")));
@@ -129,7 +134,8 @@ for (const { name, width, height } of [
     const headingBox = await heading.boundingBox();
     expect(headingBox!.height, "the column title wrapped onto a second line").toBeLessThan(32);
 
-    await expect(col.locator("[data-league-tag]")).toHaveCount(4, { timeout: 15_000 });
+    await expect(cards(page)).toHaveCount(4, { timeout: 15_000 });
+    await expect(col.locator("[data-league-tag]")).toHaveCount(CHIPS);
     expect(await cardNames(page)).toEqual(EXPECTED);
     for (const matchup of NEVER) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(0);
 
@@ -154,7 +160,8 @@ test("phone: ESPN front page cards keep one-line rows like the other columns (39
   await seed(page, { showRatings: true });
   await page.goto("/");
   const col = page.locator('[data-league-column="top"]');
-  await expect(col.locator("[data-league-tab]")).toHaveCount(4, { timeout: 30_000 });
+  await expect(cards(page)).toHaveCount(4, { timeout: 30_000 });
+  await expect(col.locator("[data-league-tab]")).toHaveCount(CHIPS);
   const refH = (await page.locator('[data-league-column="mlb"] .game-meta-row').first().boundingBox())!.height;
   const rows = col.locator(".game-meta-row");
   await expect(rows).toHaveCount(4);
@@ -162,19 +169,21 @@ test("phone: ESPN front page cards keep one-line rows like the other columns (39
     const h = (await rows.nth(i).boundingBox())!.height;
     expect(h, `card ${i}: the meta row wrapped (${h}px vs ${refH}px in the MLB column)`).toBeLessThanOrEqual(refH + 0.5);
   }
-  await expect(col.locator("[data-league-tag]")).toHaveCount(4);
-  for (let i = 0; i < 4; i++) await expect(col.locator("[data-league-tag]").nth(i)).toBeHidden();
-  const tabs = await col.locator("[data-league-tab]").evaluateAll((els) => els.map((t) => {
-    const tab = t.getBoundingClientRect();
-    const card = t.parentElement!.getBoundingClientRect();
-    const row = t.parentElement!.querySelector(".game-meta-row")!.getBoundingClientRect();
-    return { text: t.textContent, top: tab.top, bottom: tab.bottom, cardTop: card.top, rowTop: row.top, shown: getComputedStyle(t).display !== "none" };
-  }));
-  expect(tabs.map((t) => t.text)).toEqual(["NCAAF", "NHL", "MLB", "NCAAF"]);
-  for (const [i, t] of tabs.entries()) {
-    expect(t.shown, `card ${i}: tab hidden`).toBe(true);
-    expect(t.top < t.cardTop && t.bottom > t.cardTop, `card ${i}: tab is not on the card's top border`).toBe(true);
-    expect(t.bottom, `card ${i}: tab overlaps the row below it`).toBeLessThanOrEqual(t.rowTop);
+  await expect(col.locator("[data-league-tag]")).toHaveCount(CHIPS);
+  if (SHOW_CARD_LEAGUE_CHIP) {
+    for (let i = 0; i < 4; i++) await expect(col.locator("[data-league-tag]").nth(i)).toBeHidden();
+    const tabs = await col.locator("[data-league-tab]").evaluateAll((els) => els.map((t) => {
+      const tab = t.getBoundingClientRect();
+      const card = t.parentElement!.getBoundingClientRect();
+      const row = t.parentElement!.querySelector(".game-meta-row")!.getBoundingClientRect();
+      return { text: t.textContent, top: tab.top, bottom: tab.bottom, cardTop: card.top, rowTop: row.top, shown: getComputedStyle(t).display !== "none" };
+    }));
+    expect(tabs.map((t) => t.text)).toEqual(["NCAAF", "NHL", "MLB", "NCAAF"]);
+    for (const [i, t] of tabs.entries()) {
+      expect(t.shown, `card ${i}: tab hidden`).toBe(true);
+      expect(t.top < t.cardTop && t.bottom > t.cardTop, `card ${i}: tab is not on the card's top border`).toBe(true);
+      expect(t.bottom, `card ${i}: tab overlaps the row below it`).toBeLessThanOrEqual(t.rowTop);
+    }
   }
   if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/espn-front-page-phone-ratings.png` });
 });
@@ -183,13 +192,28 @@ test("ratings mode keeps ESPN's order instead of re-sorting by rating", async ({
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page, { showRatings: true });
   await page.goto("/");
-  await expect(page.locator('[data-league-column="top"] [data-league-tag]')).toHaveCount(4, { timeout: 30_000 });
+  await expect(cards(page)).toHaveCount(4, { timeout: 30_000 });
   expect(await cardNames(page)).toEqual(EXPECTED);
 });
 
-test("the column switcher offers ESPN front page on today's board", async ({ page }) => {
+// Opt-in while it is tested (Jacob 9/26: "default off for all"): no row
+// until Settings turns it on or a column pins it. These seeds pin a real
+// league in column 3: `thirdLeague: undefined` would vanish when the init
+// script's argument is serialized, leaving the base "top" pin in place.
+test("the column switcher has no ESPN front page row by default", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
-  await seed(page, { thirdLeague: undefined, hiddenLeagues: [] });
+  await seed(page, { thirdLeague: "ncaaf", hiddenLeagues: [] });
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
+  await page.locator('button[title="Switch league"]').first().click();
+  const menu = page.getByRole("dialog", { name: "Switch league" }).first();
+  await expect(menu.getByRole("button", { name: "Auto" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /ESPN front page/ })).toHaveCount(0);
+});
+
+test("turned on, the column switcher offers ESPN front page on today's board", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { thirdLeague: "ncaaf", hiddenLeagues: [], shownLeagues: ["top"] });
   await page.goto("/");
   await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
   await page.locator('button[title="Switch league"]').first().click();
@@ -240,5 +264,22 @@ test("Settings: the Across leagues list turns ESPN front page off and on", async
     .toContain("top");
   await box.check();
   await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}").hiddenLeagues ?? []))
+    .not.toContain("top");
+});
+
+test("Settings: ESPN front page starts unticked, and ticking it adds it to the switcher", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { thirdLeague: "ncaaf" });
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
+  await page.locator('[aria-label="Open settings"]').first().click();
+  await page.getByText(/leagues in the switcher · Edit/).click();
+  const box = page.getByRole("checkbox", { name: "ESPN front page" });
+  await expect(box).not.toBeChecked();
+  await box.check();
+  await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}").shownLeagues ?? []))
+    .toContain("top");
+  await box.uncheck();
+  await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}").shownLeagues ?? []))
     .not.toContain("top");
 });

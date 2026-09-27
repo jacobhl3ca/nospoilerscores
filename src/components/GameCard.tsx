@@ -8,7 +8,7 @@ import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName, s
 import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
-import { handleExternalClick } from "@/lib/openExternal";
+import { handleExternalClick, watchLinkProps } from "@/lib/openExternal";
 import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
@@ -243,13 +243,9 @@ export function CompactUpcomingCard({
   const networkNode = network ? (
     networkHref ? (
       <a
-        href={networkHref}
-        target="_blank"
-        rel="noopener noreferrer"
+        {...watchLinkProps(network, networkHref)}
         className="text-[11px] hover:underline whitespace-nowrap"
         style={{ color: "var(--text-muted)" }}
-        title={`Watch on ${network}`}
-        onClick={handleExternalClick(networkHref)}
       >
         {shortNetwork(network)}
       </a>
@@ -393,6 +389,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const liveUrl = game.streamUrl;
   // Team-view treats finished games like past-date cards (hide records, show highlights).
   const effectivePastDate = isPastDate || (teamView && isFinished);
+  // What the status bar (game-meta-row) shows besides a league chip. In
+  // ratings mode the schedule shows each finished game's rating
+  // (GREAT/GOOD/MEH/SKIP) so you can see which past games were worth
+  // watching; in Scores mode showRating is false → cards show FINAL. Series
+  // state renders as a top banner above the card, not in this row.
+  const hasStatusText = isLive || isFuture || !!nextGameDate || !!teamView || !isFinished;
+  const hasBroadcast = !isFinished && game.broadcasts.length > 0;
+  const showFinal = isFinished && !isPastDate && !teamView;
+  const metaRowHasText = hasStatusText || showRating || hasBroadcast || showFinal;
+  // The 3-column phone board moves the league chip onto the card's top border
+  // only when the row has other text to share it with (see league-tag-tab).
+  const leagueTabOnBorder = !!leagueTag && metaRowHasText;
   const espnUrl = espnGameUrl(game);
   // Under ?demo=1 the team names are anonymized ("Team A1 at Team A2"), but
   // espnUrl still points at the REAL ESPN gamecast — game.recapUrl (which
@@ -574,10 +582,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           consistent"). On the border it costs no width and no height, so the
           row reads exactly like every other column's. CSS picks one of the
           two (globals.css, .ns-board-tight); everywhere else the inline chip
-          below shows and this one is display:none. */}
-      {leagueTag && (
+          below shows and this one is display:none.
+          Only when the row has something else to show (leagueTabOnBorder): a
+          row that exists for the chip alone (a finished game on a past date,
+          ratings off) has room for it, and moving it out left that row empty
+          under the tab (Jacob 9/26: "empty row looks stupid"). */}
+      {leagueTabOnBorder && (
         <span
-          className="league-tag-tab absolute left-2 top-0 -translate-y-1/2 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none pointer-events-none"
+          className="league-tag-tab absolute left-2 top-0 -translate-y-1/2 text-[11px] font-semibold uppercase tracking-wide rounded px-1.5 py-px leading-none pointer-events-none"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
           data-league-tab={leagueTag}
         >
@@ -681,19 +693,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
 
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
-        const hasStatusText = isLive || isFuture || nextGameDate || teamView || (!isFinished);
-        // In ratings mode the schedule shows each finished game's rating
-        // (GREAT/GOOD/MEH/SKIP) so you can see which past games were worth
-        // watching; in Scores mode showRating is false → cards show FINAL.
         const hasRating = showRating;
-        const hasBroadcast = !isFinished && game.broadcasts.length > 0;
-        const showFinal = isFinished && !isPastDate && !teamView;
-        // Series state now renders as a top banner above the card (see above),
-        // not in the status bar's middle cell, so it's gone from showBar here.
         // A cross-league card carries its league chip in this row, so the row
         // renders for the chip alone (a finished game on a past date has no
         // status, rating or network text to show otherwise).
-        const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView || !!leagueTag;
+        const showBar = metaRowHasText || !!leagueTag;
         if (!showBar) return null;
         // Small ESPN link wrapper for upcoming-time / date labels. In demo mode
         // the link would leak the real matchup (see demoActive above), so render
@@ -744,14 +748,15 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 badge moves right just enough to clear them instead of covering
                 the chip or clipping the live clock. (The 3-column phone board
                 is that case, so there the chip leaves this row for the tab on
-                the card's border — see league-tag-tab above.) Elsewhere it is
+                the card's border whenever the row has other text — see
+                league-tag-tab above.) Elsewhere it is
                 display:contents — no box of its own, so the three stay direct
                 flex items of the row exactly as before. column-gap: inherit
                 keeps the row's own gap, tight-board override included. */}
             <span className={hasRating ? "flex-1 flex items-center [column-gap:inherit]" : "contents"}>
             {leagueTag && (
               <span
-                className="league-tag-inline shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
+                className={`${leagueTabOnBorder ? "league-tag-inline " : ""}shrink-0 text-[11px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 leading-none`}
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
                 data-league-tag={leagueTag}
                 title={leagueLabel && leagueLabel !== leagueTag ? leagueLabel : undefined}
@@ -937,13 +942,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   return (
                     <a
                       key={key}
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      {...watchLinkProps(name, href)}
                       className="hover:underline transition-colors whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
-                      title={`Watch on ${name}`}
-                      onClick={handleExternalClick(href)}
                     >
                       {shortNetwork(name)}
                     </a>
@@ -1037,13 +1038,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 return (
                   <a
                     key={b}
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    {...watchLinkProps(b, href)}
                     className="hover:underline whitespace-nowrap"
                     style={{ color: "var(--text-muted)" }}
-                    title={`Watch on ${b}`}
-                    onClick={handleExternalClick(href)}
                   >
                     {b}
                   </a>

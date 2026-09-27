@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { SHOW_CARD_LEAGUE_CHIP } from "../../src/lib/leagueLabels";
 
 // B1 "Best of yesterday": the cross-league column of last night's best games,
 // on the TODAY board. The board's last column is on Auto, so the column puts
@@ -160,10 +161,24 @@ for (const { name, width, height } of [
     const headingBox = await heading.boundingBox();
     expect(headingBox!.height, "the column title wrapped onto a second line").toBeLessThan(32);
 
-    // Five cards, each naming its own league, each with a play button.
-    const cards = col.locator("[data-league-tag]");
-    await expect(cards).toHaveCount(5, { timeout: 15_000 });
-    expect((await cards.allTextContents()).sort()).toEqual(["EPL", "EPL", "NFL", "NFL", "WNBA"]);
+    // Five cards, each with a play button.
+    await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 15_000 });
+    const chips = col.locator("[data-league-tag]");
+    await expect(col.locator("[data-league-tab]")).toHaveCount(0);
+    if (SHOW_CARD_LEAGUE_CHIP) {
+      // Each card names its own league. Ratings off, so each card's top row
+      // holds the chip alone. The chip stays in that row even on the 3-column
+      // phone board: moving it onto the card's border left the row empty under
+      // the tab (Jacob 9/26).
+      expect((await chips.allTextContents()).sort()).toEqual(["EPL", "EPL", "NFL", "NFL", "WNBA"]);
+      for (let i = 0; i < 5; i++) await expect(chips.nth(i)).toBeVisible();
+    } else {
+      // Chip off for now (Jacob 9/26, too small): no chip, and no top row left
+      // empty where it was (a finished past-date game, ratings off, has nothing
+      // else to put there).
+      await expect(chips).toHaveCount(0);
+      await expect(col.locator(".game-meta-row")).toHaveCount(0);
+    }
     for (const matchup of EXPECTED) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(1);
     for (const matchup of NEVER) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(0);
     const text = (await col.innerText()).replace(/\s+/g, " ");
@@ -194,6 +209,7 @@ for (const { name, width, height } of [
   { name: "desktop", width: 1180, height: 820 },
 ]) {
   test(`a card's rating badge stays centered next to its league chip (${name} ${width}px)`, async ({ page }) => {
+    test.skip(!SHOW_CARD_LEAGUE_CHIP, "league chip is off (SHOW_CARD_LEAGUE_CHIP)");
     await page.setViewportSize({ width, height });
     await seed(page, { showRatings: true });
     await page.goto("/");
@@ -239,7 +255,7 @@ test("Best of yesterday replaces the Auto league even when that league has a gam
   await seed(page);
   await page.goto("/");
   await expect(page.locator('[data-league-column="best"]')).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('[data-league-column="best"] [data-league-tag]')).toHaveCount(5, { timeout: 15_000 });
+  await expect(page.locator('[data-league-column="best"]').getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 15_000 });
   const order = await page.locator("[data-league-column]").evaluateAll((els) => els.map((e) => e.getAttribute("data-league-column")));
   expect(order).toEqual(["nfl", "wnba", "best"]);
   // The NCAAF column and its game tonight are gone from the board — replaced,

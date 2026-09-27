@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import { GolfTournament } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
-import { handleExternalClick } from "@/lib/openExternal";
+import { handleExternalClick, watchLinkProps } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import {
   isGolfLive,
@@ -522,13 +522,9 @@ export default function GolfLeaderboard({
               return (
                 <a
                   key={key}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  {...watchLinkProps(name, href)}
                   className="hover:underline transition-colors"
                   style={{ color: "var(--text-muted)" }}
-                  title={`Watch on ${name}`}
-                  onClick={handleExternalClick(href)}
                 >
                   {name}
                 </a>

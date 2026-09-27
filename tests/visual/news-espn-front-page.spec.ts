@@ -1,11 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Jacob 9/26: "separate espn card where i just see front page". The news
-// switcher's "ESPN front page" row turns a column into espn.com's own front
-// page: its Top Headlines first, then its homepage clips, no Reddit. The
+// Jacob 9/26: "separate espn card where i just see front page", then "just
+// have this espn news thing as a league itself thats selectable from league
+// switcher? default off for all". ESPN front page is a league on both boards:
+// its news column is espn.com's own front page (Top Headlines, then homepage
+// clips, no Reddit), it follows its scores column like any league, and it
+// sits in no switcher until Settings turns it on or a column pins it. The
 // source funnel defaults to Reddit only, and it must not blank this column.
-// The same column is what the news board shows under an ESPN front page
-// scores column.
 
 const BASE_PREFS = {
   favoriteLeagues: [],
@@ -78,15 +79,27 @@ test.beforeEach(async ({ page }) => {
   await mockEspnFeeds(page);
 });
 
-test("ESPN front page from column 3: headlines then clips, no Reddit, past the Reddit-only funnel", async ({ page }) => {
+const rowsOf = async (page: Page, idx: number) => {
+  await titles(page).nth(idx).click();
+  const menu = page.getByRole("dialog", { name: "Switch news league" });
+  return { menu, rows: await menu.getByRole("button").allTextContents() };
+};
+
+test("off by default: no ESPN front page row in a news switcher", async ({ page }) => {
   await seedPrefs(page);
   await page.goto("/");
   await expect(titles(page)).toHaveCount(3, LOAD);
+  const { rows } = await rowsOf(page, 2);
+  expect(rows.some((r) => r.startsWith("ESPN front page")), rows.join(" | ")).toBe(false);
+});
 
-  await titles(page).nth(2).click();
-  const menu = page.getByRole("dialog", { name: "Switch news league" });
-  const rows = await menu.getByRole("button").allTextContents();
-  // Auto, Top news, then ESPN front page.
+test("turned on: ESPN front page is a league row in news column 3, headlines then clips past the Reddit-only funnel", async ({ page }) => {
+  await seedPrefs(page, { shownLeagues: ["top"] });
+  await page.goto("/");
+  await expect(titles(page)).toHaveCount(3, LOAD);
+
+  const { menu, rows } = await rowsOf(page, 2);
+  // Auto, Top news, then ESPN front page as the first league.
   expect(rows[1]).toMatch(/^Top news \(ESPN\)/);
   expect(rows[2]).toBe("ESPN front page");
   await menu.getByRole("button", { name: "ESPN front page" }).click();
@@ -96,41 +109,55 @@ test("ESPN front page from column 3: headlines then clips, no Reddit, past the R
   for (const h of HEADLINES) await expect(page.getByText(h)).toHaveCount(1);
   await expect(page.getByText(CLIP)).toHaveCount(1);
   const prefs = await saved(page);
-  expect(prefs.newsFrontPage).toBe(true);
-  expect(prefs.newsGenericSlot).toBe(2);
+  // A news column 3 league pick, the same pref any league pick writes.
+  expect(prefs.newsThirdLeague).toBe("top");
+  expect(prefs.newsTopNews).toBe(false);
+  expect(prefs.thirdLeague).toBe("wnba");
 });
 
-test("ESPN front page picked from column 1 lands there, and Auto hands the column back", async ({ page }) => {
-  await seedPrefs(page);
+test("picked in news column 1, it is scores column 1 too, and Auto hands both back", async ({ page }) => {
+  await seedPrefs(page, { shownLeagues: ["top"] });
   await page.goto("/");
   await expect(titles(page)).toHaveCount(3, LOAD);
-  await titles(page).nth(0).click();
-  await page.getByRole("dialog", { name: "Switch news league" }).getByRole("button", { name: "ESPN front page" }).click();
+  const first = await rowsOf(page, 0);
+  await first.menu.getByRole("button", { name: "ESPN front page" }).click();
   await expect(titles(page).nth(0)).toHaveText("ESPN front page");
-  await expect(titles(page).nth(1)).toHaveText("MLB");
+  await expect(titles(page).nth(1)).toHaveText("NFL");
+  expect((await saved(page)).firstLeague).toBe("top");
 
-  await titles(page).nth(0).click();
-  const menu = page.getByRole("dialog", { name: "Switch news league" });
-  await expect(menu.getByRole("button", { name: "ESPN front page" })).toHaveAttribute("aria-current", "true");
-  await menu.getByRole("button", { name: "Auto" }).click();
-  await expect(titles(page).nth(2)).toHaveText("WNBA");
-  expect((await saved(page)).newsFrontPage).toBe(false);
+  const again = await rowsOf(page, 0);
+  await expect(again.menu.getByRole("button", { name: /^ESPN front page/ })).toHaveAttribute("aria-current", "true");
+  await again.menu.getByRole("button", { name: "Auto" }).click();
+  await expect(titles(page).nth(0)).not.toHaveText("ESPN front page");
+  expect((await saved(page)).firstLeague).toBeUndefined();
 });
 
-test("under an ESPN front page scores column, the news column is ESPN front page on Auto", async ({ page }) => {
+test("under an ESPN front page scores column 3, news column 3 is ESPN front page on Auto", async ({ page }) => {
+  // Pinned but never turned on in Settings: the pin alone puts it on the board.
   await seedPrefs(page, { thirdLeague: "top" });
   await page.goto("/");
   await expect(titles(page)).toHaveCount(3, LOAD);
   await expect(titles(page).nth(2)).toHaveText("ESPN front page");
   await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["ESPN TOP HEADLINES", "ESPN VIDEOS"]);
-  expect((await saved(page)).newsFrontPage).toBeUndefined();
+  const { rows } = await rowsOf(page, 2);
+  expect(rows.find((r) => r.startsWith("ESPN front page"))).toBe("ESPN front page");
+  expect((await saved(page)).newsThirdLeague).toBeUndefined();
 });
 
-test("phone: ESPN front page leads the merged feed with the headlines", async ({ page }) => {
+test("phone: an ESPN front page scores column 3 leads the merged feed with the headlines", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await seedPrefs(page, { newsFrontPage: true });
+  await seedPrefs(page, { thirdLeague: "top" });
   await page.goto("/");
   const first = page.locator(".news-source-sticky-top").first();
   await expect(first).toHaveText(/Top Headlines/i, LOAD);
   await expect(page.getByText(HEADLINES[0])).toHaveCount(1);
+});
+
+test("phone: without it, the feed does not lead with the front page", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedPrefs(page);
+  await page.goto("/");
+  const first = page.locator(".news-source-sticky-top").first();
+  await expect(first).toBeVisible(LOAD);
+  await expect(first).not.toHaveText(/Top Headlines/i);
 });

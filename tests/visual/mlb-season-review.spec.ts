@@ -134,9 +134,10 @@ for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
     await page.goto("/");
     const pill = page.locator('[data-review-strip] [data-league-recap="mlb"][data-recap-kind="review"]');
     await expect(pill).toBeVisible({ timeout: 20_000 });
-    await expect(pill.getByRole("button")).toHaveCount(3);
+    // Three sections + the strip's "don't show again" ×.
+    await expect(pill.getByRole("button")).toHaveCount(4);
     const m = await pillMetrics(page);
-    expect(m.buttonTexts).toEqual(["Months", "Playoffs", "Teams"]);
+    expect(m.buttonTexts).toEqual(["Months", "Playoffs", "Teams", ""]);
     expect(m.overflow).toBe(0);
     expect(m.buttonsPastEdge).toBe(0);
     expect(m.buttonsClipped).toBe(0);
@@ -145,6 +146,44 @@ for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
     await testInfo.attach(`review-strip-${vp.width}-${m.layout}`, { body: await page.locator("main").screenshot(), contentType: "image/png" });
   });
 }
+
+const STRIP = '[data-review-strip] [data-recap-kind="review"]';
+
+test("the strip is for MLB followers only: no MLB league, team or column → no strip", async ({ page }) => {
+  await page.clock.setFixedTime(OFFSEASON);
+  await seed(page, { ...NO_MLB, favoriteTeams: ["nfl-19"] });
+  await page.goto("/");
+  await expect(page.locator("[data-league-column]").first()).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(1500);
+  await expect(page.locator("[data-review-strip]")).toHaveCount(0);
+});
+
+test("the strip shows on Yesterday's board too (a new visitor's landing date)", async ({ page }) => {
+  await page.clock.setFixedTime(OFFSEASON);
+  await seed(page, { ...NO_MLB, defaultDateMode: "yesterday" });
+  await page.goto("/");
+  await expect(page.locator(STRIP)).toBeVisible({ timeout: 20_000 });
+});
+
+test("the strip's × hides it for the season, survives a reload, and Undo brings it back", async ({ page }) => {
+  await page.clock.setFixedTime(OFFSEASON);
+  await seed(page, NO_MLB);
+  await page.goto("/");
+  await expect(page.locator(STRIP)).toBeVisible({ timeout: 20_000 });
+  await page.locator("[data-recap-review-dismiss]").click();
+  await expect(page.locator(STRIP)).toHaveCount(0);
+  const note = page.locator("[data-review-strip-hidden]");
+  await expect(note).toContainText("Hidden for this season");
+  await note.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(STRIP)).toBeVisible();
+  await page.locator("[data-recap-review-dismiss]").click();
+  expect(await page.evaluate(() => localStorage.getItem("nss-mlb-review-hidden"))).toBe("2026");
+  await page.reload();
+  await expect(page.locator("[data-league-column]").first()).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(1500);
+  await expect(page.locator(STRIP)).toHaveCount(0);
+  await expect(page.locator("[data-review-strip-hidden]")).toHaveCount(0);
+});
 
 test("Teams opens the dialog with the favorite team's cut first; a month Top 25 plays in the native HLS player", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 800 });

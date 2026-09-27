@@ -12,7 +12,8 @@
 
 import type { Preferences } from "./preferences";
 
-export const DEVICE_LOCAL_PREF_KEYS = ["singleColumn", "newsSingleColumn"] as const;
+// tvPlayer: a Mac opens TV channel links in IINA, a phone in VLC (9/26).
+export const DEVICE_LOCAL_PREF_KEYS = ["singleColumn", "newsSingleColumn", "tvPlayer"] as const;
 
 type DeviceLocalKey = (typeof DEVICE_LOCAL_PREF_KEYS)[number];
 
@@ -26,9 +27,12 @@ export function withoutDeviceLocalPrefs<T extends Partial<Preferences>>(prefs: T
 /** After a merge with the server copy, put this device's own values back. */
 export function keepDeviceLocalPrefs<T extends Partial<Preferences>>(merged: T, local: Partial<Preferences>): T {
   const out = { ...merged };
+  // The keys hold different value types (boolean, TvPlayer), so index through
+  // a plain record — T[union key] would demand a value of every type at once.
+  const rec = out as Record<DeviceLocalKey, unknown>;
   for (const key of DEVICE_LOCAL_PREF_KEYS) {
-    if (local[key] === undefined) delete out[key];
-    else out[key] = local[key] as T[typeof key];
+    if (local[key] === undefined) delete rec[key];
+    else rec[key] = local[key];
   }
   return out;
 }

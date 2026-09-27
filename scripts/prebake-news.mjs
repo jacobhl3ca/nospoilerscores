@@ -11,6 +11,8 @@ import {
   parseRelativeTime, isoDurationToSec, etYmd, shiftYmd, dailyCoversDate, weekdayCoversDate,
   weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, parseWatchPagePlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
   fillHeading, pickShorterClub, promoteLoneExtended, eplSeasonYear, uploadFitsGameDate, keepCarriedRecap,
+  RECAP_ARCHIVE_START, recapEndYmd, monthsBetween, recapMonths, recapInMainFile, splitEmptyByMonth,
+  recapEmptyIsFinal, recapFileBody,
   classifyMlbReviewTitle, mlbReviewSeason, mlbTeamIdsFromKeywords, mlbToEspnTeamIds, ROUND_ORDER,
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
@@ -18,7 +20,7 @@ import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
 } from "./lib/fotmob.mjs";
-import { channelSearchHandle, channelSearchMinSec, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
+import { channelFeedId, channelSearchHandle, channelSearchMinSec, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 import { pickEspnGameClip } from "./lib/espn-clip.mjs";
 
@@ -450,8 +452,26 @@ async function fetchMLBPlaybackForSlug(slug) {
 // needs beside the manifest: uploadDate, duration (ISO 8601 → seconds) and
 // the poster. null when the page has no HLS VideoObject.
 async function fetchMLBVideoMeta(slug) {
+  return (await fetchMLBVideoMetaStatus(slug)).meta;
+}
+
+// fetchMLBVideoMeta plus whether mlb.com answered a definite 404 — the only
+// miss the recap bake may record as "no cut that day" (a timeout or a 5xx is
+// retried next run).
+async function fetchMLBVideoMetaStatus(slug) {
+  let res;
   try {
-    const html = await getText(`https://www.mlb.com/video/${slug}`);
+    res = await fetch(`https://www.mlb.com/video/${slug}`, { headers: { "User-Agent": UA } });
+  } catch {
+    return { meta: null, notFound: false };
+  }
+  if (res.status === 404) return { meta: null, notFound: true };
+  if (!res.ok) return { meta: null, notFound: false };
+  return { meta: parseMLBVideoMeta(await res.text().catch(() => "")), notFound: false };
+}
+
+function parseMLBVideoMeta(html) {
+  try {
     const m = html.match(/<script type="application\/ld\+json">([\s\S]+?)<\/script>/g);
     if (!m) return null;
     for (const block of m) {
@@ -2645,6 +2665,8 @@ const HL_TEAM_ALIASES = {
   Tempo: "Toronto Tempo",
   Valkyries: "Golden State Valkyries",
   Rensselaer: "RPI",
+  "Union (NY)": "Union",
+  "Post University": "Post",
 };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
 // The LLWS code->state/country table is the SAME FILE src/lib/youtube.ts reads,
@@ -3315,6 +3337,15 @@ async function hlEspnClipFinish() {
 //   • off under GitHub Actions and with HL_CHANNEL_SEARCH=0 (the off switch).
 // Every hit logs HIGHLIGHT-CHANNEL-SEARCH, so a FotMob fill that still shows up
 // (HIGHLIGHT-FOTMOB) is a gap this pass has not learned yet.
+//
+// The channel's uploads feed goes first (added 2026-09-26, CHANNEL_FEED_IDS):
+// one fetch per channel per bake, shared by every game on that channel, and
+// none of the page limits above apply to it. A game the feed holds never
+// spends a results page. Nor does a game the feed reaches back past with no
+// cut in it: that cut is simply not posted yet — on the first local ECAC +
+// AHA bake (9/26) all 10 pages went to that day's games. The page is asked
+// only when the feed has rolled past the game (a busy channel) or failed. A
+// feed hit logs HIGHLIGHT-CHANNEL-FEED.
 const HL_CS_ON = process.env.HL_CHANNEL_SEARCH !== "0" && process.env.GITHUB_ACTIONS !== "true";
 const HL_CS_MAX_FETCHES = 30;
 const HL_CS_GAP_MS = 1500;
@@ -3322,7 +3353,24 @@ const HL_CS_REASK_MS = 90 * 60 * 1000;
 const HL_CS_MAX_FAILURES = 3;
 // Outside public/news for the same reason as the FotMob state file.
 const HL_CS_STATE_PATH = ".bake-state/channel-search.json";
-const hlCs = { fetches: 0, failures: 0, hits: 0, lastAt: 0, state: null };
+const hlCs = { fetches: 0, failures: 0, hits: 0, lastAt: 0, state: null, feeds: new Map(), feedFailures: 0, feedHits: 0, feedCovered: 0 };
+
+// One channel's uploads feed (parseChannelFeed), fetched once per bake. A
+// failed fetch yields null (logged once) and the search page takes over.
+function hlChannelFeed(channel) {
+  const id = channelFeedId(channel);
+  if (!id) return Promise.resolve(null);
+  if (!hlCs.feeds.has(id)) {
+    hlCs.feeds.set(id, getText(`https://www.youtube.com/feeds/videos.xml?channel_id=${id}`)
+      .then(parseChannelFeed)
+      .catch((e) => {
+        hlCs.feedFailures++;
+        console.warn(`HIGHLIGHT-CHANNEL-FEED-FAIL ${channel}: ${e?.cause?.message || e?.message || e}`);
+        return null;
+      }));
+  }
+  return hlCs.feeds.get(id);
+}
 
 async function hlCsState() {
   if (hlCs.state) return hlCs.state;
@@ -3340,10 +3388,55 @@ function hlSearchName(team) {
     .reduce((best, v) => (String(v).length > best.length ? String(v) : best), "");
 }
 
-// The id this channel's own search page holds for this game, gated, or null.
+// The first card that clears every gate an official id must clear, or null.
+// Feed cards carry no length, so theirs is read off the watch page — the same
+// cached read the upload-date gate makes.
+async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, compTokens, picks, minSec) {
+  for (const { videoId, durationSec } of picks) {
+    const sec = Number.isFinite(durationSec) ? durationSec : await fetchYtDurationSec(videoId);
+    if ((Number.isFinite(sec) && sec < minSec)
+      || !(await hlVideoMatchesChannel(videoId, channel))
+      || !(await hlVideoMatchesTeams(videoId, away, home))
+      || !(await hlVideoMatchesComp(videoId, compTokens))
+      || !(await hlVideoMatchesDate(videoId, gameIso))
+      || (await fetchYtEmbeddable(videoId)) !== true) {
+      console.warn(`${tag}-REJECT ${key} ${videoId} ${channel} (${away} vs ${home})`);
+      continue;
+    }
+    console.log(`${tag} ${key} ${videoId} ${channel}`);
+    return videoId;
+  }
+  return null;
+}
+
+// The id this channel's uploads feed or own search page holds for this game,
+// gated, or null.
 async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTokens, exclude) {
   const handle = channelSearchHandle(channel);
-  if (!HL_CS_ON || !handle || hlCs.failures >= HL_CS_MAX_FAILURES || hlCs.fetches >= HL_CS_MAX_FETCHES) return null;
+  if (!HL_CS_ON || (!handle && !channelFeedId(channel))) return null;
+  const minSec = channelSearchMinSec(channel);
+  const pickOpts = {
+    titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home),
+    compOk: (title) => titleHasCompToken(title, compTokens),
+    gameMs: Date.parse(gameIso),
+    exclude,
+    minSec,
+    womensGame: isWomensSport(key.split(":")[0]),
+  };
+  // Feed cards have no length yet, so one more candidate is let through for
+  // the watch-page length check to drop a goal clip.
+  const feed = await hlChannelFeed(channel);
+  const feedPicks = pickChannelSearchCards(feed?.cards ?? [], { ...pickOpts, limit: 3 });
+  const fromFeed = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-FEED", key, channel, away, home, gameIso, compTokens, feedPicks, minSec);
+  if (fromFeed) {
+    hlCs.feedHits++;
+    return fromFeed;
+  }
+  if (feedCoversGame(feed, pickOpts.gameMs)) {
+    hlCs.feedCovered++;
+    return null;
+  }
+  if (!handle || hlCs.failures >= HL_CS_MAX_FAILURES || hlCs.fetches >= HL_CS_MAX_FETCHES) return null;
   const state = await hlCsState();
   const askKey = `${key}|${channel}`;
   if (Date.now() - (state.asked[askKey] ?? 0) < HL_CS_REASK_MS) return null;
@@ -3361,31 +3454,13 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
     hlCs.lastAt = Date.now();
   }
   state.asked[askKey] = Date.now();
-  const picks = pickChannelSearchCards(cards, {
-    titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home),
-    compOk: (title) => titleHasCompToken(title, compTokens),
-    gameMs: Date.parse(gameIso),
-    exclude,
-    minSec: channelSearchMinSec(channel),
-  });
-  for (const { videoId } of picks) {
-    if (!(await hlVideoMatchesChannel(videoId, channel))
-      || !(await hlVideoMatchesTeams(videoId, away, home))
-      || !(await hlVideoMatchesComp(videoId, compTokens))
-      || !(await hlVideoMatchesDate(videoId, gameIso))
-      || (await fetchYtEmbeddable(videoId)) !== true) {
-      console.warn(`HIGHLIGHT-CHANNEL-SEARCH-REJECT ${key} ${videoId} ${channel} (${away} vs ${home})`);
-      continue;
-    }
-    hlCs.hits++;
-    console.log(`HIGHLIGHT-CHANNEL-SEARCH ${key} ${videoId} ${channel}`);
-    return videoId;
-  }
-  return null;
+  const id = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-SEARCH", key, channel, away, home, gameIso, compTokens, pickChannelSearchCards(cards, pickOpts), minSec);
+  if (id) hlCs.hits++;
+  return id;
 }
 
 async function hlChannelSearchFinish() {
-  console.log(`HIGHLIGHT-CHANNEL-SEARCH-REQUESTS n=${hlCs.fetches} hits=${hlCs.hits} failures=${hlCs.failures}`);
+  console.log(`HIGHLIGHT-CHANNEL-SEARCH-REQUESTS n=${hlCs.fetches} hits=${hlCs.hits} failures=${hlCs.failures} feeds=${hlCs.feeds.size} feedHits=${hlCs.feedHits} feedCovered=${hlCs.feedCovered} feedFailures=${hlCs.feedFailures}`);
   if (!hlCs.state) return;
   const cutoff = Date.now() - HL_ENTRY_TTL_MS;
   for (const [k, at] of Object.entries(hlCs.state.asked)) if (!(at > cutoff)) delete hlCs.state.asked[k];
@@ -3976,29 +4051,82 @@ async function bakeGameHighlights() {
 // (GHA) leaves the mini's good records in place instead of writing an empty
 // file over them.
 const RECAPS_OUT_PATH = `${OUT_DIR}/${RECAP_OUT_NAME}.json`;
+// One file per month, every record of that month (recapMonths). recaps.json
+// carries only the last RECAP_TTL_DAYS days, so a board load stays one small
+// fetch; an older board fetches its month (src/lib/recaps.ts).
+const RECAPS_ARCHIVE_DIR = `${OUT_DIR}/${RECAP_OUT_NAME}`;
+// Month files this bake changed that are not on R2 yet, one name per line.
+// scripts/upload-recap-archive.sh uploads them and removes the names that
+// landed, so a failed upload is retried next run and an unchanged month is
+// never re-uploaded. A dotfile: the public/news/*.json upload loops skip it.
+const RECAPS_PENDING_PATH = `${RECAPS_ARCHIVE_DIR}/.pending-upload`;
+// --recap-backfill: walk every source back to RECAP_ARCHIVE_START once. Not in
+// any cron — run by hand after a deploy that widens the archive.
+const RECAP_BACKFILL = process.argv.includes("--recap-backfill");
 
 function recapIdentity(rec) {
   return `${rec.sport}:${rec.key}:${rec.cadence === "weekly" ? `w${rec.coversWeek}` : rec.coversDate}`;
 }
 
-async function loadPriorRecaps() {
-  let local = null;
+async function readJsonFile(path) {
   try {
-    local = JSON.parse(await readFile(RECAPS_OUT_PATH, "utf8"));
-  } catch { /* fresh checkout / ignored generated file */ }
-  let live = null;
-  // A 404 is "never baked yet" (safe to write the first file); anything else
-  // that is not a 200 means the prior could not be read, which matters below.
-  let liveFailed = false;
+    return JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+// One live file off hidescore.com. A 404 is "never baked yet"; anything else
+// that is not a 200 means the copy could not be read, which callers must not
+// mistake for "empty".
+async function fetchLiveRecapFile(path) {
   try {
-    const res = await fetch(`https://hidescore.com/news/${RECAP_OUT_NAME}.json?ts=${Date.now()}`, { headers: { "User-Agent": UA } });
-    if (res.ok) live = await res.json();
-    else if (res.status !== 404) liveFailed = true;
-  } catch { liveFailed = true; }
-  // Same entry-by-entry merge as loadPriorHighlights: either copy can fill a
-  // gap, the newer timestamp wins.
+    const res = await fetch(`https://hidescore.com/news/${path}?ts=${Date.now()}`, { headers: { "User-Agent": UA } });
+    if (res.ok) return { data: await res.json(), failed: false };
+    return { data: null, failed: res.status !== 404 };
+  } catch {
+    return { data: null, failed: true };
+  }
+}
+
+// The same body a month file would get, for "did this month change?".
+function recapFileKey(data) {
+  const records = Object.values(data?.recaps ?? {}).flatMap((l) => (Array.isArray(l) ? l : []));
+  return JSON.stringify(recapFileBody(records, data?.empty));
+}
+
+async function loadPriorRecaps(todayYmd) {
+  const local = await readJsonFile(RECAPS_OUT_PATH);
+  const { data: live, failed: liveFailed } = await fetchLiveRecapFile(`${RECAP_OUT_NAME}.json`);
+  // Month files: the local copy when there is one (this machine wrote it), else
+  // the live one — a fresh checkout reads at most one GET per month.
+  const firstDay = Object.values(RECAP_ARCHIVE_START).sort()[0];
+  const monthFiles = [];
+  const priorKeys = new Map();
+  const unreadableMonths = new Set();
+  const localMonths = new Set();
+  let archiveGets = 0;
+  // Two weeks ahead too: an NFL window runs past next week's Sunday, so late
+  // in a month its records already sit in next month's file.
+  for (const month of monthsBetween(firstDay, shiftYmd(todayYmd, 14))) {
+    let data = await readJsonFile(`${RECAPS_ARCHIVE_DIR}/${month}.json`);
+    if (data) localMonths.add(month);
+    else {
+      archiveGets++;
+      const got = await fetchLiveRecapFile(`${RECAP_OUT_NAME}/${month}.json`);
+      data = got.data;
+      if (got.failed) unreadableMonths.add(month);
+    }
+    if (data?.recaps) {
+      monthFiles.push(data);
+      priorKeys.set(month, recapFileKey(data));
+    }
+  }
+  // Same entry-by-entry merge as loadPriorHighlights: any copy can fill a gap,
+  // the newer timestamp wins.
   const byId = new Map();
-  for (const source of [live, local]) {
+  const empty = new Map();
+  for (const source of [...monthFiles, live, local]) {
     for (const list of Object.values(source?.recaps ?? {})) {
       for (const rec of Array.isArray(list) ? list : []) {
         if (!rec?.sport || !rec?.key) continue;
@@ -4006,8 +4134,12 @@ async function loadPriorRecaps() {
         if (!byId.has(id) || (rec.t ?? 0) >= (byId.get(id).t ?? 0)) byId.set(id, rec);
       }
     }
+    for (const [key, days] of Object.entries(source?.empty ?? {})) {
+      if (!empty.has(key)) empty.set(key, new Set());
+      for (const d of Array.isArray(days) ? days : []) empty.get(key).add(d);
+    }
   }
-  return { byId, liveFailed, localOk: !!local?.recaps };
+  return { byId, empty, liveFailed, localOk: !!local?.recaps, priorKeys, unreadableMonths, localMonths, archiveGets };
 }
 
 // "lengthSeconds":"596" + "publishDate" off the watch page. Every good read is
@@ -4113,6 +4245,59 @@ async function resolveYtRecapSeries(series, seasonYear) {
   return pick;
 }
 
+// --recap-backfill for a weekly YouTube series: one channel search per week the
+// archive lacks ("Top 15 Plays From Week 3"), then the same gates as the
+// normal run — title + season token, a watch-page publish date (none → skip),
+// the oEmbed uploader. A cut published before the sport's archive floor is
+// last season's (MLS titles carry no season). Weeks run from 1 up to `maxWeek`,
+// and past the highest known week only until two in a row find nothing. A 429
+// ends the series for this run; the next backfill resumes where it stopped.
+async function resolveYtRecapBackfill(series, sport, seasonYear, { carriedWeek, knownMaxWeek, maxWeek }) {
+  const floor = RECAP_ARCHIVE_START[sport];
+  if (!floor || !series.handle) return [];
+  const floorMs = Date.parse(`${floor.slice(0, 4)}-${floor.slice(4, 6)}-${floor.slice(6)}T00:00:00-05:00`);
+  const template = series.backfillQuery ?? `${series.searchQuery} {n}`;
+  const hits = [];
+  let misses = 0;
+  for (let week = 1; week <= maxWeek; week++) {
+    if (carriedWeek(week)) continue;
+    if (week > knownMaxWeek && misses >= 2) break;
+    await recapPause();
+    let results;
+    try {
+      results = await fetchYtChannelSearch(series.handle, fillHeading(template, week));
+    } catch (e) {
+      const msg = String(e?.message ?? e);
+      console.warn(`recaps ${sport} ${series.key}: week ${week} search FAILED ${msg}`);
+      if (/→ 429$/.test(msg)) break;
+      continue;
+    }
+    const ranked = results.map((c) => matchSeriesTitle(series, c, { seasonYear })).filter((m) => m && m.week === week);
+    let pick = null;
+    // Newest first; a stray from last season (MLS) falls to the next one.
+    while (ranked.length && !pick) {
+      const cand = pickNewest(ranked);
+      ranked.splice(ranked.indexOf(cand), 1);
+      const meta = await fetchYtWatchMeta(cand.videoId);
+      if (!Number.isFinite(meta.publishedMs) || meta.publishedMs < floorMs) continue;
+      const author = (await hlOembedMeta(cand.videoId))?.author ?? "";
+      if (author.toLowerCase() !== series.channelName.toLowerCase()) {
+        console.warn(`RECAP-CHANNEL-REJECT ${series.channelName} ${series.key} ${cand.videoId} author=${author || "?"}`);
+        continue;
+      }
+      pick = { ...cand, publishedMs: meta.publishedMs, durationSec: Number.isFinite(cand.durationSec) ? cand.durationSec : meta.durationSec };
+    }
+    if (!pick) {
+      misses++;
+      console.log(`recaps ${sport} ${series.key}: week ${week} → none`);
+      continue;
+    }
+    misses = 0;
+    hits.push(pick);
+  }
+  return hits;
+}
+
 // mlb.com topic page → every card on it (~20, about three weeks) whose slug
 // matches the series, one per day, newest first. The slug names the WEEKDAY,
 // not the date, so each cut is dated by its upload day: the named weekday on
@@ -4150,21 +4335,76 @@ async function resolveMlbRecapSeries(series, todayYmd, cutoff, carriedUrl) {
 
 // MLB Film Room's search (the gateway behind mlb.com/video/search), newest
 // first. ⚠️ The season must be a NUMBER — `["2026"]` 500s the whole query.
-async function fetchFilmRoomTag(tag, season) {
+// `dates` (YYYY-MM-DD) narrows it to those days: the gateway has no paging
+// (`offset` 500s, `limit` stops at 200) and no range operator (`<` / `<=` on
+// Timestamp or Date return 0), but `Date = [d1, d2, …]` takes a list — probed
+// 2026-09-26 — so the backfill asks for one month at a time.
+async function fetchFilmRoomTag(tag, season, { dates = null, limit = 30 } = {}) {
   const query = `query Search($query: String!, $limit: Int) {
     search(query: $query, limit: $limit) { plays { mediaPlayback { slug title timestamp } } }
   }`;
+  const dateClause = dates?.length ? ` AND Date = [${dates.map((d) => `"${d}"`).join(", ")}]` : "";
   const res = await fetch("https://fastball-gateway.mlb.com/graphql", {
     method: "POST",
     headers: { "User-Agent": UA, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
       query,
-      variables: { query: `Season = [${Number(season)}] AND ContentTags = ["${tag}"] Order By Timestamp DESC`, limit: 30 },
+      variables: { query: `Season = [${Number(season)}] AND ContentTags = ["${tag}"]${dateClause} Order By Timestamp DESC`, limit },
     }),
   });
   if (!res.ok) throw new Error(`film room ${tag} → ${res.status}`);
   const data = await res.json();
   return (data?.data?.search?.plays ?? []).flatMap((p) => p?.mediaPlayback ?? []);
+}
+
+// Every day of a "YYYY-MM" month as YYYY-MM-DD, clipped to [fromYmd, toYmd].
+function monthDates(month, fromYmd, toYmd) {
+  const out = [];
+  for (let ymd = `${month.replace("-", "")}01`; ymd.startsWith(month.replace("-", "")); ymd = shiftYmd(ymd, 1)) {
+    if (ymd >= fromYmd && ymd <= toYmd) out.push(`${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6)}`);
+  }
+  return out;
+}
+
+const RECAP_BACKFILL_GAP_MS = 1000;
+const recapPause = () => new Promise((r) => setTimeout(r, RECAP_BACKFILL_GAP_MS));
+
+// --recap-backfill for a Film Room series: the whole season by tag, a month at
+// a time, each cut dated the way the normal run dates it. Days already carried
+// (or found this run) are not fetched again.
+async function resolveMlbFilmRoomArchive(series, tag, todayYmd, floor, carried) {
+  const hits = [];
+  const days = new Set();
+  for (const month of monthsBetween(floor, todayYmd)) {
+    let items = [];
+    try {
+      items = await fetchFilmRoomTag(tag, todayYmd.slice(0, 4), { dates: monthDates(month, floor, todayYmd), limit: 200 });
+    } catch (e) {
+      console.warn(`recaps mlb ${series.key}: film room ${month} FAILED ${e?.message ?? e}`);
+      continue;
+    }
+    let found = 0;
+    for (const item of items) {
+      if (!item?.slug) continue;
+      const posted = etYmd(item.timestamp);
+      let coversDate = "";
+      if (series.slugRx) {
+        const sm = item.slug.match(series.slugRx);
+        if (sm && posted) coversDate = weekdayCoversDate(sm[series.weekdayGroup], posted);
+      } else if (series.filmRoomTitleRx?.test(item.title ?? "")) {
+        coversDate = posted;
+      }
+      if (!coversDate || coversDate < floor || days.has(coversDate) || carried(coversDate)) continue;
+      days.add(coversDate);
+      await recapPause();
+      const meta = await fetchMLBVideoMeta(item.slug);
+      if (!meta?.playbackUrl) continue;
+      hits.push({ slug: item.slug, coversDate, ...meta, uploadDate: meta.uploadDate ?? item.timestamp });
+      found++;
+    }
+    console.log(`recaps mlb ${series.key}: archive ${month} → ${items.length} tagged, ${found} new`);
+  }
+  return hits;
 }
 
 // mlb.com series → its recent cuts, minus days already carried (`carried`).
@@ -4173,18 +4413,36 @@ async function fetchFilmRoomTag(tag, season) {
 // a Film Room tag (the oddity round-ups) yields the newest few matches, one per
 // ET day. Only days not yet carried are fetched, so after the first run a bake
 // costs one or two page GETs per series.
-async function resolveMlbRecapHits(series, todayYmd, carried, carriedUrl) {
+//
+// `empty` is the dated-slug series' known-empty days: a day that 404s once it
+// is RECAP_EMPTY_MIN_AGE_DAYS old is added (`markEmpty`) and never probed again.
+// --recap-backfill widens every window to the sport's RECAP_ARCHIVE_START.
+async function resolveMlbRecapHits(series, todayYmd, carried, carriedUrl, { isEmpty = () => false, markEmpty = () => {} } = {}) {
   const cutoff = shiftYmd(todayYmd, -RECAP_TTL_DAYS);
-  if (series.topicUrl) return resolveMlbRecapSeries(series, todayYmd, cutoff, carriedUrl);
+  const floor = RECAP_ARCHIVE_START.mlb;
+  if (series.topicUrl) {
+    const hits = await resolveMlbRecapSeries(series, todayYmd, cutoff, carriedUrl);
+    if (RECAP_BACKFILL && series.archiveTag) {
+      const found = new Set(hits.map((h) => h.coversDate));
+      hits.push(...await resolveMlbFilmRoomArchive(series, series.archiveTag, todayYmd, floor, (ymd) => carried(ymd) || found.has(ymd)));
+    }
+    return hits;
+  }
   const hits = [];
   if (series.slugForDate) {
-    for (let back = 1; back <= RECAP_TTL_DAYS; back++) {
-      const ymd = shiftYmd(todayYmd, -back);
-      if (ymd < cutoff) break;
-      if (carried(ymd)) continue;
+    const oldest = RECAP_BACKFILL ? floor : cutoff;
+    for (let ymd = shiftYmd(todayYmd, -1); ymd >= oldest; ymd = shiftYmd(ymd, -1)) {
+      if (carried(ymd) || isEmpty(ymd)) continue;
+      if (RECAP_BACKFILL) await recapPause();
       const slug = series.slugForDate(ymd);
-      const meta = await fetchMLBVideoMeta(slug);
-      if (!meta?.playbackUrl) continue;
+      const { meta, notFound } = await fetchMLBVideoMetaStatus(slug);
+      if (!meta?.playbackUrl) {
+        if (notFound && recapEmptyIsFinal(ymd, todayYmd)) {
+          markEmpty(ymd);
+          console.log(`recaps mlb ${series.key}: no cut ${ymd}, recorded as empty`);
+        }
+        continue;
+      }
       console.log(`recaps mlb ${series.key}: found ${ymd} (${slug})`);
       hits.push({ slug, coversDate: ymd, ...meta });
     }
@@ -4198,6 +4456,9 @@ async function resolveMlbRecapHits(series, todayYmd, carried, carriedUrl) {
       seen.add(ymd);
       const meta = await fetchMLBVideoMeta(item.slug);
       if (meta?.playbackUrl) hits.push({ slug: item.slug, coversDate: ymd, ...meta, uploadDate: meta.uploadDate ?? item.timestamp });
+    }
+    if (RECAP_BACKFILL) {
+      hits.push(...await resolveMlbFilmRoomArchive(series, series.filmRoomTag, todayYmd, floor, (ymd) => carried(ymd) || seen.has(ymd)));
     }
   }
   return hits;
@@ -4222,7 +4483,76 @@ async function bakeLeagueRecaps() {
   const now = Date.now();
   const todayYmd = hlEtYmd(0);
   const cutoff = hlEtYmd(-RECAP_TTL_DAYS);
-  const prior = await loadPriorRecaps();
+  // Every fetch this bake makes, for the RECAP-FETCHES line: a normal run after
+  // the backfill should stay at the handful of newest-cut checks.
+  let fetches = 0;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (...args) => {
+    fetches++;
+    return realFetch(...args);
+  };
+  try {
+    await bakeLeagueRecapsInner(now, todayYmd, cutoff);
+  } finally {
+    globalThis.fetch = realFetch;
+    console.log(`RECAP-FETCHES n=${fetches}${RECAP_BACKFILL ? " (backfill)" : ""}`);
+  }
+}
+
+// A YouTube hit → its record (see resolveYtRecapSeries / resolveYtRecapBackfill).
+async function ytRecapRecord(sport, series, hit, nflSeasonYear, now) {
+  const rec = {
+    sport, key: series.key, cadence: series.cadence,
+    heading: fillHeading(series.heading, hit.week), label: series.label,
+    videoId: hit.videoId, pageUrl: `https://www.youtube.com/watch?v=${hit.videoId}`,
+    channel: series.channelName, durationSec: hit.durationSec,
+    published: hit.publishedMs ? new Date(hit.publishedMs).toISOString() : undefined,
+    sourcePolicy: "official-channel",
+  };
+  if (series.cadence === "weekly") {
+    rec.coversWeek = hit.week;
+    let win = null;
+    if (sport === "nfl" && nflSeasonYear && hit.week) {
+      win = nflWeekWindow(
+        await fetchNflWeekEvents(nflSeasonYear, hit.week),
+        await fetchNflWeekEvents(nflSeasonYear, hit.week + 1),
+        await fetchNflWeekEvents(nflSeasonYear, hit.week + 2),
+      );
+    }
+    if (!win) win = weeklyWindowFromPublished(etYmd(hit.publishedMs ?? now));
+    Object.assign(rec, win);
+    return rec;
+  }
+  if (hit.titleDate) {
+    rec.coversDate = hit.titleDate;
+    return rec;
+  }
+  if (hit.publishedMs) {
+    rec.coversDate = dailyCoversDate(new Date(hit.publishedMs).toISOString());
+    return rec;
+  }
+  // No date in the title and no upload time → the day this cut covers is
+  // unknown. Falling back to `now` stamped it with the bake day, which put a
+  // "Best of the day" pill on top of a slate still being played (Jacob 9/20,
+  // MLB Morning Lineup). A daily record with no readable date is dropped.
+  console.log(`recaps ${sport} ${series.key} → no publish time for a daily cut, skipped`);
+  return null;
+}
+
+// The highest week a weekly series can have reached by today: NFL from ESPN's
+// scoreboard; EPL / MLS one per week since the archive floor (an overshoot
+// costs one empty search, the two-misses rule stops the walk).
+function recapBackfillMaxWeek(sport, nflWeek, todayYmd) {
+  if (sport === "nfl") return nflWeek || 0;
+  const floor = RECAP_ARCHIVE_START[sport];
+  if (!floor) return 0;
+  const days = Math.round((Date.parse(`${todayYmd.slice(0, 4)}-${todayYmd.slice(4, 6)}-${todayYmd.slice(6)}`)
+    - Date.parse(`${floor.slice(0, 4)}-${floor.slice(4, 6)}-${floor.slice(6)}`)) / 86400000);
+  return Math.min(sport === "epl" ? 38 : 34, Math.floor(days / 7) + 1);
+}
+
+async function bakeLeagueRecapsInner(now, todayYmd, cutoff) {
+  const prior = await loadPriorRecaps(todayYmd);
   // No prior at all to carry (fresh GHA checkout, live copy unreadable): a
   // partial result from an IP YouTube / mlb.com refuse would be uploaded over
   // the mini's good file, so leave the live file alone this run.
@@ -4232,23 +4562,28 @@ async function bakeLeagueRecaps() {
   }
   const byId = new Map();
   for (const [id, rec] of prior.byId) {
-    // Out of the window, or dated from an older run's bake clock instead of the
-    // cut itself: an undated weekly window, or an undated daily record dated
-    // today or later (the premature "Best of the day" pill). See keepCarriedRecap.
-    if (!keepCarriedRecap(rec, cutoff, todayYmd)) {
-      const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
-      if (end && end >= cutoff) console.log(`recaps: dropping undated ${rec.sport}:${rec.key} ${rec.cadence === "weekly" ? `week ${rec.coversWeek}` : rec.coversDate}`);
+    // Dated before the sport's archive floor, or dated from an older run's
+    // bake clock instead of the cut itself: an undated weekly window, or an
+    // undated daily record dated today or later (the premature "Best of the
+    // day" pill). Never for age alone. See keepCarriedRecap.
+    const floor = RECAP_ARCHIVE_START[rec.sport] ?? "";
+    if (!keepCarriedRecap(rec, floor, todayYmd)) {
+      const end = recapEndYmd(rec);
+      if (end && end >= floor) console.log(`recaps: dropping undated ${rec.sport}:${rec.key} ${rec.cadence === "weekly" ? `week ${rec.coversWeek}` : rec.coversDate}`);
       continue;
     }
     byId.set(id, rec);
   }
+  const empty = prior.empty;
 
   // Season year the NFL scoreboard reports — the title's "| 2026 NFL Season"
   // token must agree, or last season's Week 1 wins the regex.
   let nflSeasonYear = null;
+  let nflWeek = 0;
   try {
     const sb = await getJson("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard");
     nflSeasonYear = Number(sb?.season?.year) || null;
+    if (Number(sb?.season?.type) === 2) nflWeek = Number(sb?.week?.number) || 0;
   } catch { /* season token check is skipped this run */ }
 
   let resolved = 0;
@@ -4260,14 +4595,19 @@ async function bakeLeagueRecaps() {
       attempted++;
       const tag = `recaps ${sport} ${series.key}`;
       try {
-        let rec = null;
-        // mlb.com series can yield several days in one run (Top 5 by dated
-        // slug, the oddity round-ups by tag); every other source yields one.
-        let mlbRecs = null;
+        let recs = [];
         if (series.source === "mlbcom") {
+          const emptyKey = `${sport}:${series.key}`;
           const carried = (ymd) => byId.has(`${sport}:${series.key}:${ymd}`);
           const carriedUrl = (url) => [...byId.values()].some((r) => r.sport === sport && r.key === series.key && r.pageUrl === url);
-          mlbRecs = (await resolveMlbRecapHits(series, todayYmd, carried, carriedUrl)).map((hit) => ({
+          const hits = await resolveMlbRecapHits(series, todayYmd, carried, carriedUrl, {
+            isEmpty: (ymd) => !!empty.get(emptyKey)?.has(ymd),
+            markEmpty: (ymd) => {
+              if (!empty.has(emptyKey)) empty.set(emptyKey, new Set());
+              empty.get(emptyKey).add(ymd);
+            },
+          });
+          recs = hits.map((hit) => ({
             sport, key: series.key, heading: series.heading, label: series.label, cadence: "daily",
             coversDate: hit.coversDate, playbackUrl: hit.playbackUrl, poster: hit.poster,
             pageUrl: `https://www.mlb.com/video/${hit.slug}`, channel: "MLB.com",
@@ -4275,51 +4615,32 @@ async function bakeLeagueRecaps() {
           }));
         } else {
           const seasonYear = sport === "nfl" ? nflSeasonYear : sport === "epl" ? eplSeasonYear() : null;
+          const hits = [];
           const hit = await resolveYtRecapSeries(series, seasonYear);
-          if (hit) {
-            rec = {
-              sport, key: series.key, cadence: series.cadence,
-              heading: fillHeading(series.heading, hit.week), label: series.label,
-              videoId: hit.videoId, pageUrl: `https://www.youtube.com/watch?v=${hit.videoId}`,
-              channel: series.channelName, durationSec: hit.durationSec,
-              published: hit.publishedMs ? new Date(hit.publishedMs).toISOString() : undefined,
-              sourcePolicy: "official-channel",
-            };
-            if (series.cadence === "weekly") {
-              rec.coversWeek = hit.week;
-              let win = null;
-              if (sport === "nfl" && nflSeasonYear && hit.week) {
-                win = nflWeekWindow(
-                  await fetchNflWeekEvents(nflSeasonYear, hit.week),
-                  await fetchNflWeekEvents(nflSeasonYear, hit.week + 1),
-                  await fetchNflWeekEvents(nflSeasonYear, hit.week + 2),
-                );
-              }
-              if (!win) win = weeklyWindowFromPublished(etYmd(hit.publishedMs ?? now));
-              Object.assign(rec, win);
-            } else if (hit.titleDate) {
-              rec.coversDate = hit.titleDate;
-            } else if (hit.publishedMs) {
-              rec.coversDate = dailyCoversDate(new Date(hit.publishedMs).toISOString());
-            } else {
-              // No date in the title and no upload time → the day this cut
-              // covers is unknown. Falling back to `now` stamped it with the
-              // bake day, which put a "Best of the day" pill on top of a slate
-              // still being played (Jacob 9/20, MLB Morning Lineup). A daily
-              // record with no readable date is dropped instead.
-              console.log(`${tag} → no publish time for a daily cut, skipped`);
-              rec = null;
-            }
+          if (hit) hits.push(hit);
+          if (RECAP_BACKFILL && series.cadence === "weekly" && !series.fallbackOnly) {
+            const weekCarried = (w) => byId.has(`${sport}:${series.key}:w${w}`) || hits.some((h) => h.week === w);
+            const known = [...byId.values()].filter((r) => r.sport === sport && r.key === series.key).map((r) => r.coversWeek ?? 0);
+            hits.push(...await resolveYtRecapBackfill(series, sport, seasonYear, {
+              carriedWeek: weekCarried,
+              knownMaxWeek: Math.max(0, hit?.week ?? 0, ...known),
+              maxWeek: Math.max(hit?.week ?? 0, recapBackfillMaxWeek(sport, nflWeek, todayYmd)),
+            }));
+          }
+          for (const h of hits) {
+            const rec = await ytRecapRecord(sport, series, h, nflSeasonYear, now);
+            if (rec) recs.push(rec);
           }
         }
-        const recs = mlbRecs ?? (rec ? [rec] : []);
         if (!recs.length) {
           console.log(`${tag} → none`);
           continue;
         }
+        // The archive floor, or for a sport without one the normal window.
+        const floor = RECAP_ARCHIVE_START[sport] ?? cutoff;
         for (const rec of recs) {
-          const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
-          if (!end || end < cutoff) {
+          const end = recapEndYmd(rec);
+          if (!end || end < floor) {
             console.log(`${tag} → stale (${end || "no date"}), skipped`);
             continue;
           }
@@ -4370,14 +4691,52 @@ async function bakeLeagueRecaps() {
     return;
   }
 
-  const recaps = {};
-  for (const rec of byId.values()) (recaps[rec.sport] ??= []).push(rec);
-  for (const list of Object.values(recaps)) {
-    list.sort((a, b) => (a.durationSec ?? Infinity) - (b.durationSec ?? Infinity));
-  }
+  const fetchedAt = new Date().toISOString();
+  const all = [...byId.values()];
+  const emptyObj = Object.fromEntries([...empty].map(([k, days]) => [k, [...days]]));
+
+  // recaps.json: the last RECAP_TTL_DAYS days, written every run as before.
+  const mainRecs = all.filter((rec) => recapInMainFile(rec, todayYmd));
+  const mainEmpty = Object.fromEntries(Object.entries(emptyObj).map(([k, days]) => [k, days.filter((d) => d >= cutoff)]));
   await mkdir(dirname(RECAPS_OUT_PATH), { recursive: true });
-  await writeFile(RECAPS_OUT_PATH, JSON.stringify({ fetchedAt: new Date().toISOString(), recaps }));
-  console.log(`wrote ${RECAPS_OUT_PATH} (${byId.size} records, ${resolved} resolved this run)`);
+  await writeFile(RECAPS_OUT_PATH, JSON.stringify({ fetchedAt, ...recapFileBody(mainRecs, mainEmpty) }));
+  console.log(`wrote ${RECAPS_OUT_PATH} (${mainRecs.length} of ${byId.size} records, ${resolved} resolved this run)`);
+
+  // recaps/<YYYY-MM>.json: every record of the month. Rewritten only when its
+  // records changed, and queued for upload only then.
+  const byMonth = new Map();
+  for (const rec of all) {
+    for (const month of recapMonths(rec)) {
+      if (!byMonth.has(month)) byMonth.set(month, []);
+      byMonth.get(month).push(rec);
+    }
+  }
+  const emptyByMonth = splitEmptyByMonth(emptyObj);
+  const months = new Set([...byMonth.keys(), ...emptyByMonth.keys(), ...prior.priorKeys.keys()]);
+  const pending = new Set((await readFile(RECAPS_PENDING_PATH, "utf8").catch(() => "")).split("\n").filter(Boolean));
+  const rewritten = [];
+  await mkdir(RECAPS_ARCHIVE_DIR, { recursive: true });
+  for (const month of [...months].sort()) {
+    // A month whose live copy could not be read and that has no local copy
+    // would be written from this run's finds alone — over the full live file.
+    if (prior.unreadableMonths.has(month)) {
+      console.warn(`recaps: ${month} unreadable (live) and no local copy — not written this run`);
+      continue;
+    }
+    const body = recapFileBody(byMonth.get(month) ?? [], emptyByMonth.get(month) ?? {});
+    const changed = JSON.stringify(body) !== prior.priorKeys.get(month);
+    // Also written when only the live copy existed, so the next run reads it
+    // from disk instead of refetching it; not re-uploaded, R2 already has it.
+    if (!changed && prior.localMonths.has(month)) continue;
+    await writeFile(`${RECAPS_ARCHIVE_DIR}/${month}.json`, JSON.stringify({ fetchedAt, ...body }));
+    if (changed) {
+      pending.add(`${month}.json`);
+      rewritten.push(month);
+    }
+  }
+  await writeFile(RECAPS_PENDING_PATH, [...pending].sort().map((n) => `${n}\n`).join(""));
+  const sizes = [...byMonth.keys()].sort().map((m) => `${m}:${byMonth.get(m).length}`).join(" ");
+  console.log(`RECAP-ARCHIVE rewritten=${rewritten.length}${rewritten.length ? ` (${rewritten.join(" ")})` : ""} pending=${pending.size} archiveGets=${prior.archiveGets} months ${sizes}`);
 }
 
 // ── MLB season in review ─────────────────────────────────────────────────────

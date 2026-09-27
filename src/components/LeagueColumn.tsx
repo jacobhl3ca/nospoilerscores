@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, LeagueData, LeagueEventCard, FightBout, Sport, Team } from "@/lib/types";
-import { SHORT_LEAGUE_LABELS, HEADER_SHORT_LABEL_MAX_PX } from "@/lib/leagueLabels";
+import { SHORT_LEAGUE_LABELS, HEADER_SHORT_LABEL_MAX_PX, SHOW_CARD_LEAGUE_CHIP } from "@/lib/leagueLabels";
 import type { ShareCardMeta } from "@/lib/shareCard";
 import type { RecordLeague } from "@/lib/upcomingRecords";
 import { displayShortName, loadBigInningSchedule, getSeasonOpener, sportDisplayLabel, BigInningSchedule } from "@/lib/espn";
@@ -1020,7 +1020,8 @@ export default function LeagueColumn({
   // ("Sports A/B/C"), and this chip only exists to disambiguate a mixed
   // column's rows, which a screenshot doesn't need to do.
   const cardLeagueTag = (game: Game): string | undefined => {
-    if (!crossLeague || isDemoModeActive()) return undefined;
+    // Off for now (Jacob 9/26, too small) — see SHOW_CARD_LEAGUE_CHIP.
+    if (!SHOW_CARD_LEAGUE_CHIP || !crossLeague || isDemoModeActive()) return undefined;
     const label = cardLeagueLabel(game);
     return SHORT_LEAGUE_LABELS[label] || label;
   };

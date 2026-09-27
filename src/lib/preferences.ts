@@ -1,6 +1,7 @@
 import { Sport } from "./types";
 import type { RecordLeague } from "./upcomingRecords";
 import { setServiceTimeZone } from "./etDay";
+import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
 
 const STORAGE_KEY = "nss-preferences";
 
@@ -287,11 +288,6 @@ export interface Preferences {
   // 9/25: a set newsGenericSlot then stands in for it, because only that
   // switcher pick ever wrote newsGenericSlot.
   newsTopNews?: boolean;
-  // True when the user picked "ESPN front page" from a news switcher (Jacob
-  // 9/26): the generic column shows only espn.com's Top Headlines + homepage
-  // clips instead of Top news. Uses the same column (and newsGenericSlot
-  // position) as Top news, so the two are either/or.
-  newsFrontPage?: boolean;
   // News column 3 is on the board by default, even when scores column 3 is
   // Empty (it then shows Top news). True means the user removed it.
   newsGenericHidden?: boolean;
@@ -435,6 +431,14 @@ export interface Preferences {
   // device with the target app (Raycast, Shortcuts, …). Syncs with the rest of
   // the blob.
   reminderLinkTemplate?: string;
+  // "TV channel links" (Settings → More settings, lib/tvChannelLinks.ts). One
+  // line per network, `ESPN = http://…`; that network's chip then opens the
+  // link in the device's own player instead of the network's site. Blank = off.
+  // Syncs, so the list is pasted once per account.
+  tvChannelLinks?: string;
+  // Which player opens those links. Device-local (lib/devicePrefs.ts): a Mac
+  // wants IINA, a phone wants VLC. Undefined = "auto".
+  tvPlayer?: TvPlayer;
   // News headlines are spoilers (a highlight's title gives away the result), so
   // every headline in the news view + modal is blurred by default. The "Titles"
   // eye toggle in the news header flips this on to reveal them all at once.
@@ -554,6 +558,7 @@ export function loadPreferences(): Preferences {
     // Push the chosen zone into the shared module so the data layer + UI agree
     // before the first fetch/render after a load.
     setServiceTimeZone(prefs.timezone);
+    setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
     return prefs;
   } catch {
     return defaults;
@@ -572,6 +577,7 @@ export function setRemoteSync(fn: RemoteSync | null): void {
 export function savePreferences(prefs: Preferences): void {
   if (typeof window === "undefined") return;
   setServiceTimeZone(prefs.timezone);
+  setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
   // localStorage.setItem can throw — quota exceeded, or storage blocked in a
   // sandboxed/private context — and savePreferences runs straight out of click
   // handlers (e.g. toggling a setting). Mirror loadPreferences' guard so a

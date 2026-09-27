@@ -51,3 +51,12 @@ export const HEADER_SHORT_LABEL_MAX_PX = 160;
 // function of character count, so a new entry still needs measuring in the
 // browser. This only catches the obvious kind of mistake.
 export const SHORT_LABEL_MAX_CHARS = 9;
+
+// The league chip on each cross-league card ("MLB" on an ESPN front page or
+// Best of yesterday card). OFF since 2026-09-26: Jacob found it too small
+// ("the leagues look mini ... dont have them for now"); the team logos already
+// say the league. The chip code stays in GameCard at a larger size (11px, was
+// 9px), so turning it back on is this one line. Re-run the chip tests in
+// espn-front-page.spec.ts + best-yesterday.spec.ts when you do: they skip
+// while this is false.
+export const SHOW_CARD_LEAGUE_CHIP = false;

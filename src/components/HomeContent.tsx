@@ -27,7 +27,7 @@ import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import SlamBracketModal from "@/components/SlamBracketModal";
 import PlayoffPictureModal from "@/components/PlayoffPictureModal";
 import MlbSeasonReviewModal from "@/components/MlbSeasonReviewModal";
-import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
+import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, MLB_REVIEW_HIDDEN_KEY, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
@@ -40,7 +40,7 @@ import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
-import { getRecapsFor, getRecapsForSync, loadBakedRecaps } from "@/lib/recaps";
+import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
@@ -656,6 +656,20 @@ export default function HomeContent({
   // section its dialog opens at. The file is read only in the offseason months.
   const [mlbReview, setMlbReview] = useState<MlbReview | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  // The offseason strip's × ("don't show again"): the season it was hidden for,
+  // kept in localStorage so next season's review shows again. `reviewUndo` =
+  // the few seconds the strip's place holds a "Hidden · Undo" line.
+  const [reviewHiddenSeason, setReviewHiddenSeason] = useState<number | null>(null);
+  const [reviewUndo, setReviewUndo] = useState(false);
+  useEffect(() => {
+    const v = Number(localStorage.getItem(MLB_REVIEW_HIDDEN_KEY));
+    if (Number.isFinite(v) && v > 0) setReviewHiddenSeason(v);
+  }, []);
+  useEffect(() => {
+    if (!reviewUndo) return;
+    const t = setTimeout(() => setReviewUndo(false), 8000);
+    return () => clearTimeout(t);
+  }, [reviewUndo]);
   const [reviewSection, setReviewSection] = useState<MlbReviewSection | null>(null);
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
@@ -1336,14 +1350,15 @@ export default function HomeContent({
           prefsRef.current.hiddenLeagues,
         ),
         loadBakedHighlights(),
-        // Recaps too, so the "Best of day" / "Week N" pill is in the board's
-        // first paint. Without this the pill's fetch only started once the
+        // Recaps too (plus the archive month for a day older than
+        // recaps.json reaches), so the "Best of day" / "Week N" pill is in the
+        // board's first paint. Without this the pill's fetch only started once the
         // columns had rendered — one extra round trip after every card was
         // already up, and the sibling columns' first cards jumped down when
         // the row got reserved (Jacob 9/26). The loader never rejects; the
         // race caps what a stalled R2 read can cost the board — past it the
         // pill falls back to landing when the file does, as before.
-        Promise.race([loadBakedRecaps(), new Promise<void>((r) => setTimeout(r, 1500))]),
+        Promise.race([preloadRecapsFor(date), new Promise<void>((r) => setTimeout(r, 1500))]),
       ]);
       // A newer fetch started while we awaited — discard this now-stale result
       // rather than paint the wrong day's board over the current one.
@@ -1501,7 +1516,6 @@ export default function HomeContent({
     updatePrefs({
       newsThirdLeague: sport,
       newsTopNews: false,
-      newsFrontPage: false,
       newsGenericHidden: false,
       // Keep a one-column Focus view pointed at the replacement column.
       newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
@@ -1765,9 +1779,11 @@ export default function HomeContent({
       options.set("best", { sport: "best", label: BEST_YESTERDAY_LABEL, defaultInSwitcher: true });
     }
     // ESPN front page: ESPN's strip is today's, so the same today-only rule
-    // and the same place in the map (Jacob 9/26).
+    // and the same place in the map (Jacob 9/26). Opt-in while it is tested:
+    // off in every switcher until Settings turns it on or a column pins it
+    // (Jacob 9/26: "default off for all but on for me").
     if (TOP_EVENTS_ENABLED && selectedDate === getDateString(0)) {
-      options.set("top", { sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: true });
+      options.set("top", { sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: false });
     }
     return [...options.values()];
   }, [selectedDate]);
@@ -2032,8 +2048,13 @@ export default function HomeContent({
     }),
     [thirdLeagueOptions, prefs],
   );
-  // The news board has no cross-league feed, so its switchers skip the pills.
-  const newsSwitcherOptions = useMemo(() => switcherOptions.filter((o) => o.sport !== "top" && o.sport !== "best"), [switcherOptions]);
+  // Best of yesterday has no news feed, so the news switchers skip it. ESPN
+  // front page does (espn.com's headlines + clips), so it is a league row
+  // there too, first like in the scores switcher (Jacob 9/26).
+  const newsSwitcherOptions = useMemo(() => {
+    const leagues = switcherOptions.filter((o) => o.sport !== "best");
+    return [...leagues.filter((o) => o.sport === "top"), ...leagues.filter((o) => o.sport !== "top")];
+  }, [switcherOptions]);
 
   // Switcher sports in RELEVANCE order — the auto-picker's own ranking
   // (firstPref pins like the World Cup first, then LEAGUE_PRIORITY). Drives
@@ -2586,8 +2607,28 @@ export default function HomeContent({
   const bracketPillShown = bracketPillDue && mlbColumnShown;
   const reviewPillShown = reviewPillDue && mlbColumnShown;
   // Nov 2 on the MLB column is off the board (ALL_LEAGUES endDate), so the
-  // pill gets its own strip above the columns while no MLB column shows.
-  const reviewStripShown = reviewPillDue && !mlbColumnShown;
+  // pill gets its own strip above the columns while no MLB column shows. Only
+  // for people who follow MLB (a favorite league or team, or MLB picked for a
+  // column), on Today and Yesterday (a new visitor lands on Yesterday), and
+  // never after its × — Jacob 9/26: a row above every league for 3.5 months
+  // is odd for someone who does not watch baseball.
+  const followsMlb = prefs.favoriteLeagues.includes("mlb")
+    || prefs.favoriteTeams.some((t) => t.startsWith("mlb-"))
+    || selectedSlotLeagues.includes("mlb");
+  const reviewStripDue = followsMlb && !mlbColumnShown
+    && mlbReviewPillDue(selectedDate, mlbReview, isToday || selectedDate === getDateString(-1));
+  const reviewStripShown = reviewStripDue && reviewHiddenSeason !== mlbReview?.season;
+  const hideReviewStrip = () => {
+    if (!mlbReview) return;
+    localStorage.setItem(MLB_REVIEW_HIDDEN_KEY, String(mlbReview.season));
+    setReviewHiddenSeason(mlbReview.season);
+    setReviewUndo(true);
+  };
+  const undoHideReviewStrip = () => {
+    localStorage.removeItem(MLB_REVIEW_HIDDEN_KEY);
+    setReviewHiddenSeason(null);
+    setReviewUndo(false);
+  };
   const anyRecap = (recapSportsSync
     ? recapSportsSync.size > 0
     : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown;
@@ -3338,12 +3379,13 @@ export default function HomeContent({
             orderedCascade: GENERIC_CASCADE,
           };
           // "ESPN front page" (Jacob 9/26): espn.com's Top Headlines, then its
-          // homepage clips, nothing else. Picked from a news switcher, or the
-          // Auto news column under an ESPN front page scores column.
+          // homepage clips, nothing else. It is a league like any other: the
+          // news column under an ESPN front page scores column, or a pick of
+          // it in news column 3's switcher.
           const frontPageEntryFor = (slotIdx: number) => ({
             slotIdx,
-            sport: undefined as Sport | undefined,
-            id: "espn-front",
+            sport: "top" as Sport | undefined,
+            id: "top",
             label: ESPN_FRONT_PAGE_LABEL,
             orderedCascade: ESPN_FRONT_PAGE_CASCADE,
           });
@@ -3374,8 +3416,11 @@ export default function HomeContent({
             .filter((e): e is NonNullable<typeof e> => e !== null);
           // Scores column 3's league, when it has one with news. Phones keep
           // their News-first merged feed (Jacob 5/30), so only the column
-          // board mirrors it.
-          const thirdMirrorEntry = isMobile ? null : mirrorEntryFor(2);
+          // board mirrors it. ESPN front page is the one exception: it IS a
+          // news-first feed, so on a phone it takes Top news's place.
+          const thirdMirrorEntry = isMobile
+            ? (scoreSlotSports[2] === "top" ? frontPageEntryFor(2) : null)
+            : mirrorEntryFor(2);
           // A col 3 pick only counts while that league is still in the user's
           // switcher. A stored pick of a league they never added or later
           // turned off (a CFL pick the old sync bug kept bringing back, Jacob
@@ -3384,7 +3429,7 @@ export default function HomeContent({
             && newsSwitcherOptions.some((o) => o.sport === prefs.newsThirdLeague)
             ? prefs.newsThirdLeague
             : undefined;
-          const thirdLeagueEntry = newsThirdPick ? (() => {
+          const thirdLeagueEntry = newsThirdPick === "top" ? frontPageEntryFor(2) : newsThirdPick ? (() => {
             const sport = newsThirdPick;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             return { slotIdx: 2, sport, id: sport as string, label, orderedCascade: leagueSourceCascade(sport) };
@@ -3393,7 +3438,7 @@ export default function HomeContent({
           // 1-3 follow scores cols 1-3 (Jacob 9/25: "shouldn't it match 1 for 1
           // with my leagues on homepage unless manually set there"). Col 3
           // falls back to the ESPN/general feed when scores col 3 has no league
-          // with news (Empty, ESPN front page, Best of yesterday). Before 9/25, col 3
+          // with news (Empty, Best of yesterday). Before 9/25, col 3
           // was always that feed unless a 3rd news league was picked.
           const firstTwoEntries = leagueEntries.filter((e) => e.slotIdx === 0 || e.slotIdx === 1);
           // A pick in col 3's own switcher overrides the mirror: a league, or
@@ -3416,12 +3461,9 @@ export default function HomeContent({
             orderedCascade: leagueSourceCascade(nextNewsSport),
           } : null;
           const topNewsFallback = topNewsOff ? nextNewsEntry : espnEntry;
-          // An ESPN front page pick takes the same column Top news would.
           const thirdColEntry = prefs.newsGenericHidden
             ? null
-            : prefs.newsFrontPage
-              ? frontPageEntryFor(2)
-              : thirdLeagueEntry ?? (topNewsPicked && !topNewsOff ? espnEntry : thirdMirrorEntry ?? topNewsFallback);
+            : thirdLeagueEntry ?? (topNewsPicked && !topNewsOff ? espnEntry : thirdMirrorEntry ?? topNewsFallback);
           // What Auto gives col 3: the mirror, else the fallback above.
           const thirdAutoSport = thirdMirrorEntry?.sport ?? nextNewsEntry?.sport;
           const thirdAutoIsEspn = !thirdMirrorEntry && !topNewsOff;
@@ -3454,7 +3496,7 @@ export default function HomeContent({
           const orderedColumnSourcesFor = (entry: typeof visibleNewsEntries[number]): ColumnSource[] => {
             // ESPN front page IS its two ESPN cards: the funnel (Reddit-only
             // by default) and hidden labels would otherwise blank it.
-            if (entry.id === "espn-front") return entry.orderedCascade;
+            if (entry.id === "top") return entry.orderedCascade;
             const visible = entry.orderedCascade.filter((s) => !newsHiddenSources.includes(s.label));
             const typeMatched = visible.filter((s) => newsTypeFilters.includes(classifySource(s) as NewsSourceType));
             // Not every league has a source of every type — NWSL and cricket
@@ -3517,22 +3559,11 @@ export default function HomeContent({
             updatePrefs({
               newsThirdLeague: undefined,
               newsTopNews: true,
-              newsFrontPage: false,
               newsGenericHidden: false,
               newsGenericSlot: position === undefined
                 ? prefs.newsGenericSlot
                 : (Math.max(0, Math.min(2, position)) as 0 | 1 | 2),
               newsFocusLeague: prefs.newsFocusLeague ? "espn" : undefined,
-            });
-          };
-          // Same move for ESPN front page: it takes the generic column's place.
-          const pickFrontPage = (position: number) => {
-            updatePrefs({
-              newsThirdLeague: undefined,
-              newsTopNews: false,
-              newsFrontPage: true,
-              newsGenericHidden: false,
-              newsGenericSlot: Math.max(0, Math.min(2, position)) as 0 | 1 | 2,
             });
           };
 
@@ -3612,9 +3643,9 @@ export default function HomeContent({
             // Sort the score-league entries by the fixed global priority so role
             // A is always the higher-priority league (MLB ahead of NBA), not
             // whatever sits in scores column 1.
-            const newsEntry = renderedEntries.filter((e) => e.id === "espn" || e.id === "espn-front");
+            const newsEntry = renderedEntries.filter((e) => e.id === "espn" || e.id === "top");
             const leagueEntries = renderedEntries
-              .filter((e) => e.id !== "espn" && e.id !== "espn-front")
+              .filter((e) => e.id !== "espn" && e.id !== "top")
               .sort((a, b) => {
                 const ra = a.sport ? MOBILE_NEWS_LEAGUE_ORDER.indexOf(a.sport) : -1;
                 const rb = b.sport ? MOBILE_NEWS_LEAGUE_ORDER.indexOf(b.sport) : -1;
@@ -3625,7 +3656,7 @@ export default function HomeContent({
               const leagueIdx = leagueEntries.indexOf(entry);
               const role = entry.id === "espn"
                 ? "news"
-                : entry.id === "espn-front"
+                : entry.id === "top"
                   ? "front"
                   : leagueIdx === 0 ? "A" : leagueIdx === 1 ? "B" : "C";
               return orderedColumnSourcesFor(entry).map((cs, subIdx) => ({
@@ -3710,8 +3741,6 @@ export default function HomeContent({
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
                             onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                             espnActive={isEspn}
-                            onPickFrontPage={() => pickFrontPage(idx)}
-                            frontPageActive={entry.id === "espn-front"}
                             autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
                             autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                             removable={renderedEntries.length > 1}
@@ -3775,8 +3804,6 @@ export default function HomeContent({
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
                       onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                       espnActive={isEspn}
-                      onPickFrontPage={() => pickFrontPage(idx)}
-                      frontPageActive={entry.id === "espn-front"}
                       autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
                       autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                       hideTitle={stripActive}
@@ -3955,9 +3982,19 @@ export default function HomeContent({
                     onShowReview={(section) => { setReviewSection(section); setReviewOpen(true); }}
                     reviewSeason={mlbReview?.season ?? null}
                     reviewSections={reviewSections}
+                    onDismissReview={hideReviewStrip}
                     onPlayList={playNewsVideo}
                   />
                 </div>
+              </div>
+            ) : reviewStripDue && reviewUndo ? (
+              <div data-review-strip-hidden className="flex justify-center mb-2">
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }} role="status">
+                  Hidden for this season.{" "}
+                  <button type="button" onClick={undoHideReviewStrip} className="underline cursor-pointer" style={{ color: "var(--accent)" }}>
+                    Undo
+                  </button>
+                </p>
               </div>
             ) : null;
             const swapPropsForSlot = (idx: number) => ({
