@@ -19,8 +19,10 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // not dates, for the quarterfinals (March 2027) and Finals (June 2027); the
 // 2024-25 edition ran them Mar 20-23 and Jun 4-8, 2025.
 //
-// Highlights are DARK (NO_HIGHLIGHT_FALLBACK in lib/youtube.ts): 10 fixtures
-// probed, the best uploader found 3/10 and two others served the wrong match.
+// Highlights LIT 2026-09-27 (#199): FOX Sports only, behind a required
+// "nations league" title token (lib/youtube.ts). Probe of 10 finished
+// fixtures: 4/10 hits, 0 wrong. The UEFA channel served old "Classic" cuts
+// and is not used.
 // No "#N" chip: nations is not in RANK_LEAGUES.
 //
 // ⚠️ WHAT THE APP ACTUALLY DOES — do not write "the score appears when you tap
@@ -58,7 +60,7 @@ const FAQ = [
   },
   {
     q: "Does HideScore have Nations League highlights?",
-    a: "Not yet, on purpose. A highlight button only goes on a card after the uploader finds the right match in at least four of five tries with no wrong ones. For the Nations League the best channel found three of ten, and two others served a different match — a women's game and an old meeting of the same two nations — so these cards show no video button.",
+    a: "Yes, for the games FOX Sports cuts. A card gets a highlight button only when FOX Sports, the US rights holder, posts a Nations League video of that exact match. In a test of ten finished games FOX had four, and none was the wrong match. A game without a FOX cut shows no button, never a video from another channel.",
   },
   {
     q: "Where can I watch the Nations League in the US?",
@@ -130,8 +132,8 @@ export default function NationsLeagueWithoutSpoilersPage() {
           p: "The players in these games are the ones you follow every weekend for their clubs. So a Nations League result arrives through club news — a fitness update, a manager's comment, a player's form story — before you ever looked for it. HideScore keeps the game itself covered, so you can check what is on and what has finished without learning how it ended.",
         },
         {
-          h: "No highlight button yet — on purpose",
-          p: "A highlight button only goes on a card after the uploader has found the right match in at least four of five tries with no wrong ones. For the Nations League the best channel found three of ten, and two others served a different match. Until a source passes that check, these cards show no video button.",
+          h: "Highlights from FOX Sports only",
+          p: "A highlight button uses only FOX Sports, and only a video titled for the Nations League and for those two teams. FOX also posts World Cup, qualifier and Gold Cup games between the same nations, so the competition name in the title is required. FOX cuts about four games in ten. A game without a FOX cut shows no button, because another channel's video could be an old meeting of the same two teams.",
         },
         {
           h: "Watch on FOX",

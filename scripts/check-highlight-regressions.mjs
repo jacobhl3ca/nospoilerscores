@@ -146,6 +146,17 @@ check(
   JSON.stringify(youtube.getCompetitionTitleTokens("laliga")) === JSON.stringify(["laliga", "la liga"]) &&
     JSON.stringify(youtube.getCompetitionTitleTokens("ligue1")) === JSON.stringify(["ligue 1"]),
 );
+// Nations League, lit 2026-09-27 on FOX Sports (4/10 strict, 0 wrong). FOX
+// also cuts World Cup / Euro qualifier / Gold Cup meetings of the same two
+// nations, so the "nations league" token is the half that keeps it safe. The
+// "UEFA" channel served old "Classic" re-uploads and must never be the source.
+check(
+  "Nations League resolves only against FOX Sports behind the nations league token",
+  youtube.getOfficialChannelName("nations") === "FOX Sports" &&
+    !youtube.hasNoTrustedHighlightSource("nations") &&
+    youtube.getSecondaryChannels("nations").length === 0 &&
+    JSON.stringify(youtube.getCompetitionTitleTokens("nations")) === JSON.stringify(["nations league"]),
+);
 // The Europa League's uploader moved to CBS's second European channel. UCL and
 // Serie A did NOT move — asserting that here keeps a well-meaning "fix them all
 // the same way" edit from going out unprobed.
@@ -330,8 +341,6 @@ for (const [sport, path] of [
   ["uecl", '/soccer/uefa.europa.conf/scoreboard'],
   ["copadelrey", '/soccer/esp.copa_del_rey/scoreboard'],
   ["dfbpokal", '/soccer/ger.dfb_pokal/scoreboard'],
-  // Nations League (2026-09-26): dark from day one — see the note in youtube.ts.
-  ["nations", '/soccer/uefa.nations/scoreboard'],
 ]) {
   check(
     `${sport} stays dark and unmonitored`,
@@ -388,7 +397,10 @@ check(
   "monitor excludes non-YouTube MLB and covers the newly lit La Liga/Ligue 1",
   !monitor.includes('mlb:   "/baseball/mlb/scoreboard"') &&
     monitor.includes('laliga:       "/soccer/esp.1/scoreboard"') &&
-    monitor.includes('ligue1:       "/soccer/fra.1/scoreboard"'),
+    monitor.includes('ligue1:       "/soccer/fra.1/scoreboard"') &&
+    monitor.includes('nations:      "/soccer/uefa.nations/scoreboard"') &&
+    monitor.includes('nations: "FOX Sports"') &&
+    monitor.includes('nations: ["nations league"]'),
 );
 check(
   "runtime monitor covers every shipped highlight family",
@@ -451,7 +463,9 @@ check(
     prebake.includes('{ sport: "laliga",') &&
     prebake.includes('{ sport: "ligue1",') &&
     prebake.includes('laliga: ["laliga", "la liga"]') &&
-    prebake.includes('ligue1: ["ligue 1"]'),
+    prebake.includes('ligue1: ["ligue 1"]') &&
+    prebake.includes('{ sport: "nations",    path: "/soccer/uefa.nations/scoreboard",             channel: "FOX Sports" }') &&
+    prebake.includes('nations: ["nations league"]'),
 );
 // FotMob (2026-09-23): a second source for an EMPTY soccer official slot only,
 // mini-only, off with HL_FOTMOB=0, ≤41 requests per bake, tagged src "fotmob".
