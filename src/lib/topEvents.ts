@@ -210,3 +210,25 @@ export function orderByEspnHeader(
   }
   return picked.sort((a, b) => a.at - b.at).map((p) => p.game);
 }
+
+// espn.com's own layout, read off the rendered strip on 9/26: one block per
+// league in strip order, and inside a league its live games first, then the
+// rest in ESPN's order (the feed lists a league's finals before its live
+// games; the page lifts the live ones). Games arrive in strip order already
+// (orderByEspnHeader), so this only regroups. It reads state, never a score.
+export interface EspnFrontPageGroup {
+  sport: Sport;
+  games: Game[];
+}
+export function groupEspnFrontPage(games: Game[]): EspnFrontPageGroup[] {
+  const groups: EspnFrontPageGroup[] = [];
+  for (const game of games) {
+    const group = groups.find((g) => g.sport === game.sport);
+    if (group) group.games.push(game);
+    else groups.push({ sport: game.sport, games: [game] });
+  }
+  return groups.map(({ sport, games: list }) => ({
+    sport,
+    games: [...list.filter((g) => g.state === "in"), ...list.filter((g) => g.state !== "in")],
+  }));
+}

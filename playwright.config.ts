@@ -26,6 +26,12 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:3000",
     trace: "retain-on-failure",
+    // Production registers a service worker (layout.tsx, prod only), and
+    // page.route() never sees a request the worker answers. So a live
+    // read-back (a config spreading this `use` with baseURL set to
+    // https://hidescore.com) got the REAL feeds where a spec had mocked them.
+    // Dev registers none, so this changes nothing locally.
+    serviceWorkers: "block",
   },
   projects: [
     {

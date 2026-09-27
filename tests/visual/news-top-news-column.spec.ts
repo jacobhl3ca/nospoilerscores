@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// The news board's "Top news (ESPN)" entry used to only ever target column 3,
+// The news board's "Top news" entry used to only ever target column 3,
 // so picking it from a league column silently did nothing (Jacob 8/9). It now
 // moves the generic column to whichever column asked for it.
 const BASE_PREFS = {
@@ -37,15 +37,15 @@ test("Top news is reachable from a league column, not just column 3", async ({ p
   const titles = page.locator('button[title="Switch news league"]');
   await expect(titles).toHaveCount(3);
   await expect(titles.nth(0)).toHaveText("MLB");
-  await expect(titles.nth(2)).toHaveText("News");
+  await expect(titles.nth(2)).toHaveText("Top news");
 
   await titles.nth(0).click();
   await page.getByRole("dialog", { name: "Switch news league" })
-    .getByRole("button", { name: "Top news (ESPN)" }).click();
+    .getByRole("button", { name: "Top news" }).click();
 
   // The column the menu was opened from now IS the Top news column, and the
   // league it displaced shifted right instead of being dropped.
-  await expect(titles.nth(0)).toHaveText("News");
+  await expect(titles.nth(0)).toHaveText("Top news");
   await expect(titles.nth(1)).toHaveText("MLB");
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
   expect(saved.newsGenericSlot).toBe(0);
@@ -72,7 +72,7 @@ test("the switcher marks what Auto resolves to and dates upcoming leagues as M/D
 
 // Top news leads the news switcher, the way Best of yesterday leads the scores
 // one (Jacob 9/26): straight after Auto, not under a divider at the bottom.
-test("Top news (ESPN) is the first row after Auto in a news switcher", async ({ page }) => {
+test("Top news is the first row after Auto in a news switcher", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
   await seedPrefs(page, { firstLeague: "mlb", secondLeague: "nfl", thirdLeague: "empty", fourthLeague: "empty", fifthLeague: "empty" });
   await page.goto("/");
@@ -81,7 +81,7 @@ test("Top news (ESPN) is the first row after Auto in a news switcher", async ({ 
   await titles.nth(0).click();
   const rows = await page.getByRole("dialog", { name: "Switch news league" }).getByRole("button").allTextContents();
   expect(rows[0]).toBe("Auto");
-  expect(rows[1]).toMatch(/^Top news \(ESPN\)/);
+  expect(rows[1]).toMatch(/^Top news/);
 });
 
 // Turned off in Settings: gone from every news switcher, and the column that
@@ -98,7 +98,7 @@ test("Top news turned off: column 3 shows a league and no switcher offers it", a
   const labels = await titles.allTextContents();
   expect(labels[0]).toBe("MLB");
   expect(labels[1]).toMatch(/^NFL/); // "NFL Preseason" on 8/7
-  expect(labels[2]).not.toBe("News");
+  expect(labels[2]).not.toBe("Top news");
   expect(labels[2]).not.toMatch(/^(MLB|NFL)/);
   console.log("col 3 with Top news off:", labels[2]);
   await titles.nth(2).click();
@@ -114,7 +114,7 @@ test("Settings lists both cross-league columns and unticking them saves the pref
   await page.getByRole("button", { name: /^Settings$/ }).first().click();
   await page.getByText(/leagues in the switcher · Edit/).click();
   const best = page.getByRole("checkbox", { name: "Best of yesterday" });
-  const top = page.getByRole("checkbox", { name: "Top news (ESPN)" });
+  const top = page.getByRole("checkbox", { name: "Top news" });
   await expect(best).toBeChecked();
   await expect(top).toBeChecked();
   await best.uncheck();
