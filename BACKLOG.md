@@ -1,5 +1,23 @@
 # HideScore — Master Backlog
 
+## 2026-09-27 — Global sports: NRL, AFL, club rugby, international cricket, 4 landing pages
+
+**Plan:** `~/.claude/plans/hidescore-global-sports-suite-2026-09-27.md`. Four stacked branches in worktree `~/hs-global`, NOT pushed:
+1. `feat/global-sports-nrl-afl-cfl` — `nrl` (`rugby-league/3`) + `afl` columns, opt-in. NRL lit on "NRL - National Rugby League" (12/12 strict), AFL on "AFL" (6/8). Rugby linescores are CUMULATIVE on ESPN (half-time, full-time, then junk rows at periods 20/60); `normalizeRugbyLinescores` fixes the rating for every rugby column. `/nrl-highlights-without-spoilers`. CFL was already live (9/13), so the plan's "CFL column" step was a no-op.
+2. `feat/global-sports-rugby-club` — `premrugby`, `urc`, `top14`, `challengecup`, `mlr`. Only URC lit (8/8 with Cardiff/Benetton aliases); the other four dark with dated reasons in `youtube.ts`. Also: the `rugbytest` odd-year gate hid 17 real 2026 tests (Aug 8 → Nov 14), so even years now get an Aug 6 → Oct 25 row; rugby cards no longer wear a PRE chip; a feed with no half-time snapshot rates off the final margin; Top 14 ghost fixtures (no venue, scheduled forever) drop; one shared r/rugbyunion bake. `/rugby-without-spoilers`.
+3. `feat/global-sports-cricket-intl` — `cricketintl` "Cricket" column: every Test/ODI/T20I between the 12 full members. Bake `news/cricket-series.json` from the scoreboard header (R2), worker `/api/cricket-intl` merges per-series day scoreboards. Format chip on the card ("ODI", "W ODI", "Test · Day 2 of 5"); Tests unrated. DARK: ECB titles carry no date and a series repeats the pairing. Cricket page rewritten.
+4. `feat/global-sports-seo-pages` — `/afl-without-spoilers`, `/cfl-without-spoilers`, sitemap + llms.txt + sibling links.
+
+**Not done / open:**
+- [ ] The Rugby Championship (244293): ESPN's feed is frozen on 2025; the 2026 SA–NZ, Arg–Aus and Bledisloe tests sit under `rugbytest`. Re-check in July 2027.
+- [ ] Cricket highlights: needs a per-match ordinal token ("3rd ODI" from `game.stage`) on the strict lookup before the ECB / cricket.com.au channels can light. India home series stay dark (rights).
+- [ ] Premiership ("PREM Rugby" 0/5), Top 14 (2/20, old titles print scores), MLR (4/8 with a wrong match): re-probe next season. Challenge Cup: probe EPCR after round 1 (Oct 16).
+- [ ] The tvOS Swift port does not normalize rugby linescores and has no `cricketintl` (worker route); `tvos/tools/parity/parity.sh` already fails on origin/main (`FOOTBALL_CLOSENESS is not defined`).
+- [ ] Live read-back per plan §2.10 after deploy, then queue the 5 new/rewritten URLs with `gsc-index-queue.py --add` on the mini.
+- [ ] Later (plan §1): WSL, LPGA/DP World, WTA, PLL, Eredivisie/Primeira/Brasileirão/Argentina, Carabao Cup/Coppa Italia, Sudamericana/Concacaf CC, Women's UCL, Big Bash (8044, Dec–Jan).
+- [ ] Later (plan §4.3): team pages for La Liga, Bundesliga, Serie A, MLS, WNBA, NWSL, NRL, AFL and the 12 cricket nations (sitemap ~186 → ~350).
+- [ ] Decide Oct 27 (plan §4.4): per-match pages only if the GSC read shows ≥60% of the 144 team pages indexed and team-name clicks exist.
+
 ## 2026-09-26 — NCAA women's + men's soccer get columns; Atlantic Hockey America lights the AHA women's hockey games
 
 **Situation:** Jacob sent three YouTube links: a women's college soccer cut (fan channel) and two Atlantic Hockey America women's hockey cuts (Penn State–Ohio State, Lindenwood–Merrimack). Audit: ESPN serves both college soccer feeds (`soccer/usa.ncaa.w.1`, `soccer/usa.ncaa.m.1`, 40/60 games a Friday, coaches-poll rank on `curatedRank`) and the app had neither. NCAA women's hockey was in the app but its clip chain listed only ECAC Hockey, so every AHA-conference game (Penn State, Lindenwood, Mercyhurst, RIT, Robert Morris, Syracuse, Delaware) was dark. The 9/23 probe had left AHA out because every title prints the score; the `maskTitle` mechanism the efl/ligamx chains brought on 9/25 covers that now.
@@ -673,7 +691,7 @@ and documentaries only, no per-match recaps. Correctly dark.
 `b373ffc2` landed mid-session; `b373ffc2` refines the same highlight-gaps spec touched here).
 Nothing was lost, but rebase before assuming your worktree is current.
 
-## 2026-08-13 — `rugbytest` gated to ODD years (closes the empty-column question)
+## 2026-08-13 — `rugbytest` gated to ODD years (closes the empty-column question) — ⚠️ superseded 2026-09-27: 2026 has Aug–Oct tests, see the 09-27 entry
 
 ✅ **The open call from the 8/12 entry is decided: gate it, don't leave it.** `rugbytest`
 (ESPN 289234) now carries `yearCycle {mod:2, anchor:2027}` — the exact complement of
