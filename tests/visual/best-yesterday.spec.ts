@@ -204,6 +204,18 @@ for (const { name, width, height } of [
       const row = rows.nth(i);
       const badge = row.locator('[aria-label^="Worth-watching rating"]');
       await expect(badge).toBeVisible();
+      if (width < 640) {
+        // 3-column phone board: the chip rides on the card's border (see
+        // league-tag-tab), so the row is the same one line as a single-league
+        // card's and the badge sits at its true center.
+        await expect(row.locator("[data-league-tag]")).toBeHidden();
+        const r = (await row.boundingBox())!;
+        const b = (await badge.boundingBox())!;
+        const drift = (b.x + b.width / 2) - (r.x + r.width / 2);
+        expect(Math.abs(drift), `card ${i}: badge is ${drift.toFixed(1)}px off the row center`).toBeLessThanOrEqual(1);
+        centered++;
+        continue;
+      }
       await expect(row.locator("[data-league-tag]")).toBeVisible();
       const r = (await row.boundingBox())!;
       const b = (await badge.boundingBox())!;

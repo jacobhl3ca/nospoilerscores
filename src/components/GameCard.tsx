@@ -5,7 +5,7 @@ import { Game, Sport, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName, sportGroup } from "@/lib/espn";
-import { recordLeagueFor, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
+import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick } from "@/lib/openExternal";
@@ -55,7 +55,7 @@ interface GameCardProps {
   // sort can't reorder anything.
   showStars?: boolean;
   // Leagues whose upcoming cards show the italic current W-L (Settings picks
-  // them) — see lib/upcomingRecords.ts for why only pre-game.
+  // them) — see lib/upcomingRecords.ts for why pre-game and live only.
   upcomingRecordLeagues?: ReadonlySet<RecordLeague>;
 }
 
@@ -566,6 +566,24 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       aria-label={cardClickable ? cardLabel : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
+      {/* League tab — the 3-column phone board's copy of the league chip,
+          sitting on the card's top border. In the meta row, chip + live clock +
+          badge + network needed ~110px of a ~100px row, so an ESPN front page
+          card wrapped to two lines and stood a line taller than its neighbours
+          in the MLB / NFL columns (Jacob 9/26 phone screenshot: "doesn't look
+          consistent"). On the border it costs no width and no height, so the
+          row reads exactly like every other column's. CSS picks one of the
+          two (globals.css, .ns-board-tight); everywhere else the inline chip
+          below shows and this one is display:none. */}
+      {leagueTag && (
+        <span
+          className="league-tag-tab absolute left-2 top-0 -translate-y-1/2 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none pointer-events-none"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+          data-league-tab={leagueTag}
+        >
+          {leagueTag}
+        </span>
+      )}
       {/* Playoff game number ("Game 3") — DAY-OF-GAME ONLY (Jacob 6/12):
           a lookahead card ("Tomorrow - 8:30PM" on today's board, nextGameDate
           set) already carries another day's game info, so the series line stays
@@ -724,14 +742,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 purpose: chips + time are this cell's floor, so on a column too
                 narrow for them + a centered badge (a 3-column phone board) the
                 badge moves right just enough to clear them instead of covering
-                the chip or clipping the live clock. Elsewhere it is
+                the chip or clipping the live clock. (The 3-column phone board
+                is that case, so there the chip leaves this row for the tab on
+                the card's border — see league-tag-tab above.) Elsewhere it is
                 display:contents — no box of its own, so the three stay direct
                 flex items of the row exactly as before. column-gap: inherit
                 keeps the row's own gap, tight-board override included. */}
             <span className={hasRating ? "flex-1 flex items-center [column-gap:inherit]" : "contents"}>
             {leagueTag && (
               <span
-                className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
+                className="league-tag-inline shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
                 data-league-tag={leagueTag}
                 title={leagueLabel && leagueLabel !== leagueTag ? leagueLabel : undefined}
@@ -1138,13 +1158,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 team-schedule view + the Settings team picker. */}
             {showStars ? star(team.id, team.displayName, favoriteTeams.includes(team.id), isTBD) : null}
             <span className="flex-1 min-w-0" />
-            {/* Current W-L on upcoming cards, for the leagues picked in
-                Settings (Jacob 9/24 NFL, 9/25 per league). Italic marks it as
-                the record going in, not a live number. Gated on isFuture +
-                !effectivePastDate so it never reaches a live, finished or
-                past-date card; 0-0 / 0-0-0 is ESPN's pre-season placeholder
-                and says nothing, so it is skipped. */}
-            {recordKey && isFuture && !effectivePastDate && !isTBD && team.record && !/^0-0(-0)?$/.test(team.record) ? (
+            {/* Current W-L on upcoming and live cards, for the leagues picked
+                in Settings (Jacob 9/24 NFL, 9/25 per league, 9/26 live too).
+                Italic marks it as the record going in, not a live number.
+                Gated on recordShowsForState + !effectivePastDate so it never
+                reaches a finished or past-date card; 0-0 / 0-0-0 is ESPN's
+                pre-season placeholder and says nothing, so it is skipped. */}
+            {recordKey && recordShowsForState(game.state) && !effectivePastDate && !isTBD && team.record && !/^0-0(-0)?$/.test(team.record) ? (
               <span className="text-[10px] sm:text-xs italic tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }} title={recordTitle(recordKey)}>{team.record}</span>
             ) : null}
           </div>

@@ -593,6 +593,14 @@ select:focus-visible {
 .ns-board-tight .game-meta-row { column-gap: 0.125rem; }
 .ns-board-tight .game-meta-row,
 .ns-board-tight .game-meta-row span { font-size: 10px; }
+/* A cross-league card's league chip (ESPN front page, Best of yesterday) on
+   the same layout: the chip + a live clock + the badge + the network don't fit
+   one ~100px row, so the row wrapped and the card grew a line taller than the
+   single-league cards beside it (Jacob 9/26). Here the chip moves onto the
+   card's top border (GameCard's league-tag-tab) and the row keeps one line. */
+.league-tag-tab { display: none; }
+.ns-board-tight .league-tag-tab { display: block; }
+.ns-board-tight .league-tag-inline { display: none; }
 
 
 /* The YouTube IFrame API REPLACES the #yt-player <div> with an <iframe> that

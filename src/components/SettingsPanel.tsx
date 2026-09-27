@@ -1171,7 +1171,7 @@ export default function SettingsPanel({
               checked={!prefs.hideTeamStars}
               onChange={(v) => updatePrefs({ hideTeamStars: !v })}
             />
-            <Field label="Records on upcoming games" hint="Each team's current record, in italics, on today's and future games. Never on a live or finished game, or on a past date.">
+            <Field label="Records on upcoming games" hint="Each team's record going into the game, in italics, on upcoming and live games. Never on a finished game, or on a past date.">
               <>
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
