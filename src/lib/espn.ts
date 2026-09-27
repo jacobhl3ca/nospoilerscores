@@ -1593,7 +1593,15 @@ const FULL_MATCH_SECONDS = 5400;
 
 // Minimal shape of an ESPN game's live status — the only fields this progress
 // estimate reads: the current period/inning and the (optionally numeric) clock.
-type GameStatusLike = { status?: { period?: number; clock?: number } };
+// Baseball-shaped sports also read `type.shortDetail` ("Top 2nd", "Mid 2nd",
+// "Bot 2nd", "End 2nd") for half-inning progress.
+type GameStatusLike = { status?: { period?: number; clock?: number; type?: { shortDetail?: string } } };
+
+// Innings sports: no game clock, so progress comes from the half-inning.
+const INNINGS_SPORTS: ReadonlySet<Sport> = new Set<Sport>(["mlb", "llws", "ncaabase", "ncaasoft"]);
+// Where in the inning each ESPN half-inning word sits (plus 0.125 below, the
+// middle of that quarter-inning): Top 2nd reads earlier than Bot 2nd.
+const HALF_INNING_OFFSET: Record<string, number> = { top: 0, mid: 0.25, bot: 0.5, bottom: 0.5, end: 0.75 };
 
 // Fraction of regulation elapsed, [0,1]. Uses the live game clock for smooth
 // within-period progress (so the "too early" gate trips *during* period 1, and
@@ -1617,7 +1625,13 @@ function gameProgress(game: GameStatusLike, sport: Sport, regulationPeriods: num
     const periodFraction = clamp(1 - clock / periodLen);
     return clamp((period - 1 + periodFraction) / regulationPeriods);
   }
-  // MLB (no clock) and any gap: coarse midpoint of the current period.
+  // Baseball (no clock): the half-inning in shortDetail ("Bot 2nd") when ESPN
+  // sends it; otherwise the coarse midpoint below.
+  if (INNINGS_SPORTS.has(sport) && period >= 1) {
+    const half = game.status?.type?.shortDetail?.trim().match(/^(top|mid|bot|bottom|end)\b/i)?.[1].toLowerCase();
+    if (half) return clamp((period - 1 + HALF_INNING_OFFSET[half] + 0.125) / regulationPeriods);
+  }
+  // Any gap: coarse midpoint of the current period.
   return coarse;
 }
 
@@ -1739,7 +1753,7 @@ function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined)
 // and the live status/clock (via gameProgress, whose GameStatusLike this fits).
 type RatingGame = {
   _sport?: Sport;
-  status?: { type?: { state?: string }; period?: number; clock?: number };
+  status?: { type?: { state?: string; shortDetail?: string }; period?: number; clock?: number };
   competitions?: Array<
     SoccerCompetition & { competitors?: (MarginCompetitor & { score?: string })[] }
   >;
@@ -2063,15 +2077,28 @@ function calculateRating(game: RatingGame): number | null {
 
   const raw = Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus + lateDramaBonus - lowScoringPenalty)));
 
-  // Confidence cap: a tied/scoreless game legitimately reads as "close," but
-  // early on that closeness carries little signal — it hasn't *held up* yet.
-  // Cap the max reachable rating by game progress so an early tie can't hit
-  // the top tiers no matter how close: GREAT (~85) only unlocks past ~62%
-  // elapsed, GOOD opens up around the midpoint. A blowout already rates low
-  // via the closeness factors, so the cap only bites genuinely-close games.
-  // Finished games (progress=1) are uncapped → cap = 100.
-  const cap = Math.round(60 + 40 * progress);
-  return Math.min(raw, cap);
+  return liveTimeCap(raw, progress);
+}
+
+// How much the time played limits a live rating. Jacob 9/26: "meh on any time
+// doesn't make sense … no time cap is better, I like ties, but later ties
+// ranked higher, and keep an easy revert."
+//   off        — the label comes from the score only. A tie reads GREAT from
+//                the 12% too-early gate on; MEH/SKIP mean lopsided, never
+//                "started recently". Later ties still sort first (liveProgress
+//                tiebreak in LeagueColumn), which never touches the label.
+//   good-floor — the one-word revert: a close game reads GOOD until 62.5%
+//                elapsed, then GREAT.
+//   legacy     — the old cap (60 + 40·progress): a close game read MEH until
+//                25% elapsed. Kept only for the A/B test.
+// Finished games have progress 1, so every mode leaves them uncapped.
+export type LiveTimeCapMode = "off" | "good-floor" | "legacy";
+export const LIVE_TIME_CAP: LiveTimeCapMode = "off";
+
+export function liveTimeCap(raw: number, progress: number, mode: LiveTimeCapMode = LIVE_TIME_CAP): number {
+  if (mode === "off") return raw;
+  const legacyCap = Math.round(60 + 40 * progress);
+  return Math.min(raw, mode === "good-floor" ? Math.max(70, legacyCap) : legacyCap);
 }
 
 // Tennis returns ONE event per tournament (e.g. "Roland Garros") with 0
@@ -2669,6 +2696,9 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     awayProbable,
     stage,
     rating: calculateRating(event),
+    liveProgress: event.status?.type?.state === "in"
+      ? gameProgress(event, sport, (SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba).regulationPeriods, "in")
+      : undefined,
     seriesNote,
     weekNumber: gridironWeekNumber(sport, event),
     isPlayoff,

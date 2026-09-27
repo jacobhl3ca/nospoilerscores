@@ -18,6 +18,7 @@ import { groupEspnFrontPage } from "@/lib/topEvents";
 import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
 import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
+import { compareRatedLive } from "@/lib/liveSort";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
@@ -1466,10 +1467,10 @@ export default function LeagueColumn({
       // "Too early to rate" live games (rating still null in their 1st period)
       // sit below rated live games — a just-started 0-0 game shouldn't outrank
       // games that have built up real closeness signal. Order within the live
-      // cluster: rated (by rating desc) → too-early → delayed.
+      // cluster: rated (by rating desc, then later game first) → too-early → delayed.
       const aEarly = a.rating == null, bEarly = b.rating == null;
       if (aEarly !== bEarly) return aEarly ? 1 : -1;
-      return (b.rating ?? 0) - (a.rating ?? 0);
+      return compareRatedLive(a, b);
     }
 
     if (a.state === "post" && b.state === "post") {
