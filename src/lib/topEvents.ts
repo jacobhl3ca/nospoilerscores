@@ -211,24 +211,50 @@ export function orderByEspnHeader(
   return picked.sort((a, b) => a.at - b.at).map((p) => p.game);
 }
 
+// The `${sport}:${id}` keys of the body games (parseEspnFrontPageFeed) the
+// strip carries — the ones orderByEspnHeader puts first. A body id takes its
+// sport from the strip, the same way orderByEspnHeader matches it.
+export function espnFeaturedKeys(features: EspnHeaderFeature[], featured: string[]): string[] {
+  const stripSport = new Map<string, Sport>();
+  for (const f of features) for (const id of f.eventIds) if (!stripSport.has(id)) stripSport.set(id, f.sport);
+  const out: string[] = [];
+  for (const id of featured) {
+    const sport = stripSport.get(id);
+    if (sport && !out.includes(`${sport}:${id}`)) out.push(`${sport}:${id}`);
+  }
+  return out;
+}
+
 // espn.com's own layout, read off the rendered strip on 9/26: one block per
-// league in strip order, and inside a league its live games first, then the
-// rest in ESPN's order (the feed lists a league's finals before its live
-// games; the page lifts the live ones). Games arrive in strip order already
-// (orderByEspnHeader), so this only regroups. It reads state, never a score.
+// league, and inside a league its live games first, then the rest in ESPN's
+// order (the feed lists a league's finals before its live games; the page
+// lifts the live ones). Games arrive in orderByEspnHeader's order, so the
+// block of the league ESPN's homepage body features first leads the column,
+// and inside a block the body's own games (featuredKeys) keep the top, in the
+// body's order, ahead of the live ones: the hero game is always the first
+// card. This only regroups. It reads state, never a score.
 export interface EspnFrontPageGroup {
   sport: Sport;
   games: Game[];
 }
-export function groupEspnFrontPage(games: Game[]): EspnFrontPageGroup[] {
+export function groupEspnFrontPage(games: Game[], featuredKeys: readonly string[] = []): EspnFrontPageGroup[] {
+  const featured = new Set(featuredKeys);
   const groups: EspnFrontPageGroup[] = [];
   for (const game of games) {
     const group = groups.find((g) => g.sport === game.sport);
     if (group) group.games.push(game);
     else groups.push({ sport: game.sport, games: [game] });
   }
-  return groups.map(({ sport, games: list }) => ({
-    sport,
-    games: [...list.filter((g) => g.state === "in"), ...list.filter((g) => g.state !== "in")],
-  }));
+  return groups.map(({ sport, games: list }) => {
+    const isFeatured = (g: Game) => featured.has(`${g.sport}:${g.id}`);
+    const rest = list.filter((g) => !isFeatured(g));
+    return {
+      sport,
+      games: [
+        ...list.filter(isFeatured),
+        ...rest.filter((g) => g.state === "in"),
+        ...rest.filter((g) => g.state !== "in"),
+      ],
+    };
+  });
 }

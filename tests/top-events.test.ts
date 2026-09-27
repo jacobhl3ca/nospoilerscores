@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { Game, Sport, Team } from "../src/lib/types.ts";
 import {
+  espnFeaturedKeys,
   espnFrontPageSports,
   groupEspnFrontPage,
   orderByEspnHeader,
@@ -172,6 +173,8 @@ test("a body game the strip does not carry stays out, and takes its sport from t
   const games = [game({ id: "x1", sport: "nfl" }), game({ id: "b1", sport: "nhl" }), game({ id: "b1", sport: "mlb" })];
   const out = orderByEspnHeader(games, features, ["x1", "b1"]);
   assert.deepEqual(out.map((g) => `${g.sport}:${g.id}`), ["mlb:b1"]);
+});
+
 // ── espn.com's layout: league blocks, live first inside each ─────────────────
 
 test("the front page groups by league in strip order, live games first inside a league", () => {
@@ -199,4 +202,24 @@ test("a league that shows up again later joins its first block", () => {
   ]);
   assert.deepEqual(groups.map((g) => [g.sport, g.games.map((x) => x.id)]), [["mlb", ["3", "1"]], ["nhl", ["2"]]]);
   assert.deepEqual(groupEspnFrontPage([]), []);
+});
+
+test("ESPN's featured games lead their league block, ahead of its live games", () => {
+  const features: EspnHeaderFeature[] = [
+    { sport: "ncaaf", eventIds: ["c1", "c2", "c3"], sportOrder: 0 },
+    { sport: "mlb", eventIds: ["m1", "m2"], sportOrder: 1 },
+  ];
+  // The body's hero is a FINAL MLB game, then its CFB module lists c3.
+  const featured = espnFeaturedKeys(features, ["m2", "c3", "zz"]);
+  assert.deepEqual(featured, ["mlb:m2", "ncaaf:c3"]);
+  const games = orderByEspnHeader([
+    game({ id: "c1", sport: "ncaaf", state: "in" }), game({ id: "c2", sport: "ncaaf", state: "post" }),
+    game({ id: "c3", sport: "ncaaf", state: "post" }), game({ id: "m1", sport: "mlb", state: "in" }),
+    game({ id: "m2", sport: "mlb", state: "post" }),
+  ], features, ["m2", "c3", "zz"]);
+  const groups = groupEspnFrontPage(games, featured);
+  assert.deepEqual(groups.map((g) => [g.sport, g.games.map((x) => x.id)]), [
+    ["mlb", ["m2", "m1"]],
+    ["ncaaf", ["c3", "c1", "c2"]],
+  ]);
 });

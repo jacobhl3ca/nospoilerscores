@@ -2,7 +2,7 @@ import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventC
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
-import { espnFrontPageSports, orderByEspnHeader, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
+import { espnFeaturedKeys, espnFrontPageSports, orderByEspnHeader, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_MIN_GAMES, prevYmd, rankBestYesterday } from "./bestYesterday";
 import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
@@ -5520,7 +5520,7 @@ export async function fetchTopEvents(
     }
   }));
   const games = orderByEspnHeader(pools.flat(), features, featured);
-  return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false };
+  return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false, espnFeatured: espnFeaturedKeys(features, featured) };
 }
 
 // ═══════════════════════════════════════════════════════════════

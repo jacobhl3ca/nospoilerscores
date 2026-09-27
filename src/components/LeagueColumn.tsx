@@ -1494,10 +1494,10 @@ export default function LeagueColumn({
 
     return chronoMs(a.date) - chronoMs(b.date);
   });
-  // ESPN front page lays out the way espn.com does: a block per league in
-  // strip order, live games first inside each (Jacob 9/26). Every other
-  // column keeps its live / upcoming / final sections below.
-  const espnGroups = league.sport === "top" ? groupEspnFrontPage(sortedGames) : null;
+  // ESPN front page lays out the way espn.com does: a block per league, the
+  // homepage's featured games then live games first inside each (Jacob 9/26).
+  // Every other column keeps its live / upcoming / final sections below.
+  const espnGroups = league.sport === "top" ? groupEspnFrontPage(sortedGames, league.espnFeatured) : null;
   const sorted = espnGroups ? espnGroups.flatMap((g) => g.games) : sortedGames;
 
   // Split into sections
@@ -1547,7 +1547,7 @@ export default function LeagueColumn({
   // the per-card league chip (off since 9/26), so demo mode drops it too.
   const renderEspnGroups = (games: Game[]) => (
     <div className="flex flex-col gap-2.5 sm:gap-3">
-      {groupEspnFrontPage(games).map((group) => {
+      {groupEspnFrontPage(games, league.espnFeatured).map((group) => {
         const label = cardLeagueLabel(group.games[0]);
         return (
           <div key={group.sport} className="flex flex-col gap-1.5 sm:gap-2" data-espn-league={group.sport}>
