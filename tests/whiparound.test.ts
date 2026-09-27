@@ -59,6 +59,7 @@ test("Sunday before kickoff shows the scheduled time and does not link", () => {
   assert.deepEqual(r.tiers, ["RedZone · 1:00 PM", "RedZone · 1:00 PM", "RedZone"]);
   assert.equal(r.href, undefined);
   assert.notEqual(r.live, true);
+  assert.equal(r.watchName, undefined);
 });
 
 test("Sunday inside the window with live games goes green and links out", () => {
@@ -71,6 +72,8 @@ test("Sunday inside the window with live games goes green and links out", () => 
   ]);
   assert.equal(r.href, "https://www.nfl.com/redzone");
   assert.equal(r.live, true);
+  // The header looks this name up on the TV channel links list (9/27).
+  assert.equal(r.watchName, "RedZone");
 });
 
 test("Sunday inside the window with nothing in progress stays on the scheduled text", () => {
