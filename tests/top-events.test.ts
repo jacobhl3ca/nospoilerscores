@@ -177,7 +177,7 @@ test("a body game the strip does not carry stays out, and takes its sport from t
 
 // ── espn.com's layout: league blocks, live first inside each ─────────────────
 
-test("the front page groups by league in strip order, live games first inside a league", () => {
+test("the front page groups by league in strip order: live, then upcoming, then final inside a league", () => {
   // The 9/26 9:30 pm strip: the feed lists CFB finals (priority 0-10) before
   // its live games (11-16), MLB finals before live before the late game.
   const games = [
@@ -191,7 +191,7 @@ test("the front page groups by league in strip order, live games first inside a 
   assert.deepEqual(groups.map((g) => g.sport), ["ncaaf", "mlb", "nwsl"]);
   assert.deepEqual(groups.map((g) => g.games.map((x) => x.id)), [
     ["c11", "c12", "c0", "c1"],
-    ["m20", "m17", "m25"],
+    ["m20", "m25", "m17"],
     ["s41"],
   ]);
 });
@@ -204,7 +204,7 @@ test("a league that shows up again later joins its first block", () => {
   assert.deepEqual(groupEspnFrontPage([]), []);
 });
 
-test("ESPN's featured games lead their league block, ahead of its live games", () => {
+test("ESPN's featured games lead their state inside a league block; live games still lead the block", () => {
   const features: EspnHeaderFeature[] = [
     { sport: "ncaaf", eventIds: ["c1", "c2", "c3"], sportOrder: 0 },
     { sport: "mlb", eventIds: ["m1", "m2"], sportOrder: 1 },
@@ -218,8 +218,46 @@ test("ESPN's featured games lead their league block, ahead of its live games", (
     game({ id: "m2", sport: "mlb", state: "post" }),
   ], features, ["m2", "c3", "zz"]);
   const groups = groupEspnFrontPage(games, featured);
+  // The hero's league still leads the column; inside it the live game beats
+  // the final hero, and featured final c3 leads non-featured final c2.
   assert.deepEqual(groups.map((g) => [g.sport, g.games.map((x) => x.id)]), [
-    ["mlb", ["m2", "m1"]],
-    ["ncaaf", ["c3", "c1", "c2"]],
+    ["mlb", ["m1", "m2"]],
+    ["ncaaf", ["c1", "c3", "c2"]],
   ]);
+});
+
+test("the 9/26 10:18 pm column: no final sits above a live game in its league", () => {
+  // Jacob's screenshot: the body featured live TA&M–LSU (hero) plus finals
+  // WIS–PSU and CMU–MIA, and those finals sat above four live CFB games.
+  const ids = ["tam", "wis", "cmu", "sc", "ore", "miz", "most", "tex", "ill"];
+  const states: Game["state"][] = ["in", "post", "post", "in", "in", "in", "in", "post", "post"];
+  const features: EspnHeaderFeature[] = [{ sport: "ncaaf", eventIds: ids, sportOrder: 0 }];
+  const body = ["tam", "wis", "cmu"];
+  const games = orderByEspnHeader(ids.map((id, i) => game({ id, sport: "ncaaf", state: states[i] })), features, body);
+  const [block] = groupEspnFrontPage(games, espnFeaturedKeys(features, body));
+  assert.deepEqual(block.games.map((g) => g.id), ["tam", "sc", "ore", "miz", "most", "wis", "cmu", "tex", "ill"]);
+  const lastLive = block.games.map((g) => g.state).lastIndexOf("in");
+  const firstFinal = block.games.findIndex((g) => g.state === "post");
+  assert.ok(lastLive < firstFinal);
+});
+
+test("a delayed live game sits below the other live games, above upcoming and finals", () => {
+  const [block] = groupEspnFrontPage([
+    game({ id: "rain", sport: "mlb", state: "in", statusDetail: "Rain Delay" }),
+    game({ id: "fin", sport: "mlb", state: "post" }),
+    game({ id: "live", sport: "mlb", state: "in", statusDetail: "Top 5th" }),
+    game({ id: "late", sport: "mlb", state: "pre" }),
+  ], ["mlb:rain"]);
+  assert.deepEqual(block.games.map((g) => g.id), ["live", "rain", "late", "fin"]);
+});
+
+test("grouping is stable: regrouping a grouped column changes nothing", () => {
+  const games = [
+    game({ id: "a", sport: "mlb", state: "post" }), game({ id: "b", sport: "mlb", state: "pre" }),
+    game({ id: "c", sport: "nhl", state: "in" }), game({ id: "d", sport: "mlb", state: "in" }),
+  ];
+  const once = groupEspnFrontPage(games, ["mlb:a"]).flatMap((g) => g.games);
+  const twice = groupEspnFrontPage(once, ["mlb:a"]).flatMap((g) => g.games);
+  assert.deepEqual(twice.map((g) => g.id), once.map((g) => g.id));
+  assert.deepEqual(once.map((g) => g.id), ["d", "b", "a", "c"]);
 });

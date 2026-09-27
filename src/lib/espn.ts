@@ -5515,6 +5515,15 @@ async function fetchEspnHeader(): Promise<EspnHeaderFeature[]> {
 // every live poll. Any failure = no body signal, and the column falls back to
 // the strip's order.
 const ESPN_FRONT_PAGE_FEED_URL = "https://onefeed.fan.api.espn.com/apis/v3/cached/contentEngine/oneFeed/frontpage?source=ESPN.com+-+FAM&showfc=true&region=us&lang=en&editionKey=espn-en&isPremium=true&offset=0&limit=10";
+// The edge caches the CORS answer with the body (it varies on
+// Accept-Encoding only), so the first origin to ask owns the next 60 s: a
+// localhost test run on 9/26 got its own origin echoed back to a
+// hidescore.com request, which the browser then blocks. A per-origin param
+// gives each origin its own cache entry.
+function espnFrontPageFeedUrl(): string {
+  const host = typeof location === "undefined" ? "" : location.host;
+  return host ? `${ESPN_FRONT_PAGE_FEED_URL}&hs=${encodeURIComponent(host)}` : ESPN_FRONT_PAGE_FEED_URL;
+}
 const ESPN_FRONT_PAGE_FEED_TTL_MS = 2 * 60 * 1000;
 let espnFrontPageFeedCache: { at: number; ids: string[] } | null = null;
 
@@ -5523,7 +5532,7 @@ async function fetchEspnFrontPageFeed(): Promise<string[]> {
     return espnFrontPageFeedCache.ids;
   }
   try {
-    const res = await fetchWithRetry(ESPN_FRONT_PAGE_FEED_URL, 1, 6000);
+    const res = await fetchWithRetry(espnFrontPageFeedUrl(), 1, 6000);
     if (!res.ok) return espnFrontPageFeedCache?.ids ?? [];
     const ids = parseEspnFrontPageFeed(await res.json());
     espnFrontPageFeedCache = { at: Date.now(), ids };

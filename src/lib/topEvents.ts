@@ -226,13 +226,24 @@ export function espnFeaturedKeys(features: EspnHeaderFeature[], featured: string
 }
 
 // espn.com's own layout, read off the rendered strip on 9/26: one block per
-// league, and inside a league its live games first, then the rest in ESPN's
-// order (the feed lists a league's finals before its live games; the page
-// lifts the live ones). Games arrive in orderByEspnHeader's order, so the
-// block of the league ESPN's homepage body features first leads the column,
-// and inside a block the body's own games (featuredKeys) keep the top, in the
-// body's order, ahead of the live ones: the hero game is always the first
-// card. This only regroups. It reads state, never a score.
+// league. Games arrive in orderByEspnHeader's order, so the block of the
+// league ESPN's homepage body features first leads the column. Inside a
+// block: live games, then upcoming, then finals (Jacob 9/26: "shouldnt
+// finished games be after live ones per league?" — the feed lists a league's
+// finals before its live games, and the body's featured finals had sat on top
+// of live ones). Inside each state the body's own games (featuredKeys) lead,
+// in the body's order, then the rest in ESPN's order. So the hero game is the
+// first card of its block unless a live game in that league outranks a final
+// hero. A delayed live game (rain, lightning) sits at the bottom of the live
+// games, the rule every other column follows. This only regroups. It reads
+// state, never a score.
+const isDelayed = (g: Game) => g.state === "in" && /delay/i.test(g.statusDetail);
+const PHASES: readonly ((g: Game) => boolean)[] = [
+  (g) => g.state === "in" && !isDelayed(g),
+  isDelayed,
+  (g) => g.state === "pre",
+  (g) => g.state === "post",
+];
 export interface EspnFrontPageGroup {
   sport: Sport;
   games: Game[];
@@ -245,16 +256,12 @@ export function groupEspnFrontPage(games: Game[], featuredKeys: readonly string[
     if (group) group.games.push(game);
     else groups.push({ sport: game.sport, games: [game] });
   }
-  return groups.map(({ sport, games: list }) => {
-    const isFeatured = (g: Game) => featured.has(`${g.sport}:${g.id}`);
-    const rest = list.filter((g) => !isFeatured(g));
-    return {
-      sport,
-      games: [
-        ...list.filter(isFeatured),
-        ...rest.filter((g) => g.state === "in"),
-        ...rest.filter((g) => g.state !== "in"),
-      ],
-    };
-  });
+  const isFeatured = (g: Game) => featured.has(`${g.sport}:${g.id}`);
+  return groups.map(({ sport, games: list }) => ({
+    sport,
+    games: PHASES.flatMap((inPhase) => {
+      const inState = list.filter(inPhase);
+      return [...inState.filter(isFeatured), ...inState.filter((g) => !isFeatured(g))];
+    }),
+  }));
 }
