@@ -589,7 +589,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           under the tab (Jacob 9/26: "empty row looks stupid"). */}
       {leagueTabOnBorder && (
         <span
-          className="league-tag-tab absolute left-2 top-0 -translate-y-1/2 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none pointer-events-none"
+          className="league-tag-tab absolute left-2 top-0 -translate-y-1/2 text-[11px] font-semibold uppercase tracking-wide rounded px-1.5 py-px leading-none pointer-events-none"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
           data-league-tab={leagueTag}
         >
@@ -756,7 +756,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             <span className={hasRating ? "flex-1 flex items-center [column-gap:inherit]" : "contents"}>
             {leagueTag && (
               <span
-                className={`${leagueTabOnBorder ? "league-tag-inline " : ""}shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none`}
+                className={`${leagueTabOnBorder ? "league-tag-inline " : ""}shrink-0 text-[11px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 leading-none`}
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
                 data-league-tag={leagueTag}
                 title={leagueLabel && leagueLabel !== leagueTag ? leagueLabel : undefined}
