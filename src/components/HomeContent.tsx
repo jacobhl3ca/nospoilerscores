@@ -27,7 +27,7 @@ import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import SlamBracketModal from "@/components/SlamBracketModal";
 import PlayoffPictureModal from "@/components/PlayoffPictureModal";
 import MlbSeasonReviewModal from "@/components/MlbSeasonReviewModal";
-import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
+import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, MLB_REVIEW_HIDDEN_KEY, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
@@ -656,6 +656,20 @@ export default function HomeContent({
   // section its dialog opens at. The file is read only in the offseason months.
   const [mlbReview, setMlbReview] = useState<MlbReview | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  // The offseason strip's × ("don't show again"): the season it was hidden for,
+  // kept in localStorage so next season's review shows again. `reviewUndo` =
+  // the few seconds the strip's place holds a "Hidden · Undo" line.
+  const [reviewHiddenSeason, setReviewHiddenSeason] = useState<number | null>(null);
+  const [reviewUndo, setReviewUndo] = useState(false);
+  useEffect(() => {
+    const v = Number(localStorage.getItem(MLB_REVIEW_HIDDEN_KEY));
+    if (Number.isFinite(v) && v > 0) setReviewHiddenSeason(v);
+  }, []);
+  useEffect(() => {
+    if (!reviewUndo) return;
+    const t = setTimeout(() => setReviewUndo(false), 8000);
+    return () => clearTimeout(t);
+  }, [reviewUndo]);
   const [reviewSection, setReviewSection] = useState<MlbReviewSection | null>(null);
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
@@ -2588,8 +2602,28 @@ export default function HomeContent({
   const bracketPillShown = bracketPillDue && mlbColumnShown;
   const reviewPillShown = reviewPillDue && mlbColumnShown;
   // Nov 2 on the MLB column is off the board (ALL_LEAGUES endDate), so the
-  // pill gets its own strip above the columns while no MLB column shows.
-  const reviewStripShown = reviewPillDue && !mlbColumnShown;
+  // pill gets its own strip above the columns while no MLB column shows. Only
+  // for people who follow MLB (a favorite league or team, or MLB picked for a
+  // column), on Today and Yesterday (a new visitor lands on Yesterday), and
+  // never after its × — Jacob 9/26: a row above every league for 3.5 months
+  // is odd for someone who does not watch baseball.
+  const followsMlb = prefs.favoriteLeagues.includes("mlb")
+    || prefs.favoriteTeams.some((t) => t.startsWith("mlb-"))
+    || selectedSlotLeagues.includes("mlb");
+  const reviewStripDue = followsMlb && !mlbColumnShown
+    && mlbReviewPillDue(selectedDate, mlbReview, isToday || selectedDate === getDateString(-1));
+  const reviewStripShown = reviewStripDue && reviewHiddenSeason !== mlbReview?.season;
+  const hideReviewStrip = () => {
+    if (!mlbReview) return;
+    localStorage.setItem(MLB_REVIEW_HIDDEN_KEY, String(mlbReview.season));
+    setReviewHiddenSeason(mlbReview.season);
+    setReviewUndo(true);
+  };
+  const undoHideReviewStrip = () => {
+    localStorage.removeItem(MLB_REVIEW_HIDDEN_KEY);
+    setReviewHiddenSeason(null);
+    setReviewUndo(false);
+  };
   const anyRecap = (recapSportsSync
     ? recapSportsSync.size > 0
     : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown;
@@ -3943,9 +3977,19 @@ export default function HomeContent({
                     onShowReview={(section) => { setReviewSection(section); setReviewOpen(true); }}
                     reviewSeason={mlbReview?.season ?? null}
                     reviewSections={reviewSections}
+                    onDismissReview={hideReviewStrip}
                     onPlayList={playNewsVideo}
                   />
                 </div>
+              </div>
+            ) : reviewStripDue && reviewUndo ? (
+              <div data-review-strip-hidden className="flex justify-center mb-2">
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }} role="status">
+                  Hidden for this season.{" "}
+                  <button type="button" onClick={undoHideReviewStrip} className="underline cursor-pointer" style={{ color: "var(--accent)" }}>
+                    Undo
+                  </button>
+                </p>
               </div>
             ) : null;
             const swapPropsForSlot = (idx: number) => ({
