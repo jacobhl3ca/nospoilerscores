@@ -214,8 +214,13 @@ export async function fetchRemotePrefs(): Promise<Partial<Preferences> | null> {
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingPrefs: Partial<Preferences> | null = null;
 let flushHookAttached = false;
+// Bumped on every push; with the in-flight count it tells a pull whether this
+// device saved something the server may not hold yet — see pullIsStale.
+let pushCount = 0;
+let putsInFlight = 0;
 
 function putPrefs(body: string, keepalive: boolean): void {
+  putsInFlight++;
   fetch("/api/prefs", {
     method: "PUT",
     credentials: "include",
@@ -223,7 +228,20 @@ function putPrefs(body: string, keepalive: boolean): void {
     body,
     // keepalive lets the request outlive a page teardown — see flushPendingPrefs.
     keepalive,
-  }).catch(() => {});
+  }).catch(() => {}).finally(() => { putsInFlight--; });
+}
+
+// A pull's answer is only as new as the moment the server read it. Take a mark
+// BEFORE fetchRemotePrefs() and pass it here once the answer lands: true means
+// this device saved during the round trip, or still has a PUT queued or on the
+// wire, so the answer predates that save and applying it would undo it. Jacob
+// pasted his TV channel links while a resume pull was out, and the old copy
+// came back over them (9/26). The save's own PUT brings the server level.
+export function pullMark(): number {
+  return pushCount;
+}
+export function pullIsStale(mark: number): boolean {
+  return mark !== pushCount || pendingPrefs !== null || putsInFlight > 0;
 }
 
 // Fire any queued PUT immediately, bypassing the 800ms debounce. Without this a
@@ -248,6 +266,7 @@ export function pushRemotePrefs(prefs: Preferences): void {
   // Device-only keys (single-column view) never reach the account copy — see
   // lib/devicePrefs.ts.
   pendingPrefs = withoutDeviceLocalPrefs(prefs);
+  pushCount++;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     const body = JSON.stringify(pendingPrefs);
