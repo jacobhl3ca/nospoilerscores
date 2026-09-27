@@ -41,6 +41,7 @@ import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
+import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
 import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
@@ -1061,6 +1062,47 @@ export default function HomeContent({
     document.addEventListener("visibilitychange", onVis);
     return () => { alive = false; document.removeEventListener("visibilitychange", onVis); };
   }, [adoptStoredPrefs]);
+
+  // New build on RESUME. A resumed app/tab keeps the JS it first loaded, so a
+  // fix that shipped since then never reaches it until a cold relaunch (9/27:
+  // the RedZone header still opened nfl.com on a phone loaded before #203).
+  // On each resume, at most once per 10 min, compare /build.json with the id
+  // baked into this bundle and reload once if a newer build is live. Native
+  // too: Capacitor's server.url loads the live site. Never mid-task: an open
+  // modal or a focused text field defers it to the next resume.
+  useEffect(() => {
+    if (!RUNNING_BUILD_ID || RUNNING_BUILD_ID === "dev") return;
+    let alive = true;
+    const read = (k: string) => { try { return sessionStorage.getItem(k); } catch { return null; } };
+    const write = (k: string, v: string | null) => {
+      try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch { /* private mode */ }
+    };
+    const check = async () => {
+      if (document.visibilityState !== "visible" || pageIsBusy(document)) return;
+      const now = Date.now();
+      const last = read(LAST_CHECK_KEY);
+      if (!checkIsDue(now, last === null ? null : Number(last))) return;
+      write(LAST_CHECK_KEY, String(now));
+      try {
+        const res = await fetch(`/build.json?t=${now}`, { cache: "no-store" });
+        if (!res.ok || !alive) return;
+        const live = parseBuildId(await res.json());
+        if (!shouldReload(RUNNING_BUILD_ID, live, read(RELOADED_FOR_KEY)) || !live) return;
+        // The user may have opened something during the round trip.
+        if (document.visibilityState !== "visible" || pageIsBusy(document)) {
+          write(LAST_CHECK_KEY, null); // re-check on the next resume
+          return;
+        }
+        write(RELOADED_FOR_KEY, live);
+        window.location.reload();
+      } catch {
+        /* offline or a bad body; try again after the gap */
+      }
+    };
+    const onVis = () => { void check(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; document.removeEventListener("visibilitychange", onVis); };
+  }, []);
 
   // Track the OS color scheme in state so `resolvedTheme` re-derives live when
   // the system flips while theme === "system" (otherwise the data-theme attr
