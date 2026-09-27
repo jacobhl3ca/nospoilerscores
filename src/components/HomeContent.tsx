@@ -3451,13 +3451,12 @@ export default function HomeContent({
           };
           const leagueEntries = [0, 1].map(mirrorEntryFor)
             .filter((e): e is NonNullable<typeof e> => e !== null);
-          // Scores column 3's league, when it has one with news. Phones keep
-          // their News-first merged feed (Jacob 5/30), so only the column
-          // board mirrors it. ESPN front page is the one exception: it IS a
-          // news-first feed, so on a phone it takes Top news's place.
-          const thirdMirrorEntry = isMobile
-            ? (scoreSlotSports[2] === "top" ? frontPageEntryFor(2) : null)
-            : mirrorEntryFor(2);
+          // Scores column 3's league, when it has one with news. Phones mirror
+          // it too (Jacob 9/27: "r/sports on single column makes no sense"
+          // next to an MLB / NFL / NCAAF board). Before, phones always led with
+          // Top news (Jacob 5/30); now they get it only where the column board
+          // does: a Top news pick, or a scores col 3 with no league news.
+          const thirdMirrorEntry = mirrorEntryFor(2);
           // A col 3 pick only counts while that league is still in the user's
           // switcher. A stored pick of a league they never added or later
           // turned off (a CFL pick the old sync bug kept bringing back, Jacob
@@ -3506,19 +3505,21 @@ export default function HomeContent({
           const thirdAutoIsEspn = !thirdMirrorEntry && !topNewsOff;
           // The league that stands in for a turned-off Top news stays last too.
           const thirdColMirrors = thirdColEntry !== null && (thirdColEntry === thirdMirrorEntry || thirdColEntry === nextNewsEntry);
-          // Mobile (single stacked column): lead with News, then the two score
-          // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
-          // 3-across order: the two leagues, then the News/3rd-league column.
+          // Mobile (single stacked column): a Top news / ESPN front page col 3
+          // leads, then the two score leagues (Jacob 5/30 — "news, then mlb,
+          // then nba"). A league col 3 takes the desktop order below.
+          // Desktop keeps the 3-across order: the two leagues, then the
+          // News/3rd-league column.
           // Desktop position of the generic column: last by default, but the
           // user can pull it left by picking "Top news" from any
           // column's switcher (newsGenericSlot). The league columns shift
-          // right around it — nothing is dropped. Mobile keeps its fixed
-          // news-first stack (Jacob 5/30) regardless.
+          // right around it — nothing is dropped.
           // A mirrored col 3 stays last, in its scores position.
           const genericPos = thirdColMirrors
             ? firstTwoEntries.length
             : Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length);
-          const visibleNewsEntries = isMobile
+          const thirdIsNewsFeed = thirdColEntry?.id === "espn" || thirdColEntry?.id === "top";
+          const visibleNewsEntries = isMobile && thirdIsNewsFeed
             ? [...(thirdColEntry ? [thirdColEntry] : []), ...firstTwoEntries]
             : thirdColEntry
               ? [...firstTwoEntries.slice(0, genericPos), thirdColEntry, ...firstTwoEntries.slice(genericPos)]
