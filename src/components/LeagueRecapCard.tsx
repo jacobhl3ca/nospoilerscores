@@ -87,6 +87,7 @@ export default function LeagueRecapCard({
   onShowReview,
   reviewSeason,
   reviewSections,
+  onDismissReview,
   onPlayList,
 }: {
   sport: string;
@@ -109,6 +110,9 @@ export default function LeagueRecapCard({
   onShowReview?: ((section: MlbReviewSection) => void) | null;
   reviewSeason?: number | null;
   reviewSections?: MlbReviewSection[] | null;
+  // The offseason strip only (not the MLB column's pill): a quiet × after the
+  // buttons that hides the review for the rest of the season.
+  onDismissReview?: (() => void) | null;
   onPlayList?: PlayHandler;
 }) {
   const ymd = lastPlayedDate || date;
@@ -253,6 +257,24 @@ export default function LeagueRecapCard({
               <span className={`${minsText} font-medium whitespace-nowrap`}>{t.label}</span>
             </button>
           ))}
+          {onDismissReview && (
+            <button
+              type="button"
+              data-recap-review-dismiss
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismissReview();
+              }}
+              className="flex shrink-0 items-center justify-center rounded-md w-5 transition-opacity opacity-60 hover:opacity-100 cursor-pointer"
+              style={{ color: "var(--text-muted)" }}
+              aria-label={`Don’t show ${reviewSeason} in review again this season`}
+              title="Don’t show again this season"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
     );

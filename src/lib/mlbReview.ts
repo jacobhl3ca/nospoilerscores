@@ -80,6 +80,9 @@ export function mlbReviewHasContent(review: MlbReview | null | undefined): boole
     || !!review.postseasonTop25 || review.yearEnd.length > 0 || review.teams.length > 0;
 }
 
+// localStorage: the season whose offseason strip the reader hid with its ×.
+export const MLB_REVIEW_HIDDEN_KEY = "nss-mlb-review-hidden";
+
 // The last day of the pill: Feb 15 of the next year. Pitchers and catchers
 // report around Feb 12–15, and from then on the board is about the new season.
 export function mlbReviewPillEnd(season: number): string {
