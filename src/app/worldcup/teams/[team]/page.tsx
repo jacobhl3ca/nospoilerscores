@@ -231,7 +231,15 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
                   // WebSite isPartOf ref above uses — instead of leaving two
                   // separate SportsTeam nodes for the same team on the page.
                   { "@id": `https://hidescore.com${canonical}#team` },
-                  { "@type": "SportsEvent", name: "2026 FIFA World Cup" },
+                  // A plain Thing, not a SportsEvent: Google validates every
+                  // Event node as an event listing, and this bare mention has
+                  // no startDate/location, so Search Console flagged the team
+                  // pages (9/27). sameAs keeps the entity link.
+                  {
+                    "@type": "Thing",
+                    name: "2026 FIFA World Cup",
+                    sameAs: "https://en.wikipedia.org/wiki/2026_FIFA_World_Cup",
+                  },
                   { "@type": "Thing", name: "spoiler-free sports scores" },
                 ],
               },
