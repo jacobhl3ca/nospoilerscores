@@ -1,0 +1,258 @@
+{
+ "id": "1535684",
+ "uid": "s:200~e:1535684",
+ "date": "2026-09-27T04:00Z",
+ "endDate": "2026-10-01T23:59Z",
+ "name": "India Under-19s v Australia Under-19s",
+ "shortName": "IND19 v AUS19",
+ "description": "1st Youth Test, Australia Under-19s tour of India at Rajkot, Sep 27-30 2026",
+ "season": {
+  "year": 2026,
+  "type": 24377
+ },
+ "competitions": [
+  {
+   "id": "1535684",
+   "uid": "s:200~e:1535684~c:1535684",
+   "description": "1st Youth Test",
+   "shortDescription": "1st Youth Test,  at Rajkot",
+   "date": "2026-09-27T04:00Z",
+   "endDate": "2026-10-01T23:59Z",
+   "timeValid": true,
+   "neutralSite": true,
+   "attendance": 0,
+   "conferenceCompetition": false,
+   "playByPlayAvailable": false,
+   "fastcastAvailable": true,
+   "recent": true,
+   "class": {
+    "internationalClassId": "14",
+    "generalClassId": "11",
+    "generalClassCard": "Youth Test",
+    "name": "Youth Test matches",
+    "eventType": "Test"
+   },
+   "venue": {
+    "id": "377285",
+    "fullName": "Niranjan Shah Stadium, Rajkot",
+    "address": {
+     "city": "Rajkot",
+     "state": "",
+     "country": "India",
+     "summary": ""
+    },
+    "capacity": 28000,
+    "indoor": false
+   },
+   "competitors": [
+    {
+     "id": "1803",
+     "uid": "s:200~e:1535684~c:1535684~t:1803",
+     "type": "team",
+     "order": 2,
+     "homeAway": "home",
+     "winner": "false",
+     "score": "8/0 (1 ov)",
+     "team": {
+      "id": "1803",
+      "uid": "s:200~t:1803",
+      "location": "India",
+      "name": "India Under-19s",
+      "abbreviation": "IND19",
+      "displayName": "India Under-19s",
+      "shortDisplayName": "IND19",
+      "isActive": true,
+      "countryCode": "IN",
+      "color": "",
+      "links": [
+       {
+        "rel": [
+         "clubhouse",
+         "desktop"
+        ],
+        "href": "https://www.espn.in/cricket/team/_/id/1803/india-under-19s",
+        "text": "Clubhouse",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/1803.png"
+     },
+     "linescores": [
+      {
+       "period": 1,
+       "value": 1,
+       "displayValue": 1,
+       "wickets": 0,
+       "runs": 0,
+       "overs": 86.5,
+       "isBatting": false,
+       "description": "all out",
+       "isCurrent": 0
+      },
+      {
+       "period": 2,
+       "value": 2,
+       "displayValue": 2,
+       "wickets": 0,
+       "runs": 8,
+       "overs": 1.0,
+       "isBatting": true,
+       "description": "",
+       "isCurrent": 1
+      }
+     ],
+     "leaders": {
+      "$ref": "http://new.core.espnuk.org/v2/sports/cricket/leagues/24377/events/1535684/competitions/1535684/competitors/1803/leaders"
+     },
+     "statistics": []
+    },
+    {
+     "id": "233",
+     "uid": "s:200~e:1535684~c:1535684~t:233",
+     "type": "team",
+     "order": 1,
+     "homeAway": "away",
+     "winner": "false",
+     "score": "217",
+     "team": {
+      "id": "233",
+      "uid": "s:200~t:233",
+      "location": "Australia",
+      "name": "Australia Under-19s",
+      "abbreviation": "AUS19",
+      "displayName": "Australia Under-19s",
+      "shortDisplayName": "AUS19",
+      "isActive": true,
+      "countryCode": "AU",
+      "color": "",
+      "links": [
+       {
+        "rel": [
+         "clubhouse",
+         "desktop"
+        ],
+        "href": "https://www.espn.in/cricket/team/_/id/233/australia-under-19s",
+        "text": "Clubhouse",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/233.png"
+     },
+     "linescores": [
+      {
+       "period": 1,
+       "value": 1,
+       "displayValue": 1,
+       "wickets": 10,
+       "runs": 217,
+       "overs": 86.5,
+       "isBatting": true,
+       "description": "all out",
+       "isCurrent": 0
+      },
+      {
+       "period": 2,
+       "value": 2,
+       "displayValue": 2,
+       "wickets": 0,
+       "runs": 0,
+       "overs": 1.0,
+       "isBatting": false,
+       "description": "",
+       "isCurrent": 1
+      }
+     ],
+     "leaders": {
+      "$ref": "http://new.core.espnuk.org/v2/sports/cricket/leagues/24377/events/1535684/competitions/1535684/competitors/233/leaders"
+     },
+     "statistics": []
+    }
+   ],
+   "status": {
+    "clock": 0,
+    "displayClock": "0'",
+    "period": 2,
+    "session": "Day 1",
+    "featuredAthletes": [],
+    "summary": "IND Under-19 trail by 209 runs",
+    "type": {
+     "id": "112",
+     "description": "Stumps",
+     "detail": "Live",
+     "shortDetail": "Live",
+     "state": "in"
+    }
+   },
+   "odds": [],
+   "broadcasts": [],
+   "notes": [],
+   "situation": {},
+   "startDate": "2026-09-27T04:00Z",
+   "broadcast": "",
+   "geoBroadcasts": [],
+   "highlights": []
+  }
+ ],
+ "links": [
+  {
+   "language": "en",
+   "rel": [
+    "event",
+    "boxscore",
+    "match",
+    "live",
+    "summary",
+    "desktop"
+   ],
+   "href": "https://www.espn.in/cricket/series/24377/game/1535684/india-under-19s-vs-australia-under-19s-1st-youth-test-24377",
+   "text": "Summary",
+   "shortText": "Summary",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en",
+   "rel": [
+    "event",
+    "recap",
+    "report",
+    "desktop"
+   ],
+   "href": "https://www.espn.in/cricket/series/24377/report/1535684/india-under-19s-vs-australia-under-19s-1st-youth-test-24377",
+   "text": "Report",
+   "shortText": "Report",
+   "isExternal": false,
+   "isPremium": false
+  },
+  {
+   "language": "en",
+   "rel": [
+    "event",
+    "league",
+    "serieshome",
+    "desktop"
+   ],
+   "href": "https://www.espn.in/cricket/series/_/id/24377/24377",
+   "text": "Series Home",
+   "shortText": "Series Home",
+   "isExternal": false,
+   "isPremium": false
+  }
+ ],
+ "status": {
+  "clock": 0,
+  "displayClock": "0'",
+  "period": 2,
+  "session": "Day 1",
+  "summary": "IND Under-19 trail by 209 runs",
+  "type": {
+   "id": "112",
+   "description": "Stumps",
+   "detail": "Live",
+   "shortDetail": "Live",
+   "state": "in"
+  }
+ }
+}

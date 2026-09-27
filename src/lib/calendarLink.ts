@@ -38,6 +38,13 @@ const DURATION_MIN: Record<string, number> = {
   ncaawsoc: 120, ncaamsoc: 120,
   libertadores: 120, euro: 120, afcon: 120, saudi: 120,
   uecl: 120, facup: 120, copadelrey: 120, dfbpokal: 120, nations: 120,
+  // NRL: 80 minutes plus half-time and stoppages. AFL: four ~30-minute
+  // quarters plus breaks, ~2h45m.
+  nrl: 120, afl: 180,
+  premrugby: 120, urc: 120, top14: 120, challengecup: 120, mlr: 120,
+  // International cricket: an ODI is ~8 hours and a Test day ~7, so a long
+  // block. A T20I runs short of it, which is the safe side.
+  cricketintl: 480,
 };
 const DEFAULT_DURATION_MIN = 150;
 

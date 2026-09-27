@@ -23,6 +23,7 @@ import {
 import { channelFeedId, channelSearchHandle, channelSearchMinSec, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 import { pickEspnGameClip } from "./lib/espn-clip.mjs";
+import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
 
 const OUT_DIR = "public/news";
 
@@ -1000,6 +1001,7 @@ const PATH_TO_LOGO = {
   soccer: SPORT_ICON("soccer"),
   tennis: SPORT_ICON("tennis"),
   cricket: SPORT_ICON("cricket"),
+  cricketintl: SPORT_ICON("cricket"),
   rugby: SPORT_ICON("rugby"),
   badminton: SPORT_ICON("badminton"),
   nascar: SPORT_ICON("nascar"),
@@ -2584,6 +2586,12 @@ const HL_LEAGUES = [
   // Pacific, which posts the southern-hemisphere host fixtures (mirrors
   // SECONDARY_CHANNELS.nationschamp).
   { sport: "nationschamp", path: "/rugby/17567/scoreboard",                    channel: "World Rugby", secondaryChannel: "Super Rugby Pacific" },
+  // NRL + AFL (added 2026-09-27) — see OFFICIAL_CHANNELS in src/lib/youtube.ts
+  // for the strict probes (NRL 12/12, AFL 6/8, 0 wrong).
+  { sport: "nrl",          path: "/rugby-league/3/scoreboard",                 channel: "NRL - National Rugby League" },
+  { sport: "afl",          path: "/australian-football/afl/scoreboard",        channel: "AFL" },
+  // URC (added 2026-09-27, 8/8 strict). The other club competitions are dark.
+  { sport: "urc",          path: "/rugby/270557/scoreboard",                   channel: "United Rugby Championship" },
   // CFL (added 2026-09-13). ESPN no longer serves the CFL, so `worker: true`
   // reads the slate from our own /api/cfl route (theScore, reshaped to the
   // ESPN scoreboard — see public/_worker.js) instead of site.api.espn.com.
@@ -2673,6 +2681,8 @@ const HL_TEAM_ALIASES = {
   Rensselaer: "RPI",
   "Union (NY)": "Union",
   "Post University": "Post",
+  "Cardiff Blues": "Cardiff Rugby",
+  "Benetton Treviso": "Benetton",
 };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
 // The LLWS code->state/country table is the SAME FILE src/lib/youtube.ts reads,
@@ -5160,6 +5170,11 @@ const jobs = [
   ["reddit-ncaabase", () => fetchReddit("collegebaseball", "r/collegebaseball")],
   // 2026-09-13: CFL. One more 45s gate slot in the reddit bake.
   ["reddit-cfl", () => fetchReddit("CFL", "r/CFL")],
+  // 2026-09-27: NRL + AFL. Two more 45s gate slots in the reddit bake.
+  ["reddit-nrl", () => fetchReddit("nrl", "r/nrl")],
+  // 2026-09-27: one shared r/rugbyunion bake for every union column.
+  ["reddit-rugbyunion", () => fetchReddit("rugbyunion", "r/rugbyunion")],
+  ["reddit-afl", () => fetchReddit("AFL", "r/AFL")],
   ["reddit-ufc", () => fetchReddit("ufc", "r/ufc")],
   ["reddit-boxing", () => fetchReddit("Boxing", "r/Boxing")],
   ["reddit-f1", () => fetchReddit("formula1", "r/formula1")],
@@ -5270,6 +5285,53 @@ if (runMlbReview) {
   }
 }
 
+// International cricket series list (see scripts/lib/cricket-series.mjs). The
+// /api/cricket-intl worker route reads it to know which series scoreboards to
+// ask for a date. Token "cricket-series" for --only / --skip. Fails LOUD: a
+// header with zero series at all means ESPN moved the endpoint, and the column
+// would quietly go empty once the kept series age out.
+async function bakeCricketSeries() {
+  const path = `${OUT_DIR}/cricket-series.json`;
+  const res = await fetch("https://site.web.api.espn.com/apis/v2/scoreboard/header?sport=cricket");
+  if (!res.ok) throw new Error(`cricket header HTTP ${res.status}`);
+  const header = await res.json();
+  const leagues = header?.sports?.[0]?.leagues ?? [];
+  if (leagues.length === 0) throw new Error("cricket header returned 0 series (endpoint moved?)");
+  const picked = pickInternationalSeries(header);
+  const fresh = [];
+  for (const { id, name } of picked) {
+    try {
+      const sb = await (await fetch(`https://site.web.api.espn.com/apis/site/v2/sports/cricket/${id}/scoreboard`)).json();
+      const lg = sb?.leagues?.[0] ?? {};
+      const start = String(lg.calendarStartDate ?? "").slice(0, 10);
+      const end = String(lg.calendarEndDate ?? "").slice(0, 10);
+      if (!start || !end) continue;
+      fresh.push({ id, name: lg.name || name, start, end });
+    } catch (e) {
+      console.warn(`cricket series ${id} skipped:`, e?.message || e);
+    }
+  }
+  let prev = [];
+  try { prev = JSON.parse(await readFile(path, "utf8")).series ?? []; } catch { /* first run */ }
+  const today = new Date().toISOString().slice(0, 10);
+  const series = mergeSeries(prev, fresh, today);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify({ fetchedAt: new Date().toISOString(), series }, null, 1));
+  console.log(`CRICKET-SERIES header=${leagues.length} intl=${picked.length} fresh=${fresh.length} kept=${series.length}`);
+}
+const runCricketSeries = !ONLY_REDDIT
+  && (ONLY_LIST.length === 0 || ONLY_LIST.includes("cricket-series"))
+  && !tokenSkipped("cricket-series");
+let cricketSeriesFailed = false;
+if (runCricketSeries) {
+  try {
+    await bakeCricketSeries();
+  } catch (e) {
+    console.error("cricket-series bake FAILED:", e?.message || e);
+    cricketSeriesFailed = true;
+  }
+}
+
 // Persist the watch-page reads both bakes above made, then say how many were
 // served from disk vs fetched live, so a new YouTube block shows up in the log.
 try {
@@ -5294,3 +5356,4 @@ if (activeJobs.length > 0 && failed === activeJobs.length) process.exit(1);
 if (highlightsFailed && ONLY_LIST.includes("highlights")) process.exit(1);
 if (recapsFailed && ONLY_LIST.includes("recaps")) process.exit(1);
 if (mlbReviewFailed && ONLY_LIST.includes("mlb-review")) process.exit(1);
+if (cricketSeriesFailed && ONLY_LIST.includes("cricket-series")) process.exit(1);

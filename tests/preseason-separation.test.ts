@@ -73,7 +73,8 @@ test("the card marker is suppressed only when the header already says it", () =>
 // window closes on 09-03 while the games it describes stay on the board.
 test("isPreseason is derived from the season type", () => {
   const src = fs.readFileSync(new URL("../src/lib/espn.ts", import.meta.url), "utf8");
-  assert.ok(/const isPreseason = event\.season\?\.type === 1;/.test(src));
+  // Rugby is the one exception: ESPN tags every rugby fixture type 1 (2026-09-27).
+  assert.ok(/const isPreseason = event\.season\?\.type === 1 && !RUGBY_SPORTS\.has\(sport\);/.test(src));
   assert.ok(/^\s{4}isPreseason,$/m.test(src), "parseGame must return the flag");
 });
 

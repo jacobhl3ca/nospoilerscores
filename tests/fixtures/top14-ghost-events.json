@@ -1,0 +1,1512 @@
+[
+ {
+  "id": "604732",
+  "uid": "s:300~l:8005~e:604732",
+  "date": "2026-09-13T19:00Z",
+  "name": "Bordeaux vs Stade Toulousain",
+  "shortName": "BORDE VS STADE",
+  "season": {
+   "year": 2026,
+   "type": 1,
+   "slug": "top-14"
+  },
+  "competitions": [
+   {
+    "id": "604732",
+    "uid": "s:300~l:8005~e:604732~c:604732",
+    "date": "2026-09-13T19:00Z",
+    "attendance": 0,
+    "type": {
+     "id": "0",
+     "abbreviation": "N/A"
+    },
+    "timeValid": true,
+    "neutralSite": false,
+    "conferenceCompetition": false,
+    "playByPlayAvailable": false,
+    "recent": true,
+    "competitors": [
+     {
+      "id": "126831",
+      "uid": "s:300~l:8005~t:126831",
+      "type": "team",
+      "order": 0,
+      "homeAway": "home",
+      "team": {
+       "id": "126831",
+       "uid": "s:300~t:126831",
+       "name": "Bordeaux",
+       "abbreviation": "BORDE",
+       "displayName": "Bordeaux",
+       "shortDisplayName": "Bordeaux",
+       "isActive": true,
+       "links": [
+        {
+         "rel": [
+          "clubhouse",
+          "desktop",
+          "team"
+         ],
+         "href": "https://www.espn.com/rugby/team/_/id/126831/bordeaux",
+         "text": "Clubhouse",
+         "isExternal": false,
+         "isPremium": false
+        }
+       ]
+      },
+      "score": "0",
+      "statistics": [],
+      "form": ""
+     },
+     {
+      "id": "289546",
+      "uid": "s:300~l:8005~t:289546",
+      "type": "team",
+      "order": 1,
+      "homeAway": "away",
+      "team": {
+       "id": "289546",
+       "uid": "s:300~t:289546",
+       "name": "Stade Toulousain",
+       "abbreviation": "STADE",
+       "displayName": "Stade Toulousain",
+       "shortDisplayName": "Stade Toulousain",
+       "isActive": true,
+       "links": [
+        {
+         "rel": [
+          "clubhouse",
+          "desktop",
+          "team"
+         ],
+         "href": "https://www.espn.com/rugby/team/_/id/289546/stade-toulousain",
+         "text": "Clubhouse",
+         "isExternal": false,
+         "isPremium": false
+        }
+       ]
+      },
+      "score": "0",
+      "statistics": [],
+      "form": ""
+     }
+    ],
+    "notes": [],
+    "status": {
+     "clock": 0.0,
+     "displayClock": "1'",
+     "period": 0,
+     "type": {
+      "id": "1",
+      "name": "STATUS_SCHEDULED",
+      "state": "pre",
+      "completed": false,
+      "description": "Scheduled",
+      "detail": "Sun, September 13th at 3:00 PM EDT",
+      "shortDetail": "9/13 - 3:00 PM EDT"
+     }
+    },
+    "broadcasts": [],
+    "format": {
+     "regulation": {
+      "periods": 2
+     }
+    },
+    "startDate": "2026-09-13T19:00Z",
+    "broadcast": "",
+    "geoBroadcasts": [],
+    "details": [],
+    "highlights": []
+   }
+  ],
+  "links": [
+   {
+    "language": "en-US",
+    "rel": [
+     "summary",
+     "desktop",
+     "event"
+    ],
+    "href": "https://www.espn.com/rugby/match/_/gameId/604732/league/270559",
+    "text": "Summary",
+    "shortText": "Summary",
+    "isExternal": false,
+    "isPremium": false
+   }
+  ],
+  "status": {
+   "clock": 0.0,
+   "displayClock": "1'",
+   "period": 0,
+   "type": {
+    "id": "1",
+    "name": "STATUS_SCHEDULED",
+    "state": "pre",
+    "completed": false,
+    "description": "Scheduled",
+    "detail": "Sun, September 13th at 3:00 PM EDT",
+    "shortDetail": "9/13 - 3:00 PM EDT"
+   }
+  }
+ },
+ {
+  "id": "604373",
+  "uid": "s:300~l:8005~e:604373",
+  "date": "2026-09-13T19:05Z",
+  "name": "Stade Toulousain vs Bordeaux Begles",
+  "shortName": "STA VS UNI",
+  "season": {
+   "year": 2027,
+   "type": 1,
+   "slug": "top-14"
+  },
+  "competitions": [
+   {
+    "id": "604373",
+    "uid": "s:300~l:8005~e:604373~c:604373",
+    "date": "2026-09-13T19:05Z",
+    "attendance": 0,
+    "timeValid": true,
+    "neutralSite": false,
+    "conferenceCompetition": false,
+    "playByPlayAvailable": true,
+    "recent": false,
+    "venue": {
+     "id": "16510",
+     "fullName": "Stade Ernest-Wallon",
+     "address": {
+      "city": "Toulouse",
+      "state": "France"
+     },
+     "indoor": false
+    },
+    "competitors": [
+     {
+      "id": "25922",
+      "uid": "s:300~l:8005~t:25922",
+      "type": "team",
+      "order": 0,
+      "homeAway": "home",
+      "winner": true,
+      "team": {
+       "id": "25922",
+       "uid": "s:300~t:25922",
+       "name": "Stade Toulousain",
+       "abbreviation": "STA",
+       "displayName": "Stade Toulousain",
+       "shortDisplayName": "Stade Toulousain",
+       "color": "000000",
+       "isActive": true,
+       "venue": {
+        "id": "16510"
+       },
+       "links": [
+        {
+         "rel": [
+          "clubhouse",
+          "desktop",
+          "team"
+         ],
+         "href": "https://www.espn.com/rugby/team/_/id/25922/stade-toulousain",
+         "text": "Clubhouse",
+         "isExternal": false,
+         "isPremium": false
+        }
+       ],
+       "logo": "https://a.espncdn.com/i/teamlogos/rugby/teams/500/25922.png"
+      },
+      "score": "48",
+      "linescores": [
+       {
+        "value": 0.0,
+        "displayValue": "0",
+        "period": 1
+       },
+       {
+        "value": 48.0,
+        "displayValue": "48",
+        "period": 2
+       },
+       {
+        "value": 0.0,
+        "displayValue": "0",
+        "period": 20
+       },
+       {
+        "value": 0.0,
+        "displayValue": "0",
+        "period": 60
+       }
+      ],
+      "statistics": [],
+      "form": "WWLWW",
+      "records": [
+       {
+        "name": "overall",
+        "abbreviation": "Total",
+        "type": "total",
+        "summary": "WWLWW"
+       }
+      ]
+     },
+     {
+      "id": "143737",
+      "uid": "s:300~l:8005~t:143737",
+      "type": "team",
+      "order": 1,
+      "homeAway": "away",
+      "winner": false,
+      "team": {
+       "id": "143737",
+       "uid": "s:300~t:143737",
+       "name": "Bordeaux Begles",
+       "abbreviation": "UNI",
+       "displayName": "Bordeaux Begles",
+       "shortDisplayName": "Bordeaux Begles",
+       "color": "000099",
+       "isActive": true,
+       "venue": {
+        "id": "16681"
+       },
+       "links": [
+        {
+         "rel": [
+          "clubhouse",
+          "desktop",
+          "team"
+         ],
+         "href": "https://www.espn.com/rugby/team/_/id/143737/bordeaux-begles",
+         "text": "Clubhouse",
+         "isExternal": false,
+         "isPremium": false
+        }
+       ],
+       "logo": "https://a.espncdn.com/i/teamlogos/rugby/teams/500/143737.png"
+      },
+      "score": "12",
+      "linescores": [
+       {
+        "value": 0.0,
+        "displayValue": "0",
+        "period": 1
+       },
+       {
+        "value": 12.0,
+        "displayValue": "12",
+        "period": 2
+       },
+       {
+        "value": 0.0,
+        "displayValue": "0",
+        "period": 20
+       },
+       {
+        "value": 0.0,
+        "displayValue": "0",
+        "period": 60
+       }
+      ],
+      "statistics": [],
+      "form": "LWLWL",
+      "records": [
+       {
+        "name": "overall",
+        "abbreviation": "Total",
+        "type": "total",
+        "summary": "LWLWL"
+       }
+      ]
+     }
+    ],
+    "notes": [],
+    "status": {
+     "clock": 0.0,
+     "displayClock": "1'",
+     "period": 2,
+     "type": {
+      "id": "3",
+      "name": "STATUS_FINAL",
+      "state": "post",
+      "completed": true,
+      "description": "FT",
+      "detail": "FT",
+      "shortDetail": "FT"
+     }
+    },
+    "broadcasts": [],
+    "format": {
+     "regulation": {
+      "periods": 2
+     }
+    },
+    "startDate": "2026-09-13T19:05Z",
+    "broadcast": "",
+    "geoBroadcasts": [],
+    "highlights": [],
+    "details": [
+     {
+      "type": {
+       "id": "1",
+       "text": "try"
+      },
+      "clock": {
+       "value": 937.0,
+       "displayValue": "16'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "302140",
+        "fullName": "Kalvin Gourgues",
+        "displayName": "Kalvin Gourgues",
+        "shortName": "K. Gourgues",
+        "position": "C",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "1",
+       "text": "try"
+      },
+      "clock": {
+       "value": 1102.0,
+       "displayValue": "19'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "296096",
+        "fullName": "Ange Capuozzo",
+        "displayName": "Ange Capuozzo",
+        "shortName": "A. Capuozzo",
+        "position": "FB",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "1",
+       "text": "try"
+      },
+      "clock": {
+       "value": 1454.0,
+       "displayValue": "25'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "243185",
+        "fullName": "Julien Marchand",
+        "displayName": "Julien Marchand",
+        "shortName": "J. Marchand",
+        "position": "H",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "1",
+       "text": "try"
+      },
+      "clock": {
+       "value": 1851.0,
+       "displayValue": "31'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "295820",
+        "fullName": "Santiago Chocobares",
+        "displayName": "Santiago Chocobares",
+        "shortName": "S. Chocobares",
+        "position": "C",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "2",
+       "text": "conversion"
+      },
+      "clock": {
+       "value": 1889.0,
+       "displayValue": "32'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "292160",
+        "fullName": "Romain Ntamack",
+        "displayName": "Romain Ntamack",
+        "shortName": "R. Ntamack",
+        "position": "FH",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "1",
+       "text": "try"
+      },
+      "clock": {
+       "value": 2066.0,
+       "displayValue": "35'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "176338",
+        "fullName": "Teddy Thomas",
+        "displayName": "Teddy Thomas",
+        "shortName": "T. Thomas",
+        "position": "W",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "2",
+       "text": "conversion"
+      },
+      "clock": {
+       "value": 2112.0,
+       "displayValue": "36'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "292160",
+        "fullName": "Romain Ntamack",
+        "displayName": "Romain Ntamack",
+        "shortName": "R. Ntamack",
+        "position": "FH",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "1",
+       "text": "try"
+      },
+      "clock": {
+       "value": 2463.0,
+       "displayValue": "42'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "243185",
+        "fullName": "Julien Marchand",
+        "displayName": "Julien Marchand",
+        "shortName": "J. Marchand",
+        "position": "H",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "2",
+       "text": "conversion"
+      },
+      "clock": {
+       "value": 2515.0,
+       "displayValue": "42'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "292160",
+        "fullName": "Romain Ntamack",
+        "displayName": "Romain Ntamack",
+        "shortName": "R. Ntamack",
+        "position": "FH",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "1",
+       "text": "try"
+      },
+      "clock": {
+       "value": 2680.0,
+       "displayValue": "45'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "176339",
+        "fullName": "Cyril Baille",
+        "displayName": "Cyril Baille",
+        "shortName": "C. Baille",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 2750.0,
+       "displayValue": "46'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "288445",
+        "fullName": "Alex Moon",
+        "displayName": "Alex Moon",
+        "shortName": "A. Moon",
+        "position": "L",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 2750.0,
+       "displayValue": "46'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "290613",
+        "fullName": "Boris Palu",
+        "displayName": "Boris Palu",
+        "shortName": "B. Palu",
+        "position": "L",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 2751.0,
+       "displayValue": "46'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "303492",
+        "fullName": "Marko Gazzotti",
+        "displayName": "Marko Gazzotti",
+        "shortName": "M. Gazzotti",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 2751.0,
+       "displayValue": "46'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "291648",
+        "fullName": "Tom Willis",
+        "displayName": "Tom Willis",
+        "shortName": "T. Willis",
+        "position": "BR",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 2752.0,
+       "displayValue": "46'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "300681",
+        "fullName": "Martin Page-Relo",
+        "displayName": "Martin Page-Relo",
+        "shortName": "M. Page-Relo",
+        "position": "SH",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 2752.0,
+       "displayValue": "46'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "296206",
+        "fullName": "Maxime Lucu",
+        "displayName": "Maxime Lucu",
+        "shortName": "M. Lucu",
+        "position": "SH",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 2753.0,
+       "displayValue": "46'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "294265",
+        "fullName": "Sipili Falatea",
+        "displayName": "Sipili Falatea",
+        "shortName": "S. Falatea",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 2753.0,
+       "displayValue": "46'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "291406",
+        "fullName": "Toma Taufa",
+        "displayName": "Toma Taufa",
+        "shortName": "T. Taufa",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 2977.0,
+       "displayValue": "50'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "297076",
+        "fullName": "Emmanuel Meafou",
+        "displayName": "Emmanuel Meafou",
+        "shortName": "E. Meafou",
+        "position": "L",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 2977.0,
+       "displayValue": "50'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "296802",
+        "fullName": "Thibaud Flament",
+        "displayName": "Thibaud Flament",
+        "shortName": "T. Flament",
+        "position": "L",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "1",
+       "text": "try"
+      },
+      "clock": {
+       "value": 3078.0,
+       "displayValue": "52'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "292755",
+        "fullName": "Pablo Uberti",
+        "displayName": "Pablo Uberti",
+        "shortName": "P. Uberti",
+        "position": "C",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 3145.0,
+       "displayValue": "53'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "176339",
+        "fullName": "Cyril Baille",
+        "displayName": "Cyril Baille",
+        "shortName": "C. Baille",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 3145.0,
+       "displayValue": "53'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "237671",
+        "fullName": "Rodrigue Neti",
+        "displayName": "Rodrigue Neti",
+        "shortName": "R. Neti",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 3146.0,
+       "displayValue": "53'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "243185",
+        "fullName": "Julien Marchand",
+        "displayName": "Julien Marchand",
+        "shortName": "J. Marchand",
+        "position": "H",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 3146.0,
+       "displayValue": "53'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "285669",
+        "fullName": "Peato Mauvaka",
+        "displayName": "Peato Mauvaka",
+        "shortName": "P. Mauvaka",
+        "position": "H",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 3556.0,
+       "displayValue": "60'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "296207",
+        "fullName": "Yoram Moefana",
+        "displayName": "Yoram Moefana",
+        "shortName": "Y. Moefana",
+        "position": "C",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 3556.0,
+       "displayValue": "60'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "288711",
+        "fullName": "Arthur Retiere",
+        "displayName": "Arthur Retiere",
+        "shortName": "A. Retiere",
+        "position": "W",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 3557.0,
+       "displayValue": "60'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "265395",
+        "fullName": "Daniel du Plessis",
+        "displayName": "Daniel du Plessis",
+        "shortName": "D. du Plessis",
+        "position": "C",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 3557.0,
+       "displayValue": "60'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "302114",
+        "fullName": "Nicolas Depoortere",
+        "displayName": "Nicolas Depoortere",
+        "shortName": "N. Depoortere",
+        "position": "C",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 3558.0,
+       "displayValue": "60'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "286551",
+        "fullName": "Jack Willis",
+        "displayName": "Jack Willis",
+        "shortName": "J. Willis",
+        "position": "FL",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 3558.0,
+       "displayValue": "60'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "298635",
+        "fullName": "Theo Ntamack",
+        "displayName": "Theo Ntamack",
+        "shortName": "T. Ntamack",
+        "position": "FL",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "1",
+       "text": "try"
+      },
+      "clock": {
+       "value": 3646.0,
+       "displayValue": "61'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "291406",
+        "fullName": "Toma Taufa",
+        "displayName": "Toma Taufa",
+        "shortName": "T. Taufa",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "2",
+       "text": "conversion"
+      },
+      "clock": {
+       "value": 3679.0,
+       "displayValue": "62'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "296206",
+        "fullName": "Maxime Lucu",
+        "displayName": "Maxime Lucu",
+        "shortName": "M. Lucu",
+        "position": "SH",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 3704.0,
+       "displayValue": "62'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "243187",
+        "fullName": "Dorian Aldegheri",
+        "displayName": "Dorian Aldegheri",
+        "shortName": "D. Aldegheri",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 3704.0,
+       "displayValue": "62'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "292154",
+        "fullName": "Georges-Henri Colombe",
+        "displayName": "Georges-Henri Colombe",
+        "shortName": "G. Colombe",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 3711.0,
+       "displayValue": "62'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "294414",
+        "fullName": "Maxime Lamothe",
+        "displayName": "Maxime Lamothe",
+        "shortName": "M. Lamothe",
+        "position": "H",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 3711.0,
+       "displayValue": "62'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "298674",
+        "fullName": "Gaetan Barlot",
+        "displayName": "Gaetan Barlot",
+        "shortName": "G. Barlot",
+        "position": "H",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 3893.0,
+       "displayValue": "65'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "298939",
+        "fullName": "Matis Perchaud",
+        "displayName": "Matis Perchaud",
+        "shortName": "M. Perchaud",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 3893.0,
+       "displayValue": "65'"
+      },
+      "team": {
+       "id": "143737"
+      },
+      "athletesInvolved": [
+       {
+        "id": "306741",
+        "fullName": "Amir Hattouma",
+        "displayName": "Amir Hattouma",
+        "shortName": "A. Hattouma",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 3894.0,
+       "displayValue": "65'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "238367",
+        "fullName": "Thomas Ramos",
+        "displayName": "Thomas Ramos",
+        "shortName": "T. Ramos",
+        "position": "FB",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 3894.0,
+       "displayValue": "65'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "265603",
+        "fullName": "Blair Kinghorn",
+        "displayName": "Blair Kinghorn",
+        "shortName": "B. Kinghorn",
+        "position": "FB",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 4031.0,
+       "displayValue": "68'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "245267",
+        "fullName": "Antoine Dupont",
+        "displayName": "Antoine Dupont",
+        "shortName": "A. Dupont",
+        "position": "SH",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 4031.0,
+       "displayValue": "68'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "300612",
+        "fullName": "Paul Graou",
+        "displayName": "Paul Graou",
+        "shortName": "P. Graou",
+        "position": "SH",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "7",
+       "text": "player substituted"
+      },
+      "clock": {
+       "value": 4321.0,
+       "displayValue": "73'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "177474",
+        "fullName": "Francois Cros",
+        "displayName": "Francois Cros",
+        "shortName": "F. Cros",
+        "position": "FL",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "8",
+       "text": "substitute on"
+      },
+      "clock": {
+       "value": 4321.0,
+       "displayValue": "73'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "306732",
+        "fullName": "Romeo Bonnard Martin",
+        "displayName": "Romeo Bonnard Martin",
+        "shortName": "R. Bonnard Martin",
+        "position": "L",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "1",
+       "text": "try"
+      },
+      "clock": {
+       "value": 4913.0,
+       "displayValue": "82'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "292154",
+        "fullName": "Georges-Henri Colombe",
+        "displayName": "Georges-Henri Colombe",
+        "shortName": "G. Colombe",
+        "position": "P",
+        "links": []
+       }
+      ]
+     },
+     {
+      "type": {
+       "id": "2",
+       "text": "conversion"
+      },
+      "clock": {
+       "value": 4959.0,
+       "displayValue": "83'"
+      },
+      "team": {
+       "id": "25922"
+      },
+      "athletesInvolved": [
+       {
+        "id": "292160",
+        "fullName": "Romain Ntamack",
+        "displayName": "Romain Ntamack",
+        "shortName": "R. Ntamack",
+        "position": "FH",
+        "links": []
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "links": [
+   {
+    "language": "en-US",
+    "rel": [
+     "summary",
+     "desktop",
+     "event"
+    ],
+    "href": "https://www.espn.com/rugby/match/_/gameId/604373/league/270559",
+    "text": "Summary",
+    "shortText": "Summary",
+    "isExternal": false,
+    "isPremium": false
+   },
+   {
+    "language": "en-US",
+    "rel": [
+     "lineup",
+     "desktop",
+     "event"
+    ],
+    "href": "https://www.espn.com/rugby/lineups/_/gameId/604373/league/270559",
+    "text": "Line-Ups",
+    "shortText": "Line-Ups",
+    "isExternal": false,
+    "isPremium": false
+   },
+   {
+    "language": "en-US",
+    "rel": [
+     "match",
+     "desktop",
+     "event"
+    ],
+    "href": "https://www.espn.com/rugby/match/_/gameId/604373/league/270559",
+    "text": "Match",
+    "shortText": "Match",
+    "isExternal": false,
+    "isPremium": false
+   },
+   {
+    "language": "en-US",
+    "rel": [
+     "matchstats",
+     "desktop",
+     "event"
+    ],
+    "href": "https://www.espn.com/rugby/matchstats/_/gameId/604373/league/270559",
+    "text": "Match Stats",
+    "shortText": "Match Stats",
+    "isExternal": false,
+    "isPremium": false
+   },
+   {
+    "language": "en-US",
+    "rel": [
+     "playerstats",
+     "desktop",
+     "event"
+    ],
+    "href": "https://www.espn.com/rugby/playerstats/_/gameId/604373/league/270559",
+    "text": "Player Stats",
+    "shortText": "Player Stats",
+    "isExternal": false,
+    "isPremium": false
+   }
+  ],
+  "status": {
+   "clock": 0.0,
+   "displayClock": "1'",
+   "period": 2,
+   "type": {
+    "id": "3",
+    "name": "STATUS_FINAL",
+    "state": "post",
+    "completed": true,
+    "description": "FT",
+    "detail": "FT",
+    "shortDetail": "FT"
+   }
+  }
+ }
+]

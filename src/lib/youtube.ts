@@ -192,6 +192,29 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // COMPETITION_TITLE_TOKENS below, which is REQUIRED, not an optimization:
   // with it World Rugby is 10/18 correct and 0/18 wrong.
   nationschamp: "World Rugby",
+  // ── NRL + AFL, added 2026-09-27. Measured against the LIVE worker with
+  // strict=1 and the bare production query (`A vs B highlights Mon D, YYYY`).
+  // NRL: the league channel's full name is the byline — "NRL - National Rugby
+  // League"; the bare "NRL" is 0/5. 12/12 over the 2026 Round 27 + finals
+  // fixtures (Sep 5 → Sep 27, both prelim finals included), 0 wrong. Titles
+  // read "NRL Finals 2026 | Panthers v Knights | Match Highlights | Finals
+  // Week 3" — no score. The women's comp posts from its OWN channel ("NRLW -
+  // National Rugby League Women's", same clubs, same format), which the exact
+  // byline gate already keeps out, and the channel's 2018 re-uploads of the
+  // same finals pairings fail the year gate.
+  nrl: "NRL - National Rugby League",
+  // AFL: "AFL", 6/8 over the 2026 finals series (Sep 4 → the Sep 26 Grand
+  // Final), 0 wrong. Titles read "Fremantle v Brisbane Lions Highlights |
+  // 2026 Toyota AFL Grand Final | AFL" — no score. AFLW posts from its own
+  // "AFL Women's" channel, so the byline gate keeps it out too.
+  afl: "AFL",
+  // URC: "United Rugby Championship", 8/8 strict over the 2026-27 opening two
+  // rounds (Sep 25 → Sep 27), 0 wrong, once ESPN's "Cardiff Blues" and
+  // "Benetton Treviso" are aliased to the title forms (see TEAM_NAME_ALIASES).
+  // Titles read "Highlights | Leinster Rugby v Munster Rugby | Round 1 | URC
+  // 2026/27" — no score. The other four club competitions stay DARK (see
+  // NO_HIGHLIGHT_FALLBACK).
+  urc: "United Rugby Championship",
   // euro + cricket deliberately have NO entry — see the block comment below.
   //
   // ── La Liga + Ligue 1, LIT 2026-09-19. Both were dark because the LEAGUE's
@@ -430,6 +453,15 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "copadelrey",
   "cricket",
+  // International cricket, probed 2026-09-27. The ECB channel ("England &
+  // Wales Cricket Board") does post a package per match, but titles read
+  // "Highlights - England v Sri Lanka | 3rd Metro Bank ODI 2026": no date, and
+  // a series plays the same pairing 3 to 5 times in two weeks. The strict
+  // lookup has no per-match token to tell the 1st ODI from the 3rd, and the
+  // client's dated query ("Sri Lanka vs England highlights Sep 27, 2026") gets
+  // no results at all (0/6). Wrong-match risk, the rugbytest class: dark until
+  // the lookup can require the match ordinal ("3rd ODI") from game.stage.
+  "cricketintl",
   "dfbpokal",
   "euro",
   "esports",
@@ -445,6 +477,18 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "ncaawsoc",
   "rugbychamp",
   "rugbytest",
+  // Club rugby, probed 2026-09-27 (lib/espn.ts has the ids). Only URC lit.
+  // premrugby: "PREM Rugby" and "Premiership Rugby" both 0/5 strict; the
+  //   league's clips carry no "A v B" pairing in the title.
+  // top14: "TOP 14 - Officiel" 2 unique hits out of 20 probed, and the older
+  //   uploads print the score in the title.
+  // challengecup: no fixture played yet (pool round 1 is 2026-10-16).
+  //   RE-PROBE the EPCR channel after round 1.
+  // mlr: 4/8 with one WRONG match, and titles hint at the result.
+  "premrugby",
+  "top14",
+  "challengecup",
+  "mlr",
   "ufl",
   "uecl",
 ]);
@@ -796,6 +840,10 @@ const TEAM_NAME_ALIASES: Record<string, string> = {
   // both games dark.
   "Union (NY)": "Union",
   "Post University": "Post",
+  // URC (2026-09-27): ESPN keeps the pre-2021 club names; the URC channel uses
+  // the current ones ("Cardiff Rugby", "Benetton Rugby"). 6/8 → 8/8 strict.
+  "Cardiff Blues": "Cardiff Rugby",
+  "Benetton Treviso": "Benetton",
 };
 
 function aliasTeam(name: string): string {

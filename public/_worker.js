@@ -2541,6 +2541,135 @@ export default {
       }
     }
 
+    // ── International cricket: many ESPN series, merged into one scoreboard ──
+    // (added 2026-09-27). ESPN keys cricket by SERIES id and has no "all
+    // internationals" feed, so the cricketintl column reads this route instead:
+    //   GET /api/cricket-intl?dates=YYYYMMDD[-YYYYMMDD]  → { events }
+    //   GET /api/cricket-intl/standings                  → { children: [] }
+    //   GET /api/cricket-intl/teams                      → { items: [] }
+    // The series to ask are the union of news/cricket-series.json (R2, baked by
+    // prebake bakeCricketSeries, which keeps a series until its last day) and
+    // the live scoreboard header (every series with a match on now), so a new
+    // series shows before the next bake. Each series scoreboard is asked for one
+    // day at a time: a dates=A-B range comes back EMPTY on the cricket feeds
+    // (read 2026-09-27), while a single day lists a multi-day Test on every one
+    // of its days. Only matches between two ICC full members in an international
+    // class are kept (scripts/lib/cricket-series.mjs has the same rule; keep in
+    // sync). Always HTTP 200, `{ events: [] }` on failure, like /api/cfl.
+    if (url.pathname === "/api/cricket-intl" || url.pathname === "/api/cricket-intl/standings" || url.pathname === "/api/cricket-intl/teams") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+      const cjson = (body, maxAge = 120) =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${maxAge}`,
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      if (url.pathname.endsWith("/standings")) return cjson({ children: [] }, 3600);
+      if (url.pathname.endsWith("/teams")) return cjson({ items: [] }, 3600);
+
+      const cache = typeof caches !== "undefined" ? caches.default : null;
+      const cacheKey = new Request(url.toString(), { method: "GET" });
+      if (cache) {
+        const hit = await cache.match(cacheKey);
+        if (hit) return hit;
+      }
+      const FULL_MEMBERS = new Set([
+        "Afghanistan", "Australia", "Bangladesh", "England", "India", "Ireland",
+        "New Zealand", "Pakistan", "South Africa", "Sri Lanka", "West Indies", "Zimbabwe",
+      ]);
+      const nationOf = (n) => String(n ?? "").trim().replace(/\s+Women$/, "");
+      const isIntl = (ev) => {
+        const cls = ev?.class ?? ev?.competitions?.[0]?.class ?? {};
+        if (String(cls.internationalClassId ?? "0") === "0") return false;
+        const comps = ev?.competitors ?? ev?.competitions?.[0]?.competitors ?? [];
+        return comps.length === 2 && comps.every((c) => FULL_MEMBERS.has(nationOf(c?.displayName ?? c?.team?.displayName)));
+      };
+      const ESPN = "https://site.web.api.espn.com/apis";
+      const getJson = async (u) => {
+        try {
+          const r = await fetch(u, { cf: { cacheTtl: 60, cacheEverything: true } });
+          return r.ok ? await r.json() : null;
+        } catch {
+          return null;
+        }
+      };
+      try {
+        const etDay = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
+        const m = (url.searchParams.get("dates") || "").match(/^(\d{8})(?:-(\d{8}))?$/);
+        let from = m ? m[1] : etDay.format(new Date()).replace(/-/g, "");
+        let to = m ? (m[2] || m[1]) : from;
+        if (to < from) [from, to] = [to, from];
+        const days = [];
+        for (let d = new Date(Date.UTC(+from.slice(0, 4), +from.slice(4, 6) - 1, +from.slice(6, 8))); days.length < 14; d.setUTCDate(d.getUTCDate() + 1)) {
+          const ymd = d.toISOString().slice(0, 10).replace(/-/g, "");
+          if (ymd > to) break;
+          days.push(ymd);
+        }
+        const series = new Map();
+        // The bake lands in R2 (key news/cricket-series.json, uploaded with
+        // the other public/news/*.json); a static copy is the fallback.
+        let baked = null;
+        try {
+          const obj = env.DATA ? await env.DATA.get("news/cricket-series.json") : null;
+          if (obj) baked = await obj.json();
+        } catch { /* fall through */ }
+        if (!baked) {
+          baked = await env.ASSETS.fetch(new Request(new URL("/news/cricket-series.json", url), { method: "GET" }))
+            .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        }
+        for (const s of baked?.series ?? []) {
+          if (/^\d+$/.test(String(s?.id ?? ""))) series.set(String(s.id), { id: String(s.id), name: s.name, start: String(s.start ?? "").replace(/-/g, ""), end: String(s.end ?? "").replace(/-/g, "") });
+        }
+        const header = await getJson(`${ESPN}/v2/scoreboard/header?sport=cricket`);
+        const today = etDay.format(new Date()).replace(/-/g, "");
+        for (const lg of header?.sports?.[0]?.leagues ?? []) {
+          const id = String(lg?.id ?? "");
+          if (!/^\d+$/.test(id) || series.has(id) || !(lg.events ?? []).some(isIntl)) continue;
+          // Dates unknown until the bake reads the series calendar: ask it for
+          // a week either side of today only.
+          const around = (off) => {
+            const d = new Date(Date.UTC(+today.slice(0, 4), +today.slice(4, 6) - 1, +today.slice(6, 8) + off));
+            return d.toISOString().slice(0, 10).replace(/-/g, "");
+          };
+          series.set(id, { id, name: lg.name, start: around(-7), end: around(7) });
+        }
+        const asks = [];
+        for (const day of days) {
+          for (const s of series.values()) {
+            if (s.start && day < s.start) continue;
+            if (s.end && day > s.end) continue;
+            asks.push({ day, s });
+          }
+        }
+        const results = await Promise.all(
+          asks.slice(0, 48).map(async ({ day, s }) => {
+            const sb = await getJson(`${ESPN}/site/v2/sports/cricket/${s.id}/scoreboard?dates=${day}`);
+            return (sb?.events ?? []).filter(isIntl).map((ev) => ({ ...ev, seriesId: s.id, seriesName: s.name || sb?.leagues?.[0]?.name || "" }));
+          }),
+        );
+        const byId = new Map();
+        for (const ev of results.flat()) if (ev?.id && !byId.has(ev.id)) byId.set(ev.id, ev);
+        const events = [...byId.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+        const live = events.some((e) => e?.status?.type?.state === "in");
+        const res = cjson({ events }, live ? 60 : 300);
+        if (cache) ctx.waitUntil(cache.put(cacheKey, res.clone()));
+        return res;
+      } catch {
+        return cjson({ events: [] }, 60);
+      }
+    }
+
     // ── CFL: theScore's app API, reshaped to the ESPN scoreboard ───────────
     // ESPN stopped serving the CFL after 2023 (probed 2026-09-13: the calendar
     // is frozen at 2023 and every date returns 0 events), so the config-only

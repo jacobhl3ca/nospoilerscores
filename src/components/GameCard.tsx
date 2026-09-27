@@ -12,7 +12,7 @@ import { handleExternalClick, watchLinkProps } from "@/lib/openExternal";
 import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
-import { formatGameProgress } from "@/lib/liveProgress";
+import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
 
 interface GameCardProps {
   game: Game;
@@ -381,6 +381,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null && !isDelayed;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
+  // Held before first pitch/kickoff: yellow label beside the start time.
+  const delayedStart = delayedStartLabel(game);
   // This game's key in the Settings record picker, or null when records are
   // off for its league (or it has no team record at all).
   const recordLeague = recordLeagueFor(game.sport, sportGroup(game.sport) === "soccer");
@@ -775,6 +777,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 Pre
               </span>
             )}
+            {/* Cricket format chip (cricketintl): "ODI", "T20I", "W ODI",
+                "Test · Day 2 of 5". A column mixes all three formats, and a
+                Test that is on day 3 is not a game that starts at 5:00 AM. */}
+            {game.formatTag && (
+              <span
+                className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none whitespace-nowrap"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                data-format-tag={game.formatTag}
+              >
+                {game.formatTag}
+              </span>
+            )}
             {/* Date/time never shrinks or clips (shrink-0) so the time always
                 shows in full — including the ":00". When it + a wide network
                 ("Sun 12:00PM" + "FS1 +2") can't share one line on a narrow mobile
@@ -873,6 +887,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 withEspn(
                   <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
                     {formatTime(localTime || cleanStatusDetail(game.statusDetail, false))}
+                    {/* Delayed start (Jacob 9/27): the start time alone read as
+                        on schedule. Same yellow as a live-game delay. */}
+                    {delayedStart ? <span className="ml-1 text-yellow-500 font-medium">{delayedStart}</span> : null}
                   </span>
                 )
               ) : null}
