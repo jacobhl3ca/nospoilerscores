@@ -190,9 +190,11 @@ test("open stays open while paging posts, and the next open starts closed", asyn
   await expect(panel(page)).toBeVisible();
 
   const dialog = page.getByRole("dialog");
-  const before = await dialog.locator(".news-title").first().textContent();
+  // Text posts: the headline is plain text, not a blurred .news-title.
+  const headline = dialog.locator("[data-modal-headline], .news-title").first();
+  const before = await headline.textContent();
   await page.keyboard.press("ArrowDown");
-  await expect.poll(() => dialog.locator(".news-title").first().textContent()).not.toBe(before);
+  await expect.poll(() => headline.textContent()).not.toBe(before);
   await expect(panel(page)).toBeVisible();
 
   await page.getByTestId("modal-controls").getByRole("button", { name: "Close" }).click();
