@@ -737,7 +737,6 @@ export default function SettingsPanel({
       fifthLeague: undefined,
       newsThirdLeague: undefined,
       newsTopNews: undefined,
-      newsFrontPage: undefined,
       newsGenericHidden: undefined,
       topNewsHidden: undefined,
       newsGenericSlot: undefined,
@@ -1385,22 +1384,10 @@ export default function SettingsPanel({
                           <span>{BEST_YESTERDAY_LABEL}</span>
                         </label>
                       )}
-                      {TOP_EVENTS_ENABLED && (
-                        <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
-                          <input
-                            type="checkbox"
-                            checked={!(prefs.hiddenLeagues ?? []).includes("top")}
-                            onChange={(event) => {
-                              const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
-                              if (event.target.checked) hiddenLeagues.delete("top");
-                              else hiddenLeagues.add("top");
-                              updatePrefs({ hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined });
-                            }}
-                            className="cursor-pointer accent-[var(--accent)]"
-                          />
-                          <span>{ESPN_FRONT_PAGE_LABEL}</span>
-                        </label>
-                      )}
+                      {/* ESPN front page starts off (Jacob 9/26), like an
+                          opt-in league: on = shownLeagues, and off only needs
+                          hiddenLeagues while a column pins it. */}
+                      {TOP_EVENTS_ENABLED && renderSwitcherToggle({ sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: false })}
                       <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
                         <input
                           type="checkbox"
