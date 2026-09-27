@@ -1918,9 +1918,12 @@ export default {
             "Match",
             "Day",
             "Part",
+            "Chapter",
             "Episode",
             "Vol",
+            "Volume",
             "Season",
+            "Tier",
           ]);
           const isTeamScoreSpoiler = (text) => {
             const m = text.match(TEAM_SCORE_RX);

@@ -2971,9 +2971,12 @@ const TEAM_SCORE_LISTICLE_WORDS = new Set([
   "Match",
   "Day",
   "Part",
+  "Chapter",
   "Episode",
   "Vol",
+  "Volume",
   "Season",
+  "Tier",
 ]);
 
 function isTeamScoreSpoiler(text: string): boolean {
