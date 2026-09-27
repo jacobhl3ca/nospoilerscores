@@ -5,6 +5,7 @@ import type { Game, Sport, Team } from "../src/lib/types.ts";
 import {
   espnFrontPageSports,
   orderByEspnHeader,
+  parseEspnFrontPageFeed,
   parseEspnHeader,
   type EspnHeaderFeature,
 } from "../src/lib/topEvents.ts";
@@ -124,4 +125,50 @@ test("the live 9/26 strip shape parses into the front page's league order", () =
     game({ id: "401", sport: "ncaaf" }), game({ id: "701", sport: "nwsl" }),
   ];
   assert.deepEqual(orderByEspnHeader(games, features).map((g) => g.id), ["401", "402", "501", "601", "701", "801"]);
+});
+
+// ── ESPN homepage body (the "highlighted" games, Jacob 9/26) ───────────────
+
+// The 9/26 9 pm feed in miniature: the Texas A&M–LSU hero block, the College
+// Football Scoreboard module (a final first, as ESPN lists it), a story
+// module, then the MLB scoreboard module.
+const BODY = {
+  feed: [
+    { data: { event: { id: "702", shortName: "TA&M @ LSU" }, now: [{ type: "Module", inlines: [{ type: "Module", headline: "Collection" }] }] } },
+    { data: { now: [{ type: "Module", inlines: [
+      { type: "SportingEvent", eventId: "466" }, { type: "SportingEvent", eventId: "238" }, { type: "SportingEvent", eventId: 696 },
+    ] }] } },
+    { data: { now: [{ type: "Module", inlines: [{ type: "Module", headline: "Iowa beats Michigan" }] }] } },
+    { data: { now: [{ type: "Module", inlines: [{ type: "SportingEvent", eventId: "097" }, { type: "SportingEvent", eventId: "238" }] }] } },
+  ],
+};
+
+test("parseEspnFrontPageFeed reads game blocks and scoreboard modules top to bottom", () => {
+  assert.deepEqual(parseEspnFrontPageFeed(BODY), ["702", "466", "238", "696", "097"]);
+});
+
+test("parseEspnFrontPageFeed never throws on a reshaped payload", () => {
+  assert.deepEqual(parseEspnFrontPageFeed(null), []);
+  assert.deepEqual(parseEspnFrontPageFeed({ feed: "nope" }), []);
+  assert.deepEqual(parseEspnFrontPageFeed({ feed: [null, 7, { data: { now: "x", event: 3 } }, { data: { now: [{ inlines: [null, { type: "SportingEvent" }] }] } }] }), []);
+});
+
+test("the body's games lead, then the rest of the strip in strip order", () => {
+  const features: EspnHeaderFeature[] = [
+    { sport: "ncaaf", eventIds: ["238", "696", "702", "466", "999"], sportOrder: 0 },
+    { sport: "mlb", eventIds: ["097", "098"], sportOrder: 1 },
+  ];
+  const games = ["238", "696", "702", "466", "999"].map((id) => game({ id, sport: "ncaaf" }))
+    .concat(["097", "098"].map((id) => game({ id, sport: "mlb" })));
+  const featured = parseEspnFrontPageFeed(BODY);
+  assert.deepEqual(orderByEspnHeader(games, features, featured).map((g) => g.id), ["702", "466", "238", "696", "097", "999", "098"]);
+  // No body signal = the strip's order, as before.
+  assert.deepEqual(orderByEspnHeader(games, features).map((g) => g.id), ["238", "696", "702", "466", "999", "097", "098"]);
+});
+
+test("a body game the strip does not carry stays out, and takes its sport from the strip", () => {
+  const features: EspnHeaderFeature[] = [{ sport: "mlb", eventIds: ["b1"], sportOrder: 0 }];
+  const games = [game({ id: "x1", sport: "nfl" }), game({ id: "b1", sport: "nhl" }), game({ id: "b1", sport: "mlb" })];
+  const out = orderByEspnHeader(games, features, ["x1", "b1"]);
+  assert.deepEqual(out.map((g) => `${g.sport}:${g.id}`), ["mlb:b1"]);
 });

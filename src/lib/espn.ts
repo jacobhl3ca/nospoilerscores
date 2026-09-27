@@ -2,7 +2,7 @@ import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventC
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
-import { espnFrontPageSports, orderByEspnHeader, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
+import { espnFrontPageSports, orderByEspnHeader, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_MIN_GAMES, prevYmd, rankBestYesterday } from "./bestYesterday";
 import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
@@ -5477,13 +5477,39 @@ async function fetchEspnHeader(): Promise<EspnHeaderFeature[]> {
   }
 }
 
+// ESPN's homepage body — the feed espn.com renders under the strip: the big
+// game block up top, then league scoreboard modules and stories. Its games
+// lead the column (see parseEspnFrontPageFeed). CORS-open, 60 s edge cache.
+// The first 10 items cover the hero and the main scoreboard modules (~80 KB
+// gzipped on 9/26), so the answer is kept 2 minutes rather than refetched on
+// every live poll. Any failure = no body signal, and the column falls back to
+// the strip's order.
+const ESPN_FRONT_PAGE_FEED_URL = "https://onefeed.fan.api.espn.com/apis/v3/cached/contentEngine/oneFeed/frontpage?source=ESPN.com+-+FAM&showfc=true&region=us&lang=en&editionKey=espn-en&isPremium=true&offset=0&limit=10";
+const ESPN_FRONT_PAGE_FEED_TTL_MS = 2 * 60 * 1000;
+let espnFrontPageFeedCache: { at: number; ids: string[] } | null = null;
+
+async function fetchEspnFrontPageFeed(): Promise<string[]> {
+  if (espnFrontPageFeedCache && Date.now() - espnFrontPageFeedCache.at < ESPN_FRONT_PAGE_FEED_TTL_MS) {
+    return espnFrontPageFeedCache.ids;
+  }
+  try {
+    const res = await fetchWithRetry(ESPN_FRONT_PAGE_FEED_URL, 1, 6000);
+    if (!res.ok) return espnFrontPageFeedCache?.ids ?? [];
+    const ids = parseEspnFrontPageFeed(await res.json());
+    espnFrontPageFeedCache = { at: Date.now(), ids };
+    return ids;
+  } catch {
+    return espnFrontPageFeedCache?.ids ?? [];
+  }
+}
+
 export async function fetchTopEvents(
   date: string | undefined,
   // Games the board already fetched for this date, by sport — a league that is
   // also a column costs nothing extra.
   prefetched: Map<Sport, Game[]>,
 ): Promise<LeagueData> {
-  const features = await fetchEspnHeader();
+  const [features, featured] = await Promise.all([fetchEspnHeader(), fetchEspnFrontPageFeed()]);
   const pools = await Promise.all(espnFrontPageSports(features).map(async (sport) => {
     const pre = prefetched.get(sport);
     if (pre) return pre;
@@ -5493,7 +5519,7 @@ export async function fetchTopEvents(
       return [] as Game[];
     }
   }));
-  const games = orderByEspnHeader(pools.flat(), features);
+  const games = orderByEspnHeader(pools.flat(), features, featured);
   return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false };
 }
 

@@ -76,8 +76,15 @@ const EXPECTED = ["Oklahoma at Georgia", "Hurricanes at Predators", "Dodgers at 
 const NEVER = ["Akron at Toledo", "Rockies at White Sox"];
 const SCORES = ["47", "44", "17", "13"];
 
-async function seed(page: Page, extra: Record<string, unknown> = {}) {
+// ESPN's homepage body (the feed under the strip). Empty by default = no body
+// signal, so the column is the strip's order; the "highlighted" test below
+// serves a hero block and a scoreboard module instead.
+const NO_BODY = { feed: [] };
+
+async function seed(page: Page, extra: Record<string, unknown> = {}, body: unknown = NO_BODY) {
   await page.clock.setFixedTime(NOW);
+  await page.route("**/oneFeed/frontpage**", (route: Route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) }));
   await page.addInitScript((extra) => localStorage.setItem("nss-preferences", JSON.stringify({
     favoriteLeagues: [],
     favoriteTeams: [],
@@ -186,6 +193,24 @@ test("phone: ESPN front page cards keep one-line rows like the other columns (39
     }
   }
   if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/espn-front-page-phone-ratings.png` });
+});
+
+// Jacob 9/26 ("ur not taking highlighted posts into consideration"): espn.com
+// put a big Texas A&M–LSU block above its College Football Scoreboard, and
+// the column still led with the strip's first game. The body now leads: its
+// hero (m1) and then its scoreboard module (h1) go ahead of the strip's order
+// inside each section. A story module carries no game and changes nothing.
+test("ESPN's highlighted games lead the column, ahead of the strip's order", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, {}, {
+    feed: [
+      { data: { event: { id: "m1" }, now: [{ type: "Module", inlines: [{ type: "Module", headline: "Dodgers preview" }] }] } },
+      { data: { now: [{ type: "Module", inlines: [{ type: "SportingEvent", eventId: "h1" }, { type: "SportingEvent", eventId: "c1" }] }] } },
+    ],
+  });
+  await page.goto("/");
+  await expect(cards(page)).toHaveCount(4, { timeout: 30_000 });
+  expect(await cardNames(page)).toEqual(["Oklahoma at Georgia", "Dodgers at Giants", "Hurricanes at Predators", "Texas at Tennessee"]);
 });
 
 test("ratings mode keeps ESPN's order instead of re-sorting by rating", async ({ page }) => {
