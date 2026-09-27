@@ -48,7 +48,7 @@ function workerOrigin(): string {
   return "https://hidescore.com";
 }
 // Sports whose scoreboard is a worker route rather than an ESPN path.
-const WORKER_SCOREBOARD_SPORTS = new Set<Sport>(["cfl"]);
+const WORKER_SCOREBOARD_SPORTS = new Set<Sport>(["cfl", "cricketintl"]);
 function scoreboardUrl(sport: Sport): URL {
   return new URL(WORKER_SCOREBOARD_SPORTS.has(sport) ? workerOrigin() + SPORT_PATHS[sport] : BASE_URL + SPORT_PATHS[sport]);
 }
@@ -208,6 +208,12 @@ const SPORT_PATHS: Record<Sport, string> = {
   // Adding any of them ungated would park a permanently empty column in the
   // switcher, which is exactly the failure the big-five block warns about.
   cricket: "/cricket/8048/scoreboard",
+  // International cricket (added 2026-09-27): every series between two ICC full
+  // members, men's and women's Tests, ODIs and T20Is. NOT an ESPN path — ESPN
+  // keys cricket by series and has no all-internationals feed, so the worker
+  // route merges the day's series scoreboards (public/_worker.js, fed by the
+  // prebake cricket-series list). The IPL keeps the `cricket` key.
+  cricketintl: "/api/cricket-intl",
   // Rugby union (added 2026-08-11). ESPN keys rugby by LEAGUE ID, not by a
   // slug — there is no `/sports/rugby/scoreboard` (404), the id is mandatory.
   // Each competition therefore needs its own Sport key, exactly like the
@@ -525,6 +531,10 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Window is ESPN's own calendar for the competition, first date → final:
   // 2026-03-28 → 2026-05-31. Opt-in like the rest of the second wave.
   { sport: "cricket", label: "IPL", startDate: "03-28", endDate: "05-31", championshipDate: "05-31", excludeFromAuto: true },
+  // ── International cricket (added 2026-09-27) ──
+  // Year-round: there is an international series on somewhere in almost every
+  // week, so no window and no off-season marker. Opt-in like the IPL.
+  { sport: "cricketintl", label: "Cricket", excludeFromAuto: true },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
   { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-20", championshipDate: "12-18", verifiedFor: 2026 },
   // ── NCAAF (College Football, late Aug – late Jan) ──
@@ -955,7 +965,7 @@ const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
   uecl: "⚽", facup: "⚽", copadelrey: "⚽", dfbpokal: "⚽", nations: "⚽",
-  cricket: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
+  cricket: "🏏", cricketintl: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
   ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", esports: "🎮", top: "⭐",
 };
 
@@ -1010,7 +1020,7 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   nations: "soccer",
   golf: "majors", tennis: "majors",
   f1: "other", nascar: "other", indycar: "other", ufc: "other",
-  boxing: "other", cricket: "other", chess: "other", poker: "other",
+  boxing: "other", cricket: "other", cricketintl: "other", chess: "other", poker: "other",
   esports: "other",
   sixnations: "other", rugbywc: "other", rugbychamp: "other",
   superrugby: "other", rugbytest: "other", nationschamp: "other",
@@ -1282,6 +1292,7 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   ncaaw: 25,
   wnba: 26,
   cricket: 27,
+  cricketintl: 27.5,
   // Opt-in event leagues sort to the bottom of the switcher (like WNBA).
   f1: 28,
   nascar: 29,
@@ -1474,6 +1485,81 @@ type RawCompetitor = {
   curatedRank?: { current?: number };
 };
 
+// Both cricket columns: the IPL (`cricket`) and every international series
+// (`cricketintl`, added 2026-09-27). They share the score trim and the rating.
+const CRICKET_SPORTS = new Set<Sport>(["cricket", "cricketintl"]);
+
+// The fields of a cricket event that say what KIND of match it is. Read
+// 2026-09-27 off the series scoreboards: competition.class = { eventType:
+// "ODI" | "T20" | "Test", generalClassCard: "ODI" | "T20I" | "Women's ODI" |
+// "Women T20", internationalClassId }, competition.description = "2nd ODI",
+// event.endDate = the day AFTER the last scheduled day, 23:59Z, and on a
+// multi-day match status.session = "Day 1". ⛔ status.summary is the result
+// ("Titans won by 9 wkts") and is never read.
+type CricketEventLike = {
+  date?: string;
+  endDate?: string;
+  status?: { session?: string; type?: { state?: string } };
+  competitions?: Array<{ class?: { eventType?: string; generalClassCard?: string }; description?: string; competitors?: { team?: { displayName?: string } }[] }>;
+};
+
+// Scheduled days: 1 for a one-day match, 5 for a men's Test, 4 for a youth or
+// women's Test. endDate is the next day at 23:59Z, so the span rounds to N + 1.
+function cricketScheduledDays(e: CricketEventLike): number {
+  const start = Date.parse(String(e.date ?? "").slice(0, 10) + "T00:00:00Z");
+  const end = Date.parse(String(e.endDate ?? ""));
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 1;
+  return Math.max(1, Math.round((end - start) / 86400_000) - 1);
+}
+
+function isMultiDayCricket(e: CricketEventLike): boolean {
+  return e.competitions?.[0]?.class?.eventType === "Test" || cricketScheduledDays(e) > 1;
+}
+
+// { formatTag: "ODI" | "T20I" | "Test · Day 2 of 5" | "W ODI", stage: "2nd ODI"
+// | "1st Test · Day 2 of 5" }. Null fields when the feed says nothing useful.
+export function cricketMatchInfo(e: CricketEventLike, now = Date.now()): { formatTag: string | null; stage: string | null } {
+  const comp = e.competitions?.[0];
+  const cls = comp?.class ?? {};
+  const women =
+    /women/i.test(cls.generalClassCard ?? "") ||
+    (comp?.competitors ?? []).some((c) => /\sWomen$/.test(c?.team?.displayName ?? ""));
+  const base =
+    cls.eventType === "Test" ? "Test"
+    : cls.eventType === "ODI" ? "ODI"
+    : cls.eventType === "T20" ? "T20I"
+    : (cls.generalClassCard ?? "").replace(/^Women'?s?\s+/i, "") || null;
+  let day = "";
+  if (isMultiDayCricket(e)) {
+    const total = cricketScheduledDays(e);
+    const state = e.status?.type?.state;
+    if (state === "in") {
+      const fromSession = /^Day\s+(\d+)/i.exec(e.status?.session ?? "")?.[1];
+      const start = Date.parse(String(e.date ?? ""));
+      const n = fromSession ? Number(fromSession) : Number.isFinite(start) ? Math.floor((now - start) / 86400_000) + 1 : 0;
+      if (n >= 1) day = `Day ${Math.min(n, total)} of ${total}`;
+    } else if (state === "pre") {
+      day = `${total} days`;
+    }
+  }
+  const formatTag = base ? [women ? `W ${base}` : base, day].filter(Boolean).join(" · ") : null;
+  const desc = (comp?.description ?? "").replace(/\s*\(D\/N\)\s*$/, "").trim();
+  const stage = [desc, day].filter(Boolean).join(" · ") || null;
+  return { formatTag, stage };
+}
+
+// The twelve full members' ESPNcricinfo team ids (every logo 200, 2026-09-27).
+// A women's side uses its nation's mark: ESPN has no logo for some of them
+// ("Zimbabwe Women", 271866.png, 404s), so a card would show one flag and a gap.
+const CRICKET_NATION_IDS: Record<string, number> = {
+  England: 1, Australia: 2, "South Africa": 3, "West Indies": 4, "New Zealand": 5, India: 6,
+  Pakistan: 7, "Sri Lanka": 8, Zimbabwe: 9, Bangladesh: 25, Ireland: 29, Afghanistan: 40,
+};
+function cricketNationLogo(name?: string): string | null {
+  const id = CRICKET_NATION_IDS[String(name ?? "").trim().replace(/\s+Women$/, "")];
+  return id ? `https://a.espncdn.com/i/teamlogos/cricket/500/${id}.png` : null;
+}
+
 // ESPN's cricket `score` is a whole sentence, not a score:
 //   "161/5 (18/20 ov, target 156)"
 // Two problems with rendering that verbatim in a score slot sized for "4".
@@ -1482,7 +1568,7 @@ type RawCompetitor = {
 // chasing team's score tile silently reveals the OTHER side's score. Keep only
 // the "runs/wickets" head. Non-cricket scores pass through untouched.
 function formatScore(raw: string, sport: Sport): string {
-  if (sport !== "cricket") return raw;
+  if (!CRICKET_SPORTS.has(sport)) return raw;
   const head = raw.split("(")[0]?.trim();
   return head || raw;
 }
@@ -1504,12 +1590,17 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
     id: rawId ? `${sport}-${rawId}` : "",
     abbreviation: competitor.team?.abbreviation ?? "",
     displayName: competitor.team?.displayName ?? "",
-    shortDisplayName: competitor.team?.shortDisplayName ?? "",
+    // International cricket: ESPN's short names are codes ("WI-W", "ZIM-W",
+    // "SA"); the nation's name is what a US reader recognises and is still
+    // short ("West Indies Women" is the longest of the twelve).
+    shortDisplayName: sport === "cricketintl"
+      ? (competitor.team?.displayName ?? competitor.team?.shortDisplayName ?? "")
+      : (competitor.team?.shortDisplayName ?? ""),
     ...(competitor.team?.location ? { location: competitor.team.location } : {}),
     ...(competitor.team?.conferenceId != null ? { conferenceId: String(competitor.team.conferenceId) } : {}),
     // ESPN has no artwork for some one-off opponents (mostly D2/D3 schools);
     // teamLogoOverrides.ts fills those in.
-    logo: competitor.team?.logo || logoOverride(sport, String(rawId)) || "",
+    logo: (sport === "cricketintl" ? cricketNationLogo(competitor.team?.displayName) : null) || competitor.team?.logo || logoOverride(sport, String(rawId)) || "",
     color: competitor.team?.color ?? "666666",
     score: formatScore(competitor.score ?? "0", sport),
     winner: competitor.winner ?? false,
@@ -1624,6 +1715,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // field that IS still read, by gameProgress: a limited-overs match is two
   // innings, so innings 1 reads as ~25% elapsed and clears the "too early" gate.
   cricket: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 2 },
+  cricketintl: { multiplier: 1, overtimeBonus: 0, scoringDivisor: 1,   regulationPeriods: 2 },
   // Rugby union: two 40-minute halves, team totals in the 20-35 range — close
   // enough to NFL's shape that it takes NFL's calibration, with two periods
   // instead of four. Extra time is rare and only happens in knockout rugby, so
@@ -2151,7 +2243,13 @@ function calculateRating(game: RatingGame): number | null {
 
   // Cricket branches out before the shared scorer touches it — see cricketRating
   // for why runs-vs-runs is actively misleading in this sport.
-  if (game._sport === "cricket") return cricketRating(competitors, state);
+  // Multi-day matches (Tests) have no rating: four innings and a draw that can
+  // be the best possible finish do not fit the two-innings chase model, and a
+  // wrong mark on a five-day game is worse than none.
+  if (game._sport && CRICKET_SPORTS.has(game._sport)) {
+    if (isMultiDayCricket(game as CricketEventLike)) return null;
+    return cricketRating(competitors, state);
+  }
   // Volleyball branches out too: its `score` is sets, not points.
   if (game._sport === "ncaavb") return volleyballRating(competitors, game.status?.period ?? 0, state);
 
@@ -2855,7 +2953,8 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   const homeProbable = sport === "mlb" ? probablePitcher(home) : null;
   const awayProbable = sport === "mlb" ? probablePitcher(away) : null;
 
-  const stage = deriveStage(competition?.altGameNote, event.season?.slug);
+  const cricketInfo = sport === "cricketintl" ? cricketMatchInfo(event as CricketEventLike) : null;
+  const stage = cricketInfo ? cricketInfo.stage : deriveStage(competition?.altGameNote, event.season?.slug);
 
   // Penalty shootout: a soccer knockout decided (or being decided) by spot
   // kicks — level after extra time, the pure tune-in moment. ESPN tags it via a
@@ -2891,6 +2990,7 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     homeProbable,
     awayProbable,
     stage,
+    formatTag: cricketInfo?.formatTag ?? null,
     rating: calculateRating(event),
     liveProgress: event.status?.type?.state === "in"
       ? gameProgress(event, sport, (SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba).regulationPeriods, "in")
@@ -3169,6 +3269,9 @@ export function espnGameUrl(game: Game): string {
     // ESPN serves cricket off its India edition; 8048 is the IPL series id
     // (same id as SPORT_PATHS). The /scorecard/ path is the per-match page.
     case "cricket": return `https://www.espn.in/cricket/series/8048/scorecard/${game.id}`;
+    // Each international series has its own id, carried on the event's own
+    // link (recapUrl). The cricket hub is the fallback.
+    case "cricketintl": return "https://www.espn.in/cricket/";
     case "golf": return `https://www.espn.com/golf/leaderboard`;
     case "tennis": return `https://www.espn.com/tennis/scoreboard`;
     // F1/UFC render as event tiles (no Game objects) — these are here only for
@@ -3302,7 +3405,9 @@ export function sportStreamFallback(sport: Sport): string {
     case "dfbpokal": return "https://plus.espn.com/";
     // Willow TV holds the US broadcast rights to the IPL (and to most
     // international cricket). Verified reachable 2026-08-03.
-    case "cricket": return "https://www.willow.tv/";
+    case "cricket":
+    case "cricketintl":
+      return "https://www.willow.tv/";
     case "tennis": return "https://www.tennischannel.com/";
     case "golf": return "https://www.pgatour.com/live";
     case "f1": return "https://f1tv.formula1.com/";

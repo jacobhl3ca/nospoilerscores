@@ -96,6 +96,7 @@ export function logoForTeam(sport: Sport, rawId: string, abbreviation: string, g
     case "llws":
       return llwsFlag(abbreviation);
     case "cricket":
+    case "cricketintl":
       return `https://a.espncdn.com/i/teamlogos/cricket/500/${rawId}.png`;
     case "epl":
     case "mls":

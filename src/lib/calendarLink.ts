@@ -42,6 +42,9 @@ const DURATION_MIN: Record<string, number> = {
   // quarters plus breaks, ~2h45m.
   nrl: 120, afl: 180,
   premrugby: 120, urc: 120, top14: 120, challengecup: 120, mlr: 120,
+  // International cricket: an ODI is ~8 hours and a Test day ~7, so a long
+  // block. A T20I runs short of it, which is the safe side.
+  cricketintl: 480,
 };
 const DEFAULT_DURATION_MIN = 150;
 

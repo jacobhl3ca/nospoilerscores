@@ -453,6 +453,15 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "copadelrey",
   "cricket",
+  // International cricket, probed 2026-09-27. The ECB channel ("England &
+  // Wales Cricket Board") does post a package per match, but titles read
+  // "Highlights - England v Sri Lanka | 3rd Metro Bank ODI 2026": no date, and
+  // a series plays the same pairing 3 to 5 times in two weeks. The strict
+  // lookup has no per-match token to tell the 1st ODI from the 3rd, and the
+  // client's dated query ("Sri Lanka vs England highlights Sep 27, 2026") gets
+  // no results at all (0/6). Wrong-match risk, the rugbytest class: dark until
+  // the lookup can require the match ordinal ("3rd ODI") from game.stage.
+  "cricketintl",
   "dfbpokal",
   "euro",
   "esports",

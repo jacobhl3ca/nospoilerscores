@@ -131,6 +131,10 @@ const FEEDS = [
   // records change monthly at most, but fetchedAt moves every run; loose
   // anyway, since a missed week only delays a new month's cut.
   { path: "/news/mlb-review.json", warnH: 7 * 24, critH: 30 * 24 },
+  // International cricket series list (prebake bakeCricketSeries, every bake).
+  // The /api/cricket-intl worker reads it; a stuck file only misses NEW series,
+  // since kept ones stay listed until their last day, so it is loose.
+  { path: "/news/cricket-series.json", warnH: 24, critH: 72 },
   { path: "/espn-airings.json", warnH: 6, critH: 24 },           // GHA every 2h
   // prime-asins is a best-effort nicety: it deep-links Prime broadcasts to the
   // exact game page, and scrape-prime-asins.mjs is explicitly non-fatal — if

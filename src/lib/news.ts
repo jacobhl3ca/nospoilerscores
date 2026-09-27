@@ -78,6 +78,8 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   // for the sport) and it's the same tradeoff tennis already makes by routing
   // through the ATP feed.
   cricket: "/cricket/8048",
+  // International cricket reads the same general wire (2026-09-27).
+  cricketintl: "/cricket/8048",
   // Racing/combat leagues share ESPN's league-base + /news pattern (the path is
   // the scoreboard path minus /scoreboard — see espn.ts). Without these, the
   // "ESPN F1"/"ESPN UFC" cards that leagueSourceCascade() builds for every sport
@@ -369,6 +371,8 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   // Cricket keys its league logos by series id under its own /cricket/ path
   // (8048 = IPL), not the /soccer/ path. Verified 200 on 2026-08-03.
   cricket: "https://a.espncdn.com/i/leaguelogos/cricket/500/8048.png",
+  // No league mark for "internationals": ESPN's cricket sport icon (200, 2026-09-27).
+  cricketintl: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-cricket.png",
   // Rugby has no `leaguelogos/rugby/500/<id>.png` set at all (8323 and 8337
   // both 404, checked 2026-08-11) — ESPN's own rugby scoreboards serve the
   // redesign sport icon as `leagues[0].logos[0]`, identically for all five
@@ -470,6 +474,8 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   // deliberately not an IPL-only sub. One more feed costs one more 45s gate
   // slot in the reddit bake; see the batch/cooldown notes in prebake-news.mjs.
   cricket: { key: "reddit-cricket", label: "r/Cricket" },
+  // r/Cricket is mostly internationals, so it suits this column even better.
+  cricketintl: { key: "reddit-cricket", label: "r/Cricket" },
   ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
   ncaah: { key: "reddit-ncaah", label: "r/collegehockey" },
   // r/UFL is the University of Florida (checked 2026-09-14); the league's live
@@ -625,7 +631,7 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "euro", "afcon", "ligamx", "nwsl", "efl", "libertadores", "saudi",
   "uecl", "facup", "copadelrey", "dfbpokal", "nations",
   "ncaawsoc", "ncaamsoc",
-  "cricket", "nrl", "afl",
+  "cricketintl", "cricket", "nrl", "afl",
   "sixnations", "rugbywc", "nationschamp", "rugbytest", "superrugby", "rugbychamp",
   "urc", "premrugby", "top14", "challengecup", "mlr",
   "ufc", "boxing", "f1", "nascar", "indycar", "poker",
