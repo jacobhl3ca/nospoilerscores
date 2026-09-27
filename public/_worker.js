@@ -2322,15 +2322,17 @@ export default {
         }
 
         if (!videoId) {
-          // Deliberately NOT cached: a game's recap can post any minute after
-          // full-time, and this app's whole value is surfacing it the instant
-          // it's up. Re-scraping a miss on each request is cheap enough at real
-          // traffic (a normal page load is ~20 lookups, all served) that it's
-          // not worth trading recap freshness for.
+          // Cached for 120 s only: a game's recap can post any minute after
+          // full-time, and this app's whole value is surfacing it fast. Uncached,
+          // misses were ~19K of ~55K daily worker invocations (9/27) and pushed the
+          // account toward Cloudflare's 100K/day free cap. A Pages Function
+          // response is NOT edge-cached, so this header saves invocations only
+          // via the browser/WebView HTTP cache (the client uses a plain fetch()).
           return new Response(JSON.stringify({ error: "No results" }), {
             status: 404,
             headers: {
               "Content-Type": "application/json",
+              "Cache-Control": "public, max-age=120",
               "Access-Control-Allow-Origin": "*",
             },
           });
