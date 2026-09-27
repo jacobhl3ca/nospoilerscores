@@ -8,9 +8,13 @@
 //   parseEspnHeader — reads ESPN's homepage scores strip
 //     (site.web.api.espn.com/apis/v2/scoreboard/header) into a per-sport list
 //     of the event ids ESPN is featuring, in the order the strip shows them.
+//   parseEspnFrontPageFeed — reads the homepage BODY under the strip
+//     (onefeed.fan.api.espn.com …/oneFeed/frontpage): the big game blocks
+//     and the league scoreboard modules, top to bottom.
 //   orderByEspnHeader — keeps the real Game objects (the same ones the league
-//     columns render) that ESPN features, in that order. It never reads a
-//     score or a margin, so 🙈 mode stays honest.
+//     columns render) that ESPN features: the body's games first, then the
+//     rest of the strip. It never reads a score or a margin, so 🙈 mode stays
+//     honest.
 //
 // No value imports from espn.ts on purpose: preferences.ts imports "./types"
 // extensionless, which `node --experimental-strip-types` cannot resolve, so
@@ -143,17 +147,58 @@ export function espnFrontPageSports(
   return out.slice(0, maxSources);
 }
 
-// The games ESPN features, in the strip's order: its first league first, and
-// inside a league the order ESPN lists them. Anything ESPN is not featuring
-// is dropped. Ids are only unique within a sport, so the key carries both.
-export function orderByEspnHeader(games: Game[], features: EspnHeaderFeature[]): Game[] {
-  const rank = new Map<string, number>();
-  for (const f of features) {
-    for (const id of f.eventIds) {
-      const key = `${f.sport}:${id}`;
-      if (!rank.has(key)) rank.set(key, rank.size);
+// The event ids espn.com's homepage body puts on show, top to bottom (Jacob
+// 9/26: "ur not taking highlighted posts into consideration" — the big
+// Texas A&M–LSU block above the College Football Scoreboard). Two shapes
+// carry a game: a game block (`data.event`, the hero and later recap blocks)
+// and a scoreboard module (`SportingEvent` inlines, in the module's order).
+// Story modules carry no game and are skipped. Tolerant like parseEspnHeader:
+// a reshaped feed means no body signal, never a throw.
+export function parseEspnFrontPageFeed(payload: unknown): string[] {
+  const out: string[] = [];
+  const push = (id: unknown) => {
+    if (typeof id !== "string" && typeof id !== "number") return;
+    const s = String(id);
+    if (s && !out.includes(s)) out.push(s);
+  };
+  const feed = (payload as { feed?: unknown[] } | null)?.feed;
+  if (!Array.isArray(feed)) return out;
+  for (const item of feed) {
+    const data = (item as { data?: { event?: { id?: unknown }; now?: unknown[] } } | null)?.data;
+    if (!data) continue;
+    push(data.event?.id);
+    for (const mod of Array.isArray(data.now) ? data.now : []) {
+      const inlines = (mod as { inlines?: unknown[] } | null)?.inlines;
+      for (const inl of Array.isArray(inlines) ? inlines : []) {
+        const e = inl as { type?: unknown; eventId?: unknown } | null;
+        if (e?.type === "SportingEvent") push(e.eventId);
+      }
     }
   }
+  return out;
+}
+
+// The games ESPN features. First the ones the homepage body puts on show, in
+// its order; then the rest of the strip in the strip's order (its first
+// league first, and inside a league the order ESPN lists them). Anything the
+// strip does not carry is dropped. Ids are only unique within a sport, so the
+// key carries both, and a body id takes its sport from the strip.
+export function orderByEspnHeader(
+  games: Game[],
+  features: EspnHeaderFeature[],
+  featured: string[] = [],
+): Game[] {
+  const rank = new Map<string, number>();
+  const put = (key: string) => {
+    if (!rank.has(key)) rank.set(key, rank.size);
+  };
+  const stripSport = new Map<string, Sport>();
+  for (const f of features) for (const id of f.eventIds) if (!stripSport.has(id)) stripSport.set(id, f.sport);
+  for (const id of featured) {
+    const sport = stripSport.get(id);
+    if (sport) put(`${sport}:${id}`);
+  }
+  for (const f of features) for (const id of f.eventIds) put(`${f.sport}:${id}`);
   const seen = new Set<string>();
   const picked: { game: Game; at: number }[] = [];
   for (const game of games) {
