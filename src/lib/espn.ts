@@ -247,6 +247,21 @@ const SPORT_PATHS: Record<Sport, string> = {
   superrugby: "/rugby/242041/scoreboard",
   rugbytest: "/rugby/289234/scoreboard",
   nationschamp: "/rugby/17567/scoreboard",
+  // NRL (rugby league, added 2026-09-27). Same id-keyed shape as rugby union:
+  // `/rugby-league/nrl` is a 400, the numeric slug `3` is the path. It is the
+  // ONLY rugby-league id ESPN serves (core API count 1), so Super League is not
+  // reachable here. Probed live 2026-09-27: 200, two 40-minute halves, clock
+  // counts UP to 4800 like union, and the same cumulative linescores (see
+  // normalizeRugbyLinescores). ⚠️ ESPN tags the whole REGULAR season
+  // type 1 ("2026 REG NRL") and the finals type 2 ("2026-final-nrl"), so NRL
+  // sits in SEASON_TYPE_1_IS_REGULAR and its finals are read off the slug.
+  nrl: "/rugby-league/3/scoreboard",
+  // AFL (added 2026-09-27). Slug-keyed like the US leagues. Probed live
+  // 2026-09-27: 200, four quarters with the clock counting UP inside each
+  // quarter, preseason type 1 / regular 2 / finals 3 (the ordinary shape, so
+  // the preseason filter is right for it). Scores are TOTAL points; goals and
+  // behinds are not split out on the scoreboard.
+  afl: "/australian-football/afl/scoreboard",
   f1: "/racing/f1/scoreboard",
   // NASCAR Cup + IndyCar (added 2026-08-03). Both share F1's racing shape, so
   // they render through the same single-race event tile. Two differences from
@@ -644,6 +659,21 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // in-season for 3.5 empty months. Same sport, so the catalog dedupes them.
   { sport: "nationschamp", label: "Rugby Nations", startDate: "07-04", endDate: "07-19", championshipDate: "11-29", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
   { sport: "nationschamp", label: "Rugby Nations", startDate: "11-06", endDate: "11-29", championshipDate: "11-29", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
+  // ── NRL (rugby league, added 2026-09-27) ──
+  // Read off real fixtures, NOT ESPN's league.season object (which only spans
+  // the finals window 09-10 → 10-08). First fixture: Knights v Cowboys, Las
+  // Vegas, 2026-03-01T02:15Z = Sat Feb 28 evening ET. Grand Final: Accor
+  // Stadium, 2026-10-04T08:30Z = Sun Oct 4 4:30 am ET. endDate runs one day
+  // past it so the morning-after tab still resolves the column. Opt-in like
+  // every rugby column; it sits next to them in "Racing, combat & more".
+  { sport: "nrl", label: "NRL", startDate: "02-28", endDate: "10-05", championshipDate: "10-04", verifiedFor: 2026, excludeFromAuto: true },
+  // ── AFL (added 2026-09-27) ──
+  // Preseason (type 1, Feb 26 → Mar 1) is filtered out, so the window opens on
+  // the first REGULAR fixture: Carlton at Sydney, 2026-03-05T08:30Z. Grand
+  // Final: Brisbane Lions at Fremantle, MCG, 2026-09-26T04:30Z (Sat 12:30 am
+  // ET). Off-season from Sep 28 to ~Mar 2027; the 2027 fixture is not out, so
+  // the season-opener line reads "~Mar 5" until it is.
+  { sport: "afl", label: "AFL", startDate: "03-05", kickoffDate: "03-05", endDate: "09-27", championshipDate: "09-26", verifiedFor: 2026, excludeFromAuto: true },
   // ── F1 + UFC (single-event tiles) ──
   // UFC re-enabled 2026-07-17: its bout cards now match the game cards' look
   // (fighter names use the standard text-sm .team-name treatment + shared
@@ -877,6 +907,10 @@ const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", ncaabase: "⚾", ncaasoft: "🥎", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
   nfl: "🏈", ncaaf: "🏈", ufl: "🏈", cfl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", ncaavb: "🏐", ncaawsoc: "⚽", ncaamsoc: "⚽", golf: "⛳", tennis: "🎾",
   sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
+  nrl: "🏉",
+  // No Australian-rules emoji exists; 🏉 is the closest oval ball and the
+  // header shows the AFL league logo anyway.
+  afl: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
@@ -940,6 +974,7 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   esports: "other",
   sixnations: "other", rugbywc: "other", rugbychamp: "other",
   superrugby: "other", rugbytest: "other", nationschamp: "other",
+  nrl: "other", afl: "other",
 };
 
 export function sportGroup(sport: Sport): SportGroup {
@@ -960,6 +995,7 @@ export function sportGroup(sport: Sport): SportGroup {
 const CATALOG_TAIL: ReadonlySet<Sport> = new Set<Sport>([
   "llws",
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
+  "nrl", "afl",
 ]);
 
 // Sort rank within a Settings group: minority events last, then in-season
@@ -1214,6 +1250,8 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   poker: 34,
   esports: 35,
   cfl: 36,
+  nrl: 37,
+  afl: 38,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -1549,6 +1587,16 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   superrugby: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   rugbytest:  { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   nationschamp: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  // NRL: two 40-minute halves, try 4 + conversion 2, so a converted try is 6
+  // and team totals sit in the 10-40 range — union's shape, so union's row.
+  // Golden-point extra time (regular season and finals) reads as period 3.
+  nrl:        { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  // AFL: goal 6, behind 1, team totals ~60-110, four quarters. A goal is the
+  // unit of "one score", so the straight line is scaled to it: a 6-point
+  // (one-goal) margin reads 82, two goals 64, five goals (30) 10.
+  // scoringDivisor 18: a 170-point game earns the full +10 like a 50-point
+  // NFL game does at 8. Extra time exists only in finals (two 3-min halves).
+  afl:        { multiplier: 3, overtimeBonus: 20, scoringDivisor: 18, regulationPeriods: 4 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
   // F1 / UFC render as single-event tiles (no Game objects), so these are
@@ -1590,6 +1638,58 @@ const SOCCER_SPORTS = new Set<Sport>([
   "ncaawsoc", "ncaamsoc",
 ]);
 const FULL_MATCH_SECONDS = 5400;
+// Rugby (union and league) is soccer-shaped on the clock: status.clock counts
+// UP through the whole match and reads 4800 (80') at full time (read
+// 2026-09-27 on NRL 604844 and URC 604035). Without this both fell through to
+// the coarse half midpoint, so a try in the 2nd minute and one in the 38th
+// read the same progress.
+const RUGBY_SPORTS = new Set<Sport>([
+  "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
+  "nrl",
+]);
+const RUGBY_FULL_MATCH_SECONDS = 4800;
+
+// ESPN's rugby linescores are CUMULATIVE, not per period, and carry two extra
+// rows. Read 2026-09-27: Knights (NRL, final 22) = period 1 → 6 (half-time
+// score), period 2 → 22 (full-time score), period 20 → 0, period 60 → 0; URC
+// Lions (final 27) = 17, 27, 10, 17. The two high-numbered rows are snapshots
+// that mean nothing to a per-period reader. calcRunningMargin and
+// calcFinalPeriodMargin SUM the rows, so fed raw they read 6 + 22 + 0 + 0 = 28
+// for a 22-point side and took the "margin entering the last period" off a
+// junk row. This rewrites the rows in place to real per-period points: drop
+// every row whose period is 20 or more, then difference the cumulative ones.
+// If the rows are not cumulative after all (a total that goes DOWN, or a last
+// row that is not the score) they are left as they are — the junk rows still
+// go, because they are never a period.
+export function normalizeRugbyLinescores(
+  competitors: (MarginCompetitor & { score?: string })[],
+): void {
+  type Row = LineScore & { period?: number };
+  const kept = competitors.map((c) =>
+    ((c.linescores ?? []) as Row[]).filter((r) => typeof r.period !== "number" || r.period < 20),
+  );
+  const cumulative = kept.every((rows, i) => {
+    let prev = 0;
+    for (const r of rows) {
+      const v = r.value ?? 0;
+      if (v < prev) return false;
+      prev = v;
+    }
+    const score = Number.parseInt(competitors[i].score ?? "", 10);
+    return rows.length === 0 || !Number.isFinite(score) || prev === score;
+  });
+  competitors.forEach((c, i) => {
+    if (!c.linescores) return;
+    let prev = 0;
+    c.linescores = kept[i].map((r) => {
+      if (!cumulative) return r;
+      const v = r.value ?? 0;
+      const row = { ...r, value: v - prev };
+      prev = v;
+      return row;
+    });
+  });
+}
 
 // Minimal shape of an ESPN game's live status — the only fields this progress
 // estimate reads: the current period/inning and the (optionally numeric) clock.
@@ -1618,6 +1718,10 @@ function gameProgress(game: GameStatusLike, sport: Sport, regulationPeriods: num
   // Soccer: clock counts up as total elapsed match seconds.
   if (SOCCER_SPORTS.has(sport)) {
     return clock && clock > 0 ? clamp(clock / FULL_MATCH_SECONDS) : coarse;
+  }
+  // Rugby: the same count-up clock over an 80-minute match.
+  if (RUGBY_SPORTS.has(sport)) {
+    return clock && clock > 0 ? clamp(clock / RUGBY_FULL_MATCH_SECONDS) : coarse;
   }
   // Count-down timed sports: clock = seconds left in the current period.
   const periodLen = PERIOD_SECONDS[sport];
@@ -2465,6 +2569,14 @@ function gridironWeekNumber(sport: Sport, event: ScoreboardEvent): number | null
   return typeof week === "number" && week >= 1 && week <= 25 ? week : null;
 }
 
+// NRL finals weeks → the round names the NRL itself uses.
+const NRL_FINALS_WEEKS: Record<number, string> = {
+  1: "Finals Week 1",
+  2: "Semi-Final",
+  3: "Preliminary Final",
+  4: "Grand Final",
+};
+
 // NCAA baseball + softball: the two leagues whose postseason ESPN files as
 // season type 6 and whose notes name regionals (see parseGame).
 const COLLEGE_DIAMOND_SPORTS = new Set<Sport>(["ncaabase", "ncaasoft"]);
@@ -2527,6 +2639,8 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
 
   // Tag sport for rating calculation
   event._sport = sport;
+  // Rugby rows arrive cumulative with two junk rows — see normalizeRugbyLinescores.
+  if (RUGBY_SPORTS.has(sport)) normalizeRugbyLinescores(competitors);
 
   // Extract series game number and playoff round from notes
   let seriesNote: string | null = null;
@@ -2592,6 +2706,14 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   // playoffLabel is unaffected — it's driven only by the notes match above.
   if (event.season?.type === 3) {
     isPlayoff = true;
+  }
+  // NRL files its finals as type 2 under the slug "2026-final-nrl" with empty
+  // notes, and numbers the finals weeks 1-4 on event.week (read 2026-09-27:
+  // the prelim finals are week 3, the Grand Final week 4). The round is known
+  // before kickoff, so naming it spoils nothing.
+  if (sport === "nrl" && /\bfinal\b/i.test(event.season?.slug?.replace(/-/g, " ") ?? "")) {
+    isPlayoff = true;
+    if (!playoffLabel) playoffLabel = NRL_FINALS_WEEKS[event.week?.number ?? 0] ?? "Finals";
   }
   // College baseball/softball file the whole NCAA tournament as type 6
   // ("championship-series", read 2026-09-14 on the CWS final 2026-06-21 and the
@@ -2935,6 +3057,10 @@ export function espnGameUrl(game: Game): string {
     case "superrugby": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/242041`;
     case "rugbytest":  return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/289234`;
     case "nationschamp": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/17567`;
+    // The event's own "Gamecast" link (read 2026-09-27) — same /league/<id>
+    // suffix rule as union.
+    case "nrl": return `https://www.espn.com/nrl/match/_/gameId/${game.id}/league/3`;
+    case "afl": return `https://www.espn.com/afl/game/_/gameId/${game.id}`;
     case "epl":
     case "mls":
     case "fifa":
@@ -3034,6 +3160,13 @@ export function sportStreamFallback(sport: Sport): string {
     case "rugbytest":
     case "nationschamp":
       return "https://www.espn.com/rugby/";
+    // NRL + AFL: US TV is FOX (FS1/FS2/FOX Soccer Plus), but FOX has no NRL or
+    // AFL page (foxsports.com/nrl, /afl, /rugby-league/nrl all 404 on
+    // 2026-09-27). Each league's own international pass streams every match
+    // in the US and is a watch page, never a scorecard: Watch NRL and Watch
+    // AFL, both 200 on 2026-09-27.
+    case "nrl": return "https://www.watchnrl.com/";
+    case "afl": return "https://www.watchafl.com.au/";
     case "mls": return "https://tv.apple.com/us/mls";
     case "epl": return "https://www.peacocktv.com/";
     case "fifa": return "https://www.foxsports.com/soccer/fifa-world-cup";
@@ -4588,6 +4721,10 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
 const SEASON_TYPE_1_IS_REGULAR = new Set<Sport>([
   "nfl",
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
+  // NRL: the whole regular season is type 1 ("2026 REG NRL", read 2026-09-27);
+  // only the finals are type 2. Without this the column is empty until
+  // September.
+  "nrl",
 ]);
 
 // Map raw ESPN scoreboard events into Game[] (team-based sports). Shared by

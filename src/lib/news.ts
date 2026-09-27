@@ -68,6 +68,10 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   dfbpokal: "/soccer/ger.dfb_pokal",
   // Nations League (2026-09-26): /news probed 200 with 6 articles.
   nations: "/soccer/uefa.nations",
+  // NRL + AFL (2026-09-27): both /news feeds probed 200 with 6 articles
+  // (ESPN Australia's desk covers both leagues).
+  nrl: "/rugby-league/3",
+  afl: "/australian-football/afl",
   // Cricket: same league-base + /news shape. Note this feed is ESPNcricinfo's
   // GENERAL cricket wire, not IPL-only — it carries county / Hundred / Test
   // headlines too. That's still the right feed (it's the only one ESPN serves
@@ -376,6 +380,10 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   superrugby: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   rugbytest: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   nationschamp: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  // NRL + AFL DO have marks in the `teamlogos/leagues` set, unlike union —
+  // both straight off their scoreboards' `leagues[0].logos`, 200 on 2026-09-27.
+  nrl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nrl.png&w=40&h=40&transparent=true",
+  afl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/afl.png&w=40&h=40&transparent=true",
   // Racing has no entry in the `teamlogos/leagues` set (nascar/indycar/irl all
   // 404 there). NASCAR does have one in ESPN's redesign sport-icon set; IndyCar
   // has neither, so it falls back to Wikimedia exactly like NCAAM and tennis
@@ -469,6 +477,9 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   // baked snapshot — no second bake job, no second staleness entry.
   ncaawh: { key: "reddit-ncaah", label: "r/collegehockey" },
   cfl: { key: "reddit-cfl", label: "r/CFL" },
+  // 2026-09-27: r/nrl and r/AFL, the two leagues' main subs.
+  nrl: { key: "reddit-nrl", label: "r/nrl" },
+  afl: { key: "reddit-afl", label: "r/AFL" },
   ufc: { key: "reddit-ufc", label: "r/ufc" },
   boxing: { key: "reddit-boxing", label: "r/Boxing" },
   f1: { key: "reddit-f1", label: "r/formula1" },
@@ -595,7 +606,7 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "euro", "afcon", "ligamx", "nwsl", "efl", "libertadores", "saudi",
   "uecl", "facup", "copadelrey", "dfbpokal", "nations",
   "ncaawsoc", "ncaamsoc",
-  "cricket",
+  "cricket", "nrl", "afl",
   "ufc", "boxing", "f1", "nascar", "indycar", "poker",
 ];
 

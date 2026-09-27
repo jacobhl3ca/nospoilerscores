@@ -39,6 +39,8 @@ const LEAGUE_PATHS = {
   copadelrey: "/soccer/esp.copa_del_rey/scoreboard",
   dfbpokal: "/soccer/ger.dfb_pokal/scoreboard",
   nations: "/soccer/uefa.nations/scoreboard",
+  nrl: "/rugby-league/3/scoreboard",
+  afl: "/australian-football/afl/scoreboard",
   fifa: "/soccer/fifa.world/scoreboard",
   epl: "/soccer/eng.1/scoreboard",
   mls: "/soccer/usa.1/scoreboard",

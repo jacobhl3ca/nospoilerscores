@@ -58,6 +58,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/europa-league-without-spoilers",
     "/conference-league-without-spoilers",
     "/nations-league-without-spoilers",
+    // Added 2026-09-27 with the NRL column, a week before the Grand Final.
+    "/nrl-highlights-without-spoilers",
     "/best-spoiler-free-sports-sites",
     "/redzone-for-every-sport",
     "/faq",
@@ -135,6 +137,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/europa-league-without-spoilers",
     "/conference-league-without-spoilers",
     "/nations-league-without-spoilers",
+    // Added 2026-09-27. Same specificity gate: dated ET kickoffs off the ESPN
+    // feed and the NRL's own spoiler mechanism (every game overnight in the
+    // US, finals fixtures that give away the week before).
+    "/nrl-highlights-without-spoilers",
   ]);
 
   // Build timestamp, for the boards whose rendered content really does change

@@ -1835,7 +1835,7 @@ export default function HomeContent({
     // whose first pill is an offseason/preseason league reads as stale (Jacob
     // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
     "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw", "ncaah", "cfl", "ncaawh", "ncaavb", "ufl", "ncaabase", "ncaasoft",
-    "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket",
+    "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket", "nrl", "afl",
     "chess", "poker", "esports",
     // ── soccer block, bottom ──
     "epl", "ucl", "uel", "uecl", "nations", "laliga", "seriea", "bundesliga", "ligue1",
@@ -4540,7 +4540,8 @@ export default function HomeContent({
               <a href="/cricket-highlights-without-spoilers" style={{ textDecoration: "underline" }}>cricket</a> — plus spoiler-free{" "}
               <a href="/nba-scores-without-spoilers" style={{ textDecoration: "underline" }}>NBA scores</a>,{" "}
               <a href="/nhl-scores-without-spoilers" style={{ textDecoration: "underline" }}>NHL scores</a>,{" "}
-              <a href="/f1-without-spoilers" style={{ textDecoration: "underline" }}>F1</a> and{" "}
+              <a href="/f1-without-spoilers" style={{ textDecoration: "underline" }}>F1</a>,{" "}
+              <a href="/nrl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NRL</a> and{" "}
               <a href="/ufc-results-without-spoilers" style={{ textDecoration: "underline" }}>UFC</a>, or the{" "}
               <a href="/redzone-for-every-sport" style={{ textDecoration: "underline" }}>RedZone-style view for every sport</a>. Compare us with the other{" "}
               <a href="/best-spoiler-free-sports-sites" style={{ textDecoration: "underline" }}>spoiler-free sports apps</a>, or see the{" "}

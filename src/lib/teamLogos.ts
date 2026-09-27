@@ -26,6 +26,8 @@ export const TEAM_PICKER_SKIP: readonly Sport[] = [
 // them all (Ireland = 3 in the Six Nations and in the World Cup).
 const RUGBY: ReadonlySet<Sport> = new Set<Sport>([
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
+  // NRL clubs sit on the same rugby/teams path (all 19 ids 200, 2026-09-27).
+  "nrl",
 ]);
 
 // College diamond team ids are sport-specific (softball OU is 524), so the
@@ -69,6 +71,9 @@ export function logoForTeam(sport: Sport, rawId: string, abbreviation: string, g
     // UFL follows the abbreviation convention (lou.png / bham.png answer 200,
     // checked 2026-09-14).
     case "ufl":
+    // AFL too: afl/500/<abbr>.png is what every one of its 19 teams' own
+    // `logos[0]` points at (checked 2026-09-27, 0 mismatches).
+    case "afl":
       return abbr ? `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbr}.png` : undefined;
     case "ncaam":
     case "ncaaw":

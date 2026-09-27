@@ -80,6 +80,9 @@ const highlightBufferHours: Record<string, number> = {
   // i.e. the audit could flag a "missing" button during the hour the app was
   // still deliberately hiding it.
   sixnations: 3, superrugby: 3, rugbywc: 3, rugbychamp: 3, nationschamp: 3,
+  // NRL: 80 minutes like union, same 3h. AFL: four ~30-minute quarters plus
+  // breaks run ~2h45m of wall clock, so an hour more.
+  nrl: 3, afl: 4,
 };
 // ncaaw is 4, not 2: women's college hoops plays four 10-min quarters (moved to
 // quarters in 2015-16), so a finished regulation game reports period 4. A value
@@ -90,7 +93,8 @@ const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, n
   // Two 40-minute halves. Without these the default of 4 made rawOt negative
   // for every finished rugby match — clamped to 0 by the Math.max, so the
   // buffer was right by accident; stating it keeps that an intent, not luck.
-  sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2 };
+  sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2,
+  nrl: 2, afl: 4 };
 
 // Fallback label for the official-highlight button. That button normally
 // reads the clip's LENGTH ("9m") - the league name is redundant beside a card

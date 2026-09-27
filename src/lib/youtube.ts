@@ -192,6 +192,22 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // COMPETITION_TITLE_TOKENS below, which is REQUIRED, not an optimization:
   // with it World Rugby is 10/18 correct and 0/18 wrong.
   nationschamp: "World Rugby",
+  // ── NRL + AFL, added 2026-09-27. Measured against the LIVE worker with
+  // strict=1 and the bare production query (`A vs B highlights Mon D, YYYY`).
+  // NRL: the league channel's full name is the byline — "NRL - National Rugby
+  // League"; the bare "NRL" is 0/5. 12/12 over the 2026 Round 27 + finals
+  // fixtures (Sep 5 → Sep 27, both prelim finals included), 0 wrong. Titles
+  // read "NRL Finals 2026 | Panthers v Knights | Match Highlights | Finals
+  // Week 3" — no score. The women's comp posts from its OWN channel ("NRLW -
+  // National Rugby League Women's", same clubs, same format), which the exact
+  // byline gate already keeps out, and the channel's 2018 re-uploads of the
+  // same finals pairings fail the year gate.
+  nrl: "NRL - National Rugby League",
+  // AFL: "AFL", 6/8 over the 2026 finals series (Sep 4 → the Sep 26 Grand
+  // Final), 0 wrong. Titles read "Fremantle v Brisbane Lions Highlights |
+  // 2026 Toyota AFL Grand Final | AFL" — no score. AFLW posts from its own
+  // "AFL Women's" channel, so the byline gate keeps it out too.
+  afl: "AFL",
   // euro + cricket deliberately have NO entry — see the block comment below.
   //
   // ── La Liga + Ligue 1, LIT 2026-09-19. Both were dark because the LEAGUE's

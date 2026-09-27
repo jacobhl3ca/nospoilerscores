@@ -207,6 +207,10 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/la-liga-without-spoilers" className="underline underline-offset-2">
             La Liga
           </Link>
+          {/* 2026-09-27: NRL, linked on its first day for the same orphan reason. */}
+          <Link href="/nrl-highlights-without-spoilers" className="underline underline-offset-2">
+            NRL
+          </Link>
           <Link href="/mls-highlights-without-spoilers" className="underline underline-offset-2">
             MLS
           </Link>

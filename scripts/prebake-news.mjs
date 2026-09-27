@@ -2584,6 +2584,10 @@ const HL_LEAGUES = [
   // Pacific, which posts the southern-hemisphere host fixtures (mirrors
   // SECONDARY_CHANNELS.nationschamp).
   { sport: "nationschamp", path: "/rugby/17567/scoreboard",                    channel: "World Rugby", secondaryChannel: "Super Rugby Pacific" },
+  // NRL + AFL (added 2026-09-27) — see OFFICIAL_CHANNELS in src/lib/youtube.ts
+  // for the strict probes (NRL 12/12, AFL 6/8, 0 wrong).
+  { sport: "nrl",          path: "/rugby-league/3/scoreboard",                 channel: "NRL - National Rugby League" },
+  { sport: "afl",          path: "/australian-football/afl/scoreboard",        channel: "AFL" },
   // CFL (added 2026-09-13). ESPN no longer serves the CFL, so `worker: true`
   // reads the slate from our own /api/cfl route (theScore, reshaped to the
   // ESPN scoreboard — see public/_worker.js) instead of site.api.espn.com.
@@ -5160,6 +5164,9 @@ const jobs = [
   ["reddit-ncaabase", () => fetchReddit("collegebaseball", "r/collegebaseball")],
   // 2026-09-13: CFL. One more 45s gate slot in the reddit bake.
   ["reddit-cfl", () => fetchReddit("CFL", "r/CFL")],
+  // 2026-09-27: NRL + AFL. Two more 45s gate slots in the reddit bake.
+  ["reddit-nrl", () => fetchReddit("nrl", "r/nrl")],
+  ["reddit-afl", () => fetchReddit("AFL", "r/AFL")],
   ["reddit-ufc", () => fetchReddit("ufc", "r/ufc")],
   ["reddit-boxing", () => fetchReddit("Boxing", "r/Boxing")],
   ["reddit-f1", () => fetchReddit("formula1", "r/formula1")],

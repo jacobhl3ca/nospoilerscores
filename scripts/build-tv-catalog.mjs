@@ -96,6 +96,7 @@ const SUPPORTED = new Set([
   "uecl", "facup", "copadelrey", "dfbpokal", "nations",
   "ncaawsoc", "ncaamsoc",
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
+  "nrl", "afl",
 ]);
 
 // What the Apple TV opens on before anyone has picked anything. It has to be a

@@ -196,6 +196,8 @@ const SPORT_LABEL: Record<Sport, string> = {
   superrugby: "Super Rugby",
   rugbytest: "Rugby Tests",
   nationschamp: "Rugby Nations",
+  nrl: "NRL (rugby league)",
+  afl: "AFL (Aussie rules)",
   f1: "F1",
   nascar: "NASCAR",
   indycar: "IndyCar",
