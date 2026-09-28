@@ -41,8 +41,9 @@
 // HideScore's own embedded player (VideoModal) — see fetchFirstVideoId in
 // lib/youtube.ts. openExternal only runs when no specific video resolves.
 
-import { parseYouTubeId } from "./youtubeLink";
-import { tvChannelLink } from "./tvChannelLinks";
+import { parseYouTubeId } from "./youtubeLink.ts";
+import { tvChannelLink } from "./tvChannelLinks.ts";
+import type { Game } from "./types";
 
 // True inside the Capacitor iOS/Android wrapper. Exported for callers that
 // need to pick a native-safe link form (e.g. an https .ics instead of a data:
@@ -267,6 +268,46 @@ export function watchLinkProps(network: string, webHref: string) {
     title: `Watch on ${network}`,
     onClick: handleExternalClick(webHref),
   };
+}
+
+// The user's own stream for the FIRST listed broadcaster of this game, else the
+// web stream. Used by the card's live clock and the modal's Watch live button,
+// so the two big live entry points follow the Settings TV channel list the
+// same way the small network chips do.
+export function liveWatchUrl(
+  game: Pick<Game, "broadcasts" | "streamUrl">
+): { url: string; network: string | null; scheme: boolean } | null {
+  for (const network of game.broadcasts ?? []) {
+    const tv = tvChannelLink(network);
+    if (tv) return { url: tv, network, scheme: true };
+  }
+  return game.streamUrl ? { url: game.streamUrl, network: null, scheme: false } : null;
+}
+
+// Props for the live clock's `<a>`, same shape as watchLinkProps. Null when the
+// game has neither a listed channel nor a web stream.
+export function liveWatchProps(game: Pick<Game, "broadcasts" | "streamUrl">) {
+  const live = liveWatchUrl(game);
+  if (!live) return null;
+  if (live.scheme) {
+    return { href: live.url, title: `Watch ${live.network} on your TV`, onClick: handleAppSchemeClick(live.url) };
+  }
+  return {
+    href: live.url,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    title: "Watch live",
+    onClick: handleExternalClick(live.url),
+  };
+}
+
+// Open the live stream for a button (no `<a>`). False when there is nothing to open.
+export function openLiveWatch(game: Pick<Game, "broadcasts" | "streamUrl">): boolean {
+  const live = liveWatchUrl(game);
+  if (!live) return false;
+  if (live.scheme) openAppScheme(live.url);
+  else openExternal(live.url);
+  return true;
 }
 
 // Use as an `onClick` handler on `<a>` tags so the browser's default link
