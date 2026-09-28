@@ -9,6 +9,7 @@
       "5": "Big Ten Football",
       "8": "SEC",
       "12": "Conference USA",
+      "15": "Get Some MACtion",
       "37": "Sun Belt Conference",
       "151": "American Conference"
     },
@@ -43,12 +44,19 @@
         "channel": "CW Sports"
       }
     ],
+    "teamChannels": {
+      "276": "Marshall Thundering Herd"
+    },
     "channelTitleTokens": {
       "Conference USA": [
         "football",
         "regular season week"
-      ]
-    }
+      ],
+      "Get Some MACtion": []
+    },
+    "maskTitle": [
+      "Get Some MACtion"
+    ]
   },
   "ncaavb": {
     "primaryFromChain": true,
