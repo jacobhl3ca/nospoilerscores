@@ -13,11 +13,14 @@ import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import type { BestYesterdayOptions } from "@/lib/espn";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
-import { fromYmd } from "@/lib/etDay";
+import { fromYmd, etSlateYmd, nextYmd } from "@/lib/etDay";
+import { toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
+import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
+import GameCard from "@/components/GameCard";
 import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
-import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { fetchAllLeagues, fetchSlateGames, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn, { playoffPictureInWindow } from "@/components/LeagueColumn";
@@ -96,6 +99,9 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
     // See lib/dismissals.ts.
     kickoffBannersDismissed: mergeDismissedKeys(local.kickoffBannersDismissed, remote.kickoffBannersDismissed),
     wcBannerDismissed: local.wcBannerDismissed || remote.wcBannerDismissed || undefined,
+    // The account copy wins, but pruned like a local load (3 days, cap 20),
+    // so a stale queue is not written back and re-pushed to every device.
+    watchQueue: pruneWatchQueue(remote.watchQueue, getDateString(0)),
   };
   // The remote copy is canonical for a signed-in account. Its missing marker,
   // not the new device's local marker, decides whether the account is legacy.
@@ -1721,6 +1727,92 @@ export default function HomeContent({
   };
 
   const isToday = selectedDate === getDateString(0);
+
+  // ── Watch queue (Jacob 9/27) ──────────────────────────────────────────
+  // The card's "Later" pill adds a game here; the strip above the board shows
+  // each one as a normal spoiler-free card until it is marked Done. Pruned on
+  // read too, so an account copy pulled from another device never shows a
+  // game older than the 3-day window. Off under ?demo=1: the strip fetches its
+  // own games, and those would skip the demo anonymizer.
+  const boardDemo = useMemo(() => isDemoModeActive(), []);
+  const todayYmd = getDateString(0);
+  const watchQueueEntries = useMemo(
+    () => (boardDemo ? [] : pruneWatchQueue(prefs.watchQueue, todayYmd) ?? []),
+    [boardDemo, prefs.watchQueue, todayYmd],
+  );
+  const toggleWatchLater = useCallback((game: Game) => {
+    const entry: WatchQueueEntry = {
+      id: game.id,
+      league: game.sport,
+      // The game's own slate day, not the board's: a "Tomorrow" lookahead
+      // card on today's board belongs to tomorrow's scoreboard.
+      date: etSlateYmd(game.date) || selectedDate,
+      addedAt: Date.now(),
+      title: game.shortName || game.name,
+    };
+    updatePrefs({ watchQueue: toggleWatchQueue(prefs.watchQueue, entry) });
+  }, [prefs.watchQueue, selectedDate, updatePrefs]);
+  const markWatchDone = (entry: { id: string; league: string }) =>
+    updatePrefs({ watchQueue: removeFromWatchQueue(prefs.watchQueue, entry) });
+  const clearWatchQueue = () => updatePrefs({ watchQueue: undefined });
+  const watchQueueApi = useMemo<WatchQueueApi | null>(
+    () => (boardDemo || prefs.hideWatchLaterPill ? null : {
+      isQueued: (g: Game) => isGameQueued(prefs.watchQueue, g.id, g.sport),
+      toggle: toggleWatchLater,
+    }),
+    [boardDemo, prefs.hideWatchLaterPill, prefs.watchQueue, toggleWatchLater],
+  );
+  // Queued games the loaded board does not hold (another day, a league not on
+  // a column) are fetched after first paint, one scoreboard per league + day.
+  // null = looked and not found. Refetched after 5 min so a game queued before
+  // it started does not stay "upcoming" in the strip all night.
+  const [queueFetched, setQueueFetched] = useState<Record<string, { game: Game | null; at: number }>>({});
+  const queueInFlight = useRef(new Set<string>());
+  const boardGameFor = useCallback((entry: WatchQueueEntry): Game | undefined => {
+    for (const l of leagues) {
+      for (const list of [l.games, l.nextGameDay?.games, l.previousGameDay?.games]) {
+        const hit = list?.find((g) => g.id === entry.id && g.sport === entry.league);
+        if (hit) return hit;
+      }
+    }
+    return undefined;
+  }, [leagues]);
+  useEffect(() => {
+    const stale = watchQueueEntries.filter((e) => {
+      const key = `${e.league}|${e.id}`;
+      const had = queueFetched[key];
+      return !boardGameFor(e) && !queueInFlight.current.has(key) && (!had || Date.now() - had.at > 5 * 60_000);
+    });
+    if (!stale.length) return;
+    const slates = new Map<string, WatchQueueEntry[]>();
+    for (const e of stale) {
+      queueInFlight.current.add(`${e.league}|${e.id}`);
+      const k = `${e.league}|${e.date}`;
+      slates.set(k, [...(slates.get(k) ?? []), e]);
+    }
+    for (const entries of slates.values()) {
+      const { league, date } = entries[0];
+      const sport = league as Sport;
+      (async () => {
+        const found: Record<string, Game | null> = {};
+        let games = await fetchSlateGames(sport, date).catch(() => [] as Game[]);
+        // The device zone and ESPN's day can differ by one around midnight,
+        // so a miss looks one day either side before giving up.
+        if (entries.some((e) => !games.some((g) => g.id === e.id))) {
+          const around = await Promise.all([prevYmd(date), nextYmd(date)].map((d) => fetchSlateGames(sport, d).catch(() => [] as Game[])));
+          games = [...games, ...around.flat()];
+        }
+        for (const e of entries) found[`${e.league}|${e.id}`] = games.find((g) => g.id === e.id) ?? null;
+        const at = Date.now();
+        for (const key of Object.keys(found)) queueInFlight.current.delete(key);
+        setQueueFetched((prev) => {
+          const next = { ...prev };
+          for (const [key, game] of Object.entries(found)) next[key] = { game, at };
+          return next;
+        });
+      })();
+    }
+  }, [watchQueueEntries, boardGameFor, queueFetched]);
   // After the 2026 final the hub stops pointing at today's board (which has no
   // World Cup column) and sends readers to the matches themselves: the final,
   // or a team's last match, via /worldcup?d=YYYYMMDD. Keyed off today's date,
@@ -2715,6 +2807,7 @@ export default function HomeContent({
     : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown;
 
   return (
+    <WatchQueueContext.Provider value={watchQueueApi}>
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Keyboard skip link (WCAG 2.4.1) — visually hidden until focused, then
           jumps a Tab user past the sticky header / date nav straight to the
@@ -4365,6 +4458,86 @@ export default function HomeContent({
             // At most one banner occupies the strip above the board.
             const topBanner = wcBanner ?? kickoffBanner;
 
+            // Watch queue strip (Jacob 9/27): the games queued with a card's
+            // "Later" pill, above everything else on every date so they are
+            // the first thing on screen the next morning. A queued game the
+            // board already holds uses that copy (it live-updates with the
+            // board); the rest come from queueFetched above.
+            const watchQueueStrip = watchQueueEntries.length ? (
+              <section data-watch-queue aria-label="Watch queue" className="mb-3 sm:mb-4">
+                <div className="flex items-baseline justify-between gap-2 mb-1.5 px-1">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                    Watch queue <span className="tabular-nums font-normal">· {watchQueueEntries.length}</span>
+                  </h2>
+                  <button
+                    type="button"
+                    data-watch-queue-clear
+                    onClick={clearWatchQueue}
+                    className="text-[11px] cursor-pointer hover:underline"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Clear all
+                  </button>
+                </div>
+                <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {watchQueueEntries.map((entry) => {
+                    const key = `${entry.league}|${entry.id}`;
+                    const game = boardGameFor(entry) ?? queueFetched[key]?.game;
+                    const sport = entry.league as Sport;
+                    const label = sportDisplayLabel(sport, fromYmd(entry.date));
+                    const dayLabel = entry.date === todayYmd ? "Today"
+                      : entry.date === getDateString(-1) ? "Yesterday"
+                        : entry.date === getDateString(1) ? "Tomorrow"
+                          : fromYmd(entry.date).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" });
+                    return (
+                      <div key={key} data-watch-queue-item={entry.id} className="min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1 px-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                          <span className="truncate">{label} · {dayLabel}</span>
+                          <button
+                            type="button"
+                            data-watch-queue-done
+                            onClick={() => markWatchDone(entry)}
+                            className="shrink-0 rounded-full px-2 py-0.5 leading-none cursor-pointer transition-colors"
+                            style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                            aria-label={`Done: remove ${entry.title ?? "this game"} from the Watch queue`}
+                          >
+                            Done
+                          </button>
+                        </div>
+                        {game ? (
+                          <GameCard
+                            game={game}
+                            favoriteTeams={prefs.favoriteTeams}
+                            onToggleFavoriteTeam={toggleFavoriteTeam}
+                            showRatings={prefs.showRatings}
+                            isPastDate={entry.date < todayYmd}
+                            isToday={entry.date === todayYmd}
+                            onPlayHighlight={openVideoModal}
+                            onPlayEmbed={openEmbedModal}
+                            leagueLabel={label}
+                            onShowDetails={(g: Game) => setDetailGame(g)}
+                            upcomingRecordLeagues={recordLeagues}
+                            hideWatchLater
+                          />
+                        ) : (
+                          <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 text-xs flex items-center justify-between gap-2" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+                            <span className="truncate" style={{ color: "var(--text)" }}>{entry.title ?? "Queued game"}</span>
+                            {queueFetched[key] ? (
+                              <button type="button" onClick={() => setSelectedDate(entry.date)} className="shrink-0 cursor-pointer hover:underline">
+                                Open {dayLabel}
+                              </button>
+                            ) : (
+                              <span className="shrink-0">Loading…</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null;
+
             // Single-column board (Settings → Board layout): stack every league
             // in one centered, wider column with bigger cards. The .ns-cards-lg
             // class scales up logos + team names (see globals.css); colWidthClass
@@ -4411,6 +4584,7 @@ export default function HomeContent({
             if (showFinalSplit) {
               return (
                 <>
+                {watchQueueStrip}
                 {topBanner}
                 {reviewStrip}
                 <div className={boardRowCls}>
@@ -4443,6 +4617,7 @@ export default function HomeContent({
 
             return (
               <>
+              {watchQueueStrip}
               {topBanner}
               {reviewStrip}
               <div className={boardRowCls}>
@@ -5098,5 +5273,6 @@ export default function HomeContent({
         <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} />
       </div>
     </div>
+    </WatchQueueContext.Provider>
   );
 }

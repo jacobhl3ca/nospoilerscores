@@ -627,6 +627,13 @@ select:focus-visible {
 .league-tag-tab { display: none; }
 .ns-board-tight .league-tag-tab { display: block; }
 .ns-board-tight .league-tag-inline { display: none; }
+/* The card's "Later" pill (Watch queue): a word everywhere, a one-glyph
+   "+" / "✓" on the tight 3-column phone board, where the word would squeeze
+   the team name. */
+.watch-later-short { display: none; }
+.ns-board-tight .watch-later-full { display: none; }
+.ns-board-tight .watch-later-short { display: inline; }
+.ns-board-tight .watch-later-pill { padding-left: 0.25rem; padding-right: 0.25rem; }
 
 
 /* The YouTube IFrame API REPLACES the #yt-player <div> with an <iframe> that
