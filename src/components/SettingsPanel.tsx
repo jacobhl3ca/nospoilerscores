@@ -760,6 +760,8 @@ export default function SettingsPanel({
       defaultRatings: "auto",
       hideLeagueChevrons: undefined,
       hideTeamStars: undefined,
+      hideWatchLaterPill: undefined,
+      watchQueue: undefined,
       upcomingRecordLeagues: undefined,
       hideUpcomingRecords: undefined,
       // Reset means "act like a fresh install", and on a fresh install the
@@ -1158,6 +1160,12 @@ export default function SettingsPanel({
               hint="The ★ next to team names"
               checked={!prefs.hideTeamStars}
               onChange={(v) => updatePrefs({ hideTeamStars: !v })}
+            />
+            <ToggleRow
+              label="Show the Later pill on cards"
+              hint="Tap Later on a game to pin it to a Watch queue at the top of the board"
+              checked={!prefs.hideWatchLaterPill}
+              onChange={(v) => updatePrefs({ hideWatchLaterPill: !v })}
             />
             <Field label="Records on upcoming games" hint="Each team's record going into the game, in italics, on upcoming and live games. Never on a finished game, or on a past date.">
               <>
