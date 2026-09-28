@@ -20,6 +20,12 @@ export interface WatchQueueEntry {
   title?: string;
 }
 
+// Master switch. Off 9/28 (Jacob): the "+" / "Later" pill on every card reads
+// as jarring, and the way to queue a game needs a new, more natural design.
+// Off = no pill, no strip, no Settings row, no queue fetches. A queue already
+// saved stays in prefs, untouched, for when the feature comes back.
+export const WATCH_QUEUE_ENABLED = false;
+
 export const WATCH_QUEUE_CAP = 20;
 export const WATCH_QUEUE_MAX_AGE_DAYS = 3;
 

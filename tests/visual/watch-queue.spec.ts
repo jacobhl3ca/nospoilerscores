@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { WATCH_QUEUE_ENABLED } from "../../src/lib/watchQueue";
 
 // Watch queue (Jacob 9/27): the card's "Later" pill queues a game; after a
 // reload the game sits in a strip ABOVE the league columns with a Done button,
@@ -72,6 +73,7 @@ const strip = (page: Page) => page.locator("[data-watch-queue]");
 
 for (const width of [390, 1440]) {
   test(`${width}px: Later queues a game, the strip leads the board after reload, Done empties it`, async ({ page }) => {
+    test.skip(!WATCH_QUEUE_ENABLED, "Watch queue is off (WATCH_QUEUE_ENABLED)");
     await setup(page, width);
     await page.goto("/");
     const pill = page.getByRole("button", { name: "Add to Watch queue" }).first();
@@ -110,6 +112,7 @@ for (const width of [390, 1440]) {
 }
 
 test("Clear all empties a two-game queue", async ({ page }) => {
+  test.skip(!WATCH_QUEUE_ENABLED, "Watch queue is off (WATCH_QUEUE_ENABLED)");
   await setup(page, 1440);
   await page.goto("/");
   const pills = page.getByRole("button", { name: "Add to Watch queue" });
@@ -122,8 +125,22 @@ test("Clear all empties a two-game queue", async ({ page }) => {
 });
 
 test("Settings off switch hides the pill", async ({ page }) => {
+  test.skip(!WATCH_QUEUE_ENABLED, "Watch queue is off (WATCH_QUEUE_ENABLED)");
   await setup(page, 1440, { hideWatchLaterPill: true });
   await page.goto("/");
   await expect(page.getByRole("button", { name: /Red Sox at New York Yankees/ }).first()).toBeVisible();
   await expect(page.locator("[data-watch-later]")).toHaveCount(0);
+});
+
+// Off since 9/28: no pill on any card and no strip, even with a queue saved
+// from before the switch.
+test("master switch off: no pill, no strip, a saved queue stays hidden", async ({ page }) => {
+  test.skip(WATCH_QUEUE_ENABLED, "Watch queue is on");
+  await setup(page, 1440, {
+    watchQueue: [{ id: "401999101", league: "mlb", date: "20260930", addedAt: Date.parse("2026-09-30T11:00:00-04:00"), title: "BOS @ NYY" }],
+  });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /Red Sox at New York Yankees/ }).first()).toBeVisible();
+  await expect(page.locator("[data-watch-later]")).toHaveCount(0);
+  await expect(strip(page)).toHaveCount(0);
 });

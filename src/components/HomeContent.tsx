@@ -14,7 +14,7 @@ import type { BestYesterdayOptions } from "@/lib/espn";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
 import { fromYmd, etSlateYmd, nextYmd } from "@/lib/etDay";
-import { toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
+import { WATCH_QUEUE_ENABLED, toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
 import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
 import GameCard from "@/components/GameCard";
 import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
@@ -1824,11 +1824,12 @@ export default function HomeContent({
   // each one as a normal spoiler-free card until it is marked Done. Pruned on
   // read too, so an account copy pulled from another device never shows a
   // game older than the 3-day window. Off under ?demo=1: the strip fetches its
-  // own games, and those would skip the demo anonymizer.
+  // own games, and those would skip the demo anonymizer. Off everywhere while
+  // WATCH_QUEUE_ENABLED is false (lib/watchQueue.ts).
   const boardDemo = useMemo(() => isDemoModeActive(), []);
   const todayYmd = getDateString(0);
   const watchQueueEntries = useMemo(
-    () => (boardDemo ? [] : pruneWatchQueue(prefs.watchQueue, todayYmd) ?? []),
+    () => (!WATCH_QUEUE_ENABLED || boardDemo ? [] : pruneWatchQueue(prefs.watchQueue, todayYmd) ?? []),
     [boardDemo, prefs.watchQueue, todayYmd],
   );
   const toggleWatchLater = useCallback((game: Game) => {
@@ -1847,7 +1848,7 @@ export default function HomeContent({
     updatePrefs({ watchQueue: removeFromWatchQueue(prefs.watchQueue, entry) });
   const clearWatchQueue = () => updatePrefs({ watchQueue: undefined });
   const watchQueueApi = useMemo<WatchQueueApi | null>(
-    () => (boardDemo || prefs.hideWatchLaterPill ? null : {
+    () => (!WATCH_QUEUE_ENABLED || boardDemo || prefs.hideWatchLaterPill ? null : {
       isQueued: (g: Game) => isGameQueued(prefs.watchQueue, g.id, g.sport),
       toggle: toggleWatchLater,
     }),

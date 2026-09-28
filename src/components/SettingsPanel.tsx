@@ -6,6 +6,7 @@ import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortR
 import { TEAM_PICKER_SKIP } from "@/lib/teamLogos";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
+import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { ALL_RECORD_LEAGUES, FREQUENT_RECORD_LEAGUES, WEEKLY_RECORD_LEAGUES, toggleAllRecordLeagues, toggleRecordLeague, upcomingRecordLeagues, type RecordLeague } from "@/lib/upcomingRecords";
 import {
@@ -1161,12 +1162,14 @@ export default function SettingsPanel({
               checked={!prefs.hideTeamStars}
               onChange={(v) => updatePrefs({ hideTeamStars: !v })}
             />
-            <ToggleRow
-              label="Show the Later pill on cards"
-              hint="Tap Later on a game to pin it to a Watch queue at the top of the board"
-              checked={!prefs.hideWatchLaterPill}
-              onChange={(v) => updatePrefs({ hideWatchLaterPill: !v })}
-            />
+            {WATCH_QUEUE_ENABLED ? (
+              <ToggleRow
+                label="Show the Later pill on cards"
+                hint="Tap Later on a game to pin it to a Watch queue at the top of the board"
+                checked={!prefs.hideWatchLaterPill}
+                onChange={(v) => updatePrefs({ hideWatchLaterPill: !v })}
+              />
+            ) : null}
             <Field label="Records on upcoming games" hint="Each team's record going into the game, in italics, on upcoming and live games. Never on a finished game, or on a past date.">
               <>
                 <div className="flex items-baseline justify-between gap-3">
