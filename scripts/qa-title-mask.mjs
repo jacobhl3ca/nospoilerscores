@@ -57,12 +57,10 @@ for (const ch of ['UFC', 'UFC on Paramount+', 'ESPN MMA', 'DAZN Boxing']) {
   check('ordinary clip: NOT covered (the 9/8 default)', h === 0, `mask=${h}px`);
 }
 {
-  // Turning the pref ON does NOT put a bar over a title the app has already
-  // judged clean — titleSafe wins, and has since long before this commit
-  // (`maskVideoTitle && !titleSafe`; this change only widened the left operand).
-  // Asserting the real rule rather than the one you'd guess from the label.
+  // Turning the pref ON covers every title, a clean one too (Jacob 9/28). Until
+  // then titleSafe won here, so the toggle hid almost nothing.
   const h = await topMaskHeight({ __url: link(null, ''), maskVideoTitle: true });
-  check('ordinary clip, clean title: still uncovered with the pref ON (titleSafe wins)', h === 0, `mask=${h}px`);
+  check('ordinary clip, clean title: covered with the pref ON', h >= 40 && h <= 52, `mask=${h}px`);
 }
 {
   const h = await topMaskHeight({ __url: link('MLB', '') });

@@ -80,48 +80,27 @@ const DEFAULT_RATINGS_OPTIONS: { value: DefaultRatings; label: string; hint: str
   { value: "on", label: "On", hint: "Always start with ratings shown" },
 ];
 
-// Full IANA zone list for the Time zone picker, with a graceful fallback for
-// runtimes without Intl.supportedValuesOf.
-const TIME_ZONES: string[] = (() => {
-  try {
-    const I = Intl as typeof Intl & { supportedValuesOf?: (k: string) => string[] };
-    const v = I.supportedValuesOf?.("timeZone");
-    if (Array.isArray(v) && v.length) return v;
-  } catch { /* fall through */ }
-  return [
-    "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
-    "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu",
-    "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Tokyo",
-    "Asia/Kolkata", "Australia/Sydney",
-  ];
-})();
+const THEME_OPTIONS: { value: Theme; label: string }[] = [
+  { value: "system", label: "🖥️ System" },
+  { value: "light", label: "☀️ Light" },
+  { value: "dark", label: "🌙 Dark" },
+];
 
-// Resolve a US ZIP to its IANA time zone via Open-Meteo's geocoder — the same
-// CORS-open, key-free service the weather lookup uses. Returns the zone plus a
-// friendly place label, or null if the ZIP can't be found.
-async function lookupZipTimeZone(zip: string): Promise<{ tz: string; place: string } | null> {
-  try {
-    const r = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(zip)}&count=5&language=en&format=json&countryCode=US`,
-    );
-    if (!r.ok) return null;
-    const d = await r.json();
-    const list: Array<{ name?: string; admin1?: string; country_code?: string; country?: string; timezone?: string }> = d.results ?? [];
-    const pick =
-      list.find((x) => (x.country_code === "US" || x.country === "United States") && x.timezone) ??
-      list.find((x) => x.timezone);
-    if (!pick?.timezone) return null;
-    return { tz: pick.timezone, place: [pick.name, pick.admin1].filter(Boolean).join(", ") };
-  } catch {
-    return null;
-  }
+// Sets <html data-theme> the moment the pref changes, as the Theme pills do.
+function applyThemeAttr(theme: Theme) {
+  const resolved = theme === "system"
+    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+    : theme;
+  document.documentElement.setAttribute("data-theme", resolved);
 }
 
-const THEME_OPTIONS: { value: Theme; label: string }[] = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-];
+// "1 PM (default)" for the Automatic switch-time select.
+function hourLabel(h: number): string {
+  const base = h === 0 ? "12 AM" : h === 12 ? "12 PM" : h < 12 ? `${h} AM` : `${h - 12} PM`;
+  return h === 13 ? `${base} (default)` : base;
+}
+
+const PROVIDER_LABEL: Record<string, string> = { apple: "Apple", google: "Google", email: "email" };
 
 const SWITCHER_MODE_OPTIONS: { value: "dropdown" | "arrows" | "both" | "off"; label: string; hint: string }[] = [
   { value: "dropdown", label: "Dropdown", hint: "Tap a header to pick from a list" },
@@ -234,14 +213,20 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-// Plain-words list of the leagues that show records, for the one-line summary
-// above the (folded) chip picker.
+// Plain-words list of the leagues that show records: the chips' accessible name.
 function recordLeagueSummary(selected: ReadonlySet<RecordLeague>): string {
   if (selected.size === 0) return "Off";
   if (ALL_RECORD_LEAGUES.every((k) => selected.has(k))) return "All leagues";
   return ALL_RECORD_LEAGUES.filter((k) => selected.has(k))
     .map((k) => (k === "soccer" ? "Soccer" : SPORT_LABEL[k]))
     .join(", ");
+}
+
+// The same summary as chips: one per league, "All leagues" or "Off".
+function recordSummaryChips(selected: ReadonlySet<RecordLeague>): string[] {
+  if (selected.size === 0) return ["Off"];
+  if (ALL_RECORD_LEAGUES.every((k) => selected.has(k))) return ["All leagues"];
+  return ALL_RECORD_LEAGUES.filter((k) => selected.has(k)).map((k) => (k === "soccer" ? "Soccer" : SPORT_LABEL[k]));
 }
 
 function teamSportFromId(id: string): Sport | null {
@@ -272,30 +257,6 @@ export default function SettingsPanel({
   shareUrl,
 }: SettingsPanelProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
-  // The device's own zone — shown in the "Auto" option so the user knows what
-  // Auto resolves to. Computed at render (client) so it reflects their device.
-  let deviceTimeZone = "";
-  try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
-  // ZIP → time zone helper state (Settings → Time zone).
-  const [zip, setZip] = useState("");
-  const [zipBusy, setZipBusy] = useState(false);
-  const [zipMsg, setZipMsg] = useState("");
-  const [zipErr, setZipErr] = useState(false);
-  const resolveZip = async () => {
-    if (zip.length !== 5 || zipBusy) return;
-    setZipBusy(true); setZipErr(false); setZipMsg("Looking up…");
-    const res = await lookupZipTimeZone(zip);
-    setZipBusy(false);
-    if (res) {
-      updatePrefs({ timezone: res.tz });
-      setZipErr(false);
-      setZipMsg(`${res.place} — ${res.tz.replace(/_/g, " ")}`);
-    } else {
-      setZipErr(true);
-      setZipMsg("Couldn’t find that ZIP");
-    }
-  };
-
   // Safari ignores the text/x-moz-url + text/html drag overrides below and
   // names a dragged bookmark after the link's visible text instead. So on
   // Safari we make the chip's text read "HideScore" (the desired bookmark
@@ -373,6 +334,9 @@ export default function SettingsPanel({
   // simply open when email is the only way in.
   const hasButtonSignIn = auth.providers?.apple !== false || (!!auth.providers?.google && canUseGoogle);
   const signedOutEmailOpen = showEmailForm || emailStep === "code" || !hasButtonSignIn;
+  // Signed in AND known: the only state where Account moves down the panel.
+  const signedInKnown = authKnown && auth.signedIn;
+  const signedInProvider = auth.provider ?? auth.linkedProviders?.[0] ?? null;
 
   // Esc to close
   useEffect(() => {
@@ -730,101 +694,292 @@ export default function SettingsPanel({
     }
   };
 
-  const resetAll = () => {
-    updatePrefs({
-      favoriteLeagues: [],
-      favoriteTeams: [],
-      theme: "system",
-      showRatings: false,
-      skipExplainer: false,
-      skipNewsExplainer: false,
-      showNews: false,
-      firstLeague: undefined,
-      secondLeague: undefined,
-      thirdLeague: undefined,
-      fourthLeague: undefined,
-      fifthLeague: undefined,
-      newsThirdLeague: undefined,
-      newsTopNews: undefined,
-      newsGenericHidden: undefined,
-      topNewsHidden: undefined,
-      newsGenericSlot: undefined,
-      // Yesterday, not "smart" — this is the documented fresh-install default
-      // (see `defaults` in preferences.ts, moved off "smart" on 2026-08-09 so a
-      // new visitor after 1 PM local isn't dropped on a board of not-yet-started
-      // games). Like smartCutoffHour/newsColCount/newsTypeFilter below, this pref
-      // carries an explicit non-undefined default, so a reset must write that
-      // value rather than "smart" for reset to match a genuine fresh install.
-      defaultDateMode: "yesterday",
-      defaultLandingView: "remember",
-      defaultRatings: "auto",
-      hideLeagueChevrons: undefined,
-      hideTeamStars: undefined,
-      upcomingRecordLeagues: undefined,
-      hideUpcomingRecords: undefined,
-      // Reset means "act like a fresh install", and on a fresh install the
-      // stars are on for two visits before the app hides them itself. Leaving
-      // the counter at 3 would re-hide them on the very next open, which reads
-      // as the reset not having worked. See lib/sessionVisits.ts.
-      sessionCount: undefined,
-      lastSessionAt: undefined,
-      wcBannerDismissed: undefined,
-      // Sibling of wcBannerDismissed: a full reset should bring back every
-      // season-kickoff banner too, so clear the per-kickoff dismissal list.
-      // Read as `?? []`, so undefined restores the fresh-install "none dismissed".
-      kickoffBannersDismissed: undefined,
-      leagueSwitcherMode: undefined,
-      hiddenLeagues: undefined,
-      shownLeagues: undefined,
-      // The spoiler-protection + layout controls the panel also exposes were
-      // omitted here, so "Reset all settings to defaults" left them at whatever
-      // the user had set — a reset could keep the video title strip revealed,
-      // the seek cap lifted, or news headlines un-blurred, which defeats the
-      // no-spoiler defaults a reset is supposed to restore. Clearing each to
-      // undefined mirrors a fresh install: JSON.stringify drops undefined keys,
-      // and every read falls back to its documented default (`?? true`/`?? false`
-      // /`?? "both"` /`!!`). The three prefs with an explicit non-undefined
-      // default in `defaults` (smartCutoffHour: 13, newsColCount: 3,
-      // newsTypeFilter: "reddit") can't rely on that undefined fallback, so reset
-      // each to its documented default value instead — otherwise a user's chosen
-      // news source-type filter (e.g. "ESPN only") survived "Reset to defaults".
-      maskVideoTitle: undefined,
-      hideControlsHint: undefined,
-      youtubeNativeControls: undefined,
-      videoSeekControl: undefined,
-      videoSeekFill: undefined,
-      videoAllowEnd: undefined,
-      videoWarnHalfway: undefined,
-      revealNewsTitles: undefined,
-      showTextPosts: undefined,
-      revealNewsMedia: undefined,
-      // The remaining news-view state the toolbar persists was still omitted, so
-      // a reset kept the user's Feed-vs-Cards view, the 🎥 Videos-only filter, and
-      // their drag-reordered source-type order. newsHiddenSources belongs here
-      // too: it has no live setter, but it is still APPLIED as a source filter, so
-      // a value left in localStorage from an earlier build hides sources with no
-      // UI to clear it — a reset is the only way out. All four have no non-
-      // undefined default, so clearing to undefined restores the fresh-install
-      // default (Cards view, no video filter, default order, nothing hidden).
-      // newsOldestFirst (the ⇅ control) was the last toolbar pref still
-      // surviving a reset; it has no non-undefined default either.
-      newsFeedView: undefined,
-      newsVideosOnly: undefined,
-      newsOldestFirst: undefined,
-      newsTypeFilterOrder: undefined,
-      newsHiddenSources: undefined,
-      singleColumn: undefined,
-      newsSingleColumn: undefined,
-      hideSensitiveNews: undefined,
-      hideCrashNews: undefined,
-      timezone: undefined,
-      reminderLinkTemplate: undefined,
-      smartCutoffHour: 13,
-      newsColCount: 3,
-      newsTypeFilter: "reddit",
-      newsTypeFilters: undefined,
-    });
+  // Reset shows "Settings reset · Undo" for 15 s (Jacob 9/28). The undo patch
+  // holds the prior value of every key the reset wrote, so Undo puts back
+  // exactly what was there, unset keys included.
+  const [resetUndo, setResetUndo] = useState<Partial<Preferences> | null>(null);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); }, []);
+  const undoReset = () => {
+    if (!resetUndo) return;
+    updatePrefs(resetUndo);
+    applyThemeAttr(resetUndo.theme ?? "system");
+    setResetUndo(null);
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
   };
+
+  const resetAll = () => {
+    const patch = resetPatch();
+    const undo: Partial<Preferences> = {};
+    for (const key of Object.keys(patch) as (keyof Preferences)[]) {
+      (undo as Record<string, unknown>)[key] = prefs[key];
+    }
+    updatePrefs(patch);
+    applyThemeAttr("system");
+    setResetUndo(undo);
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = setTimeout(() => setResetUndo(null), 15_000);
+  };
+
+  const resetPatch = (): Partial<Preferences> => ({
+    favoriteLeagues: [],
+    favoriteTeams: [],
+    theme: "system",
+    showRatings: false,
+    skipExplainer: false,
+    skipNewsExplainer: false,
+    showNews: false,
+    firstLeague: undefined,
+    secondLeague: undefined,
+    thirdLeague: undefined,
+    fourthLeague: undefined,
+    fifthLeague: undefined,
+    newsThirdLeague: undefined,
+    newsTopNews: undefined,
+    newsGenericHidden: undefined,
+    topNewsHidden: undefined,
+    newsGenericSlot: undefined,
+    // Yesterday, not "smart" — this is the documented fresh-install default
+    // (see `defaults` in preferences.ts, moved off "smart" on 2026-08-09 so a
+    // new visitor after 1 PM local isn't dropped on a board of not-yet-started
+    // games). Like smartCutoffHour/newsColCount/newsTypeFilter below, this pref
+    // carries an explicit non-undefined default, so a reset must write that
+    // value rather than "smart" for reset to match a genuine fresh install.
+    defaultDateMode: "yesterday",
+    defaultLandingView: "remember",
+    defaultRatings: "auto",
+    hideLeagueChevrons: undefined,
+    hideTeamStars: undefined,
+    upcomingRecordLeagues: undefined,
+    hideUpcomingRecords: undefined,
+    // Reset means "act like a fresh install", and on a fresh install the
+    // stars are on for two visits before the app hides them itself. Leaving
+    // the counter at 3 would re-hide them on the very next open, which reads
+    // as the reset not having worked. See lib/sessionVisits.ts.
+    sessionCount: undefined,
+    lastSessionAt: undefined,
+    wcBannerDismissed: undefined,
+    // Sibling of wcBannerDismissed: a full reset should bring back every
+    // season-kickoff banner too, so clear the per-kickoff dismissal list.
+    // Read as `?? []`, so undefined restores the fresh-install "none dismissed".
+    kickoffBannersDismissed: undefined,
+    leagueSwitcherMode: undefined,
+    hiddenLeagues: undefined,
+    shownLeagues: undefined,
+    // The spoiler-protection + layout controls the panel also exposes were
+    // omitted here, so "Reset all settings to defaults" left them at whatever
+    // the user had set — a reset could keep the video title strip revealed,
+    // the seek cap lifted, or news headlines un-blurred, which defeats the
+    // no-spoiler defaults a reset is supposed to restore. Clearing each to
+    // undefined mirrors a fresh install: JSON.stringify drops undefined keys,
+    // and every read falls back to its documented default (`?? true`/`?? false`
+    // /`?? "both"` /`!!`). The three prefs with an explicit non-undefined
+    // default in `defaults` (smartCutoffHour: 13, newsColCount: 3,
+    // newsTypeFilter: "reddit") can't rely on that undefined fallback, so reset
+    // each to its documented default value instead — otherwise a user's chosen
+    // news source-type filter (e.g. "ESPN only") survived "Reset to defaults".
+    maskVideoTitle: undefined,
+    hideControlsHint: undefined,
+    youtubeNativeControls: undefined,
+    videoSeekControl: undefined,
+    videoSeekFill: undefined,
+    videoAllowEnd: undefined,
+    videoWarnHalfway: undefined,
+    revealNewsTitles: undefined,
+    showTextPosts: undefined,
+    revealNewsMedia: undefined,
+    // The remaining news-view state the toolbar persists was still omitted, so
+    // a reset kept the user's Feed-vs-Cards view, the 🎥 Videos-only filter, and
+    // their drag-reordered source-type order. newsHiddenSources belongs here
+    // too: it has no live setter, but it is still APPLIED as a source filter, so
+    // a value left in localStorage from an earlier build hides sources with no
+    // UI to clear it — a reset is the only way out. All four have no non-
+    // undefined default, so clearing to undefined restores the fresh-install
+    // default (Cards view, no video filter, default order, nothing hidden).
+    // newsOldestFirst (the ⇅ control) was the last toolbar pref still
+    // surviving a reset; it has no non-undefined default either.
+    newsFeedView: undefined,
+    newsVideosOnly: undefined,
+    newsOldestFirst: undefined,
+    newsTypeFilterOrder: undefined,
+    newsHiddenSources: undefined,
+    singleColumn: undefined,
+    newsSingleColumn: undefined,
+    hideSensitiveNews: undefined,
+    hideCrashNews: undefined,
+    timezone: undefined,
+    reminderLinkTemplate: undefined,
+    smartCutoffHour: 13,
+    newsColCount: 3,
+    newsTypeFilter: "reddit",
+    newsTypeFilters: undefined,
+    catalogHiddenLeagues: undefined,
+  });
+
+  // The email form: signed out it sits under the sign-in buttons; signed in it
+  // is the "Link another way" disclosure in the bottom row.
+  const emailForm = canLinkEmail && (auth.signedIn ? showLinkMore : signedOutEmailOpen) ? (
+    <form
+      id="hs-link-more"
+      className="mt-3 space-y-2"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setEmailBusy(true);
+        setEmailError(false);
+        if (emailStep === "email") {
+          const result = await requestEmailCode(emailAddress);
+          setEmailBusy(false);
+          if (result.ok) {
+            setEmailStep("code");
+            setEmailStatus("Check your email for a six-digit code.");
+          } else {
+            setEmailError(true);
+            setEmailStatus(result.status === 429 ? "Too many tries. Wait a little and try again." : "Couldn’t send a code. Please try again.");
+          }
+          return;
+        }
+        const result = await verifyEmailCode(emailAddress, emailCode);
+        if (result.ok) { window.location.reload(); return; }
+        setEmailBusy(false);
+        setEmailError(true);
+        setEmailStatus(result.status === 429 ? "Too many tries. Wait a little and try again." : result.status === 401 ? "That code is wrong or expired." : "Couldn’t verify that code.");
+      }}
+    >
+      <input
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        required
+        readOnly={emailStep === "code"}
+        value={emailAddress}
+        onChange={(event) => setEmailAddress(event.target.value)}
+        placeholder="Email address"
+        aria-label="Email address"
+        // On the email step a failed request (bad address, send error)
+        // is voiced only by the red role="alert" status below — mark the
+        // field itself invalid and point it at that message so a screen
+        // reader announces the error state on the input too, matching the
+        // FeedbackBox email field's aria-invalid/describedby pattern.
+        aria-invalid={emailStep === "email" && emailError ? true : undefined}
+        aria-describedby={emailStatus ? "hs-email-auth-status" : undefined}
+        className="w-full min-h-11 rounded-lg px-3 text-sm"
+        style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+      />
+      {emailStep === "code" && (
+        <input
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="[0-9]*"
+          maxLength={6}
+          required
+          autoFocus
+          value={emailCode}
+          onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+          placeholder="6-digit code"
+          aria-label="Six-digit sign-in code"
+          // On the code step a wrong/expired code is voiced only by the
+          // red role="alert" status below — mark the code field invalid
+          // and describe it by that message so the error state reaches
+          // the input for assistive tech (same pattern as the email field).
+          aria-invalid={emailStep === "code" && emailError ? true : undefined}
+          aria-describedby={emailStatus ? "hs-email-auth-status" : undefined}
+          className="w-full min-h-11 rounded-lg px-3 text-sm tracking-[0.18em]"
+          style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+        />
+      )}
+      <button
+        type="submit"
+        disabled={emailBusy}
+        className="w-full min-h-11 rounded-lg text-sm font-semibold disabled:opacity-50"
+        style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }}
+      >
+        {emailStep === "email" ? (auth.signedIn ? "Link email" : "Email me a code") : "Verify code"}
+      </button>
+      {emailStep === "code" && (
+        <button
+          type="button"
+          className="w-full text-xs underline"
+          style={{ color: "var(--text-muted)" }}
+          onClick={() => { setEmailStep("email"); setEmailCode(""); setEmailStatus(""); setEmailError(false); }}
+        >
+          Use a different email
+        </button>
+      )}
+      {emailStatus && (
+        <p id="hs-email-auth-status" role={emailError ? "alert" : "status"} className="text-[11px]" style={{ color: emailError ? "#ef4444" : "var(--text-muted)" }}>
+          {emailStatus}
+        </p>
+      )}
+    </form>
+  ) : null;
+
+  const accountSection = (
+    <Section title="Account">
+      {!authKnown ? (
+        // Unknown, not signed out. A skeleton is honest; the sign-in
+        // buttons would be a lie for the ~2s /api/me can take.
+        <div className="space-y-2" aria-busy="true">
+          <div className="h-4 w-2/3 rounded animate-pulse" style={{ background: "var(--bg-card-hover)" }} />
+          <div className="h-3 w-full rounded animate-pulse" style={{ background: "var(--bg-card-hover)" }} />
+          <span className="sr-only">Checking your account</span>
+        </div>
+      ) : auth.signedIn ? (
+        // One line (Jacob 9/28). The address is only a tooltip: for
+        // Apple it is a private relay address, which is noise. Sign out,
+        // linking and delete sit in the quiet row at the bottom.
+        <p className="flex items-center gap-1.5 text-sm" style={{ color: "var(--text)" }} title={auth.email ?? undefined}>
+          <ProviderMark provider={signedInProvider} />
+          <span>
+            Signed in{signedInProvider ? ` with ${PROVIDER_LABEL[signedInProvider] ?? signedInProvider}` : ""}
+            <span style={{ color: "var(--text-muted)" }}> · synced</span>
+          </span>
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {auth.providers?.apple !== false && (
+          <button type="button"
+            onClick={() => signInWithApple()}
+            className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
+            style={{
+              background: resolvedTheme === "dark" ? "#fff" : "#000",
+              color: resolvedTheme === "dark" ? "#000" : "#fff",
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 17 17" fill="currentColor" aria-hidden="true">
+              <path d="M13.79 9.06c-.02-1.86 1.52-2.75 1.59-2.79-.87-1.27-2.22-1.44-2.7-1.46-1.15-.12-2.24.68-2.82.68-.58 0-1.48-.66-2.43-.64-1.25.02-2.4.73-3.04 1.85-1.3 2.25-.33 5.58.93 7.41.62.9 1.35 1.9 2.31 1.86.93-.04 1.28-.6 2.4-.6 1.12 0 1.43.6 2.41.58 1-.02 1.63-.91 2.24-1.81.71-1.04 1-2.05 1.01-2.1-.02-.01-1.94-.74-1.96-2.95l.01-.34zM11.9 3.38c.51-.62.86-1.48.76-2.34-.74.03-1.64.49-2.17 1.11-.47.55-.89 1.43-.78 2.27.83.07 1.67-.42 2.19-1.04z"/>
+            </svg>
+            Sign in with Apple
+          </button>
+          )}
+          {auth.providers?.google && canUseGoogle && (
+          <button type="button"
+            onClick={() => signInWithGoogle()}
+            className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
+            style={{ background: "#fff", color: "#1f1f1f", border: "1px solid #dadce0" }}
+          >
+            <GoogleG size={15} />
+            Sign in with Google
+          </button>
+          )}
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Sign in to sync your teams, layout, and settings across every browser and device.
+          </p>
+          {canLinkEmail && !signedOutEmailOpen && (
+            <button type="button"
+              onClick={() => setShowEmailForm(true)}
+              aria-expanded={false}
+              className="w-full text-[11px] underline cursor-pointer"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Use email instead
+            </button>
+          )}
+        </div>
+      )}
+      {!auth.signedIn && emailForm}
+    </Section>
+  );
 
   if (!open) return null;
 
@@ -874,404 +1029,30 @@ export default function SettingsPanel({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
-          {/* Account — Sign in with Apple syncs prefs across browsers/devices.
-              First so the cross-device value prop is the first thing seen. */}
-          <Section title="Account">
-            {!authKnown ? (
-              // Unknown, not signed out. A skeleton is honest; the sign-in
-              // buttons would be a lie for the ~2s /api/me can take.
-              <div className="space-y-2" aria-busy="true">
-                <div className="h-4 w-2/3 rounded animate-pulse" style={{ background: "var(--bg-card-hover)" }} />
-                <div className="h-3 w-full rounded animate-pulse" style={{ background: "var(--bg-card-hover)" }} />
-                <span className="sr-only">Checking your account</span>
-              </div>
-            ) : auth.signedIn ? (
-              <div className="space-y-2">
-                <p className="text-sm" style={{ color: "var(--text)" }}>
-                  Signed in{auth.email ? <> as <span className="font-medium">{auth.email}</span></> : ""}.
-                </p>
-                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  Your teams, layout, and settings sync automatically across all your browsers and devices.
-                </p>
-                <button type="button"
-                  onClick={() => signOut()}
-                  className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
-                  style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
-                >
-                  Sign out
-                </button>
-                {/* Adding a second way into the same account is a once-ever
-                    chore, so it is a grey link under Sign out rather than a
-                    stack of buttons and an email form held permanently open
-                    (Jacob 8/31). Nothing left to link = no link at all. */}
-                {(linkableProviders.length > 0 || canLinkEmail) && !showLinkMore && (
-                  <button type="button"
-                    onClick={() => setShowLinkMore(true)}
-                    aria-expanded={false}
-                    aria-controls={canLinkEmail ? "hs-link-more" : undefined}
-                    className="w-full text-[11px] underline cursor-pointer"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Link another way to sign in
-                  </button>
-                )}
-                {showLinkMore && linkableProviders.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {linkableProviders.map((l) => (
-                      <button key={l.key} type="button"
-                        onClick={l.onClick}
-                        className="flex-1 min-w-[120px] py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
-                        style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
-                      >
-                        Link {l.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {auth.providers?.apple !== false && (
-                <button type="button"
-                  onClick={() => signInWithApple()}
-                  className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
-                  style={{
-                    background: resolvedTheme === "dark" ? "#fff" : "#000",
-                    color: resolvedTheme === "dark" ? "#000" : "#fff",
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 17 17" fill="currentColor" aria-hidden="true">
-                    <path d="M13.79 9.06c-.02-1.86 1.52-2.75 1.59-2.79-.87-1.27-2.22-1.44-2.7-1.46-1.15-.12-2.24.68-2.82.68-.58 0-1.48-.66-2.43-.64-1.25.02-2.4.73-3.04 1.85-1.3 2.25-.33 5.58.93 7.41.62.9 1.35 1.9 2.31 1.86.93-.04 1.28-.6 2.4-.6 1.12 0 1.43.6 2.41.58 1-.02 1.63-.91 2.24-1.81.71-1.04 1-2.05 1.01-2.1-.02-.01-1.94-.74-1.96-2.95l.01-.34zM11.9 3.38c.51-.62.86-1.48.76-2.34-.74.03-1.64.49-2.17 1.11-.47.55-.89 1.43-.78 2.27.83.07 1.67-.42 2.19-1.04z"/>
-                  </svg>
-                  Sign in with Apple
-                </button>
-                )}
-                {auth.providers?.google && canUseGoogle && (
-                <button type="button"
-                  onClick={() => signInWithGoogle()}
-                  className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
-                  style={{ background: "#fff", color: "#1f1f1f", border: "1px solid #dadce0" }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 48 48" aria-hidden="true">
-                    <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
-                    <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
-                    <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
-                    <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
-                  </svg>
-                  Sign in with Google
-                </button>
-                )}
-                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  Sign in to sync your teams, layout, and settings across every browser and device.
-                </p>
-                {canLinkEmail && !signedOutEmailOpen && (
-                  <button type="button"
-                    onClick={() => setShowEmailForm(true)}
-                    aria-expanded={false}
-                    className="w-full text-[11px] underline cursor-pointer"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Use email instead
-                  </button>
-                )}
-              </div>
-            )}
-            {canLinkEmail && (auth.signedIn ? showLinkMore : signedOutEmailOpen) && (
-              <form
-                id="hs-link-more"
-                className="mt-3 space-y-2"
-                onSubmit={async (event) => {
-                  event.preventDefault();
-                  setEmailBusy(true);
-                  setEmailError(false);
-                  if (emailStep === "email") {
-                    const result = await requestEmailCode(emailAddress);
-                    setEmailBusy(false);
-                    if (result.ok) {
-                      setEmailStep("code");
-                      setEmailStatus("Check your email for a six-digit code.");
-                    } else {
-                      setEmailError(true);
-                      setEmailStatus(result.status === 429 ? "Too many tries. Wait a little and try again." : "Couldn’t send a code. Please try again.");
-                    }
-                    return;
-                  }
-                  const result = await verifyEmailCode(emailAddress, emailCode);
-                  if (result.ok) { window.location.reload(); return; }
-                  setEmailBusy(false);
-                  setEmailError(true);
-                  setEmailStatus(result.status === 429 ? "Too many tries. Wait a little and try again." : result.status === 401 ? "That code is wrong or expired." : "Couldn’t verify that code.");
-                }}
-              >
-                <input
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  required
-                  readOnly={emailStep === "code"}
-                  value={emailAddress}
-                  onChange={(event) => setEmailAddress(event.target.value)}
-                  placeholder="Email address"
-                  aria-label="Email address"
-                  // On the email step a failed request (bad address, send error)
-                  // is voiced only by the red role="alert" status below — mark the
-                  // field itself invalid and point it at that message so a screen
-                  // reader announces the error state on the input too, matching the
-                  // FeedbackBox email field's aria-invalid/describedby pattern.
-                  aria-invalid={emailStep === "email" && emailError ? true : undefined}
-                  aria-describedby={emailStatus ? "hs-email-auth-status" : undefined}
-                  className="w-full min-h-11 rounded-lg px-3 text-sm"
-                  style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
-                />
-                {emailStep === "code" && (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    pattern="[0-9]*"
-                    maxLength={6}
-                    required
-                    autoFocus
-                    value={emailCode}
-                    onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="6-digit code"
-                    aria-label="Six-digit sign-in code"
-                    // On the code step a wrong/expired code is voiced only by the
-                    // red role="alert" status below — mark the code field invalid
-                    // and describe it by that message so the error state reaches
-                    // the input for assistive tech (same pattern as the email field).
-                    aria-invalid={emailStep === "code" && emailError ? true : undefined}
-                    aria-describedby={emailStatus ? "hs-email-auth-status" : undefined}
-                    className="w-full min-h-11 rounded-lg px-3 text-sm tracking-[0.18em]"
-                    style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
-                  />
-                )}
-                <button
-                  type="submit"
-                  disabled={emailBusy}
-                  className="w-full min-h-11 rounded-lg text-sm font-semibold disabled:opacity-50"
-                  style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }}
-                >
-                  {emailStep === "email" ? (auth.signedIn ? "Link email" : "Email me a code") : "Verify code"}
-                </button>
-                {emailStep === "code" && (
-                  <button
-                    type="button"
-                    className="w-full text-xs underline"
-                    style={{ color: "var(--text-muted)" }}
-                    onClick={() => { setEmailStep("email"); setEmailCode(""); setEmailStatus(""); setEmailError(false); }}
-                  >
-                    Use a different email
-                  </button>
-                )}
-                {emailStatus && (
-                  <p id="hs-email-auth-status" role={emailError ? "alert" : "status"} className="text-[11px]" style={{ color: emailError ? "#ef4444" : "var(--text-muted)" }}>
-                    {emailStatus}
-                  </p>
-                )}
-              </form>
-            )}
-          </Section>
-
-          {/* Favorite teams — second, right under Account (Jacob 9/25): it is
-              the setting people come here for (12 of 29 synced accounts have
-              picked teams), and it sat sixth. Search first, then your picks,
-              then the two display options (Jacob 9/25 shape pass: the 17-chip
-              records picker used to sit above the search box). */}
-          <Section title="Favorite teams">
-            <TeamPicker
-              sports={teamLeagueOptions}
-              inSeasonSports={inSeasonSports}
-              favorites={prefs.favoriteTeams}
-              onToggle={toggleTeamFavorite}
-              teamsBySport={teamsBySportCache}
-              loadingSports={loadingTeamSports}
-              loadSport={loadTeamSport}
-              knownTeams={knownTeams}
-            />
-            {prefs.favoriteTeams.length === 0 ? (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Pick a team above, or tap the star next to a team in any game card.
-              </p>
-            ) : (
-              <>
-                {Array.from(teamsBySport.entries()).map(([sport, teams]) => (
-                  <div key={sport} className="mb-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
-                        {SPORT_LABEL[sport] ?? sport}
-                      </span>
-                      <button type="button"
-                        onClick={() => clearTeamsForSport(sport)}
-                        aria-label={`Clear ${SPORT_LABEL[sport] ?? sport} teams`}
-                        className="text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {teams.map((t) => (
-                        <button type="button"
-                          key={t.id}
-                          onClick={() => removeTeam(t.id)}
-                          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-opacity hover:opacity-80"
-                          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                          title="Remove from favorites"
-                          aria-label={`Remove ${t.displayName} from favorites`}
-                        >
-                          {t.logo && (
-                            // onError hides a 404'd/blocked ESPN logo so the chip
-                            // degrades to the team name instead of the browser's
-                            // broken-image glyph — matches the onError guard on
-                            // every other remote team logo (GameCard, GameDetailModal,
-                            // WorldCupGroupsModal, …).
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={t.logo} alt="" loading="lazy" decoding="async" width={14} height={14} className="w-3.5 h-3.5" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                          )}
-                          <span>{t.displayName}</span>
-                          <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {prefs.favoriteTeams.length} total
-                  </span>
-                  <button type="button"
-                    onClick={clearAllTeams}
-                    className="text-xs underline underline-offset-2 cursor-pointer hover:opacity-80"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Clear all
-                  </button>
-                </div>
-              </>
-            )}
-            <ToggleRow
-              label="Stars on game cards"
-              hint="The ★ next to team names"
-              checked={!prefs.hideTeamStars}
-              onChange={(v) => updatePrefs({ hideTeamStars: !v })}
-            />
-            <Field label="Records on upcoming games" hint="Each team's record going into the game, in italics, on upcoming and live games. Never on a finished game, or on a past date.">
-              <>
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {recordLeagueSummary(upcomingRecordLeagues(prefs))}
-                  </span>
-                  <button type="button"
-                    onClick={() => setRecordsOpen((v) => !v)}
-                    aria-expanded={recordsOpen}
-                    // Only while the picker exists, so the id always resolves.
-                    aria-controls={recordsOpen ? "hs-record-leagues" : undefined}
-                    className="shrink-0 text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {recordsOpen ? "Done" : "Change"}
-                  </button>
-                </div>
-                {recordsOpen && (
-                  <div id="hs-record-leagues" className="mt-2">
-                    <RecordLeaguePicker
-                      selected={upcomingRecordLeagues(prefs)}
-                      // The first pick retires the old NFL-only switch for good.
-                      onChange={(next) => updatePrefs({ upcomingRecordLeagues: next, hideUpcomingRecords: undefined })}
-                    />
-                  </div>
-                )}
-              </>
-            </Field>
-          </Section>
-
-          {/* Theme — near the top because the old standalone header toggle
-              moved in here, and dark/light is a frequently flipped setting. */}
+          {/* Section order (Jacob 9/28): Theme, Leagues, Favorite teams,
+              Default view, News, Highlight video, Account, More settings,
+              Share & reset, then the account links and the legal row. Signed
+              out (or not yet known), Account goes first instead, so the
+              cross-device value prop is the first thing seen. */}
+          {!signedInKnown && accountSection}
+          {/* Theme — first when signed in (Jacob 9/28): one row, three pills. */}
           <Section title="Theme">
             <RadioGroup
               label="Theme"
               value={prefs.theme}
-              // System names what it resolves to, in place of the old
-              // "Currently rendering" line under the pills.
-              options={THEME_OPTIONS.map((o) => (o.value === "system" ? { ...o, label: `System (${resolvedTheme} now)` } : o))}
+              options={THEME_OPTIONS}
               onChange={(v) => {
                 updatePrefs({ theme: v });
-                if (v === "system") {
-                  const sys = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-                  document.documentElement.setAttribute("data-theme", sys);
-                } else {
-                  document.documentElement.setAttribute("data-theme", v);
-                }
+                applyThemeAttr(v);
               }}
             />
           </Section>
 
-          {/* Default View */}
-          <Section title="Default view">
-            <Field label="Landing date" hint="What day to show when you open the app">
-              {/* Fall back to "yesterday", the documented fresh-install default
-                  (see `defaults` in preferences.ts, moved off "smart" on
-                  2026-08-09), not "smart". loadPreferences() always merges that
-                  default in, so `prefs.defaultDateMode` is normally set and this
-                  fallback rarely fires — but when it does (a partial prefs blob),
-                  a stale "smart" fallback made the radio highlight "Automatic"
-                  and reveal the cutoff-hour field below, misrepresenting a board
-                  the app actually renders as "yesterday". Matches the reset value
-                  in this file's clearAll and the default in preferences.ts. */}
-              <RadioGroup
-                label="Landing date"
-                value={prefs.defaultDateMode ?? "yesterday"}
-                options={DATE_MODE_OPTIONS}
-                onChange={(v) => updatePrefs({ defaultDateMode: v })}
-              />
-            </Field>
-            {(prefs.defaultDateMode ?? "yesterday") === "smart" && (
-            <Field label="Automatic switch time" hint="Hour (your local time) when the landing date flips from yesterday to today">
-                <select
-                  value={prefs.smartCutoffHour ?? 13}
-                  onChange={(e) => updatePrefs({ smartCutoffHour: Number(e.target.value) })}
-                  aria-label="Automatic switch time"
-                  className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
-                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                >
-                  {Array.from({ length: 24 }, (_, h) => {
-                    const base = h === 0 ? "12 AM (midnight)"
-                      : h === 12 ? "12 PM (noon)"
-                      : h < 12 ? `${h} AM`
-                      : `${h - 12} PM`;
-                    const label = h === 13 ? `${base} (default)` : base;
-                    return <option key={h} value={h}>{label}</option>;
-                  })}
-                </select>
-              </Field>
-            )}
-            <Field label="Landing view" hint="Scores, ratings or news on launch">
-              <RadioGroup
-                label="Landing view"
-                value={prefs.defaultLandingView ?? "remember"}
-                options={LANDING_VIEW_OPTIONS}
-                columns={4}
-                onChange={(v) => updatePrefs({ defaultLandingView: v })}
-              />
-            </Field>
-            <Field label="Ratings on launch" hint="Show or hide game ratings + best-games sort">
-              <RadioGroup
-                label="Ratings on launch"
-                value={prefs.defaultRatings ?? "auto"}
-                options={DEFAULT_RATINGS_OPTIONS}
-                onChange={(v) => updatePrefs({ defaultRatings: v })}
-              />
-            </Field>
-          </Section>
-
-          {/* League columns */}
-          <Section title="League columns">
+          {/* Leagues — second (Jacob 9/28: the switcher was the hardest thing
+              in the panel to reach). Was "League columns", fifth. */}
+          <Section title="Leagues">
             <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
-              Pick a league for each column, or tap a column header on the board.
+              Pick a league per column, or tap its header on the board.
             </p>
             {/* Slots 4-5 only when the board itself is wide enough for five
                 columns. Their saved prefs stay untouched either way. */}
@@ -1434,6 +1215,184 @@ export default function SettingsPanel({
             </details>
           </Section>
 
+          {/* Favorite teams — right under Leagues (Jacob 9/28; 9/25 it moved
+              up from sixth: 12 of 29 synced accounts have picked teams). Search first, then your picks,
+              then the two display options (Jacob 9/25 shape pass: the 17-chip
+              records picker used to sit above the search box). */}
+          <Section title="Favorite teams">
+            <TeamPicker
+              sports={teamLeagueOptions}
+              inSeasonSports={inSeasonSports}
+              favorites={prefs.favoriteTeams}
+              onToggle={toggleTeamFavorite}
+              teamsBySport={teamsBySportCache}
+              loadingSports={loadingTeamSports}
+              loadSport={loadTeamSport}
+              knownTeams={knownTeams}
+            />
+            {prefs.favoriteTeams.length === 0 ? (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Pick a team above, or tap the star next to a team in any game card.
+              </p>
+            ) : (
+              <>
+                {Array.from(teamsBySport.entries()).map(([sport, teams]) => (
+                  <div key={sport} className="mb-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
+                        {SPORT_LABEL[sport] ?? sport}
+                      </span>
+                      <button type="button"
+                        onClick={() => clearTeamsForSport(sport)}
+                        aria-label={`Clear ${SPORT_LABEL[sport] ?? sport} teams`}
+                        className="text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {teams.map((t) => (
+                        <button type="button"
+                          key={t.id}
+                          onClick={() => removeTeam(t.id)}
+                          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-opacity hover:opacity-80"
+                          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                          title="Remove from favorites"
+                          aria-label={`Remove ${t.displayName} from favorites`}
+                        >
+                          {t.logo && (
+                            // onError hides a 404'd/blocked ESPN logo so the chip
+                            // degrades to the team name instead of the browser's
+                            // broken-image glyph — matches the onError guard on
+                            // every other remote team logo (GameCard, GameDetailModal,
+                            // WorldCupGroupsModal, …).
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={t.logo} alt="" loading="lazy" decoding="async" width={14} height={14} className="w-3.5 h-3.5" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                          )}
+                          <span>{t.displayName}</span>
+                          <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {prefs.favoriteTeams.length} total
+                  </span>
+                  <button type="button"
+                    onClick={clearAllTeams}
+                    className="text-xs underline underline-offset-2 cursor-pointer hover:opacity-80"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Clear all
+                  </button>
+                </div>
+              </>
+            )}
+            <ToggleRow
+              label="Stars on game cards"
+              hint="The ★ next to team names"
+              checked={!prefs.hideTeamStars}
+              onChange={(v) => updatePrefs({ hideTeamStars: !v })}
+            />
+            {/* Label, one hint line, then the leagues as chips; a tap opens
+                the picker in place (Jacob 9/28: the old right-aligned hint and
+                "Change" link were not intuitive). */}
+            <div>
+              <div className="text-sm font-medium" style={{ color: "var(--text)" }}>Records on upcoming games</div>
+              <div className="text-[11px] mb-1.5" style={{ color: "var(--text-muted)" }}>
+                Each team&apos;s record, in italics, on upcoming and live games
+              </div>
+              {recordsOpen ? (
+                <div id="hs-record-leagues">
+                  <RecordLeaguePicker
+                    selected={upcomingRecordLeagues(prefs)}
+                    // The first pick retires the old NFL-only switch for good.
+                    onChange={(next) => updatePrefs({ upcomingRecordLeagues: next, hideUpcomingRecords: undefined })}
+                  />
+                  <button type="button"
+                    onClick={() => setRecordsOpen(false)}
+                    aria-expanded={true}
+                    aria-controls="hs-record-leagues"
+                    className="mt-2 text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5" aria-label={`Records on upcoming games: ${recordLeagueSummary(upcomingRecordLeagues(prefs))}`}>
+                  {recordSummaryChips(upcomingRecordLeagues(prefs)).map((label) => (
+                    <LeagueChip
+                      key={label}
+                      label={label}
+                      on={label !== "Off"}
+                      ariaExpanded={false}
+                      onClick={() => setRecordsOpen(true)}
+                      title="Pick the leagues that show records"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </Section>
+
+          {/* Default View */}
+          <Section title="Default view">
+            {/* Landing date and its switch time share one row (Jacob 9/28): the
+                hour sits inline in a hint under Automatic, not in a second
+                field. Falls back to "yesterday", the documented fresh-install
+                default (see `defaults` in preferences.ts, moved off "smart" on
+                2026-08-09) — a stale "smart" fallback made the row highlight
+                Automatic for a board the app renders as yesterday. */}
+            <Field label="Landing date">
+              <RadioGroup
+                label="Landing date"
+                value={prefs.defaultDateMode ?? "yesterday"}
+                options={DATE_MODE_OPTIONS}
+                onChange={(v) => updatePrefs({ defaultDateMode: v })}
+              />
+            </Field>
+            {(prefs.defaultDateMode ?? "yesterday") === "smart" && (
+              <p className="text-[11px] -mt-1.5 text-right" style={{ color: "var(--text-muted)" }}>
+                switches to today at{" "}
+                <select
+                  value={prefs.smartCutoffHour ?? 13}
+                  onChange={(e) => updatePrefs({ smartCutoffHour: Number(e.target.value) })}
+                  aria-label="Automatic switch time"
+                  className="rounded-md px-1 py-0.5 text-[11px] cursor-pointer"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                >
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>{hourLabel(h)}</option>
+                  ))}
+                </select>
+              </p>
+            )}
+            <Field label="Landing view" hint="Scores, ratings or news on launch">
+              <RadioGroup
+                label="Landing view"
+                value={prefs.defaultLandingView ?? "remember"}
+                options={LANDING_VIEW_OPTIONS}
+                columns={4}
+                onChange={(v) => updatePrefs({ defaultLandingView: v })}
+              />
+            </Field>
+            {/* Auto's rule was only a hover tooltip on the pill. */}
+            <Field label="Ratings on launch" hint="Auto = off in the morning, last state after noon ET">
+              <RadioGroup
+                label="Ratings on launch"
+                value={prefs.defaultRatings ?? "auto"}
+                options={DEFAULT_RATINGS_OPTIONS}
+                onChange={(v) => updatePrefs({ defaultRatings: v })}
+              />
+            </Field>
+          </Section>
 
           {/* News — one toggle (Jacob 9/25: "idk if 2 checkboxes needed"). It used to
               have "Also hide wrecks nobody got hurt in" nested under it; now
@@ -1448,7 +1407,7 @@ export default function SettingsPanel({
           <Section title="News">
             <ToggleRow
               label="Hide upsetting news"
-              hint="Hides deaths, assault, injuries, crashes and wrecks, serious illness, harm to animals and self-harm. The feed counts what it hid, so you can show it in one tap. Roster injury news still shows."
+              hint="Hides news about deaths, injuries and other upsetting events. You can show them in one tap."
               checked={!!(prefs.hideSensitiveNews || prefs.hideCrashNews)}
               onChange={(v) => updatePrefs({ hideSensitiveNews: v, hideCrashNews: v })}
             />
@@ -1514,89 +1473,14 @@ export default function SettingsPanel({
             )}
           </Section>
 
-          {/* Share & Reset */}
-          <Section title="Share & reset">
-            <div className="flex flex-col gap-2">
-              {(() => {
-                const nothingToShare = prefs.favoriteTeams.length === 0 && prefs.favoriteLeagues.length === 0 && !prefs.firstLeague && !prefs.secondLeague && !prefs.thirdLeague && !prefs.fourthLeague && !prefs.fifthLeague;
-                return (
-                  <>
-                    <button type="button"
-                      onClick={onShareFavorites}
-                      disabled={nothingToShare}
-                      className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ background: "var(--accent)", color: "white" }}
-                    >
-                      {shareCopied ? "Copied!" : "Copy settings link"}
-                    </button>
-                    {nothingToShare && (
-                      <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
-                        Pick a favorite team or league first — then this saves a link that restores your setup.
-                      </p>
-                    )}
-                    {/* Real <a> so the browser treats it as a draggable link —
-                        drag it onto the bookmarks/favorites bar and the saved
-                        bookmark restores this exact setup (Jacob 6/11 —
-                        bookmarking a copied URL is fiddly). The label is the
-                        affordance ("Drag to Bookmarks Bar"); dragstart
-                        overrides the drag payload so the bookmark itself gets
-                        NAMED "HideScore" where the browser honors it (Firefox
-                        x-moz-url title, Chromium text/html) instead of the
-                        instructional label. Click copies, like the button. */}
-                    {!nothingToShare && shareUrl && (
-                      <a
-                        href={shareUrl}
-                        onClick={(e) => { e.preventDefault(); onShareFavorites(); }}
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData("text/uri-list", shareUrl);
-                          e.dataTransfer.setData("text/plain", shareUrl);
-                          e.dataTransfer.setData("text/x-moz-url", `${shareUrl}\nHideScore`);
-                          e.dataTransfer.setData("text/html", `<a href="${shareUrl}">HideScore</a>`);
-                        }}
-                        className="hidden w-full py-2 rounded-lg text-sm cursor-grab transition-colors sm:flex items-center justify-center gap-1.5"
-                        style={{ background: "var(--bg-card)", border: "1px dashed var(--border)", color: "var(--text)" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-                        title="Drop on your bookmarks bar to save this setup as 'HideScore'"
-                      >
-                        {/* draggable={false} so grabbing the chip by the monkey
-                            still drags the LINK (the bookmark), not the image. */}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/monkey-see-no-evil.svg" alt="" width={14} height={14} className="inline-block" draggable={false} />
-                        {/* Safari names the bookmark after this visible text,
-                            so it must read "HideScore" there. Other browsers
-                            take the name from the dragstart overrides above, so
-                            they keep the instructional label. */}
-                        {isSafari ? "HideScore" : "Drag to Bookmarks Bar"}
-                      </a>
-                    )}
-                    {!nothingToShare && (
-                      <p className="hidden text-[11px] -mt-1 sm:block" style={{ color: "var(--text-muted)" }}>
-                        {isSafari
-                          ? "Drag this onto your bookmarks bar to save this setup. Clicking copies the link instead."
-                          : "The bookmark restores this exact setup. Clicking copies the link instead."}
-                      </p>
-                    )}
-                  </>
-                );
-              })()}
-              <button type="button"
-                onClick={() => {
-                  if (confirm("Reset all settings to defaults? Favorites will be cleared.")) resetAll();
-                }}
-                className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-              >
-                Reset to defaults
-              </button>
-            </div>
-          </Section>
+          {signedInKnown && accountSection}
 
           {/* More settings (Jacob 9/25): rows almost nobody changes, behind one
               closed fold so the sections above are what you see. Of 29 synced
               accounts on 9/12: header switcher 1 changed, keys hint 0, reminder
-              link 0; the two explainer rows are an undo, not a setting. Nothing
-              here was removed — every row works exactly as before. */}
+              link 0; the two explainer rows are an undo, not a setting. Time zone
+              left 9/28: 0 of 35 blobs had ever set it, and Auto is the device's
+              own zone. A saved zone still applies. */}
           <details className="group">
             <summary
               className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-semibold cursor-pointer select-none marker:content-none [&::-webkit-details-marker]:hidden"
@@ -1608,60 +1492,6 @@ export default function SettingsPanel({
               More settings
             </summary>
             <div className="space-y-3 mt-3">
-            {/* Time zone moved here from Default view (Jacob 9/25): Auto is
-                right for nearly everyone. Same control, same pref. */}
-            <Field label="Time zone" hint="Used for game times AND which day counts as today">
-              <select
-                value={prefs.timezone ?? ""}
-                onChange={(e) => updatePrefs({ timezone: e.target.value || undefined })}
-                aria-label="Time zone"
-                className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-              >
-                <option value="">Auto — your device{deviceTimeZone ? ` (${deviceTimeZone})` : ""}</option>
-                {TIME_ZONES.map((tz) => (
-                  <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
-                ))}
-              </select>
-              {/* Or just type a US ZIP and we'll pick the zone for you. */}
-              <div className="flex items-center gap-2 mt-2">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="postal-code"
-                  maxLength={5}
-                  value={zip}
-                  onChange={(e) => { setZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setZipMsg(""); }}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); resolveZip(); } }}
-                  placeholder="or enter ZIP"
-                  aria-label="US ZIP code for time zone"
-                  className="w-28 px-3 py-2 rounded-lg text-sm"
-                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                />
-                <button type="button"
-                  onClick={resolveZip}
-                  disabled={zip.length !== 5 || zipBusy}
-                  // Pin a stable, descriptive accessible name. The visible text
-                  // is a terse "Set" (ambiguous out of context next to a ZIP
-                  // field) and flips to a bare "…" while resolving — a meaningless
-                  // accessible name for that transient state. An aria-label
-                  // overrides the text content, so the button reads the same in
-                  // both states, matching the descriptive labels the app already
-                  // gives its other short buttons (the feedback "+", the golf
-                  // highlight buttons). Purely additive — no visual change.
-                  aria-label="Set time zone from ZIP code"
-                  className="px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity disabled:opacity-40 disabled:cursor-default"
-                  style={{ background: "var(--accent)", color: "white" }}
-                >
-                  {zipBusy ? "…" : "Set"}
-                </button>
-              </div>
-              {zipMsg && (
-                <p role="status" aria-live="polite" className="text-[11px] mt-1" style={{ color: zipErr ? "rgb(239,68,68)" : "var(--text-muted)" }}>
-                  {zipMsg}
-                </p>
-              )}
-            </Field>
             <Field label="Header league switcher" hint="How tapping a column header behaves">
               <RadioGroup
                 label="Header league switcher"
@@ -1777,13 +1607,116 @@ export default function SettingsPanel({
             </div>
           </details>
 
-          {/* Bottom-most, and deliberately quiet. Only rendered when signed in
-              — there is no account to delete otherwise. */}
+          {/* Share & Reset */}
+          <Section title="Share & reset">
+            <div className="flex flex-col gap-2">
+              {(() => {
+                const nothingToShare = prefs.favoriteTeams.length === 0 && prefs.favoriteLeagues.length === 0 && !prefs.firstLeague && !prefs.secondLeague && !prefs.thirdLeague && !prefs.fourthLeague && !prefs.fifthLeague;
+                return (
+                  <>
+                    <button type="button"
+                      onClick={onShareFavorites}
+                      disabled={nothingToShare}
+                      className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ background: "var(--accent)", color: "white" }}
+                    >
+                      {shareCopied ? "Copied!" : "Copy settings link"}
+                    </button>
+                    {nothingToShare && (
+                      <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
+                        Pick a favorite team or league first — then this saves a link that restores your setup.
+                      </p>
+                    )}
+                    {/* Real <a> so the browser treats it as a draggable link —
+                        drag it onto the bookmarks/favorites bar and the saved
+                        bookmark restores this exact setup (Jacob 6/11 —
+                        bookmarking a copied URL is fiddly). The label is the
+                        affordance ("Drag to Bookmarks Bar"); dragstart
+                        overrides the drag payload so the bookmark itself gets
+                        NAMED "HideScore" where the browser honors it (Firefox
+                        x-moz-url title, Chromium text/html) instead of the
+                        instructional label. Click copies, like the button. */}
+                    {!nothingToShare && shareUrl && (
+                      <a
+                        href={shareUrl}
+                        onClick={(e) => { e.preventDefault(); onShareFavorites(); }}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/uri-list", shareUrl);
+                          e.dataTransfer.setData("text/plain", shareUrl);
+                          e.dataTransfer.setData("text/x-moz-url", `${shareUrl}\nHideScore`);
+                          e.dataTransfer.setData("text/html", `<a href="${shareUrl}">HideScore</a>`);
+                        }}
+                        className="hidden w-full py-2 rounded-lg text-sm cursor-grab transition-colors sm:flex items-center justify-center gap-1.5"
+                        style={{ background: "var(--bg-card)", border: "1px dashed var(--border)", color: "var(--text)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        title="Drop on your bookmarks bar to save this setup as 'HideScore'"
+                      >
+                        {/* draggable={false} so grabbing the chip by the monkey
+                            still drags the LINK (the bookmark), not the image. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/monkey-see-no-evil.svg" alt="" width={14} height={14} className="inline-block" draggable={false} />
+                        {/* Safari names the bookmark after this visible text,
+                            so it must read "HideScore" there. Other browsers
+                            take the name from the dragstart overrides above, so
+                            they keep the instructional label. */}
+                        {isSafari ? "HideScore" : "Drag to Bookmarks Bar"}
+                      </a>
+                    )}
+                    {!nothingToShare && (
+                      <p className="hidden text-[11px] -mt-1 sm:block" style={{ color: "var(--text-muted)" }}>
+                        {isSafari
+                          ? "Drag this onto your bookmarks bar to save this setup. Clicking copies the link instead."
+                          : "The bookmark restores this exact setup. Clicking copies the link instead."}
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
+              <button type="button"
+                onClick={() => {
+                  if (confirm("Reset all settings to defaults? Favorites will be cleared.")) resetAll();
+                }}
+                className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                Reset to defaults
+              </button>
+            </div>
+          </Section>
+
+          {/* Bottom row, signed in only (Jacob 9/28): three quiet links. Delete
+              keeps both steps (a confirm, then typing DELETE); the "cannot be
+              undone" caveat lives in the first confirm. Linking a second
+              sign-in is a once-ever chore (2 of 33 accounts, both Jacob's), so
+              it opens in place under this row. */}
           {auth.signedIn && (
-            <div className="pt-2 text-center" style={{ borderTop: "1px solid var(--border)" }}>
+            <div className="pt-3 text-center text-[11px]" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
+              <button type="button"
+                onClick={() => signOut()}
+                className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Sign out
+              </button>
+              {(linkableProviders.length > 0 || canLinkEmail) && (
+                <>
+                  <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
+                  <button type="button"
+                    onClick={() => setShowLinkMore((v) => !v)}
+                    aria-expanded={showLinkMore}
+                    aria-controls={showLinkMore ? "hs-link-more" : undefined}
+                    className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Link another way to sign in
+                  </button>
+                </>
+              )}
+              <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
               <button type="button"
                 onClick={async () => {
-                  if (!confirm("Permanently delete your account? This erases your synced teams, layout, and settings from our servers and signs you out. This cannot be undone.")) return;
+                  if (!confirm("Permanently delete your account? This removes your synced teams, layout, and settings from our servers and signs you out. It cannot be undone.")) return;
                   // Second, deliberate step: typing the word is enough friction that an
                   // accidental or half-sure tap can't wipe an account, while still being
                   // a plain in-app flow (Apple 5.1.1(v) wants it easy to FIND, not frictionless).
@@ -1797,14 +1730,25 @@ export default function SettingsPanel({
                   if (ok) window.location.href = "/";
                   else alert("Couldn't delete your account. Please try again in a moment.");
                 }}
-                className="text-[11px] underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
+                className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
                 style={{ color: "var(--text-muted)" }}
               >
                 Delete account
               </button>
-              <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
-                Removes your synced data from our servers. This cannot be undone.
-              </p>
+              {showLinkMore && linkableProviders.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {linkableProviders.map((l) => (
+                    <button key={l.key} type="button"
+                      onClick={l.onClick}
+                      className="flex-1 min-w-[120px] py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                      style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+                    >
+                      Link {l.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {emailForm}
             </div>
           )}
 
@@ -1864,8 +1808,45 @@ export default function SettingsPanel({
             )}
           </div>
         </div>
+        {/* The Reset undo, pinned to the bottom of the drawer for 15 s. */}
+        {resetUndo && (
+          <div
+            role="status"
+            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-2 rounded-full text-sm shadow-lg"
+            style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)", background: "var(--text)", color: "var(--bg)" }}
+          >
+            <span>Settings reset</span>
+            <button type="button"
+              onClick={undoReset}
+              className="font-semibold underline underline-offset-2 cursor-pointer"
+            >
+              Undo
+            </button>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// The provider mark in the signed-in Account line.
+function ProviderMark({ provider }: { provider: string | null }) {
+  if (provider === "apple") return <span aria-hidden="true">🍎</span>;
+  if (provider === "email") return <span aria-hidden="true">✉️</span>;
+  if (provider === "google") {
+    return <GoogleG size={14} />;
+  }
+  return null;
+}
+
+function GoogleG({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+      <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
+      <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
+      <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+    </svg>
   );
 }
 
@@ -1975,24 +1956,27 @@ function RadioGroup<T extends string>({
   );
 }
 
-// The one league chip: TeamPicker's league filter and the records picker.
+// The one league chip: TeamPicker's league filter, the records summary and picker.
 function LeagueChip({
   label,
   on,
   onClick,
   ariaPressed,
+  ariaExpanded,
   title,
 }: {
   label: string;
   on: boolean;
   onClick: () => void;
   ariaPressed?: boolean;
+  ariaExpanded?: boolean;
   title?: string;
 }) {
   return (
     <button type="button"
       onClick={onClick}
       aria-pressed={ariaPressed}
+      aria-expanded={ariaExpanded}
       className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
       style={{
         background: on ? "var(--accent)" : "var(--bg-card)",
