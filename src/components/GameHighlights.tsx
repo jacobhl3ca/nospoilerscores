@@ -985,12 +985,12 @@ export default function GameHighlights({
               aria-label="Telemundo extended highlights"
               title="Telemundo extended highlights"
             >
-              {fetchingOnClick === "telemundoLong" ? <span className="text-[10px]">Loading...</span> : (
-                <>
-                  <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="min-w-0 overflow-hidden text-ellipsis text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
-                </>
-              )}
+              {/* No loading state: the extended cut plays directly from the
+                  prefetched ref (see the click handler above), so this button
+                  never enters a click-time fetch — fetchingOnClick is never set
+                  to "telemundoLong", so the old loading branch was dead code. */}
+              <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="min-w-0 overflow-hidden text-ellipsis text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
             </button>
           )}
         </div>
