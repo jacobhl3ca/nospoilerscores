@@ -1250,3 +1250,65 @@ test("plain fights and KOs stay visible, a fight that goes bad does not", () => 
 test("both toggles off = nothing is ever hidden", () => {
   assert.equal(sensitiveCategoryOf("Former NBA star dies at 58", enabledCategories(false, false)), null);
 });
+
+// ── describeHiddenPost — the modal's spoiler-safe generic line ─────────────
+// Jacob 9/25: the hidden-posts modal must lead with a description that names
+// the SOURCE, the MEDIA TYPE, and which CATEGORY of content tripped the
+// filter — never the actual headline/description words, so peeking stays an
+// opt-in, separate step.
+
+import { describeHiddenPost, hiddenMediaKind } from "../src/lib/sensitiveNews.ts";
+import type { NewsItem } from "../src/lib/news.ts";
+
+function fakeItem(over: Partial<NewsItem>): NewsItem {
+  return {
+    id: "1",
+    headline: "",
+    description: "",
+    published: "",
+    imageUrl: null,
+    articleUrl: "",
+    byline: "",
+    section: "",
+    ...over,
+  };
+}
+
+const HIDDEN_FIXTURES: [string, Partial<NewsItem>][] = [
+  ["Ex-coach detained by police, turned over for investigation", { section: "r/nba" }],
+  ["Star pitcher opens up about his overdose", { section: "ESPN" }],
+  ["Hall of Famer diagnosed with pancreatic cancer", { section: "MLB.com", youtubeVideoId: "abc123" }],
+  ["Two horses euthanized after breakdowns on the card", { section: "r/horseracing", imageUrl: "https://x/y.jpg" }],
+];
+
+for (const [headline, over] of HIDDEN_FIXTURES) {
+  test(`describeHiddenPost never leaks headline words: ${headline}`, () => {
+    const item = fakeItem({ ...over, headline });
+    const desc = describeHiddenPost(item);
+    // No word (3+ letters, so "the"/"his" noise doesn't matter) from the real
+    // headline may appear in the generic description.
+    const words = headline.toLowerCase().match(/[a-z]{4,}/g) ?? [];
+    for (const w of words) {
+      assert.ok(!desc.toLowerCase().includes(w), `"${desc}" leaked "${w}" from the real headline`);
+    }
+  });
+}
+
+test("describeHiddenPost names the source, media type, and reason category", () => {
+  const reddit = fakeItem({ headline: "Star pitcher opens up about his overdose", section: "r/baseball" });
+  assert.equal(describeHiddenPost(reddit), "Reddit text post · hidden because it mentions self-harm or addiction");
+
+  const espnVideo = fakeItem({
+    headline: "Hall of Famer diagnosed with pancreatic cancer",
+    section: "ESPN",
+    youtubeVideoId: "abc123",
+  });
+  assert.equal(describeHiddenPost(espnVideo), "ESPN video post · hidden because it mentions serious illness");
+});
+
+test("hiddenMediaKind classifies video, image, link, and text posts", () => {
+  assert.equal(hiddenMediaKind(fakeItem({ youtubeVideoId: "x" })), "video");
+  assert.equal(hiddenMediaKind(fakeItem({ imageFullUrl: "https://x/y.jpg" })), "image");
+  assert.equal(hiddenMediaKind(fakeItem({ imageUrl: "https://x/y.jpg", thumbOnly: true })), "link");
+  assert.equal(hiddenMediaKind(fakeItem({})), "text");
+});

@@ -41,6 +41,7 @@ import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
+import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
 import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
@@ -649,6 +650,15 @@ export default function HomeContent({
   useEffect(() => () => { if (reopenTimerRef.current) clearTimeout(reopenTimerRef.current); }, []);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
+  // detailGame is the snapshot from the tap; hand the modal the board's latest
+  // copy so its live clock ticks with the cards while it stays open.
+  const detailGameLive = useMemo(
+    () =>
+      detailGame
+        ? leagues.flatMap((l) => l.games).find((g) => g.id === detailGame.id && g.sport === detailGame.sport) ?? detailGame
+        : null,
+    [leagues, detailGame],
+  );
   // The same, for the EVENT tiles (races, UFC bouts, boxing, chess, poker).
   // Separate state because an event tile is not a Game; `fight` is set only
   // when one bout of a UFC card was tapped rather than the card as a whole.
@@ -1066,6 +1076,47 @@ export default function HomeContent({
     document.addEventListener("visibilitychange", onVis);
     return () => { alive = false; document.removeEventListener("visibilitychange", onVis); };
   }, [adoptStoredPrefs]);
+
+  // New build on RESUME. A resumed app/tab keeps the JS it first loaded, so a
+  // fix that shipped since then never reaches it until a cold relaunch (9/27:
+  // the RedZone header still opened nfl.com on a phone loaded before #203).
+  // On each resume, at most once per 10 min, compare /build.json with the id
+  // baked into this bundle and reload once if a newer build is live. Native
+  // too: Capacitor's server.url loads the live site. Never mid-task: an open
+  // modal or a focused text field defers it to the next resume.
+  useEffect(() => {
+    if (!RUNNING_BUILD_ID || RUNNING_BUILD_ID === "dev") return;
+    let alive = true;
+    const read = (k: string) => { try { return sessionStorage.getItem(k); } catch { return null; } };
+    const write = (k: string, v: string | null) => {
+      try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch { /* private mode */ }
+    };
+    const check = async () => {
+      if (document.visibilityState !== "visible" || pageIsBusy(document)) return;
+      const now = Date.now();
+      const last = read(LAST_CHECK_KEY);
+      if (!checkIsDue(now, last === null ? null : Number(last))) return;
+      write(LAST_CHECK_KEY, String(now));
+      try {
+        const res = await fetch(`/build.json?t=${now}`, { cache: "no-store" });
+        if (!res.ok || !alive) return;
+        const live = parseBuildId(await res.json());
+        if (!shouldReload(RUNNING_BUILD_ID, live, read(RELOADED_FOR_KEY)) || !live) return;
+        // The user may have opened something during the round trip.
+        if (document.visibilityState !== "visible" || pageIsBusy(document)) {
+          write(LAST_CHECK_KEY, null); // re-check on the next resume
+          return;
+        }
+        write(RELOADED_FOR_KEY, live);
+        window.location.reload();
+      } catch {
+        /* offline or a bad body; try again after the gap */
+      }
+    };
+    const onVis = () => { void check(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; document.removeEventListener("visibilitychange", onVis); };
+  }, []);
 
   // Track the OS color scheme in state so `resolvedTheme` re-derives live when
   // the system flips while theme === "system" (otherwise the data-theme attr
@@ -2385,24 +2436,18 @@ export default function HomeContent({
   // new key and remount, which re-runs their fetch effects). Cleaner than
   // wiring imperative refresh signals through every news component.
   const [newsRefreshKey, setNewsRefreshKey] = useState(0);
-  // Settings → "Hide upsetting news" has a per-session escape hatch: the
-  // "N hidden — Show" line under the feed flips this on, which un-hides the
-  // filtered posts until the app is reopened. Deliberately NOT persisted — the
-  // stored preference stays true, so the filter is back on next launch and the
-  // Settings toggle remains the one durable control.
-  const [showSensitiveNews, setShowSensitiveNews] = useState(false);
-  // The two toggles resolve to one category list the news surfaces filter on.
-  // Memoized so it is a stable dependency for their filter memos.
+  // Settings → "Hide upsetting news". The two toggles resolve to one category
+  // list every news surface filters on. Memoized so it's a stable dependency
+  // for their filter memos. The per-session "show what got hidden" escape
+  // hatch is now per-POST (peek + restore) and lives inside NewsColumn /
+  // NewsFeed themselves via SensitiveHiddenModal — see those files — rather
+  // than a single all-or-nothing override up here (Jacob 9/25: the old
+  // one-tap "Show" dropped everything into the feed with no way to tell what
+  // was added or where).
   const hiddenNewsCategories = useMemo(
-    () => (showSensitiveNews ? [] : enabledCategories(prefs.hideSensitiveNews, prefs.hideCrashNews)),
-    [showSensitiveNews, prefs.hideSensitiveNews, prefs.hideCrashNews],
+    () => enabledCategories(prefs.hideSensitiveNews, prefs.hideCrashNews),
+    [prefs.hideSensitiveNews, prefs.hideCrashNews],
   );
-  const showSensitive = useCallback(() => setShowSensitiveNews(true), []);
-  // Re-arm the escape hatch whenever the preference is turned back on in
-  // Settings, so a session override can't silently defeat a fresh opt-in.
-  useEffect(() => {
-    if (prefs.hideSensitiveNews || prefs.hideCrashNews) setShowSensitiveNews(false);
-  }, [prefs.hideSensitiveNews, prefs.hideCrashNews]);
   const [pullDelta, setPullDelta] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const pullStartYRef = useRef<number | null>(null);
@@ -2765,7 +2810,7 @@ export default function HomeContent({
           nothing to shove. The overlap is zero by construction, for any value
           of --header-h, however stale. Guarded by tests/visual/sticky-seam.spec.ts
           ("the first card's top edge survives a stale --header-h"). */}
-      <header ref={headerRef} className="px-4 fixed top-0 left-0 right-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
+      <header ref={headerRef} className="board-noselect px-4 fixed top-0 left-0 right-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
         // In the native iOS app the WKWebView reports env(safe-area-inset-top)
         // unreliably — sometimes ~0 (header collides with the status bar),
         // sometimes an inflated stale value from a rotation/resume transition
@@ -3184,7 +3229,7 @@ export default function HomeContent({
           the 1280px breakpoint doesn't widen the still-3-column board while
           the extra leagues load; the layout swaps once, when they arrive
           (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
-      <main id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none`}>
+      <main id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none${!showNews ? " board-noselect" : ""}`}>
         {/* First-run explanations for the Ratings and News tabs. These replaced
             blocking confirm dialogs on 2026-08-04 (see handleViewModeClick):
             the tab now applies instantly and the reason arrives here, in flow,
@@ -3748,7 +3793,6 @@ export default function HomeContent({
                 videosOnly={!!prefs.newsVideosOnly}
                 oldestFirst={!!prefs.newsOldestFirst}
                 hiddenCategories={hiddenNewsCategories}
-                onShowSensitive={showSensitive}
               />
             );
           }
@@ -3828,7 +3872,6 @@ export default function HomeContent({
                     showTextPosts={!!prefs.showTextPosts}
                     oldestFirst={!!prefs.newsOldestFirst}
                     hiddenCategories={hiddenNewsCategories}
-                    onShowSensitive={showSensitive}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -3856,7 +3899,6 @@ export default function HomeContent({
                       showTextPosts={!!prefs.showTextPosts}
                       oldestFirst={!!prefs.newsOldestFirst}
                       hiddenCategories={hiddenNewsCategories}
-                      onShowSensitive={showSensitive}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).
                       removable={renderedEntries.length > 1}
@@ -4899,8 +4941,17 @@ export default function HomeContent({
             style={{ color: "var(--text)" }}
             aria-label="Reopen what you just closed"
           >
-            {/* \uFE0E forces text presentation — bare U+21A9 renders as a boxed emoji arrow on macOS/iOS. */}
-            <span aria-hidden="true" style={{ color: "var(--accent)" }}>{"\u21A9\uFE0E"}</span>
+            {/* Glyph, not text: at the button’s own text-xs the Unicode
+                arrow’s internal padding makes it read as barely-there next to
+                the label (Jacob 9/17), so it gets its own explicit size — a
+                hair over the label’s cap-height — via an inline SVG rather
+                than a bigger Unicode character, matching the app’s other
+                24-viewBox icon buttons. The button/pill’s own size (padding,
+                min-h) is unchanged. */}
+            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <path d="M9 14L4 9l5-5" />
+              <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+            </svg>
             Reopen
           </button>
           <button
@@ -4948,7 +4999,7 @@ export default function HomeContent({
 
       {detailGame && (
         <GameDetailModal
-          game={detailGame}
+          game={detailGameLive ?? detailGame}
           showRatings={prefs.showRatings}
           onClose={() => setDetailGame(null)}
           leagueLabel={thirdLeagueOptions.find((o) => o.sport === detailGame.sport)?.label ?? detailGame.sport.toUpperCase()}
@@ -4956,6 +5007,8 @@ export default function HomeContent({
           onPlayEmbed={openEmbedModal}
           onShowGroup={(groupName) => { setGroupsHighlight(groupName); setDetailGame(null); setGroupsOpen(true); }}
           reminderLinkTemplate={prefs.reminderLinkTemplate}
+          recordLeagues={recordLeagues}
+          isPastDate={selectedDate < getDateString(0)}
         />
       )}
 

@@ -170,6 +170,26 @@ html.blur-news-media .news-media-preview > * {
   .news-media-preview > * { transition: none; }
 }
 
+/* Score board chrome (the fixed header/tabs/date-nav, and the whole scores
+   board — league headers, game cards) reads as app UI, not a web page: a
+   long-press there shouldn't select text or pop iOS's Copy/Translate/Speak
+   callout (Jacob 9/16, iPhone screenshot). Applied to <header> (always) and
+   <main> when the scores/rated board is showing (HomeContent.tsx) — never to
+   the news view, article/FAQ/static pages, or form fields, which stay
+   selectable via the override below. */
+.board-noselect {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.board-noselect input,
+.board-noselect textarea,
+.board-noselect [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
 :root {
   /* Tell the browser which theme its native UI (scrollbars, the text-input
      caret + selection highlight, form controls, autofill) should paint in.
@@ -318,7 +338,24 @@ body {
 }
 
 
+/* ⛔ overflow: hidden — a highlight-btn's label is `whitespace-nowrap` so it
+   never wraps, and every button here shares its row with a sibling via
+   `flex-1`. `min-w-0` on the button (present on every one) correctly shrinks
+   the BOX to its share of the row, but the browser still PAINTS a nowrap
+   label past that box's edge when the label is wider than the share it got —
+   invisible to a `button.getBoundingClientRect()` check (the box itself never
+   moves) and only visible as painted content overlapping the next button or
+   the card edge (Jacob's 9/16 screenshot: the NFL round-up's 3rd button
+   painting over the next column; GameHighlights' two-slot row painting past
+   itself with a long league badge, e.g. "SERIE A", where no baked duration
+   means the official button falls back to the badge instead of "17m").
+   `text-overflow: ellipsis` on the label span (see GameHighlights.tsx,
+   LeagueRecapCard.tsx) needs this on the ancestor to have anything to clip
+   against; tests/visual/highlight-row-overflow.spec.ts checks
+   `scrollWidth > clientWidth` on the button, which this line is what answers
+   `false`. */
 .highlight-btn {
+  overflow: hidden;
   transition: background 0.15s, color 0.15s;
 }
 .highlight-btn:hover {
@@ -635,6 +672,27 @@ iframe#yt-player {
 @media (prefers-reduced-motion: reduce) {
   /* Hold it steady — no scale/fade churn; JS still clears it at 550ms. */
   .hs-seek-flash { animation: none; opacity: 1; transform: translateY(-50%); }
+}
+
+/* News: "Restore to feed" from SensitiveHiddenModal — the row a restored post
+   lands in gets this so it's obvious WHAT was added and WHERE (Jacob 9/13:
+   "the Show just puts them into the feed and I don't know what was added and
+   where"). JS (NewsColumn/NewsFeed) adds the class via data-news-key, scrolls
+   the first restored row into view, then removes it after ~1.8s — this is
+   purely the visual, not the timing. */
+.news-restore-flash {
+  animation: newsRestoreFlash 1800ms ease-out;
+  border-radius: 0.5rem;
+}
+@keyframes newsRestoreFlash {
+  0% { box-shadow: 0 0 0 2px var(--accent); background-color: color-mix(in srgb, var(--accent) 18%, transparent); }
+  70% { box-shadow: 0 0 0 2px var(--accent); background-color: color-mix(in srgb, var(--accent) 18%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; background-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Hold the highlight steady instead of animating it; JS still clears the
+     class at the same ~1.8s. */
+  .news-restore-flash { animation: none; box-shadow: 0 0 0 2px var(--accent); background-color: color-mix(in srgb, var(--accent) 18%, transparent); }
 }
 
 @media (prefers-reduced-motion: reduce) {

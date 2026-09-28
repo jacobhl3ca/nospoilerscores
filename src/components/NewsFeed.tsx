@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
 import { getTimeZone } from "@/lib/etDay";
 import { handleExternalClick } from "@/lib/openExternal";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
+import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
 import {
   NewsSource,
   PlayHandler,
@@ -34,12 +35,11 @@ interface NewsFeedProps {
   oldestFirst?: boolean;
   videosOnly: boolean;
   // Settings → "Hide upsetting news". When on, items matching lib/sensitiveNews
-  // are dropped from the merged feed and counted in a footer line; tapping its
-  // Show link calls onShowSensitive, which lifts the filter for this session
-  // only (the preference itself is untouched).
-  // Categories switched on by the two Settings toggles; empty = filter off.
+  // are dropped from the merged feed and counted in a footer line; tapping it
+  // opens SensitiveHiddenModal (peek + restore, per-item, session-only — the
+  // preference itself is untouched). Categories switched on by the two
+  // Settings toggles; empty = filter off.
   hiddenCategories?: SensitiveCategory[];
-  onShowSensitive?: () => void;
 }
 
 // Merge every source's items into one de-duped, time-sorted list. Dedupe by the
@@ -102,25 +102,86 @@ function useAggregatedFeed(sources: NewsSource[]) {
   return items;
 }
 
-export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, oldestFirst, hiddenCategories, onShowSensitive }: NewsFeedProps) {
+export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, oldestFirst, hiddenCategories }: NewsFeedProps) {
   const items = useAggregatedFeed(sources);
+
+  // Session-only restore set + the modal it feeds — same idea as NewsColumn's
+  // (see that file's comment for why this lives per-surface instead of lifted
+  // to HomeContent). "Show" used to just dump every hidden post back into the
+  // feed with no way to tell what changed (Jacob 9/13); now it opens
+  // SensitiveHiddenModal, which lists the real hidden posts and restores them
+  // one at a time (or all), each flashed into view where it lands.
+  const [restoredKeys, setRestoredKeys] = useState<Set<string>>(new Set());
+  const [hiddenModalOpen, setHiddenModalOpen] = useState(false);
+  const keyOf = (item: NewsItem) => item.articleUrl || item.id;
 
   // Visible posts: the same passesNewsFilters rule the Cards view applies —
   // Videos only keeps only clip-bearing posts (and overrides Text posts, Jacob
   // 9/14); otherwise headline-only text posts hide unless Text posts is on.
-  // How many posts the sensitive filter removed, so the feed can say so rather
-  // than silently shrinking. Counted over the SAME post set the other filters
-  // leave behind, so the number matches what would appear if it were off.
-  const [visible, sensitiveHidden] = useMemo<[NewsItem[], number]>(
+  // hiddenItems is the actual list the sensitive filter removed (minus any the
+  // user already restored this session), so the modal can show real posts
+  // rather than just a count.
+  const [visible, hiddenItems] = useMemo<[NewsItem[], NewsItem[]]>(
     () => {
       const preFilter = (items ?? []).filter((it) => passesNewsFilters(it, videosOnly, showTextPosts));
-      const kept = hiddenCategories?.length ? preFilter.filter((it) => !isSensitiveNews(it, hiddenCategories)) : preFilter;
+      const isRestored = (it: NewsItem) => restoredKeys.has(keyOf(it));
+      const hidden = hiddenCategories?.length
+        ? preFilter.filter((it) => isSensitiveNews(it, hiddenCategories) && !isRestored(it))
+        : [];
+      const kept = hiddenCategories?.length
+        ? preFilter.filter((it) => !isSensitiveNews(it, hiddenCategories) || isRestored(it))
+        : preFilter;
       // ⇅ Oldest first: the Feed is already time-sorted newest-first, so a plain
       // reverse IS chronological order here. Reverse a copy — `items` is shared.
-      return [oldestFirst ? [...kept].reverse() : kept, preFilter.length - kept.length];
+      return [oldestFirst ? [...kept].reverse() : kept, hidden];
     },
-    [items, showTextPosts, videosOnly, oldestFirst, hiddenCategories]
+    [items, showTextPosts, videosOnly, oldestFirst, hiddenCategories, restoredKeys]
   );
+  const sensitiveHidden = hiddenItems.length;
+
+  // Flash + scroll the restored row(s) into view — imperative DOM lookup by
+  // data-news-key (set on FeedPost's <article>), same technique as NewsColumn.
+  // Double rAF lets React commit the item's move from hiddenItems into
+  // `visible` before we go looking for its element.
+  const flashRestored = useCallback((keys: string[]) => {
+    if (keys.length === 0) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const els = keys
+          .map((k) => document.querySelector<HTMLElement>(`[data-news-key="${CSS.escape(k)}"]`))
+          .filter((el): el is HTMLElement => !!el);
+        els.forEach((el) => {
+          el.classList.add("news-restore-flash");
+          window.setTimeout(() => el.classList.remove("news-restore-flash"), 1800);
+        });
+        els[0]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    });
+  }, []);
+  const handleRestoreOne = useCallback((item: NewsItem) => {
+    const k = keyOf(item);
+    setRestoredKeys((prev) => (prev.has(k) ? prev : new Set(prev).add(k)));
+    flashRestored([k]);
+  }, [flashRestored]);
+  const handleRestoreAll = useCallback(() => {
+    const keys = hiddenItems.map(keyOf);
+    if (keys.length === 0) return;
+    setRestoredKeys((prev) => {
+      const next = new Set(prev);
+      keys.forEach((k) => next.add(k));
+      return next;
+    });
+    flashRestored(keys);
+  }, [hiddenItems, flashRestored]);
+  const hiddenModal = hiddenModalOpen ? (
+    <SensitiveHiddenModal
+      items={hiddenItems}
+      enabledCategories={hiddenCategories ?? []}
+      onRestoreOne={handleRestoreOne}
+      onRestoreAll={handleRestoreAll}
+      onClose={() => setHiddenModalOpen(false)}
+    />
+  ) : null;
 
   // Prebuild the paging payloads once so tapping any post opens the lightbox
   // with the whole feed as its ‹ prev / next › list.
@@ -156,9 +217,10 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, o
         )}
         {sensitiveHidden > 0 && (
           <span className="block mt-2">
-            <SensitiveHiddenNote count={sensitiveHidden} onShow={onShowSensitive} />
+            <SensitiveHiddenNote count={sensitiveHidden} onShow={() => setHiddenModalOpen(true)} />
           </span>
         )}
+        {hiddenModal}
       </div>
     );
   }
@@ -176,9 +238,10 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, o
       ))}
       {sensitiveHidden > 0 && (
         <div className="pt-2 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-          <SensitiveHiddenNote count={sensitiveHidden} onShow={onShowSensitive} />
+          <SensitiveHiddenNote count={sensitiveHidden} onShow={() => setHiddenModalOpen(true)} />
         </div>
       )}
+      {hiddenModal}
     </div>
   );
 }
@@ -205,6 +268,7 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
     <article
       className="rounded-xl overflow-hidden"
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      data-news-key={item.articleUrl || item.id}
     >
       {/* Source + time */}
       <div className="flex items-center gap-2 px-4 pt-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
