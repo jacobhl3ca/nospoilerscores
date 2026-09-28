@@ -144,12 +144,15 @@ test("under an ESPN front page scores column 3, news column 3 is ESPN front page
   expect((await saved(page)).newsThirdLeague).toBeUndefined();
 });
 
-test("phone: an ESPN front page scores column 3 leads the merged feed with the headlines", async ({ page }) => {
+// Jacob 9/28: "it shouldn't be ordered first if it's the 3rd column". The
+// headlines stay in the merged feed, after the column 1-2 leagues.
+test("phone: an ESPN front page scores column 3 shows the headlines after the leagues", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seedPrefs(page, { thirdLeague: "top" });
   await page.goto("/");
-  const first = page.locator(".news-source-sticky-top").first();
-  await expect(first).toHaveText(/Top Headlines/i, LOAD);
+  const headers = page.locator(".news-source-sticky-top");
+  await expect(headers.filter({ hasText: /Top Headlines/i })).toHaveCount(1, LOAD);
+  await expect(headers.first()).not.toHaveText(/Top Headlines/i);
   await expect(page.getByText(HEADLINES[0])).toHaveCount(1);
 });
 

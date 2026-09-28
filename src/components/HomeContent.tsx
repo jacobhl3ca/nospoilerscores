@@ -1699,6 +1699,8 @@ export default function HomeContent({
     updatePrefs({
       newsThirdLeague: sport,
       newsTopNews: false,
+      // Drop an old "Top news" pull-left too, so Auto puts col 3 back third.
+      newsGenericSlot: undefined,
       newsGenericHidden: false,
       // Keep a one-column Focus view pointed at the replacement column.
       newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
@@ -3741,27 +3743,23 @@ export default function HomeContent({
           // What Auto gives col 3: the mirror, else the fallback above.
           const thirdAutoSport = thirdMirrorEntry?.sport ?? nextNewsEntry?.sport;
           const thirdAutoIsEspn = !thirdMirrorEntry && !topNewsOff;
-          // The league that stands in for a turned-off Top news stays last too.
-          const thirdColMirrors = thirdColEntry !== null && (thirdColEntry === thirdMirrorEntry || thirdColEntry === nextNewsEntry);
-          // Mobile (single stacked column): a Top news / ESPN front page col 3
-          // leads, then the two score leagues (Jacob 5/30 — "news, then mlb,
-          // then nba"). A league col 3 takes the desktop order below.
-          // Desktop keeps the 3-across order: the two leagues, then the
-          // News/3rd-league column.
-          // Desktop position of the generic column: last by default, but the
-          // user can pull it left by picking "Top news" from any
-          // column's switcher (newsGenericSlot). The league columns shift
-          // right around it — nothing is dropped.
-          // A mirrored col 3 stays last, in its scores position.
-          const genericPos = thirdColMirrors
-            ? firstTwoEntries.length
-            : Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length);
-          const thirdIsNewsFeed = thirdColEntry?.id === "espn" || thirdColEntry?.id === "top";
-          const visibleNewsEntries = isMobile && thirdIsNewsFeed
-            ? [...(thirdColEntry ? [thirdColEntry] : []), ...firstTwoEntries]
-            : thirdColEntry
-              ? [...firstTwoEntries.slice(0, genericPos), thirdColEntry, ...firstTwoEntries.slice(genericPos)]
-              : [...firstTwoEntries];
+          // Column 3's entry sits third, phone and desktop alike (Jacob 9/28:
+          // "it shouldn't be ordered first if it's the 3rd column"). That
+          // covers a league mirror, the ESPN front page mirror, the Auto
+          // fallback to Top news and the league standing in for a turned-off
+          // Top news. Before 9/28 phones led with a Top news / ESPN front
+          // page col 3 (Jacob 5/30 — "news, then mlb, then nba").
+          // The one exception: an explicit "Top news" pick from a column's
+          // switcher (newsGenericSlot) pulls it left, and the league columns
+          // shift right around it — nothing is dropped. A stale slot with no
+          // Top news pick behind it is ignored.
+          const topNewsPulledLeft = topNewsPicked && !topNewsOff && thirdColEntry === espnEntry;
+          const genericPos = topNewsPulledLeft
+            ? Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length)
+            : firstTwoEntries.length;
+          const visibleNewsEntries = thirdColEntry
+            ? [...firstTwoEntries.slice(0, genericPos), thirdColEntry, ...firstTwoEntries.slice(genericPos)]
+            : [...firstTwoEntries];
 
           // Apply Focus league (drops other entries) then per-entry filter by
           // the independently checked source types + hidden labels. Hidden
@@ -3892,10 +3890,14 @@ export default function HomeContent({
           // scores columns are arranged. Per-source granular reordering (via the
           // filter button) is backlogged. Unknown combos fall to the tail in
           // cascade order. Keep each column together in its natural order:
-          // News, then higher-priority league A, then league B. This replaces
-          // the old interleaving that put B Reddit before B video.
+          // higher-priority league A, league B, then the News column (News led
+          // until 9/28). This replaces the old interleaving that put B Reddit
+          // before B video.
+          // A Top news / ESPN front page entry in column 3 goes after the
+          // leagues (Jacob 9/28), so its ranks below shift past role C. Only
+          // an explicit Top news pick into column 1 or 2 keeps it in front.
           const MOBILE_SOURCE_RANK: Record<string, number> = {
-            // ESPN front page leads the phone feed: headlines, then clips.
+            // ESPN front page: headlines, then clips.
             "front:espn": 0,
             "front:topvideos": 0.5,
             "news:topvideos": 1,
@@ -3935,11 +3937,11 @@ export default function HomeContent({
                 : entry.id === "top"
                   ? "front"
                   : leagueIdx === 0 ? "A" : leagueIdx === 1 ? "B" : "C";
-              return orderedColumnSourcesFor(entry).map((cs, subIdx) => ({
-                cs,
-                rank: MOBILE_SOURCE_RANK[`${role}:${classifySource(cs)}`] ?? 900 + subIdx,
-                subIdx,
-              }));
+              const trails = (role === "news" || role === "front") && genericPos >= firstTwoEntries.length;
+              return orderedColumnSourcesFor(entry).map((cs, subIdx) => {
+                const rank = MOBILE_SOURCE_RANK[`${role}:${classifySource(cs)}`];
+                return { cs, rank: rank === undefined ? 900 + subIdx : trails ? rank + 100 : rank, subIdx };
+              });
             });
             ranked.sort((a, b) => a.rank - b.rank || a.subIdx - b.subIdx);
             return cascadeToSources(ranked.map((r) => r.cs));
