@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CHANNEL_FEED_IDS, CHANNEL_SEARCH_HANDLES, channelFeedId, channelSearchHandle, channelSearchMinSec, feedCoversGame, isWomensSport, parseChannelFeed,
+  CHANNEL_FEED_IDS, CHANNEL_SEARCH_HANDLES, channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed,
   pickChannelSearchCards, titleDateYmd, titleHasCompToken, NOT_FIRST_TEAM_RX,
 } from "../scripts/lib/channel-search.mjs";
 
@@ -154,4 +154,39 @@ test("every searchable channel has a feed id, and the ids are channel ids", () =
   for (const id of Object.values(CHANNEL_FEED_IDS)) assert.match(id, /^UC[A-Za-z0-9_-]{22}$/);
   assert.equal(new Set(Object.values(CHANNEL_FEED_IDS)).size, Object.keys(CHANNEL_FEED_IDS).length);
   assert.equal(channelFeedId("ESPN FC"), null);
+});
+
+test("NFL: the game cut wins over the preview and the ending clip, and embeds are not required", () => {
+  // The @NFL search page for "Jets Lions", 2026-09-27 ~11 pm ET, in page order.
+  const game = Date.parse("2026-09-27T17:00Z");
+  const now = game + 13 * 3600e3;
+  const cards = [
+    { videoId: "GSZ0Bax9eeA", title: "Jets VS Lions down to the wire ending!", durationSec: 976, publishedMs: now - 6 * 3600e3 },
+    { videoId: "qahjjvrG2kI", title: "New York Jets vs Detroit Lions Game Preview | 2026 Week 3", durationSec: 706, publishedMs: now - 1.5 * DAY },
+    { videoId: "xsJzYyK4mGE", title: "New York Jets vs. Detroit Lions Game Highlights | NFL 2026 Season Week 3", durationSec: 1064, publishedMs: now - 7 * 3600e3 },
+    { videoId: "wk2", title: "New York Jets vs. Detroit Lions Game Highlights | NFL 2026 Season Week 2", durationSec: 1000, publishedMs: now - 6 * 3600e3 },
+  ];
+  const tokens = channelSearchTitleTokens("NFL");
+  assert.deepEqual(tokens, ["game highlights"]);
+  const weekOk = (title) => !/week 2\b/i.test(title);
+  const picks = pickChannelSearchCards(cards, { titleHasTeams: teams("jets", "lions"), compOk: (t) => titleHasCompToken(t, tokens) && weekOk(t), gameMs: game });
+  assert.deepEqual(picks.map((c) => c.videoId), ["xsJzYyK4mGE"]);
+  assert.equal(channelSearchHandle("NFL"), "NFL");
+  assert.equal(channelSearchNeedsEmbed("NFL"), false);
+  assert.equal(channelSearchNeedsEmbed("Major League Soccer"), true);
+  assert.deepEqual(channelSearchTitleTokens("Major League Soccer"), []);
+});
+
+test("MAC: this game's dated cut, not the 2019 meeting", () => {
+  // The @GetSomeMACtion search page for "Buffalo Robert Morris", 2026-09-27.
+  const game = Date.parse("2026-09-26T19:30Z");
+  const now = game + DAY;
+  const cards = [
+    { videoId: "NnwzIwJdfBQ", title: "Condensed Game: Buffalo vs. Robert Morris | 9.26.26", durationSec: 489, publishedMs: now - DAY },
+    { videoId: "wPGqhAcWYjM", title: "Buffalo Highlights vs. Robert Morris | 9.26.26", durationSec: 296, publishedMs: now - DAY },
+    { videoId: "old", title: "Buffalo Highlights vs. Robert Morris | 9.28.19", durationSec: 300, publishedMs: now - 7 * 365 * DAY },
+  ];
+  const picks = pickChannelSearchCards(cards, { titleHasTeams: teams("buffalo", "robert morris"), gameMs: game });
+  assert.deepEqual(picks.map((c) => c.videoId), ["NnwzIwJdfBQ", "wPGqhAcWYjM"]);
+  assert.equal(channelSearchHandle("Get Some MACtion"), "GetSomeMACtion");
 });

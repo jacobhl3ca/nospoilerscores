@@ -67,7 +67,37 @@ export const CHANNEL_SEARCH_HANDLES = {
   // the two nights of a weekend series apart.
   "Atlantic Hockey America": "atlantichockeyamerica",
   "ECAC Hockey": "ECACHockeyLeague",
+  // NFL (added 2026-09-27). On Week 3 (9/27) the /api/youtube lookup found
+  // 1 of 5 probed games; the @NFL search page put the right "Game
+  // Highlights | NFL 2026 Season Week 3" cut first for all 5. The channel
+  // posts dozens of clips a day, so its feed reaches back only a few hours.
+  "NFL": "NFL",
+  // MAC (the ncaaf chain, added 2026-09-27). Its global-search rank lost
+  // Robert Morris at Buffalo (9/26) to the 2019 meeting; its own search page
+  // put the 9.26.26 cut first.
+  "Get Some MACtion": "GetSomeMACtion",
 };
+
+// A card title must carry one of these words on this channel's search page.
+// The @NFL page ranks the game's preview ("Game Preview | 2026 Week 3") and a
+// 16-minute "down to the wire ending" beside the game cut; only the cut says
+// "Game Highlights".
+const TITLE_TOKENS_BY_CHANNEL = {
+  "NFL": ["game highlights"],
+};
+
+export function channelSearchTitleTokens(channel) {
+  return TITLE_TOKENS_BY_CHANNEL[channel] ?? [];
+}
+
+// Channels whose uploads refuse every embed by design. Their cards open on the
+// "Watch on YouTube" hand-off (EMBED_BLOCKED_CHANNELS in src/lib/youtube.ts),
+// so the embed check would refuse every cut they post.
+const EMBED_BLOCKED_SEARCH_CHANNELS = new Set(["NFL"]);
+
+export function channelSearchNeedsEmbed(channel) {
+  return !EMBED_BLOCKED_SEARCH_CHANNELS.has(channel);
+}
 
 // Channel id (UC…) per channel, for its uploads feed
 // (youtube.com/feeds/videos.xml?channel_id=). Read off each @handle page
@@ -110,6 +140,8 @@ export const CHANNEL_FEED_IDS = {
   "Wrexham AFC": "UCS7BAYpqOSaYy-pZp6oO4PA",
   "Atlantic Hockey America": "UC0x7S4TIeXr86mei-ni-kYQ", // gitleaks:allow (public channel id; "Hockey" reads as "key")
   "ECAC Hockey": "UCjUTtbKNR2Gf2GziiKf74TQ", // gitleaks:allow
+  "NFL": "UCDVYQ4Zhbm3S2dlz7P1GBDg",
+  "Get Some MACtion": "UCpiOTTxIB7VvB4N4LIYMhVw",
 };
 
 export function channelFeedId(channel) {

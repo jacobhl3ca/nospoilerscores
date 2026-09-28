@@ -140,3 +140,20 @@ test("college chains are unchanged: no searchOnly flag", () => {
   const chain = buildCollegeFallbackChain(NCAAF, PRIMARY, { conferenceId: "8" }, { conferenceId: "5" }, ["FOX"]);
   assert.ok(chain.every((f) => !("searchOnly" in f)));
 });
+
+test("ncaaf: a MAC home game reaches the MAC channel, title-masked with its own empty token list", () => {
+  // Robert Morris (2523, NEC) at Buffalo (2084, MAC), ESPN+ only.
+  const chain = buildCollegeFallbackChain(NCAAF, PRIMARY, { id: "ncaaf-2084", conferenceId: "15" }, { id: "ncaaf-2523", conferenceId: "25" }, ["ESPN+"]);
+  assert.deepEqual(chain, [{ channel: "Get Some MACtion", titleTokens: [], ownTokens: true }]);
+  assert.ok(NCAAF.maskTitle?.includes("Get Some MACtion"));
+});
+
+test("ncaaf: a school channel is the last link, after conference and network", () => {
+  // Gardner-Webb (2241, Big South-OVC) at Marshall (276, Sun Belt), ESPN+ only.
+  const espnPlus = buildCollegeFallbackChain(NCAAF, PRIMARY, { id: "ncaaf-276", conferenceId: "37" }, { id: "ncaaf-2241", conferenceId: "179" }, ["ESPN+"]);
+  assert.deepEqual(espnPlus.map((f) => f.channel), ["Sun Belt Conference", "Marshall Thundering Herd"]);
+  assert.deepEqual(espnPlus[1].titleTokens, ["football"]);
+  // Away side too, and after the network.
+  const onCbs = buildCollegeFallbackChain(NCAAF, PRIMARY, { id: "ncaaf-2", conferenceId: "8" }, { id: "ncaaf-276", conferenceId: "37" }, ["CBS"]);
+  assert.deepEqual(onCbs.map((f) => f.channel), ["SEC", "Sun Belt Conference", "CBS Sports College Football", "Marshall Thundering Herd"]);
+});

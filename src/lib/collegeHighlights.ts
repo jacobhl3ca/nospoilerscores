@@ -89,6 +89,22 @@
 //     ("Birmingham 2 Boro 2"), so every club channel is in `maskTitle`.
 //   ligamx: LIGA BBVA MX, the league's own channel, behind TUDN USA. Its
 //     titles print the result too ("JUÁREZ 2-0 TIGRES J9 AP26").
+//
+// Two ncaaf gaps closed 2026-09-27 (Sep 26 slate, both ESPN+ games that ESPN
+// College Football skipped):
+//   MAC (conference 15): "Get Some MACtion" posts a per-game cut and a
+//     condensed game, dated in the title ("Buffalo Highlights vs. Robert
+//     Morris | 9.26.26"). No "football" in its titles, so it carries its own
+//     EMPTY token list; the worker's title-date gate keeps its basketball
+//     cuts ("MAC MBB: …") off a football date. Last season's titles printed
+//     the score ("Condensed Game: Ohio 31, Buffalo 26"), so it is in
+//     `maskTitle`.
+//   `teamChannels` (ESPN team id → the school's own channel) is the last
+//     link, after the networks, for a school whose conference channel skips
+//     its non-conference games. Marshall (Sun Belt posted nothing for
+//     Gardner-Webb at Marshall) titles every game "Marshall Football
+//     Highlights vs. Gardner-Webb | 2026 Week 4" — 3 of 3 this season, no
+//     score.
 // Both set `searchOnly`: their channels are found only by the bake's
 // channel-scoped search (scripts/lib/channel-search.mjs), which drops women's
 // and youth fixtures a club channel posts under the same two names. The card
@@ -107,6 +123,8 @@ export type CollegeHighlightConfig = {
   conferences: Record<string, string>;
   teamConferences?: Record<string, string>;
   networks: { names: string[]; channel: string }[];
+  // ESPN team id → the school's own channel, tried after the networks.
+  teamChannels?: Record<string, string>;
   channelTitleTokens?: Record<string, string[]>;
   // Bake-only chain: see the soccer note above.
   searchOnly?: boolean;
@@ -124,9 +142,13 @@ export type FallbackChannel = { channel: string; titleTokens: string[]; searchOn
 // ("ncaavb-158"); only the trailing ESPN id is used.
 export type ChainTeam = { id?: string | null; conferenceId?: string | null };
 
+function rawTeamId(team: ChainTeam | null | undefined): string | undefined {
+  return team?.id ? String(team.id).split("-").pop() : undefined;
+}
+
 function conferenceKey(config: CollegeHighlightConfig, team: ChainTeam | null | undefined): string | undefined {
   if (team?.conferenceId) return String(team.conferenceId);
-  const rawId = team?.id ? String(team.id).split("-").pop() : undefined;
+  const rawId = rawTeamId(team);
   return rawId ? config.teamConferences?.[rawId] : undefined;
 }
 
@@ -150,6 +172,10 @@ export function buildCollegeFallbackChain(
   add(awayConferenceId ? config.conferences[awayConferenceId] : undefined);
   for (const name of broadcasts ?? []) {
     add(config.networks.find((n) => n.names.includes(name))?.channel);
+  }
+  for (const team of [home, away]) {
+    const rawId = rawTeamId(team);
+    add(rawId ? config.teamChannels?.[rawId] : undefined);
   }
   // Clean-title channels before masked ones (stable, so home / away / network
   // order survives within each group) — see the ncaawh note above.
