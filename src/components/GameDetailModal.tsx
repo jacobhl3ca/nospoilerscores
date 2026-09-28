@@ -31,7 +31,9 @@ function gameLengthHours(sport: string): number {
 // and dependent only on its props, so it lives at module scope rather than
 // inside the component body (declaring a component during render remounts it
 // every render and resets any state). `record` is the card's italic going-in
-// W-L, passed only when the card itself would show it.
+// W-L, passed only when the card itself would show it. Like the card, it sits
+// right-aligned at the row's end, so both records form one column, and it
+// shares the name's baseline (Jacob 9/27: right after the name they zig-zagged).
 function TeamRow({ team, record }: { team: Game["homeTeam"]; record?: { text: string; title: string } | null }) {
   return (
     <div className="flex items-center gap-3 min-w-0">
@@ -39,12 +41,14 @@ function TeamRow({ team, record }: { team: Game["homeTeam"]; record?: { text: st
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={team.logo} alt="" width={32} height={32} loading="lazy" decoding="async" className="w-8 h-8 object-contain shrink-0" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
         : <span className="w-8 h-8 flex items-center justify-center rounded text-xs shrink-0" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>}
-      <span className="text-base font-semibold truncate" style={{ color: "var(--text)" }}>
-        {team.displayName || team.shortDisplayName || team.abbreviation}
-      </span>
-      {record ? (
-        <span className="text-xs italic tabular-nums whitespace-nowrap shrink-0" style={{ color: "var(--text-muted)" }} title={record.title}>{record.text}</span>
-      ) : null}
+      <div className="flex items-baseline gap-3 flex-1 min-w-0">
+        <span className="text-base font-semibold truncate" style={{ color: "var(--text)" }}>
+          {team.displayName || team.shortDisplayName || team.abbreviation}
+        </span>
+        {record ? (
+          <span className="ml-auto text-sm italic tabular-nums text-right whitespace-nowrap shrink-0 pr-0.5" style={{ color: "var(--text-muted)" }} title={record.title}>{record.text}</span>
+        ) : null}
+      </div>
     </div>
   );
 }
