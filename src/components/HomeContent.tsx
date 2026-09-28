@@ -42,6 +42,7 @@ import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
+import { formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
 import Link from "next/link";
 import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 
@@ -582,6 +583,10 @@ export default function HomeContent({
   const [leagues, setLeagues] = useState<LeagueData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Set while the board has no connection. savedAt = when the copy on screen
+  // was pulled (the "Offline · updated 6:10 PM" line), null = no copy for this
+  // day, so the error state says "offline" instead of "Failed to load".
+  const [offline, setOffline] = useState<{ savedAt: number | null } | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
 
   // Compute smart default date client-side only to avoid SSG hydration mismatch.
@@ -1089,6 +1094,10 @@ export default function HomeContent({
     };
     const check = async () => {
       if (document.visibilityState !== "visible" || pageIsBusy(document)) return;
+      // Offline: don't start the 10-min gap on a fetch that cannot land. The
+      // "online" listener checks as soon as the connection is back, so a tab
+      // that sat offline on an old build still picks up the new one.
+      if (navigator.onLine === false) return;
       const now = Date.now();
       const last = read(LAST_CHECK_KEY);
       if (!checkIsDue(now, last === null ? null : Number(last))) return;
@@ -1111,7 +1120,8 @@ export default function HomeContent({
     };
     const onVis = () => { void check(); };
     document.addEventListener("visibilitychange", onVis);
-    return () => { alive = false; document.removeEventListener("visibilitychange", onVis); };
+    window.addEventListener("online", onVis);
+    return () => { alive = false; document.removeEventListener("visibilitychange", onVis); window.removeEventListener("online", onVis); };
   }, []);
 
   // Track the OS color scheme in state so `resolvedTheme` re-derives live when
@@ -1398,6 +1408,32 @@ export default function HomeContent({
   // "Yesterday" nav. Each call claims the next id and only applies its result
   // if it's still the latest.
   const reqSeqRef = useRef(0);
+  // The first pull of this page load. Only it may jump the board to another
+  // saved day when offline (a cold open the morning after); a tap on a day
+  // with no copy must stay on that day.
+  const firstPullRef = useRef(true);
+  // Paint the device copy of `date` (lib/offlineBoard.ts). With `allowJump`
+  // and no copy for that day, move to the newest saved day instead; its own
+  // pull then paints it. False = nothing to show.
+  const showSavedBoard = useCallback((date: string, allowJump: boolean): boolean => {
+    let snap = null;
+    try { snap = loadBoardSnapshot(localStorage, date); } catch { /* storage blocked */ }
+    if (snap) {
+      setLeagues(snap.leagues);
+      setError(false);
+      setOffline({ savedAt: snap.savedAt });
+      return true;
+    }
+    if (allowJump) {
+      let latest = null;
+      try { latest = latestBoardSnapshot(localStorage); } catch { /* storage blocked */ }
+      if (latest && latest.date !== date) {
+        setSelectedDate(latest.date);
+        return true;
+      }
+    }
+    return false;
+  }, []);
   const fetchData = useCallback(async (
     date: string,
     thirdLeague?: Sport | "empty",
@@ -1427,7 +1463,20 @@ export default function HomeContent({
       }, 40_000);
       watchdogRef.current = myWatchdog;
     }
+    const firstPull = firstPullRef.current;
+    firstPullRef.current = false;
     try {
+      // No connection: the saved copy, not a round of ESPN calls that cannot
+      // land. No copy → the offline error state; the "online" listener below
+      // pulls again the moment the connection is back.
+      if (navigator.onLine === false) {
+        if (!showSavedBoard(date, firstPull)) {
+          setLeagues([]);
+          setError(true);
+          setOffline({ savedAt: null });
+        }
+        return;
+      }
       // Slot count reads the live viewport so the initial desktop load fetches
       // all 5 leagues in one pass (isWide state hasn't flipped yet on mount).
       let [data] = await Promise.all([
@@ -1450,16 +1499,23 @@ export default function HomeContent({
       // A newer fetch started while we awaited — discard this now-stale result
       // rather than paint the wrong day's board over the current one.
       if (myReq !== reqSeqRef.current) return;
+      // The connection dropped mid-pull (every column failed): keep showing
+      // the saved copy rather than a board of "unavailable" columns.
+      if (pullLooksOffline(navigator.onLine, data) && showSavedBoard(date, false)) return;
+      const demo = isDemoModeActive() || isNoHitAlertDemoActive();
       if (isDemoModeActive()) data = applyDemoMode(data);
       if (isNoHitAlertDemoActive()) data = applyNoHitAlertDemo(data);
       setLeagues(data);
+      setOffline(null);
       // Real data won — clear any error the watchdog may have raised so a
       // slow-but-successful load still shows the board instead of the retry UI.
       setError(false);
+      if (!demo) { try { saveBoardSnapshot(localStorage, date, data, Date.now()); } catch { /* storage blocked */ } }
     } catch {
       // Ignore a superseded request's failure so it can't flip the current,
       // successfully-loaded board into the retry state.
       if (myReq !== reqSeqRef.current) return;
+      if (navigator.onLine === false && showSavedBoard(date, false)) return;
       setLeagues([]);
       setError(true);
     } finally {
@@ -1470,7 +1526,7 @@ export default function HomeContent({
       if (myWatchdog && watchdogRef.current === myWatchdog) { clearTimeout(myWatchdog); watchdogRef.current = null; }
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [showSavedBoard]);
 
   // Two-effect split so slot/league pref changes don't flash the global
   // skeleton: the date-driven effect shows loading (initial mount + day swap
@@ -1543,7 +1599,8 @@ export default function HomeContent({
   useEffect(() => {
     if (!hasLiveGames || !selectedDate) return;
     const id = window.setInterval(() => {
-      if (document.hidden) return;
+      // Offline: the saved board's live games would re-poll into nothing.
+      if (document.hidden || navigator.onLine === false) return;
       fetchData(selectedDate, prefs.thirdLeague, {
         first: prefs.firstLeague,
         second: prefs.secondLeague,
@@ -1555,6 +1612,25 @@ export default function HomeContent({
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasLiveGames, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague]);
+
+  // Back online after showing the saved board: one silent pull, which clears
+  // the "Offline" line when it lands. Same request as a normal load.
+  const isOffline = offline !== null;
+  useEffect(() => {
+    if (!isOffline || !selectedDate) return;
+    const onOnline = () => {
+      fetchData(selectedDate, prefs.thirdLeague, {
+        first: prefs.firstLeague,
+        second: prefs.secondLeague,
+        third: prefs.thirdLeague,
+        fourth: prefs.fourthLeague,
+        fifth: prefs.fifthLeague,
+      }, true);
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOffline, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague]);
 
   const updatePrefs = useCallback((update: Partial<Preferences>) => {
     const next = { ...prefs, ...update };
@@ -3240,6 +3316,14 @@ export default function HomeContent({
           the extra leagues load; the layout swaps once, when they arrive
           (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
       <main id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none${!showNews ? " board-noselect" : ""}`}>
+        {/* No connection: the board below is the device copy (lib/offlineBoard.ts).
+            One quiet line says so and when it was pulled. It goes away when the
+            "online" pull lands. */}
+        {offline?.savedAt != null && (
+          <p role="status" data-testid="offline-line" className="text-center text-xs pt-2 -mb-1" style={{ color: "var(--text-muted)" }}>
+            Offline · updated {formatOfflineUpdated(offline.savedAt, Date.now())}
+          </p>
+        )}
         {/* First-run explanations for the Ratings and News tabs. These replaced
             blocking confirm dialogs on 2026-08-04 (see handleViewModeClick):
             the tab now applies instantly and the reason arrives here, in flow,
@@ -3969,7 +4053,7 @@ export default function HomeContent({
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <p style={{ color: "var(--text-muted)" }}>Failed to load games</p>
+            <p style={{ color: "var(--text-muted)" }}>{offline ? "Offline. The board loads when you reconnect." : "Failed to load games"}</p>
             <button
               type="button"
               // Retry with the user's configured columns (thirdLeague + slot
