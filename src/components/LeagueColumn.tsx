@@ -99,6 +99,10 @@ interface LeagueColumnProps {
   // Optional content rendered between the column header and the games (the
   // league-wide recap pill on past-date boards — see LeagueRecapCard).
   topCard?: ReactNode;
+  // The top card is only LeagueRecapCard's invisible spacer, holding the row a
+  // sibling's recap or Playoff pill uses. An ESPN front page column shows its
+  // first league label in that row (see leadLabelSlot below).
+  topCardIsSpacer?: boolean;
   // Reports this column's live useAbbreviations state up to HomeContent (null =
   // this column has no team names to measure). HomeContent folds the reports
   // into `namesCompact`, which comes back down so event columns (UFC) can size
@@ -981,6 +985,7 @@ export default function LeagueColumn({
   condense,
   footer,
   topCard,
+  topCardIsSpacer,
   onAbbrevReport,
   namesCompact,
 }: LeagueColumnProps) {
@@ -1541,6 +1546,22 @@ export default function LeagueColumn({
   // Every other column keeps its live / upcoming / final sections below.
   const espnGroups = league.sport === "top" ? groupEspnFrontPage(sortedGames, league.espnFeatured) : null;
   const sorted = espnGroups ? espnGroups.flatMap((g) => g.games) : sortedGames;
+  // The label over an ESPN front page league block: "NFL", or its short form
+  // on a narrow column.
+  const espnGroupLabel = (group: { games: Game[] }) => {
+    const label = cardLeagueLabel(group.games[0]);
+    return (narrowColumn && SHORT_LEAGUE_LABELS[label]) || label;
+  };
+  // The first block's label moves up out of the card stack, so the column's
+  // first card starts at the same y as its neighbours' (Jacob 9/27: "it should
+  // just be in that row ish so cards can start at the right spot"). It takes
+  // the recap / Playoff pill row when the board holds one, else the italic
+  // line under the header. Later labels (other leagues) stay inline.
+  const showHeader = section !== "finished" && !teamViewTeam;
+  const leadLabel = espnGroups?.length && showHeader && !isDemoModeActive()
+    ? espnGroupLabel(espnGroups[0])
+    : undefined;
+  const leadLabelSlot = !leadLabel ? null : topCardIsSpacer ? "top-row" : "subtitle";
 
   // Split into sections
   const liveGames = sorted.filter((g) => g.state === "in");
@@ -1557,7 +1578,6 @@ export default function LeagueColumn({
   ).size;
   const cardStars = !!showTeamStars && distinctMatchups > 1;
 
-  const showHeader = section !== "finished" && !teamViewTeam;
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
 
@@ -1587,18 +1607,18 @@ export default function LeagueColumn({
   // ESPN front page body: a block per league, each under a small league
   // label the way espn.com's strip labels its blocks. The label stands in for
   // the per-card league chip (off since 9/26), so demo mode drops it too.
+  const espnLabelRow = (text: string) => (
+    <div className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+      <span className="text-[11px] font-semibold uppercase tracking-wide">{text}</span>
+      <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+    </div>
+  );
   const renderEspnGroups = (games: Game[]) => (
     <div className="flex flex-col gap-2.5 sm:gap-3">
-      {groupEspnFrontPage(games, league.espnFeatured).map((group) => {
-        const label = cardLeagueLabel(group.games[0]);
+      {groupEspnFrontPage(games, league.espnFeatured).map((group, i) => {
         return (
           <div key={group.sport} className="flex flex-col gap-1.5 sm:gap-2" data-espn-league={group.sport}>
-            {!isDemoModeActive() && (
-              <div className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
-                <span className="text-[11px] font-semibold uppercase tracking-wide">{(narrowColumn && SHORT_LEAGUE_LABELS[label]) || label}</span>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-              </div>
-            )}
+            {!isDemoModeActive() && !(i === 0 && leadLabelSlot) && espnLabelRow(espnGroupLabel(group))}
             {group.games.map((game) => (
               <GameCard
                 key={game.id}
@@ -2096,11 +2116,18 @@ export default function LeagueColumn({
             // instead of riding ~16px higher.
             <span aria-hidden className="text-[9px] sm:text-[10px] mt-0.5 block whitespace-nowrap">{" "}</span>
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : undefined} fallbackText={lastPlayedLabel} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : undefined} fallbackText={lastPlayedLabel ?? (leadLabelSlot === "subtitle" ? leadLabel : undefined)} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
           )}
         </div>
       )}
-      {topCard}
+      {leadLabelSlot === "top-row" ? (
+        // A flex box, so the spacer's mb-2 stays inside it: the label's
+        // bottom-2 then sits on the spacer's bottom edge, 8px over the card.
+        <div className="relative flex flex-col" data-espn-lead-label>
+          {topCard}
+          <div className="absolute inset-x-0 bottom-2">{espnLabelRow(leadLabel!)}</div>
+        </div>
+      ) : topCard}
       {teamViewTeam && !league.golfTournament ? (
         section === "finished" ? null : (
           <TeamView

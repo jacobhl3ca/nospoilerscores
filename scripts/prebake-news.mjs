@@ -20,7 +20,7 @@ import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
 } from "./lib/fotmob.mjs";
-import { channelFeedId, channelSearchHandle, channelSearchMinSec, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
+import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 import { pickEspnGameClip } from "./lib/espn-clip.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
@@ -2714,6 +2714,7 @@ const hlFallbackChain = (sport, primaryChannel, homeTeam, awayTeam, broadcasts) 
   add(homeConf ? cfg.conferences[homeConf] : undefined);
   add(awayConf ? cfg.conferences[awayConf] : undefined);
   for (const name of broadcasts ?? []) add(cfg.networks.find((n) => n.names.includes(name))?.channel);
+  for (const t of [homeTeam, awayTeam]) add(t?.id ? cfg.teamChannels?.[String(t.id)] : undefined);
   // Clean-title channels before `maskTitle` ones, stable within each group —
   // mirrors buildCollegeFallbackChain (the AHA women's hockey case).
   const masked = new Set(cfg.maskTitle ?? []);
@@ -3407,15 +3408,18 @@ function hlSearchName(team) {
 // The first card that clears every gate an official id must clear, or null.
 // Feed cards carry no length, so theirs is read off the watch page — the same
 // cached read the upload-date gate makes.
-async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, compTokens, picks, minSec) {
+async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, compTokens, picks, minSec, week) {
+  const titleTokens = channelSearchTitleTokens(channel);
   for (const { videoId, durationSec } of picks) {
     const sec = Number.isFinite(durationSec) ? durationSec : await fetchYtDurationSec(videoId);
     if ((Number.isFinite(sec) && sec < minSec)
       || !(await hlVideoMatchesChannel(videoId, channel))
       || !(await hlVideoMatchesTeams(videoId, away, home))
       || !(await hlVideoMatchesComp(videoId, compTokens))
+      || !(await hlVideoMatchesComp(videoId, titleTokens))
+      || !(await hlVideoMatchesWeek(videoId, week))
       || !(await hlVideoMatchesDate(videoId, gameIso))
-      || (await fetchYtEmbeddable(videoId)) !== true) {
+      || (channelSearchNeedsEmbed(channel) && (await fetchYtEmbeddable(videoId)) !== true)) {
       console.warn(`${tag}-REJECT ${key} ${videoId} ${channel} (${away} vs ${home})`);
       continue;
     }
@@ -3427,13 +3431,19 @@ async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, com
 
 // The id this channel's uploads feed or own search page holds for this game,
 // gated, or null.
-async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTokens, exclude) {
+async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTokens, exclude, week) {
   const handle = channelSearchHandle(channel);
   if (!HL_CS_ON || (!handle && !channelFeedId(channel))) return null;
   const minSec = channelSearchMinSec(channel);
+  const titleTokens = channelSearchTitleTokens(channel);
+  // Gridiron: a card naming another week is a different meeting of the pair.
+  const weekOk = (title) => {
+    const titleWeek = week ? hlParseWeekFromTitle(title) : null;
+    return titleWeek === null || titleWeek === week;
+  };
   const pickOpts = {
     titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home),
-    compOk: (title) => titleHasCompToken(title, compTokens),
+    compOk: (title) => titleHasCompToken(title, compTokens) && titleHasCompToken(title, titleTokens) && weekOk(title),
     gameMs: Date.parse(gameIso),
     exclude,
     minSec,
@@ -3443,7 +3453,7 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
   // the watch-page length check to drop a goal clip.
   const feed = await hlChannelFeed(channel);
   const feedPicks = pickChannelSearchCards(feed?.cards ?? [], { ...pickOpts, limit: 3 });
-  const fromFeed = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-FEED", key, channel, away, home, gameIso, compTokens, feedPicks, minSec);
+  const fromFeed = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-FEED", key, channel, away, home, gameIso, compTokens, feedPicks, minSec, week);
   if (fromFeed) {
     hlCs.feedHits++;
     return fromFeed;
@@ -3470,7 +3480,7 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
     hlCs.lastAt = Date.now();
   }
   state.asked[askKey] = Date.now();
-  const id = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-SEARCH", key, channel, away, home, gameIso, compTokens, pickChannelSearchCards(cards, pickOpts), minSec);
+  const id = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-SEARCH", key, channel, away, home, gameIso, compTokens, pickChannelSearchCards(cards, pickOpts), minSec, week);
   if (id) hlCs.hits++;
   return id;
 }
@@ -3831,7 +3841,7 @@ async function bakeGameHighlights() {
             ...fallbacks.map((fb) => ({ channel: fb.channel, tokens: officialTokensFor(fb) })),
           ];
           for (const c of channels) {
-            const id = await hlChannelSearchOfficial(key, c.channel, away, home, item.date, c.tokens, [prevExtended]);
+            const id = await hlChannelSearchOfficial(key, c.channel, away, home, item.date, c.tokens, [prevExtended], week);
             if (!id) continue;
             official = id;
             officialChannel = c.channel;

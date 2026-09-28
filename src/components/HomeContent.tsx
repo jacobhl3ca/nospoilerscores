@@ -4054,6 +4054,11 @@ export default function HomeContent({
                 />
               )
               : undefined;
+            // The ESPN front page has no recap or pill of its own, so where the
+            // board reserves the row its top card is only the spacer, and its
+            // first league label takes that row (see LeagueColumn leadLabelSlot).
+            const recapRowIsSpacer = (league: LeagueData) =>
+              (isPast || isToday) && reserveRecapSlot && league.sport === "top";
             // Offseason home for the review pill (no MLB column to sit in).
             const reviewStrip = reviewStripShown ? (
               <div data-review-strip className="flex justify-center">
@@ -4438,6 +4443,7 @@ export default function HomeContent({
                       condense={singleColumn}
                       footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
                       topCard={recapTopCard(entry.league)}
+                      topCardIsSpacer={recapRowIsSpacer(entry.league)}
                     />
                   ))}
                   {addButton}
@@ -4469,6 +4475,7 @@ export default function HomeContent({
                     condense={singleColumn}
                     footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
                     topCard={recapTopCard(entry.league)}
+                    topCardIsSpacer={recapRowIsSpacer(entry.league)}
                   />
                 ))}
                 {addButton}

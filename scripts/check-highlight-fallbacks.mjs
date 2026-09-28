@@ -542,7 +542,7 @@ const CHAIN_CONFIG = JSON.parse(fs.readFileSync(new URL("../src/lib/collegeHighl
 function chainChannelsFor(sport) {
   const cfg = CHAIN_CONFIG[sport];
   if (!cfg) return new Set();
-  return new Set([...(cfg.always ?? []), ...Object.values(cfg.conferences ?? {}), ...(cfg.networks ?? []).map((n) => n.channel)]);
+  return new Set([...(cfg.always ?? []), ...Object.values(cfg.conferences ?? {}), ...(cfg.networks ?? []).map((n) => n.channel), ...Object.values(cfg.teamChannels ?? {})]);
 }
 
 function expectedBakedSlots(sport, bakedHighlight) {
