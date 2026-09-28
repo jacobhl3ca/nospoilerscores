@@ -94,7 +94,11 @@ export const RECAP_SERIES = {
       key: "bestsunday", enabled: true, source: "youtube", cadence: "weekly",
       heading: "Week {n}", label: "Sunday's best plays",
       channelId: "UCDVYQ4Zhbm3S2dlz7P1GBDg", channelName: "NFL", handle: "NFL",
-      titleRx: /^Best Plays From Sunday!?\s*\|/i,
+      // The "|" is not reliable: Week 3 (9/27) posted as "Best Plays From
+      // Sunday! 2026 NFL Season Week 3" and the pipe-only rule kept Week 2 on
+      // the boards. Either the pipe or the season token must follow, which
+      // still keeps out "Best Plays From Sunday Night …" cuts.
+      titleRx: /^Best Plays From Sunday!?\s*(?:\||\d{4} NFL Season\b)/i,
       weekRx: NFL_WEEK_RX, seasonRx: NFL_SEASON_RX, seasonRequired: true,
       searchQuery: "Best Plays From Sunday",
       // --recap-backfill asks for one week at a time. The other series append
