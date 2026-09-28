@@ -650,6 +650,15 @@ export default function HomeContent({
   useEffect(() => () => { if (reopenTimerRef.current) clearTimeout(reopenTimerRef.current); }, []);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
+  // detailGame is the snapshot from the tap; hand the modal the board's latest
+  // copy so its live clock ticks with the cards while it stays open.
+  const detailGameLive = useMemo(
+    () =>
+      detailGame
+        ? leagues.flatMap((l) => l.games).find((g) => g.id === detailGame.id && g.sport === detailGame.sport) ?? detailGame
+        : null,
+    [leagues, detailGame],
+  );
   // The same, for the EVENT tiles (races, UFC bouts, boxing, chess, poker).
   // Separate state because an event tile is not a Game; `fight` is set only
   // when one bout of a UFC card was tapped rather than the card as a whole.
@@ -4974,7 +4983,7 @@ export default function HomeContent({
 
       {detailGame && (
         <GameDetailModal
-          game={detailGame}
+          game={detailGameLive ?? detailGame}
           showRatings={prefs.showRatings}
           onClose={() => setDetailGame(null)}
           leagueLabel={thirdLeagueOptions.find((o) => o.sport === detailGame.sport)?.label ?? detailGame.sport.toUpperCase()}

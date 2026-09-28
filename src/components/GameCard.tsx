@@ -8,7 +8,7 @@ import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName, s
 import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
-import { handleExternalClick, watchLinkProps } from "@/lib/openExternal";
+import { handleExternalClick, liveWatchProps, watchLinkProps } from "@/lib/openExternal";
 import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
@@ -48,7 +48,8 @@ interface GameCardProps {
   // When set, clicking a team name opens that team's schedule view in the column.
   onSelectTeam?: (team: Team) => void;
   // Clicking the card body opens a spoiler-safe details popup. (Live games still
-  // jump straight to the stream from the green status / network chip.)
+  // jump straight to the stream from the green status / network chip — the
+  // user's own TV channel link when the network is on the Settings list.)
   onShowDetails?: (game: Game) => void;
   // Favorite-star next to each team name (restored 6/11, off by default so the
   // team-schedule view keeps its own header star as the only one there). The
@@ -438,7 +439,9 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
   const recordLeague = recordLeagueFor(game.sport, sportGroup(game.sport) === "soccer");
   const recordKey = recordLeague && upcomingRecordLeagues?.has(recordLeague) ? recordLeague : null;
   const isLive = game.state === "in";
-  const liveUrl = game.streamUrl;
+  // Where the green live clock goes: the TV channel link for the first listed
+  // broadcaster, else the network's web stream (lib/openExternal.ts).
+  const liveLink = isLive ? liveWatchProps(game) : null;
   // Team-view treats finished games like past-date cards (hide records, show highlights).
   const effectivePastDate = isPastDate || (teamView && isFinished);
   // What the status bar (game-meta-row) shows besides a league chip. In
@@ -898,8 +901,8 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                     // line this emoji stands alone with no adjacent label text.
                     <span className="ml-1" role="img" aria-label={`${cardWeather.nowLabel} at the venue`} title={`${cardWeather.nowLabel} at the venue`}>{cardWeather.nowIcon}</span>
                   ) : null;
-                  return liveUrl ? (
-                    <><a href={liveUrl} target="_blank" rel="noopener noreferrer" aria-label={gameProgress.label || undefined} className={colorCls} onClick={handleExternalClick(liveUrl)} onAnimationStart={alignLiveClockSweep}>{progressText}</a>{wx}</>
+                  return liveLink ? (
+                    <><a {...liveLink} aria-label={gameProgress.label || undefined} className={colorCls} onAnimationStart={alignLiveClockSweep}>{progressText}</a>{wx}</>
                   ) : (
                     // No live-stream link, so this is a bare <span> — implicit
                     // role "generic", on which aria-label is prohibited and

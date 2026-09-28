@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Game } from "@/lib/types";
-import { openExternal, watchLinkProps } from "@/lib/openExternal";
-import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
+import { handleExternalClick, liveWatchUrl, openLiveWatch, watchLinkProps } from "@/lib/openExternal";
+import { espnGameUrl, networkStreamUrl, sportStreamFallback } from "@/lib/espn";
+import { formatGameProgress } from "@/lib/liveProgress";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { getDateString } from "@/components/DateNav";
@@ -205,7 +206,9 @@ export default function GameDetailModal({
   // different ways card↔modal — the mismatch the rating block already warns to
   // "keep in sync". The rating returns once play resumes.
   const isDelayed = isLive && /delay/i.test(game.statusDetail);
-  const liveUrl = game.streamUrl;
+  // Watch live follows the Settings TV channel list like the network chips:
+  // the user's own stream for the first listed broadcaster, else the web stream.
+  const liveWatch = isLive ? liveWatchUrl(game) : null;
   // Whether this game is on today's (ET) slate — drives the highlight-ready
   // buffer in GameHighlights (today's finals wait for the recap upload window;
   // past games show immediately).
@@ -216,9 +219,9 @@ export default function GameDetailModal({
   // disagree with the card on isToday (GameHighlights must "just match" the card).
   const isToday = etSlateYmd(game.date) === getDateString(0);
 
-  // Start time / status WITHOUT score. For live we say "In progress" rather
-  // than the period/clock (the clock alone is fine, but keep it minimal +
-  // spoiler-free — no score ever leaks here).
+  // Start time / status WITHOUT score. For live we add the same period/clock
+  // the card shows ("In progress · Q2 - 5:32") — statusDetail/clock/period
+  // carry no score, so this stays spoiler-free.
   const timeLabel = (() => {
     try {
       const d = new Date(game.date);
@@ -237,6 +240,7 @@ export default function GameDetailModal({
   })();
 
   const statusLabel = isFinal ? "Final" : isLive ? "In progress" : "Upcoming";
+  const progress = isLive ? formatGameProgress(game) : null;
 
   // "Add to calendar" / "Remind me" — pre-game only, and null when there is no
   // honest event to make (TBD team, bad date, tennis day-only fallback).
@@ -250,6 +254,17 @@ export default function GameDetailModal({
   const awayName = game.awayTeam.displayName || game.awayTeam.shortDisplayName || game.awayTeam.abbreviation;
   const homeName = game.homeTeam.displayName || game.homeTeam.shortDisplayName || game.homeTeam.abbreviation;
   const dialogLabel = awayName && homeName ? `${awayName} at ${homeName} — game details` : "Game details";
+
+  // "More:" row — ESPN's game page (none for esports: espnGameUrl falls back to
+  // a PandaScore vendor page) and a Google search, whose live card links on to
+  // the league/network sites we hold no per-game ids for.
+  const moreLinks: { label: string; href: string }[] = [
+    ...(game.sport === "esports" ? [] : [{ label: "ESPN", href: espnGameUrl(game) }]),
+    {
+      label: "Google",
+      href: `https://www.google.com/search?q=${encodeURIComponent([awayName, "vs", homeName, leagueLabel].filter(Boolean).join(" "))}`,
+    },
+  ];
 
   // Thresholds MUST match the score-card badge (GameCard/GolfLeaderboard
   // RatingBadge: 85/70/50) — this modal renders the identical label+color for
@@ -322,6 +337,20 @@ export default function GameDetailModal({
         {/* Status + time */}
         <div className="text-sm mb-1" style={{ color: "var(--text)" }}>
           <span className="font-medium">{statusLabel}</span>
+          {progress?.full ? (
+            <>
+              {" · "}
+              {/* Card's own colours: green while live, yellow in a delay. MLB's
+                  "▲5" reads as its spoken label, same as the card. */}
+              <span
+                className={progress.delayed ? "text-yellow-500 font-medium" : "text-green-500 font-medium"}
+                role={progress.label ? "img" : undefined}
+                aria-label={progress.label || undefined}
+              >
+                {progress.full}
+              </span>
+            </>
+          ) : null}
           {/* Wrap the start time in a semantic <time> so the machine-readable
               ISO (game.date) is exposed to assistive tech / crawlers while the
               visible, zone-formatted text stays unchanged. Mirrors VideoModal's
@@ -459,6 +488,33 @@ export default function GameDetailModal({
           </div>
         ) : null}
 
+        {/* More game info — pre-game and live only (a final's pages show the
+            score, and the card drops its ESPN link on finals too). Its own line
+            so a 3-network Watch: line never wraps into it. A tap is an explicit
+            choice, like the highlight buttons, so the title warns it can spoil. */}
+        {!isFinal ? (
+          <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+            <span className="uppercase tracking-wide">More: </span>
+            {moreLinks.flatMap((l, i) => {
+              const a = (
+                <a
+                  key={l.label}
+                  href={l.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Shows the score"
+                  onClick={handleExternalClick(l.href)}
+                  className="underline underline-offset-2 hover:opacity-80 transition-opacity"
+                  style={{ color: "var(--accent)" }}
+                >
+                  {l.label}
+                </a>
+              );
+              return i === 0 ? [a] : [" · ", a];
+            })}
+          </div>
+        ) : null}
+
         {/* Add to calendar / Remind me — upcoming games only. Sits where
             "Watch live" sits for a live game; the two never show together. */}
         {!isFinal && !isLive ? (
@@ -486,15 +542,18 @@ export default function GameDetailModal({
           </div>
         ) : null}
 
-        {/* Watch-live button for in-progress games with a stream link. */}
-        {isLive && liveUrl ? (
+        {/* Watch-live button for in-progress games with a TV channel link or
+            a web stream. */}
+        {liveWatch ? (
           <button
             type="button"
-            onClick={() => { openExternal(liveUrl); onClose(); }}
+            onClick={() => { openLiveWatch(game); onClose(); }}
             className="mt-4 w-full py-2 rounded-lg text-sm font-medium cursor-pointer"
             style={{ background: "var(--accent)", color: "white" }}
+            title={liveWatch.scheme ? `Watch ${liveWatch.network} on your TV` : undefined}
           >
             Watch live
+            {liveWatch.scheme ? <span className="block text-[11px] font-normal opacity-80">on your TV ({liveWatch.network})</span> : null}
           </button>
         ) : null}
 
