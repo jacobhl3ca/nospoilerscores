@@ -4991,6 +4991,8 @@ export default function HomeContent({
           onPlayEmbed={openEmbedModal}
           onShowGroup={(groupName) => { setGroupsHighlight(groupName); setDetailGame(null); setGroupsOpen(true); }}
           reminderLinkTemplate={prefs.reminderLinkTemplate}
+          recordLeagues={recordLeagues}
+          isPastDate={selectedDate < getDateString(0)}
         />
       )}
 
