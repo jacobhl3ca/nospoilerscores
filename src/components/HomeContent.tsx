@@ -43,6 +43,7 @@ import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard"
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
 import Link from "next/link";
+import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -1594,6 +1595,20 @@ export default function HomeContent({
     updatePrefs({ showNews: true, skipNewsExplainer: true });
     if (!prefs.skipNewsExplainer) setNewsNotice(true);
   };
+
+  // The native iOS tab bar (see lib/nativeTabBar.ts): a tap there runs the
+  // same handler as the web tabs, and the selected tab follows viewMode.
+  const handleViewModeClickRef = useRef(handleViewModeClick);
+  handleViewModeClickRef.current = handleViewModeClick;
+  const nativeTabBarRef = useRef<NativeTabBar | null>(null);
+  useEffect(() => {
+    const bar = connectNativeTabBar((v) => {
+      if (v === "scores-plain" || v === "scores-rated" || v === "news") handleViewModeClickRef.current(v);
+    });
+    nativeTabBarRef.current = bar;
+    return () => { bar?.disconnect(); nativeTabBarRef.current = null; };
+  }, []);
+  useEffect(() => { nativeTabBarRef.current?.setView(viewMode); }, [viewMode]);
 
   // A pick in news column 3's own switcher. A league overrides the column;
   // undefined (Auto) hands it back to scores column 3. `autoId` is the column
@@ -5101,7 +5116,9 @@ export default function HomeContent({
         </svg>
       </button>
 
-      <div className="sm:hidden">
+      {/* web-tab-bar: stands down when the iOS shell draws its native bar
+          (html[data-native-tabbar], see lib/nativeTabBar.ts). */}
+      <div className="sm:hidden web-tab-bar">
         <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} />
       </div>
     </div>

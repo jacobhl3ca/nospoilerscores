@@ -61,7 +61,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Called when the app was launched with an activity, including Universal Links.
         // Feel free to add additional processing here, but if you want the App API to support
         // tracking app url opens, make sure to keep this call
-        return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
+        let handled = ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
+
+        // The proxy only tells the App plugin; nothing loaded the link, so a shared
+        // clip (hidescore.com/?hs=…&c=…) opened the app on the home page (Jacob 9/27,
+        // 026D1E81). Load the link itself in the web view. Cold start lands here too:
+        // open(_:) holds the URL until the web view exists.
+        guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+              var link = userActivity.webpageURL.flatMap({ URLComponents(url: $0, resolvingAgainstBaseURL: false) }),
+              let host = link.host?.lowercased(),
+              host == "hidescore.com" || host == "www.hidescore.com",
+              let main = window?.rootViewController as? MainViewController else {
+            return handled
+        }
+        // Capacitor hands any host other than server.url's to Safari, so a www
+        // link would leave the app; the bare domain is the one the app loads.
+        link.host = "hidescore.com"
+        if let url = link.url { main.open(url) }
+        return true
     }
 
 }
