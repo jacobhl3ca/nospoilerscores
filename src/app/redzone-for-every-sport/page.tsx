@@ -14,7 +14,14 @@
 import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
-const TITLE = "Is there a RedZone for every sport? All 9 whip-around shows (2026) | HideScore";
+// Trimmed to 59 chars so Google shows it whole, including the "| HideScore"
+// brand — the prior 78-char copy was cut ~60 chars in, dropping "(2026) |
+// HideScore" from the SERP (same ~60-char title window that SITE_TITLE in
+// layout.tsx was trimmed to). The lead question is kept verbatim so it still
+// matches the "is there a redzone for <sport>" query family and the on-page H1;
+// only the "(2026)" year and "whip-around" wording were dropped. TITLE feeds
+// the title, OG/Twitter titles and their image alt, so one edit keeps them synced.
+const TITLE = "Is there a RedZone for every sport? All 9 shows | HideScore";
 // Trimmed to 151 chars so Google shows it whole — the prior 227-char copy was
 // truncated (~155-char SERP limit). DESC feeds only meta/OG/Twitter/JSON-LD
 // description, never visible page text, so the on-page inventory is unchanged.
