@@ -1,0 +1,179 @@
+{
+  "_about": "Raw theScore CFL box_score.progress values from live games, logged every 60 s by the mini's cfl-live-capture job on Fri 2026-09-25 (TOR @ WPG, SSK @ BC) and Sat 2026-09-26 (CGY @ OTT, HAM @ EDM). 421 logged changes; every running clock was '<m:ss> <Nth>' and every break was 'End <Nth>'. No 'Halftime', overtime or delay string appeared. `hidescore` is what /api/cfl served for the same game in the same minute (null when the two were not read at the same game clock).",
+  "captures": [
+    {
+      "why": "kickoff: clock starts at 15:00",
+      "ts": "2026-09-26T00:09:13.967800+00:00",
+      "game": "TOR @ WPG",
+      "event_status": "in_progress",
+      "progress": {
+        "clock_label": "15:00 1st",
+        "string": "15:00 1st",
+        "status": "in_progress",
+        "event_status": "in_progress",
+        "segment": 1,
+        "segment_string": "1st",
+        "segment_description": "1st Quarter",
+        "clock": "15:00",
+        "overtime": false
+      },
+      "hidescore": {
+        "detail": "15:00 - 1st",
+        "shortDetail": "15:00 - 1st",
+        "displayClock": "15:00",
+        "period": 1,
+        "state": "in"
+      }
+    },
+    {
+      "why": "running clock",
+      "ts": "2026-09-26T03:16:09.536602+00:00",
+      "game": "SSK @ BC",
+      "event_status": "in_progress",
+      "progress": {
+        "clock_label": "8:30 2nd",
+        "string": "8:30 2nd",
+        "status": "in_progress",
+        "event_status": "in_progress",
+        "segment": 2,
+        "segment_string": "2nd",
+        "segment_description": "2nd Quarter",
+        "clock": "8:30",
+        "overtime": false
+      },
+      "hidescore": null
+    },
+    {
+      "why": "under a minute keeps m:ss",
+      "ts": "2026-09-26T03:37:23.566911+00:00",
+      "game": "SSK @ BC",
+      "event_status": "in_progress",
+      "progress": {
+        "clock_label": "0:50 2nd",
+        "string": "0:50 2nd",
+        "status": "in_progress",
+        "event_status": "in_progress",
+        "segment": 2,
+        "segment_string": "2nd",
+        "segment_description": "2nd Quarter",
+        "clock": "0:50",
+        "overtime": false
+      },
+      "hidescore": null
+    },
+    {
+      "why": "end of a quarter: \"End 1st\", clock 0:00",
+      "ts": "2026-09-26T00:39:31.917894+00:00",
+      "game": "TOR @ WPG",
+      "event_status": "in_progress",
+      "progress": {
+        "clock_label": "End 1st",
+        "string": "End 1st",
+        "status": "in_progress",
+        "event_status": "in_progress",
+        "segment": 1,
+        "segment_string": "1st",
+        "segment_description": "1st Quarter",
+        "clock": "0:00",
+        "overtime": false
+      },
+      "hidescore": {
+        "detail": "End of 1st",
+        "shortDetail": "End of 1st",
+        "displayClock": "0:00",
+        "period": 1,
+        "state": "in"
+      }
+    },
+    {
+      "why": "halftime: theScore sends \"End 2nd\", never \"Halftime\"",
+      "ts": "2026-09-26T20:26:05.845979+00:00",
+      "game": "CGY @ OTT",
+      "event_status": "in_progress",
+      "progress": {
+        "clock_label": "End 2nd",
+        "string": "End 2nd",
+        "status": "in_progress",
+        "event_status": "in_progress",
+        "segment": 2,
+        "segment_string": "2nd",
+        "segment_description": "2nd Quarter",
+        "clock": "0:00",
+        "overtime": false
+      },
+      "hidescore": {
+        "detail": "End of 2nd",
+        "shortDetail": "End of 2nd",
+        "displayClock": "0:00",
+        "period": 2,
+        "state": "in"
+      }
+    },
+    {
+      "why": "end of the 3rd",
+      "ts": "2026-09-27T01:10:54.257524+00:00",
+      "game": "HAM @ EDM",
+      "event_status": "in_progress",
+      "progress": {
+        "clock_label": "End 3rd",
+        "string": "End 3rd",
+        "status": "in_progress",
+        "event_status": "in_progress",
+        "segment": 3,
+        "segment_string": "3rd",
+        "segment_description": "3rd Quarter",
+        "clock": "0:00",
+        "overtime": false
+      },
+      "hidescore": {
+        "detail": "End of 3rd",
+        "shortDetail": "End of 3rd",
+        "displayClock": "0:00",
+        "period": 3,
+        "state": "in"
+      }
+    },
+    {
+      "why": "second-half restart",
+      "ts": "2026-09-26T04:00:36.885557+00:00",
+      "game": "SSK @ BC",
+      "event_status": "in_progress",
+      "progress": {
+        "clock_label": "14:39 3rd",
+        "string": "14:39 3rd",
+        "status": "in_progress",
+        "event_status": "in_progress",
+        "segment": 3,
+        "segment_string": "3rd",
+        "segment_description": "3rd Quarter",
+        "clock": "14:39",
+        "overtime": false
+      },
+      "hidescore": null
+    },
+    {
+      "why": "end of regulation, still in_progress before the final",
+      "ts": "2026-09-26T02:57:58.104547+00:00",
+      "game": "TOR @ WPG",
+      "event_status": "in_progress",
+      "progress": {
+        "clock_label": "End 4th",
+        "string": "End 4th",
+        "status": "in_progress",
+        "event_status": "in_progress",
+        "segment": 4,
+        "segment_string": "4th",
+        "segment_description": "4th Quarter",
+        "clock": "0:00",
+        "overtime": false
+      },
+      "hidescore": {
+        "detail": "End of 4th",
+        "shortDetail": "End of 4th",
+        "displayClock": "0:00",
+        "period": 4,
+        "state": "in"
+      }
+    }
+  ]
+}
