@@ -643,6 +643,13 @@ const defaults: Preferences = {
   newsTypeFilter: "reddit",
 };
 
+// Every league the board and the switchers skip: the switcher's own off list
+// plus the leagues struck off the Settings catalog. Same shape as hiddenLeagues.
+export function boardHiddenLeagues(p: { hiddenLeagues?: Sport[]; catalogHiddenLeagues?: Sport[] }): Sport[] | undefined {
+  if (!p.catalogHiddenLeagues?.length) return p.hiddenLeagues;
+  return [...new Set([...(p.hiddenLeagues ?? []), ...p.catalogHiddenLeagues])];
+}
+
 // A fresh copy of the install defaults. The signed-in merge starts from these,
 // not from this device's blob — see mergeRemotePreferences in HomeContent.
 export function defaultPreferences(): Preferences {
