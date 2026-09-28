@@ -2,6 +2,13 @@
 // Goals: faster repeat visits (precache shell), graceful offline fallback,
 // never cache /api/youtube responses long-term (results stale fast).
 //
+// Offline (9/27, shot 7DC87928): the app must open to its header, tabs and the
+// last board, not a blank page. The board data itself is the device copy in
+// localStorage (src/lib/offlineBoard.ts); this worker only has to deliver the
+// shell: the "/" HTML plus the exact JS/CSS/font files it names. Every cache
+// read here is still an OFFLINE FALLBACK — nothing below serves cached HTML or
+// JS while the network answers, so a deploy is never masked by this worker.
+//
 // You do NOT need to bump CACHE_VERSION for an ordinary code deploy.
 // This comment used to say you did, back when static assets were
 // stale-while-revalidate and stable Turbopack chunk names could pin a returning
@@ -28,7 +35,35 @@ const PRECACHE_URLS = [
   "/icon-512.png",
   "/apple-touch-icon.png",
   "/og-image.png",
+  // Header images; without them an offline open shows broken-image boxes.
+  "/monkey-see-no-evil.svg",
+  "/monkey-hear-no-evil.svg",
+  "/news-emoji.svg",
 ];
+
+// The shell's own JS/CSS/fonts, read out of the cached board pages' HTML. The very
+// first visit loads them BEFORE this worker controls the page, so the fetch
+// handler never saw them: an offline open after one online visit had the HTML
+// but no bundle, which is a blank white page. Same fetch as the HTML, so the
+// two always match. /_next/* skips the Pages worker (_routes.json), so this
+// costs no Worker requests, and the default fetch mode reuses the browser's
+// HTTP cache for files the page already loaded.
+const SHELL_ASSET_RX = /\/_next\/static\/[^"'\s\\)]+\.(?:js|css|woff2?)/g;
+const SHELL_PAGES = ["/", "/today", "/tomorrow"];
+function precacheShellAssets(cache) {
+  return Promise.all(SHELL_PAGES.map((p) => cache.match(p).then((res) => (res ? res.text() : ""))))
+    .then((pages) => {
+      const urls = Array.from(new Set(pages.join("\n").match(SHELL_ASSET_RX) || []));
+      return Promise.allSettled(
+        urls.map((u) =>
+          fetch(u)
+            .then((r) => (r.ok ? cache.put(u, r) : null))
+            .catch(() => null)
+        )
+      );
+    })
+    .catch(() => null);
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -41,7 +76,7 @@ self.addEventListener("install", (event) => {
             .then((r) => (r.ok ? cache.put(u, r) : null))
             .catch(() => null)
         )
-      )
+      ).then(() => precacheShellAssets(cache))
     )
   );
   self.skipWaiting();
@@ -62,6 +97,14 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+
+  // /build.json — the resumed-tab new-build check (#210). Network only: a
+  // cached copy would hide a deploy, and each call has its own ?t= so the
+  // stale-while-revalidate branch below stored a new entry per check.
+  if (url.pathname === "/build.json") {
+    event.respondWith(fetch(req).catch(() => new Response("", { status: 504 })));
+    return;
+  }
 
   // /api/youtube — network-first, no cache write. Stale results would mean
   // serving yesterday's highlight for a game played today.
