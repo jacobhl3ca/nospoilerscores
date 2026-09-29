@@ -24,6 +24,7 @@ import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchN
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 import { pickEspnGameClip } from "./lib/espn-clip.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
+import { etServiceYmd, mergeEspnFrontSnapshot, parseFrontPageFeedIds, trimEspnHeader } from "./lib/espn-front.mjs";
 
 const OUT_DIR = "public/news";
 
@@ -5346,6 +5347,58 @@ if (runCricketSeries) {
   }
 }
 
+// ESPN front page day snapshot (see scripts/lib/espn-front.mjs). The client's
+// ESPN front page column reads it on a past date, since espn.com itself keeps
+// no history. Token "espn-front" for --only / --skip. Written to a SUBDIR so
+// the plain `public/news/*.json` upload loops never carry it; the mini's
+// 15-min espn cron owns the file and uploads it on its own. The same two URLs
+// the client fetches (src/lib/espn.ts), minus the client's per-origin `hs=`.
+const ESPN_FRONT_HEADER_URL = "https://site.web.api.espn.com/apis/v2/scoreboard/header?region=us&lang=en&contentorigin=espn&tz=America%2FNew_York";
+const ESPN_FRONT_FEED_URL = "https://onefeed.fan.api.espn.com/apis/v3/cached/contentEngine/oneFeed/frontpage?source=ESPN.com+-+FAM&showfc=true&region=us&lang=en&editionKey=espn-en&isPremium=true&offset=0&limit=10";
+async function bakeEspnFrontSnapshot() {
+  const date = etServiceYmd();
+  const path = `${OUT_DIR}/espn-front/${date}.json`;
+  const res = await fetch(ESPN_FRONT_HEADER_URL, { headers: { "User-Agent": UA } });
+  if (!res.ok) throw new Error(`espn header HTTP ${res.status}`);
+  const strip = trimEspnHeader(await res.json());
+  // An empty strip is a failed read, not an empty front page: keep the file.
+  if (!strip.sports.length) throw new Error("espn header returned 0 leagues with events");
+  let featured = [];
+  try {
+    const feed = await fetch(ESPN_FRONT_FEED_URL, { headers: { "User-Agent": UA } });
+    if (feed.ok) featured = parseFrontPageFeedIds(await feed.json());
+  } catch (e) {
+    console.warn("espn-front body feed skipped:", e?.message || e);
+  }
+  // The day so far: this machine's file, else the live copy (a fresh checkout
+  // or a second machine must not restart the day at one sample).
+  let prev = null;
+  try { prev = JSON.parse(await readFile(path, "utf8")); } catch { /* not local */ }
+  if (!prev) {
+    try {
+      const live = await fetch(`https://hidescore.com/news/espn-front/${date}.json?ts=${Date.now()}`, { headers: { "User-Agent": UA } });
+      if (live.ok) prev = await live.json();
+    } catch { /* first sample of the day */ }
+  }
+  const snap = mergeEspnFrontSnapshot(prev, { date, fetchedAt: new Date().toISOString(), strip, featured });
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify(snap));
+  const ids = snap.strip.sports.reduce((n, s) => n + s.leagues.reduce((m, l) => m + l.events.length, 0), 0);
+  console.log(`ESPN-FRONT ${date} samples=${snap.samples} leagues=${snap.strip.sports.reduce((n, s) => n + s.leagues.length, 0)} ids=${ids} featured=${snap.featured.length}`);
+}
+const runEspnFront = !ONLY_REDDIT
+  && (ONLY_LIST.length === 0 || ONLY_LIST.includes("espn-front"))
+  && !tokenSkipped("espn-front");
+let espnFrontFailed = false;
+if (runEspnFront) {
+  try {
+    await bakeEspnFrontSnapshot();
+  } catch (e) {
+    console.error("espn-front bake FAILED:", e?.message || e);
+    espnFrontFailed = true;
+  }
+}
+
 // Persist the watch-page reads both bakes above made, then say how many were
 // served from disk vs fetched live, so a new YouTube block shows up in the log.
 try {
@@ -5371,3 +5424,4 @@ if (highlightsFailed && ONLY_LIST.includes("highlights")) process.exit(1);
 if (recapsFailed && ONLY_LIST.includes("recaps")) process.exit(1);
 if (mlbReviewFailed && ONLY_LIST.includes("mlb-review")) process.exit(1);
 if (cricketSeriesFailed && ONLY_LIST.includes("cricket-series")) process.exit(1);
+if (espnFrontFailed && ONLY_LIST.includes("espn-front")) process.exit(1);

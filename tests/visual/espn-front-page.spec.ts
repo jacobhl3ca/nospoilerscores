@@ -149,8 +149,11 @@ for (const { name, width, height } of [
     expect(await cardNames(page)).toEqual(EXPECTED);
     const blocks = col.locator("[data-espn-league]");
     expect(await blocks.evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league")))).toEqual(BLOCKS);
+    // The first block's label rides up into the header's subtitle row (Jacob
+    // 9/27), so it is the column's first "NCAAF" text; later labels stay inline.
+    await expect(col.getByText(BLOCK_LABELS[0], { exact: true }).first()).toBeVisible();
     for (const [i, label] of BLOCK_LABELS.entries()) {
-      await expect(blocks.nth(i).locator("span").first()).toHaveText(label);
+      if (i > 0) await expect(blocks.nth(i).locator("span").first()).toHaveText(label);
     }
     for (const matchup of NEVER) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(0);
 
@@ -263,10 +266,100 @@ test("turned on, the column switcher offers ESPN front page on today's board", a
   expect(front).toBe(best + 1);
 });
 
-test("ESPN front page is a today-board column: the yesterday board shows the Auto league", async ({ page }) => {
+// Past days (Jacob 9/29: "shouldn't the yesterday page have those same
+// leagues? or a snapshot of the leagues that were on the frontpage
+// yesterday"). The mini bakes what espn.com featured each day to
+// /news/espn-front/<YYYYMMDD>.json, and the Yesterday board reads it:
+//   snapshot  strip NHL yh1 · NCAAF y2, y1 · MLB ym1   body: y1 (the hero)
+//   boards    NCAAF y1 y2 · MLB ym1 ym2 · NHL yh1   (all finals)
+// = the hero's NCAAF block first with the hero on top, then NHL, then MLB.
+// ym2 is on the board but was never on the front page, so it stays out.
+const YESTERDAY = "20260925";
+const YDAY_BOARDS: Record<string, unknown[]> = {
+  "football/college-football": [
+    event("y2", T("31", "Kansas", "KU", "30"), T("32", "Iowa", "IOWA", "27"), "2026-09-25T23:00:00Z", "final"),
+    event("y1", T("33", "Miami", "MIA", "24"), T("34", "Florida State", "FSU", "21"), "2026-09-26T00:00:00Z", "final"),
+  ],
+  "baseball/mlb": [
+    event("ym1", T("35", "Mets", "NYM", "5"), T("36", "Phillies", "PHI", "4"), "2026-09-25T23:05:00Z", "final"),
+    event("ym2", T("37", "Royals", "KC", "3"), T("38", "Twins", "MIN", "2"), "2026-09-26T00:10:00Z", "final"),
+  ],
+  "hockey/nhl": [
+    event("yh1", T("39", "Rangers", "NYR", "3"), T("40", "Devils", "NJ", "2"), "2026-09-25T23:00:00Z", "final"),
+  ],
+};
+const SNAPSHOT = {
+  date: YESTERDAY,
+  fetchedAt: "2026-09-26T03:45:00Z",
+  samples: 60,
+  strip: {
+    sports: [
+      { slug: "hockey", leagues: [{ slug: "nhl", events: [{ id: "yh1" }] }] },
+      { slug: "football", leagues: [{ slug: "college-football", events: [{ id: "y2" }, { id: "y1" }] }] },
+      { slug: "golf", leagues: [{ slug: "pga", events: [{ id: "g0" }] }] },
+      { slug: "baseball", leagues: [{ slug: "mlb", events: [{ id: "ym1" }] }] },
+    ],
+  },
+  featured: ["y1", "c1"],
+};
+
+async function seedYesterday(page: Page, snapshot: unknown | null) {
+  await seed(page);
+  await page.route("**/apis/site/v2/sports/**", (route: Route) => {
+    const url = new URL(route.request().url());
+    const m = /\/sports\/(.+)\/scoreboard$/.exec(url.pathname);
+    if (!m || url.searchParams.get("dates") !== YESTERDAY) return route.fallback();
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ events: YDAY_BOARDS[m[1]] ?? [] }) });
+  });
+  await page.route(`**/news/espn-front/${YESTERDAY}.json`, (route: Route) => snapshot
+    ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(snapshot) })
+    : route.fulfill({ status: 404, contentType: "application/json", body: "{}" }));
+}
+
+test("Yesterday: ESPN front page shows the day's snapshot, hero first", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seedYesterday(page, SNAPSHOT);
+  await page.goto("/yesterday");
+  const col = page.locator('[data-league-column="top"]');
+  await expect(col).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("[data-league-column]")).toHaveCount(3);
+  await expect(cards(page)).toHaveCount(4, { timeout: 15_000 });
+  expect(await cardNames(page)).toEqual(["Miami at Florida State", "Kansas at Iowa", "Rangers at Devils", "Mets at Phillies"]);
+  expect(await col.locator("[data-espn-league]").evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league"))))
+    .toEqual(["ncaaf", "nhl", "mlb"]);
+  await expect(col.getByRole("button", { name: "Royals at Twins — game details" })).toHaveCount(0);
+  await expect(col.locator("[data-espn-fallback-note]")).toHaveCount(0);
+  if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/espn-front-page-yesterday.png` });
+});
+
+test("Yesterday with no snapshot: today's strip leagues, every game, and a note", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seedYesterday(page, null);
+  await page.goto("/yesterday");
+  const col = page.locator('[data-league-column="top"]');
+  await expect(col).toBeVisible({ timeout: 30_000 });
+  // Live strip = NCAAF, NHL, MLB (golf has no game cards): every final of those.
+  await expect(cards(page)).toHaveCount(5, { timeout: 15_000 });
+  expect(await col.locator("[data-espn-league]").evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league"))))
+    .toEqual(["ncaaf", "nhl", "mlb"]);
+  await expect(col.locator("[data-espn-fallback-note]")).toHaveText("Today's front-page leagues · no snapshot for this day");
+  if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/espn-front-page-yesterday-fallback.png` });
+});
+
+test("Yesterday: the column switcher offers ESPN front page too", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seedYesterday(page, SNAPSHOT);
+  await page.goto("/yesterday");
+  await expect(page.locator('[data-league-column="top"]')).toBeVisible({ timeout: 30_000 });
+  await page.locator('button[title="Switch league"]').first().click();
+  const menu = page.getByRole("dialog", { name: "Switch league" }).first();
+  await expect(menu.getByRole("button", { name: /ESPN front page/ })).toHaveCount(1);
+});
+
+test("Tomorrow has no front page yet: the slot shows its Auto league", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page);
-  await page.goto("/yesterday");
+  await page.goto("/tomorrow");
   await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('[data-league-column="top"]')).toHaveCount(0);
   await expect(page.locator("[data-league-column]")).toHaveCount(3);

@@ -2053,11 +2053,12 @@ export default function HomeContent({
     if (BEST_YESTERDAY_ENABLED && selectedDate === getDateString(0)) {
       options.set("best", { sport: "best", label: BEST_YESTERDAY_LABEL, defaultInSwitcher: true });
     }
-    // ESPN front page: ESPN's strip is today's, so the same today-only rule
-    // and the same place in the map (Jacob 9/26). Opt-in while it is tested:
-    // off in every switcher until Settings turns it on or a column pins it
-    // (Jacob 9/26: "default off for all but on for me").
-    if (TOP_EVENTS_ENABLED && selectedDate === getDateString(0)) {
+    // ESPN front page: today and past days; past days read the day's
+    // snapshot (Jacob 9/29). Tomorrow has no front page yet. Same place in the
+    // map as Best (Jacob 9/26). Opt-in while it is tested: off in every
+    // switcher until Settings turns it on or a column pins it (Jacob 9/26:
+    // "default off for all but on for me").
+    if (TOP_EVENTS_ENABLED && selectedDate <= getDateString(0)) {
       options.set("top", { sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: false });
     }
     return [...options.values()];
