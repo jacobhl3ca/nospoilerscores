@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/lib/youtube";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
+import { frontendHref } from "@/lib/frontendLinks";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { buildKeyLegend } from "@/lib/modalKeyLegend";
@@ -281,7 +282,7 @@ function renderRedditBody(raw: string): React.ReactNode {
       parts.push(
         <a
           key={`u-${pi}-${match.index}`}
-          href={url}
+          href={frontendHref(url)}
           target="_blank"
           rel="noopener noreferrer"
           className="underline underline-offset-2 hover:opacity-80"
@@ -3107,7 +3108,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               shareUrl, so only the strictly-broken URL-less case is dropped. */}
           {sourceShareUrl && (
             <a
-              href={sourceShareUrl}
+              href={frontendHref(sourceShareUrl)}
               target="_blank"
               rel="noopener noreferrer"
               // Route through handleExternalClick so a YouTube sourceShareUrl

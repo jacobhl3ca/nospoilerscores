@@ -8,6 +8,7 @@ import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
 import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
+import { normalizeFrontend } from "@/lib/frontendLinks";
 import { ALL_RECORD_LEAGUES, FREQUENT_RECORD_LEAGUES, WEEKLY_RECORD_LEAGUES, toggleAllRecordLeagues, toggleRecordLeague, upcomingRecordLeagues, type RecordLeague } from "@/lib/upcomingRecords";
 import {
   Preferences,
@@ -1525,6 +1526,25 @@ export default function SettingsPanel({
             )}
           </Section>
 
+          {/* The user's own Redlib / Invidious (lib/frontendLinks.ts). Pasted
+              data like the TV channel list, so Reset leaves it alone. */}
+          <Section title="Links">
+            <FrontendLinkField
+              label="Reddit links open at"
+              hint="Leave empty for reddit.com"
+              placeholder="https://redlib.example.com"
+              value={prefs.redditFrontend}
+              onSave={(v) => updatePrefs({ redditFrontend: v })}
+            />
+            <FrontendLinkField
+              label="YouTube links open at"
+              hint="Invidious or Piped. Leave empty for youtube.com"
+              placeholder="https://invidious.example.com"
+              value={prefs.youtubeFrontend}
+              onSave={(v) => updatePrefs({ youtubeFrontend: v })}
+            />
+          </Section>
+
           {/* Share & Reset */}
           <Section title="Share & reset">
             <div className="flex flex-col gap-2">
@@ -1893,6 +1913,61 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </h3>
       <div className="space-y-3">{children}</div>
     </section>
+  );
+}
+
+// One "Links" row: saves on blur or Enter. Empty clears it; anything that is
+// not an http(s) address stays in the box with a hint and is not saved.
+function FrontendLinkField({ label, hint, placeholder, value, onSave }: {
+  label: string;
+  hint: string;
+  placeholder: string;
+  value: string | undefined;
+  onSave: (value: string | undefined) => void;
+}) {
+  const [draft, setDraft] = useState(value ?? "");
+  const [msg, setMsg] = useState<{ text: string; err: boolean } | null>(null);
+  // A pull from another device changed the saved value: show it.
+  const [shown, setShown] = useState(value);
+  if (shown !== value) { setShown(value); setDraft(value ?? ""); }
+  const commit = () => {
+    const typed = draft.trim();
+    if (!typed) {
+      if (value) { onSave(undefined); setMsg({ text: "Saved", err: false }); }
+      setDraft("");
+      return;
+    }
+    const clean = normalizeFrontend(typed);
+    if (!clean) { setMsg({ text: "Needs https://…", err: true }); return; }
+    setDraft(clean);
+    if (clean !== value) onSave(clean);
+    setMsg({ text: "Saved", err: false });
+  };
+  return (
+    <div>
+      <Field label={label} hint={hint}>
+        <input
+          type="url"
+          inputMode="url"
+          value={draft}
+          onChange={(e) => { setDraft(e.target.value); setMsg(null); }}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } }}
+          placeholder={placeholder}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          autoComplete="off"
+          className="w-full px-3 py-2 rounded-lg text-sm"
+          style={{ background: "var(--bg-card)", color: "var(--text)", border: `1px solid ${msg?.err ? "rgb(239,68,68)" : "var(--border)"}` }}
+        />
+      </Field>
+      {msg && (
+        <p role="status" aria-live="polite" className="text-[11px] mt-1" style={{ color: msg.err ? "rgb(239,68,68)" : "var(--text-muted)" }}>
+          {msg.text}
+        </p>
+      )}
+    </div>
   );
 }
 

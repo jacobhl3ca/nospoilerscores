@@ -3,6 +3,7 @@ import type { RecordLeague } from "./upcomingRecords";
 import { setServiceTimeZone, getEtServiceDate, toYmd } from "./etDay";
 import { pruneWatchQueue, type WatchQueueEntry } from "./watchQueue";
 import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
+import { setFrontendLinks } from "./frontendLinks";
 
 const STORAGE_KEY = "nss-preferences";
 // For the cross-tab storage listener in HomeContent.
@@ -450,6 +451,11 @@ export interface Preferences {
   // Which player opens those links. Device-local (lib/devicePrefs.ts): a Mac
   // wants IINA, a phone wants VLC. Undefined = "auto".
   tvPlayer?: TvPlayer;
+  // "Links" (Settings, lib/frontendLinks.ts): the user's own Redlib and
+  // Invidious/Piped addresses. Reddit / YouTube links then open there instead.
+  // Unset = reddit.com / youtube.com. Syncs, so it is typed once per account.
+  redditFrontend?: string;
+  youtubeFrontend?: string;
   // News headlines are spoilers (a highlight's title gives away the result), so
   // every headline in the news view + modal is blurred by default. The "Titles"
   // eye toggle in the news header flips this on to reveal them all at once.
@@ -568,6 +574,7 @@ export function loadPreferences(): Preferences {
     // before the first fetch/render after a load.
     setServiceTimeZone(prefs.timezone);
     setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
+    setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
     // After setServiceTimeZone, so "today" is the user's chosen zone.
     prefs.watchQueue = pruneWatchQueue(prefs.watchQueue, toYmd(getEtServiceDate()));
     return prefs;
@@ -589,6 +596,7 @@ export function savePreferences(prefs: Preferences): void {
   if (typeof window === "undefined") return;
   setServiceTimeZone(prefs.timezone);
   setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
+  setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
   // localStorage.setItem can throw — quota exceeded, or storage blocked in a
   // sandboxed/private context — and savePreferences runs straight out of click
   // handlers (e.g. toggling a setting). Mirror loadPreferences' guard so a

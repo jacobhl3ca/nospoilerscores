@@ -1516,15 +1516,16 @@ const REDLIB_INSTANCES = [
   "https://redlib.kittywit.ch",
   "https://safereddit.com",
 ];
+// A private Redlib the bake host runs itself (the mini: REDLIB_BASE in the job's
+// env). Tried before every public mirror. Never a public URL in the repo.
+const LOCAL_REDLIB = (process.env.REDLIB_BASE || "").trim().replace(/\/+$/, "") || null;
 
 async function fetchRedditVideoMap(subreddit) {
   // Desync + spread the burst: all reddit jobs fire in parallel, so stagger the
   // start and rotate which mirror each sub tries first rather than dog-piling
   // one volunteer instance. First non-empty result wins; failures fall through.
   await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 1200)));
-  const offset = [...subreddit].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
-  for (let k = 0; k < REDLIB_INSTANCES.length; k++) {
-    const base = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
+  for (const base of redlibOrder(subreddit, { sticky: false })) {
     // Go through redlibGet, not a raw fetch: safereddit.com (the only mirror
     // still answering as of 2026-09-18) serves an Anubis challenge page —
     // HTTP 200, zero posts — to anything sending a browser User-Agent, and the
@@ -1595,9 +1596,12 @@ async function fetchRedlibHTML(subreddit) {
 
 // Mirror-order for any redlib page: last winner first, then hash-rotated so
 // different subs don't dog-pile the same volunteer host.
-function redlibOrder(seed) {
+// The private LOCAL_REDLIB always leads. `sticky: false` (the video-id map)
+// skips the last-winner hop so the public mirrors keep their spread.
+function redlibOrder(seed, { sticky = true } = {}) {
   const order = [];
-  if (_redlibWinner && !_redlibStale.has(_redlibWinner)) order.push(_redlibWinner);
+  if (LOCAL_REDLIB && !_redlibStale.has(LOCAL_REDLIB)) order.push(LOCAL_REDLIB);
+  if (sticky && _redlibWinner && !_redlibStale.has(_redlibWinner) && !order.includes(_redlibWinner)) order.push(_redlibWinner);
   const offset = [...seed].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
   for (let k = 0; k < REDLIB_INSTANCES.length; k++) {
     const inst = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
