@@ -9,6 +9,7 @@ import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } 
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick, liveWatchProps, watchLinkProps } from "@/lib/openExternal";
+import { gameRef } from "@/lib/tvChannelLinks";
 import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
@@ -249,7 +250,7 @@ export function CompactUpcomingCard({
   const networkNode = network ? (
     networkHref ? (
       <a
-        {...watchLinkProps(network, networkHref)}
+        {...watchLinkProps(network, networkHref, gameRef(game))}
         className="text-[11px] hover:underline whitespace-nowrap"
         style={{ color: "var(--text-muted)" }}
       >
@@ -1021,7 +1022,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                   return (
                     <a
                       key={key}
-                      {...watchLinkProps(name, href)}
+                      {...watchLinkProps(name, href, gameRef(game))}
                       className="hover:underline transition-colors whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
                     >
@@ -1120,7 +1121,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 return (
                   <a
                     key={b}
-                    {...watchLinkProps(b, href)}
+                    {...watchLinkProps(b, href, gameRef(game))}
                     className="hover:underline whitespace-normal break-words"
                     style={{ color: "var(--text-muted)" }}
                   >
