@@ -10,6 +10,12 @@ import { defineConfig, devices } from "@playwright/test";
 // Usage:
 //   npm run visual          — compare against committed baselines
 //   npm run visual:update   — (re)generate baselines after an intentional change
+//
+// PLAYWRIGHT_BASE_URL points the suite at a dev server that is already running
+// elsewhere (e.g. ~/scripts/pw-webkit-mini.sh runs WebKit on the mini against
+// the laptop's server); webServer is then skipped.
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+
 export default defineConfig({
   testDir: "./tests/visual",
   fullyParallel: true,
@@ -24,7 +30,7 @@ export default defineConfig({
     },
   },
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: externalBaseURL || "http://localhost:3000",
     trace: "retain-on-failure",
     // Production registers a service worker (layout.tsx, prod only), and
     // page.route() never sees a request the worker answers. So a live
@@ -42,7 +48,7 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
+  webServer: externalBaseURL ? undefined : {
     command: "npm run dev",
     url: "http://localhost:3000",
     reuseExistingServer: true,
