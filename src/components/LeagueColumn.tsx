@@ -1566,7 +1566,7 @@ export default function LeagueColumn({
     : league.sport === "best"
       ? "No highlights from yesterday yet"
       : league.sport === "top"
-        ? "No games on ESPN's front page right now"
+        ? (league.espnSnapshot ? "No games from ESPN's front page that day" : "No games on ESPN's front page right now")
         : "No games";
   const emptyUpcomingLabel = isEventTileSport ? "No event scheduled" : "Upcoming Schedule TBD";
   // Same reason the empty copy differs: an event-tile column has no "schedule"
@@ -2118,6 +2118,13 @@ export default function LeagueColumn({
               </h2>
             )}
           </div>
+          {league.espnSnapshot === "fallback" ? (
+            // No snapshot of espn.com for this day, so today's strip leagues
+            // stand in (fetchTopEvents). Said once, over the first league label.
+            <p data-espn-fallback-note className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap truncate" style={{ color: "var(--text-muted)" }}>
+              {narrowColumn ? "Today's leagues" : "Today's front-page leagues · no snapshot for this day"}
+            </p>
+          ) : null}
           {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
           ) : league.eventCard ? (

@@ -323,4 +323,7 @@ export interface LeagueData {
   // body features (lib/topEvents.ts espnFeaturedKeys). They lead their league
   // block, ahead of its live games.
   espnFeatured?: string[];
+  // ESPN front page on a past date: "day" = that day's snapshot, "fallback" =
+  // no snapshot, so today's strip leagues stand in. Unset on today's board.
+  espnSnapshot?: "day" | "fallback";
 }

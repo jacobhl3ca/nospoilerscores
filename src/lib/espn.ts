@@ -2,7 +2,7 @@ import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventC
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
-import { espnFeaturedKeys, espnFrontPageSports, orderByEspnHeader, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
+import { espnFeaturedKeys, espnFrontPageSports, orderByEspnHeader, orderBySports, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_MIN_GAMES, prevYmd, rankBestYesterday } from "./bestYesterday";
 import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
@@ -5900,22 +5900,69 @@ async function fetchEspnFrontPageFeed(): Promise<string[]> {
   }
 }
 
+// The day's snapshot the mini bakes (scripts/lib/espn-front.mjs): the strip
+// and body as espn.com showed them over that day. A past day's file no longer
+// changes, so a hit is kept for the session; a miss is retried after a few
+// minutes, and a network error is not kept at all.
+interface EspnFrontSnapshot { strip: unknown; featured?: unknown }
+const ESPN_FRONT_MISS_TTL_MS = 10 * 60 * 1000;
+const espnFrontSnapshotCache = new Map<string, { at: number; snap: EspnFrontSnapshot | null }>();
+
+async function fetchEspnFrontSnapshot(date: string): Promise<EspnFrontSnapshot | null> {
+  const hit = espnFrontSnapshotCache.get(date);
+  if (hit && (hit.snap || Date.now() - hit.at < ESPN_FRONT_MISS_TTL_MS)) return hit.snap;
+  try {
+    const res = await fetch(`${getApiBase()}/news/espn-front/${date}.json`, { cache: "no-store" });
+    const snap = res.ok ? (await res.json()) as EspnFrontSnapshot : null;
+    const ok = snap && typeof snap === "object" && snap.strip ? snap : null;
+    if (res.ok || res.status === 404) espnFrontSnapshotCache.set(date, { at: Date.now(), snap: ok });
+    return ok;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchTopEvents(
   date: string | undefined,
   // Games the board already fetched for this date, by sport — a league that is
   // also a column costs nothing extra.
   prefetched: Map<Sport, Game[]>,
+  // A day before today: the column reads that day's snapshot instead of the
+  // live strip (Jacob 9/29: "shouldn't the yesterday page have those same
+  // leagues?").
+  isPast = false,
 ): Promise<LeagueData> {
-  const [features, featured] = await Promise.all([fetchEspnHeader(), fetchEspnFrontPageFeed()]);
-  const pools = await Promise.all(espnFrontPageSports(features).map(async (sport) => {
+  const pull = (sports: Sport[]) => Promise.all(sports.map(async (sport) => {
     const pre = prefetched.get(sport);
     if (pre) return pre;
     try {
-      return (await fetchGames(sport, date)).games;
+      const { games } = await fetchGames(sport, date);
+      // A past day's cards want their highlight buttons: the same video
+      // enrichment the /yesterday board's own columns run.
+      if (isPast && date && sport === "nhl") await enrichNhlVideos(games, date);
+      if (isPast && date && sport === "mlb") await enrichMlbVideos(games, date);
+      return games;
     } catch {
       return [] as Game[];
     }
   }));
+  if (isPast && date) {
+    const snap = await fetchEspnFrontSnapshot(date);
+    if (snap) {
+      const features = parseEspnHeader(snap.strip);
+      const featured = Array.isArray(snap.featured) ? snap.featured.filter((id): id is string => typeof id === "string") : [];
+      // Ids from other days match nothing on this date's scoreboards and drop out.
+      const games = orderByEspnHeader((await pull(espnFrontPageSports(features))).flat(), features, featured);
+      return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false, espnFeatured: espnFeaturedKeys(features, featured), espnSnapshot: "day" };
+    }
+    // No snapshot for the day (before the bake began, or the mini missed it):
+    // today's strip leagues, all of that day's games, in strip league order.
+    const sports = espnFrontPageSports(await fetchEspnHeader());
+    const games = orderBySports((await pull(sports)).flat(), sports);
+    return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false, espnFeatured: [], espnSnapshot: "fallback" };
+  }
+  const [features, featured] = await Promise.all([fetchEspnHeader(), fetchEspnFrontPageFeed()]);
+  const pools = await pull(espnFrontPageSports(features));
   const games = orderByEspnHeader(pools.flat(), features, featured);
   return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false, espnFeatured: espnFeaturedKeys(features, featured) };
 }
@@ -6048,11 +6095,12 @@ export async function fetchAllLeagues(
   const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | "hidden" | null => {
     if (sport === "empty") return "empty";
     if (!sport) return null;
-    // ESPN's strip is today's front page, so a "top" pin is a today-board
-    // column like "best" below: Auto on any other date or while the column is
-    // switched off, and filled like a turned-off league when hidden.
+    // ESPN's strip is today's front page; a past day reads that day's
+    // snapshot instead (fetchTopEvents). Tomorrow and later have no front page
+    // yet, so there and while the column is switched off the slot takes its
+    // Auto league. Filled like a turned-off league when hidden.
     if (sport === "top") {
-      if (!TOP_EVENTS_ENABLED || !isTodayView) return null;
+      if (!TOP_EVENTS_ENABLED || !(isTodayView || isPastView)) return null;
       return hidden.includes("top") ? "hidden" : TOP_EVENTS_CONFIG;
     }
     // "Yesterday" is the day before TODAY, so a "best" pin is a today-board
@@ -6367,7 +6415,7 @@ export async function fetchAllLeagues(
   if (final.some((cfg) => cfg.sport === "top")) {
     const prefetched = new Map<Sport, Game[]>();
     for (const r of results) if (r && r.games.length) prefetched.set(r.sport, r.games);
-    top = await fetchTopEvents(date, prefetched).catch(
+    top = await fetchTopEvents(date, prefetched, isPastView).catch(
       (): LeagueData => ({ sport: "top", label: TOP_EVENTS_CONFIG.label, games: [], fetchFailed: true }),
     );
   }

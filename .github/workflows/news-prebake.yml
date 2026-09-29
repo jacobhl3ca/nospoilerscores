@@ -24,7 +24,7 @@ jobs:
       # residential-IP Mac mini cron (com.hidescore.reddit-prebake, hourly) owns
       # all of these feeds and uploads them to the same R2 bucket.
       # (quoted so the shell never globs reddit-* against the working dir)
-      - run: node scripts/prebake-news.mjs '--skip=espn-top,espn-videos,reddit-*'
+      - run: node scripts/prebake-news.mjs '--skip=espn-top,espn-videos,espn-front,reddit-*'
         env:
           REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}

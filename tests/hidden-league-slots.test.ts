@@ -78,8 +78,14 @@ test("hiding an Auto column's league moves that column, not the pins", async () 
   assert.ok(!shown.includes(auto[0]), `${auto[0]} still on ${shown}`);
 });
 
-test("an ESPN front page pin is today-only: any other date shows the slot's Auto league", async () => {
-  const shown = await boardSports({ first: "mlb", second: "nfl", third: "top" }, []);
-  assert.equal(shown.length, 3);
-  assert.ok(!shown.includes("top"), `top on a past board: ${shown}`);
+// Past days read the day's ESPN front page snapshot (Jacob 9/29), so the pin
+// holds there; tomorrow and later have no front page yet and take Auto.
+test("an ESPN front page pin holds on a past board and takes Auto on a future one", async () => {
+  const past = await boardSports({ first: "mlb", second: "nfl", third: "top" }, []);
+  assert.deepEqual(past, ["mlb", "nfl", "top"]);
+  const d = new Date(Date.now() + 2 * 86_400_000);
+  const future = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const shown = (await espn.fetchAllLeagues(future, undefined, { first: "mlb", second: "nfl", third: "top" }, 3, undefined, []))
+    .flatMap((l) => (l ? [l.sport] : []));
+  assert.ok(!shown.includes("top"), `top on a future board: ${shown}`);
 });

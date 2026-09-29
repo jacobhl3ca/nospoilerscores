@@ -7,10 +7,12 @@ import {
   espnFrontPageSports,
   groupEspnFrontPage,
   orderByEspnHeader,
+  orderBySports,
   parseEspnFrontPageFeed,
   parseEspnHeader,
   type EspnHeaderFeature,
 } from "../src/lib/topEvents.ts";
+import { parseFrontPageFeedIds, trimEspnHeader } from "../scripts/lib/espn-front.mjs";
 
 const H = 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 8, 4, 23, 0, 0); // Fri Sep 4 2026, 7:00 pm ET
@@ -260,4 +262,34 @@ test("grouping is stable: regrouping a grouped column changes nothing", () => {
   const twice = groupEspnFrontPage(once, ["mlb:a"]).flatMap((g) => g.games);
   assert.deepEqual(twice.map((g) => g.id), once.map((g) => g.id));
   assert.deepEqual(once.map((g) => g.id), ["d", "b", "a", "c"]);
+});
+
+// ── Past days (Jacob 9/29): the day snapshot and its no-snapshot fallback ──
+
+test("orderBySports: the given leagues in the given order, every game, nothing else", () => {
+  const games = [
+    game({ id: "m1", sport: "mlb" }), game({ id: "c1", sport: "ncaaf" }), game({ id: "n1", sport: "nfl" }),
+    game({ id: "c2", sport: "ncaaf" }), game({ id: "m2", sport: "mlb" }), game({ id: "c1", sport: "ncaaf" }),
+  ];
+  assert.deepEqual(orderBySports(games, ["ncaaf", "mlb"]).map((g) => `${g.sport}:${g.id}`), ["ncaaf:c1", "ncaaf:c2", "mlb:m1", "mlb:m2"]);
+  assert.deepEqual(orderBySports(games, []), []);
+});
+
+test("a baked snapshot reads back as the same features and body ids as the live payloads", () => {
+  const payload = {
+    sports: [
+      { slug: "football", uid: "s:20", leagues: [
+        { slug: "college-football", abbreviation: "NCAAF", events: [{ id: "401", priority: 0, competitors: [] }, { id: 402 }] },
+        { slug: "nfl", events: [{ id: "901" }] },
+      ] },
+      { slug: "golf", leagues: [{ slug: "pga", events: [{ id: "g1" }] }] },
+      { slug: "baseball", leagues: [{ slug: "mlb", events: [{ id: "501" }, { id: "502" }] }, { slug: "empty", events: [] }] },
+      { slug: "tennis", leagues: [] },
+      { slug: "soccer", leagues: [{ slug: "usa.1", events: [{ id: "801" }] }] },
+    ],
+  };
+  const snap = JSON.parse(JSON.stringify(trimEspnHeader(payload)));
+  assert.deepEqual(parseEspnHeader(snap), parseEspnHeader(payload));
+  assert.deepEqual(parseFrontPageFeedIds(BODY), parseEspnFrontPageFeed(BODY));
+  assert.deepEqual(trimEspnHeader(null), { sports: [] });
 });
