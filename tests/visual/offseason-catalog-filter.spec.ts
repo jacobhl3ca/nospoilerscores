@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-08-05T16:00:00-04:00"));
   await page.goto("/?l=m&s=m.0.0&dd=t&dv=s");
   await page.getByRole("button", { name: "Open settings", exact: true }).click();
-  await page.locator("summary", { hasText: /leagues in the switcher · Edit/ }).click();
+  await page.getByRole("button", { name: "More leagues", exact: true }).click();
 });
 
 test("hide offseason starts on without a write, untick shows the rows, tick persists", async ({ page }) => {
@@ -36,7 +36,7 @@ test("hide offseason starts on without a write, untick shows the rows, tick pers
 
   await page.reload();
   await page.getByRole("button", { name: "Open settings", exact: true }).click();
-  await page.locator("summary", { hasText: /leagues in the switcher · Edit/ }).click();
+  await page.getByRole("button", { name: "More leagues", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: /Hide offseason/ })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "NHL · offseason", exact: true })).toHaveCount(0);
 });

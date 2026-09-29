@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/lib/youtube";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
+import { frontendHref } from "@/lib/frontendLinks";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { buildKeyLegend } from "@/lib/modalKeyLegend";
@@ -61,6 +62,9 @@ interface VideoModalProps {
   // Spoiler masks over the YouTube player chrome. Both default ON (covered);
   // user toggles each in Settings. Only affect the YouTube highlight path.
   maskVideoTitle?: boolean;
+  // A /watch link someone pasted: covered like the combat channels, but the
+  // cover still lifts once the title reads clean (the Settings toggle never lifts).
+  forceTitleMask?: boolean;
   maskVideoBottom?: boolean;
   // Opt-in (default OFF): show YouTube's NATIVE control bar (controls:1) instead
   // of our spoiler-safe stripped player. When on, YT's own progress/seek bar +
@@ -281,7 +285,7 @@ function renderRedditBody(raw: string): React.ReactNode {
       parts.push(
         <a
           key={`u-${pi}-${match.index}`}
-          href={url}
+          href={frontendHref(url)}
           target="_blank"
           rel="noopener noreferrer"
           className="underline underline-offset-2 hover:opacity-80"
@@ -452,7 +456,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   // The React-owned box the YouTube player lives INSIDE. React renders this and
   // nothing else touches it; the #yt-player node YT destroys is a plain DOM
@@ -2660,8 +2664,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   short list stays covered either way — the app's promise beats a
                   display preference. titleSafe is already forced false for these
                   channels (see the onReady/PLAYING handlers), so the second
-                  condition is belt-and-braces, not the thing doing the work. */}
-              {(maskVideoTitle || titleAlwaysMasked) && !titleSafe && (
+                  condition is belt-and-braces, not the thing doing the work.
+                  The Settings toggle itself covers EVERY title (Jacob 9/28):
+                  it used to lift too once the title read clean, so someone who
+                  turned it on still saw most titles. The clean-title skip is
+                  for the covers the app turns on by itself. */}
+              {(maskVideoTitle || ((titleAlwaysMasked || forceTitleMask) && !titleSafe)) && (
                 <div
                   aria-hidden
                   data-testid="yt-title-mask"
@@ -3107,7 +3115,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               shareUrl, so only the strictly-broken URL-less case is dropped. */}
           {sourceShareUrl && (
             <a
-              href={sourceShareUrl}
+              href={frontendHref(sourceShareUrl)}
               target="_blank"
               rel="noopener noreferrer"
               // Route through handleExternalClick so a YouTube sourceShareUrl

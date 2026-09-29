@@ -43,6 +43,7 @@
 
 import { parseYouTubeId } from "./youtubeLink.ts";
 import { tvChannelLink } from "./tvChannelLinks.ts";
+import { frontendConfig, rewriteExternalUrl } from "./frontendLinks.ts";
 import type { Game } from "./types";
 
 // True inside the Capacitor iOS/Android wrapper. Exported for callers that
@@ -200,6 +201,9 @@ async function openViaAppLink(url: string): Promise<void> {
 
 export function openExternal(url: string): void {
   if (!url) return;
+  // The user's own Redlib / Invidious (Settings → Links). First, so a moved
+  // YouTube link goes to the browser below, not the YouTube app.
+  url = rewriteExternalUrl(url, frontendConfig());
   if (isCapacitorNative()) {
     const ytApp = youTubeAppUrl(url);
     if (ytApp) {

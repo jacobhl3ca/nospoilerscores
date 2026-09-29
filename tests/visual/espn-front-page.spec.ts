@@ -293,7 +293,7 @@ test("Settings: the Across leagues list turns ESPN front page off and on", async
   await page.goto("/");
   await expect(page.locator('[data-league-column="top"]')).toBeVisible({ timeout: 30_000 });
   await page.locator('[aria-label="Open settings"]').first().click();
-  await page.getByText(/leagues in the switcher · Edit/).click();
+  await page.getByRole("button", { name: "More leagues", exact: true }).click();
   const box = page.getByRole("checkbox", { name: "ESPN front page" });
   await expect(box).toBeChecked();
   await box.uncheck();
@@ -310,7 +310,7 @@ test("Settings: ESPN front page starts unticked, and ticking it adds it to the s
   await page.goto("/");
   await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
   await page.locator('[aria-label="Open settings"]').first().click();
-  await page.getByText(/leagues in the switcher · Edit/).click();
+  await page.getByRole("button", { name: "More leagues", exact: true }).click();
   const box = page.getByRole("checkbox", { name: "ESPN front page" });
   await expect(box).not.toBeChecked();
   await box.check();
@@ -319,4 +319,43 @@ test("Settings: ESPN front page starts unticked, and ticking it adds it to the s
   await box.uncheck();
   await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}").shownLeagues ?? []))
     .not.toContain("top");
+});
+
+// One-tap add (Jacob 9/28): a league block's label opens "Add {league}". With a
+// free column, "New column" starts picked, so it is two taps.
+test("ESPN front page: a block label adds its league to a new column", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seed(page);
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="top"]')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Add NHL to a column" }).click();
+  const pop = page.getByRole("dialog", { name: "Add NHL" });
+  await expect(pop).toBeVisible();
+  await expect(pop.getByRole("radio", { name: "New column" })).toBeChecked();
+  await expect(pop.getByRole("radio")).toHaveCount(6);
+  await pop.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(pop).toHaveCount(0);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}"));
+  expect(saved.fourthLeague).toBe("nhl");
+  expect(saved.shownLeagues ?? []).toContain("nhl");
+  await expect(page.locator('[data-league-column="nhl"]')).toBeVisible({ timeout: 30_000 });
+});
+
+test("ESPN front page: with no free column, a picked column takes the league", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page, { catalogHiddenLeagues: ["nhl"] });
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="top"]')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: /^Add (NHL|Hockey) to a column$/ }).click();
+  const pop = page.getByRole("dialog", { name: /^Add / });
+  await expect(pop.getByRole("radio", { name: "New column" })).toHaveCount(0);
+  const add = pop.getByRole("button", { name: "Add", exact: true });
+  await expect(add).toBeDisabled();
+  await pop.getByRole("radio", { name: /^Column 2 / }).check();
+  await add.click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}"));
+  expect(saved.secondLeague).toBe("nhl");
+  expect(saved.shownLeagues ?? []).toContain("nhl");
+  // Adding also lifts a catalog strike.
+  expect(saved.catalogHiddenLeagues).toBeUndefined();
 });

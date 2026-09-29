@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, PREFS_STORAGE_KEY } from "@/lib/preferences";
+import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
@@ -35,6 +35,7 @@ import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
+import AddLeaguePopover from "@/components/AddLeaguePopover";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
@@ -127,7 +128,7 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
 function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): BestYesterdayOptions {
   const yesterday = fromYmd(prevYmd(date));
   const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && isLeagueActive(l, yesterday));
-  const auto = pickAndAssignLeagues(fromYmd(date), slotCount, p.hiddenLeagues).map((l) => l.sport);
+  const auto = pickAndAssignLeagues(fromYmd(date), slotCount, boardHiddenLeagues(p)).map((l) => l.sport);
   const board = [p.firstLeague, p.secondLeague, p.thirdLeague, p.fourthLeague, p.fifthLeague]
     .slice(0, slotCount)
     .map((pref, i) => (pref === undefined ? auto[i] : pref))
@@ -139,7 +140,7 @@ function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): 
     ...[...firstPref, ...rest].map((cfg) => cfg.sport),
     ...(p.shownLeagues ?? []),
   ];
-  return { sources: bestYesterdaySourceSports(ordered.filter(inSeason), p.hiddenLeagues ?? []) };
+  return { sources: bestYesterdaySourceSports(ordered.filter(inSeason), boardHiddenLeagues(p) ?? []) };
 }
 
 function getSmartDefaultOffset(cutoffHour = 13): number {
@@ -804,10 +805,7 @@ export default function HomeContent({
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const sharedVideoId = params.get("v");
-      if (
-        params.has("f") || params.has("l") || params.has("fl") || params.has("t") ||
-        params.has("th") || params.has("dd") || params.has("dv") || params.has("dr") || params.has("n")
-      ) {
+      if (SHARE_PARAM_KEYS.some((k) => params.has(k))) {
         // Support new compact format (f=m1.n15&l=m.n) and old format (f=mlb-1,mlb-2&fl=mlb,nba)
         const fParam = params.get("f");
         const oldTeams = fParam?.includes("-") ? fParam.split(",").filter(Boolean) : null;
@@ -828,6 +826,7 @@ export default function HomeContent({
         if (decoded.defaultLandingView) loaded.defaultLandingView = decoded.defaultLandingView;
         if (decoded.defaultRatings) loaded.defaultRatings = decoded.defaultRatings;
         if (decoded.newsThirdLeague) loaded.newsThirdLeague = decoded.newsThirdLeague;
+        Object.assign(loaded, sharedExtrasPatch(decoded));
         noStored = false; // shared setup = explicit league choices, skip the picker
         savePreferences(loaded);
         const keep = new URLSearchParams();
@@ -1477,7 +1476,7 @@ export default function HomeContent({
         fetchAllLeagues(
           date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3,
           bestYesterdayOptions(prefsRef.current, date, isWideViewport() ? 5 : 3),
-          prefsRef.current.hiddenLeagues,
+          boardHiddenLeagues(prefsRef.current),
         ),
         loadBakedHighlights(),
         // Recaps too (plus the archive month for a day older than
@@ -1543,7 +1542,14 @@ export default function HomeContent({
   // isWide is a dep so resizing across the 5-column breakpoint silently
   // fetches (or drops) the extra two leagues. hiddenKey is one too: turning a
   // league off in Settings moves its column to the next league at once.
-  const hiddenKey = (prefs.hiddenLeagues ?? []).join(",");
+  // What the board and switchers skip: switcher hides + catalog strikes.
+  const prefsHiddenLeagues = prefs.hiddenLeagues;
+  const prefsCatalogHidden = prefs.catalogHiddenLeagues;
+  const boardHidden = useMemo(
+    () => boardHiddenLeagues({ hiddenLeagues: prefsHiddenLeagues, catalogHiddenLeagues: prefsCatalogHidden }),
+    [prefsHiddenLeagues, prefsCatalogHidden],
+  );
+  const hiddenKey = (boardHidden ?? []).join(",");
   useEffect(() => {
     if (!mountedRef.current || !selectedDate) return;
     fetchData(selectedDate, prefs.thirdLeague, {
@@ -1738,13 +1744,7 @@ export default function HomeContent({
       prefs.favoriteLeagues,
       prefs.thirdLeague,
       [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague],
-      {
-        theme: prefs.theme,
-        defaultDateMode: prefs.defaultDateMode,
-        defaultLandingView: prefs.defaultLandingView,
-        defaultRatings: prefs.defaultRatings,
-        newsThirdLeague: prefs.newsThirdLeague,
-      },
+      shareExtrasFromPrefs(prefs),
     );
     return `${window.location.origin}?${params.toString()}`;
   };
@@ -1972,8 +1972,8 @@ export default function HomeContent({
     // A league unticked in Settings never takes the banner (two of the four
     // accounts that dismissed the UCL banner had hidden UCL first); the next
     // opener does.
-    return { kickoff: getLeagueKickoff(today, prefs.hiddenLeagues ?? []), todayYmd };
-  }, [selectedDate, prefs.hiddenLeagues]);
+    return { kickoff: getLeagueKickoff(today, boardHidden ?? []), todayYmd };
+  }, [selectedDate, boardHidden]);
   const kickoff = kickoffInfo.kickoff;
   const kickoffTodayYmd = kickoffInfo.todayYmd;
 
@@ -2296,7 +2296,7 @@ export default function HomeContent({
   // league can still be pinned or enabled deliberately.
   const switcherOptions = useMemo(
     () => thirdLeagueOptions.filter((o) => {
-      if (prefs.hiddenLeagues?.includes(o.sport)) return false;
+      if (boardHidden?.includes(o.sport)) return false;
       if (prefs.shownLeagues?.includes(o.sport)) return true;
       const pinned = [
         prefs.firstLeague,
@@ -2307,7 +2307,7 @@ export default function HomeContent({
       ].includes(o.sport);
       return o.defaultInSwitcher || pinned || prefs.favoriteLeagues.includes(o.sport);
     }),
-    [thirdLeagueOptions, prefs],
+    [thirdLeagueOptions, prefs, boardHidden],
   );
   // Best of yesterday has no news feed, so the news switchers skip it. ESPN
   // front page does (espn.com's headlines + clips), so it is a league row
@@ -2344,8 +2344,8 @@ export default function HomeContent({
   const autoSlotSports = useMemo(() => {
     if (!selectedDate) return [] as Sport[];
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
-    return pickAndAssignLeagues(viewDate, slotCount, prefs.hiddenLeagues).map((l) => l.sport);
-  }, [selectedDate, slotCount, prefs.hiddenLeagues]);
+    return pickAndAssignLeagues(viewDate, slotCount, boardHidden).map((l) => l.sport);
+  }, [selectedDate, slotCount, boardHidden]);
 
   // ‹ › cycling cursor, per slot. Lives up here (in a ref) because the column
   // component remounts whenever its league changes — per-column state would
@@ -2363,6 +2363,11 @@ export default function HomeContent({
   // Duplicates are allowed; "empty" hides the slot; Auto (undefined) only unsets
   // that one slot, so consecutive Auto clicks across all three drop back to default.
   const setSlotLeague = (slotIdx: number, sport: Sport | "empty" | undefined) => {
+    updatePrefs(slotPatch(slotIdx, sport));
+  };
+
+  // The five slot prefs after one column changes — see setSlotLeague.
+  const slotPatch = (slotIdx: number, sport: Sport | "empty" | undefined): Partial<Preferences> => {
     let resolved: (Sport | "empty" | undefined)[];
     if (sport === undefined) {
       resolved = SLOT_INDICES.map((i) => selectedSlotLeagues[i]);
@@ -2373,12 +2378,44 @@ export default function HomeContent({
       resolved = lockSlotsToBoard(SLOT_INDICES.map((i) => selectedSlotLeagues[i]), sortedLeagues.map((l) => l.sport));
       resolved[slotIdx] = sport;
     }
-    updatePrefs({
+    return {
       firstLeague: resolved[0],
       secondLeague: resolved[1],
       thirdLeague: resolved[2],
       fourthLeague: resolved[3],
       fifthLeague: resolved[4],
+    };
+  };
+
+  // The ESPN front page's "Add {league}" popover (Jacob 9/28). Adding pins the
+  // league to the chosen column and puts it in the switcher: in shownLeagues,
+  // and off both hide lists.
+  const [addLeague, setAddLeague] = useState<{ sport: Sport; anchor: DOMRect } | null>(null);
+  const closeAddLeague = useCallback(() => setAddLeague(null), []);
+  const addLeagueToSlot = (sport: Sport, slotIdx: number) => {
+    const shown = new Set(prefs.shownLeagues ?? []);
+    shown.add(sport);
+    const hidden = (prefs.hiddenLeagues ?? []).filter((s) => s !== sport);
+    const struck = (prefs.catalogHiddenLeagues ?? []).filter((s) => s !== sport);
+    updatePrefs({
+      ...slotPatch(slotIdx, sport),
+      shownLeagues: [...shown],
+      hiddenLeagues: hidden.length ? hidden : undefined,
+      catalogHiddenLeagues: struck.length ? struck : undefined,
+    });
+    setAddLeague(null);
+  };
+  // What each visible column shows now, for the popover's list, and the column
+  // "New column" fills: the first emptied one, else the first Auto one that is
+  // not the ESPN front page itself.
+  const addLeagueSlots = () => {
+    const queue = [...sortedLeagues];
+    return SLOT_INDICES.slice(0, slotCount).map((slotIdx) => {
+      const pref = selectedSlotLeagues[slotIdx];
+      if (pref === "empty") return { slotIdx, label: "empty", sport: null as Sport | null, auto: false };
+      const shownSport = queue.shift()?.sport ?? null;
+      const name = shownSport ? (thirdLeagueOptions.find((o) => o.sport === shownSport)?.label ?? shownSport.toUpperCase()) : "—";
+      return { slotIdx, label: pref === undefined ? `Auto · ${name}` : name, sport: shownSport, auto: pref === undefined };
     });
   };
 
@@ -4169,6 +4206,7 @@ export default function HomeContent({
               onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
+              onAddLeague: (sport: Sport, anchor: DOMRect) => setAddLeague({ sport, anchor }),
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
@@ -5128,7 +5166,8 @@ export default function HomeContent({
           published={videoModal.published}
           body={videoModal.body}
           shareCard={videoModal.shareCard}
-          maskVideoTitle={(prefs.maskVideoTitle ?? false) || !!videoModal.forceTitleMask}
+          maskVideoTitle={prefs.maskVideoTitle ?? false}
+          forceTitleMask={!!videoModal.forceTitleMask}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
@@ -5200,6 +5239,21 @@ export default function HomeContent({
 
       {/* Bottom-right keyboard guide. Sits outside every modal so it can say
           what the post-modal keys are WHILE that modal is open (Jacob 9/8). */}
+      {addLeague && (() => {
+        const slots = addLeagueSlots();
+        const free = slots.find((s) => s.label === "empty") ?? slots.find((s) => s.auto && s.sport !== "top");
+        return (
+          <AddLeaguePopover
+            leagueLabel={thirdLeagueOptions.find((o) => o.sport === addLeague.sport)?.label ?? addLeague.sport.toUpperCase()}
+            anchor={addLeague.anchor}
+            slots={slots.map(({ slotIdx, label }) => ({ slotIdx, label }))}
+            freeSlotIdx={free?.slotIdx}
+            onAdd={(slotIdx) => addLeagueToSlot(addLeague.sport, slotIdx)}
+            onClose={closeAddLeague}
+          />
+        );
+      })()}
+
       <ControlsHint
         enabled={!prefs.hideControlsHint}
         onDismiss={() => updatePrefs({ hideControlsHint: true })}
