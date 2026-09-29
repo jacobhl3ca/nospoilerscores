@@ -102,6 +102,11 @@ test("NFL 2026 title order (season before week) parses", () => {
   const m = matchSeriesTitle(s, cand("Best Plays From Sunday! | 2026 NFL Season Week 1", "NFL"), { seasonYear: 2026 });
   assert.equal(m?.week, 1);
   assert.equal(m?.season, 2026);
+  // Week 3 (9/27) dropped the pipe; the season token alone must still match.
+  const noPipe = matchSeriesTitle(s, cand("Best Plays From Sunday! 2026 NFL Season Week 3", "NFL"), { seasonYear: 2026 });
+  assert.equal(noPipe?.week, 3);
+  assert.equal(noPipe?.season, 2026);
+  assert.equal(matchSeriesTitle(s, cand("Best Plays From Sunday Night Football | 2026 NFL Season Week 3", "NFL"), { seasonYear: 2026 }), null);
   const top15 = matchSeriesTitle(series("nfl", "top15"), cand("Top 15 Plays From Week 2 | 2026 NFL Season", "NFL"), { seasonYear: 2026 });
   assert.equal(top15?.week, 2);
 });

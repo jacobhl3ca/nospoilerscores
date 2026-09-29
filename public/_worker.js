@@ -2661,9 +2661,10 @@ export default {
           detail = overtime ? "Final/OT" : "Final";
         } else if (rawStatus === "in_progress") {
           state = "in"; name = "STATUS_IN_PROGRESS";
-          // Live strings are unverified until the first live window (Fri
-          // 2026-09-18 23:30Z MTL@HAM). Map defensively onto ESPN's shapes:
-          // "Halftime" / "End of 2nd" / "8:32 - 2nd", which liveProgress reads.
+          // Map onto ESPN's shapes, which liveProgress reads. Live strings
+          // captured 2026-09-25/26 (tests/fixtures/cfl-live-capture.json) are
+          // only "8:32 2nd" and "End 2nd"; halftime is "End 2nd", read as
+          // Halftime downstream. The half / delay branches guard unseen strings.
           const nth = segment <= 4 ? ordinal(segment) : segment === 5 ? "OT" : `${segment - 4}OT`;
           if (/half/i.test(clockLabel)) { name = "STATUS_HALFTIME"; detail = "Halftime"; }
           else if (/^end/i.test(clockLabel)) detail = `End of ${nth}`;

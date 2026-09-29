@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import TeamSchedulePreview, { FollowTeamButton } from "@/components/TeamSchedulePreview";
 import { TEAM_PAGES, type TeamPage } from "@/lib/teamPages";
@@ -194,10 +195,8 @@ export default async function TeamPageRoute({ params }: PageProps) {
         <Link href={meta.guide} data-umami-event="team-page-footer-guide" className="underline underline-offset-2" style={muted}>
           {meta.label} without spoilers
         </Link>
-        <Link href="/" data-umami-event="team-page-footer-board" className="underline underline-offset-2" style={muted}>
-          Back to HideScore
-        </Link>
       </div>
+      <DocFooter route={canonical.replace(/^\//, "")} />
 
       <script
         type="application/ld+json"

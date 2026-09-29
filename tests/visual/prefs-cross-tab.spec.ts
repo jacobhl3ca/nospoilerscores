@@ -88,7 +88,10 @@ test("a tab opened before the paste does not wipe the list on its next save", as
 
   // … so an ordinary change there keeps it.
   const putsBefore = account.puts;
-  await b.getByRole("button", { name: /Switch to dark mode/ }).first().click();
+  // The header sun/moon toggle is gone (9/28); Theme lives in Settings only.
+  await b.getByRole("button", { name: "Open settings" }).first().click();
+  await b.getByRole("group", { name: "Theme" }).getByRole("button", { name: /Dark$/ }).click();
+  await b.keyboard.press("Escape");
   await expect(b.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect.poll(() => account.puts, { timeout: 5000 }).toBeGreaterThan(putsBefore);
 

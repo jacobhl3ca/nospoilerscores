@@ -198,6 +198,40 @@ test("live break labels map onto ESPN's Halftime / End of Nth shapes", async () 
   assert.equal(ot.body.events[0].status.period, 5);
 });
 
+// Real live strings, captured 2026-09-25/26 (tests/fixtures/cfl-live-capture.json).
+// theScore's halftime is "End 2nd" — liveProgress turns "End of 2nd" in period 2
+// into "Halftime", so the "half" branch above only guards a string never seen.
+const liveFx = JSON.parse(readFileSync(new URL("./fixtures/cfl-live-capture.json", import.meta.url), "utf8"));
+
+test("captured live strings map to the ESPN shapes hidescore.com served", async () => {
+  const expected = {
+    "15:00 1st": ["15:00 - 1st", "15:00", 1],
+    "8:30 2nd": ["8:30 - 2nd", "8:30", 2],
+    "0:50 2nd": ["0:50 - 2nd", "0:50", 2],
+    "End 1st": ["End of 1st", "0:00", 1],
+    "End 2nd": ["End of 2nd", "0:00", 2],
+    "End 3rd": ["End of 3rd", "0:00", 3],
+    "14:39 3rd": ["14:39 - 3rd", "14:39", 3],
+    "End 4th": ["End of 4th", "0:00", 4],
+  };
+  assert.deepEqual(liveFx.captures.map((c) => c.progress.string), Object.keys(expected));
+  for (const cap of liveFx.captures) {
+    const ev = JSON.parse(JSON.stringify(fx.final));
+    ev.event_status = cap.event_status; ev.status = cap.event_status; ev.box_score.progress = cap.progress;
+    const { body } = await route("/api/cfl?dates=20260912", scoreboard([ev]));
+    const st = body.events[0].status;
+    const [detail, clock, period] = expected[cap.progress.string];
+    assert.equal(st.type.state, "in", cap.progress.string);
+    assert.equal(st.type.name, "STATUS_IN_PROGRESS", cap.progress.string);
+    assert.equal(st.type.shortDetail, detail, cap.progress.string);
+    assert.equal(st.displayClock, clock, cap.progress.string);
+    assert.equal(st.period, period, cap.progress.string);
+    // Where the capture read hidescore.com at the same game clock, the live
+    // worker agreed with this one.
+    if (cap.hidescore) assert.equal(cap.hidescore.shortDetail, detail, cap.progress.string);
+  }
+});
+
 test("upstream failure is a 200 with an empty slate, never a 5xx", async () => {
   const down = await route("/api/cfl?dates=20260912", () => json({ error: "nope" }, 500));
   assert.equal(down.res.status, 200);

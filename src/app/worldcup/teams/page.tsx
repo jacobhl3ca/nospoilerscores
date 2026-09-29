@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import { WORLD_CUP_TEAMS } from "@/lib/worldCupTeams";
 
@@ -86,6 +87,7 @@ export default function WorldCupTeamsPage() {
           Highlights
         </Link>
       </div>
+      <DocFooter route="worldcup/teams" />
 
       <script
         type="application/ld+json"

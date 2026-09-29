@@ -6,6 +6,7 @@ import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortR
 import { TEAM_PICKER_SKIP } from "@/lib/teamLogos";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
+import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { ALL_RECORD_LEAGUES, FREQUENT_RECORD_LEAGUES, WEEKLY_RECORD_LEAGUES, toggleAllRecordLeagues, toggleRecordLeague, upcomingRecordLeagues, type RecordLeague } from "@/lib/upcomingRecords";
 import {
@@ -767,6 +768,8 @@ export default function SettingsPanel({
     defaultRatings: "auto",
     hideLeagueChevrons: undefined,
     hideTeamStars: undefined,
+    hideWatchLaterPill: undefined,
+    watchQueue: undefined,
     upcomingRecordLeagues: undefined,
     hideUpcomingRecords: undefined,
     // Reset means "act like a fresh install", and on a fresh install the
@@ -1380,6 +1383,14 @@ export default function SettingsPanel({
               checked={!prefs.hideTeamStars}
               onChange={(v) => updatePrefs({ hideTeamStars: !v })}
             />
+            {WATCH_QUEUE_ENABLED ? (
+              <ToggleRow
+                label="Show the Later pill on cards"
+                hint="Tap Later on a game to pin it to a Watch queue at the top of the board"
+                checked={!prefs.hideWatchLaterPill}
+                onChange={(v) => updatePrefs({ hideWatchLaterPill: !v })}
+              />
+            ) : null}
             {/* Label, one hint line, then the leagues as chips; a tap opens
                 the picker in place (Jacob 9/28: the old right-aligned hint and
                 "Change" link were not intuitive). */}
