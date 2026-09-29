@@ -21,6 +21,18 @@ const config: CapacitorConfig = {
     url: 'https://hidescore.com',
     errorPath: 'offline.html',
   },
+  // WKWebView only runs service workers when the app opts into App-Bound
+  // Domains. With the SW allowed, `/sw-v*.js` installs on the first online
+  // open and a cold open with no network paints the saved board (P9)
+  // instead of falling through to `offline.html`, whose capacitor://
+  // origin can never read the board saved under https://hidescore.com.
+  // The domain list lives in `ios/App/App/Info.plist` (`WKAppBoundDomains`).
+  // With this on, top-level navigation to any other domain fails inside the
+  // WebView; every external link already goes through
+  // `src/lib/openExternal.ts` (SFSafariViewController / AppLauncher).
+  ios: {
+    limitsNavigationsToAppBoundDomains: true,
+  },
 };
 
 export default config;
