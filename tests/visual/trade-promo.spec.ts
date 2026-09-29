@@ -60,10 +60,14 @@ test("offseason NBA remains labelled and manually selectable", async ({ page }) 
   await page.clock.setFixedTime(new Date("2026-08-05T16:00:00-04:00"));
   await page.goto("/?l=m&s=m.0.0&dd=t&dv=s");
 
+  // Offseason leagues are picked from the switcher's Add more… sheet, behind
+  // its "Show offseason leagues" toggle (Jacob 9/29).
   await page.getByRole("button", { name: "MLB", exact: true }).click();
-  const nbaOption = page.getByRole("button", { name: "NBA · offseason", exact: true });
-  await expect(nbaOption).toBeVisible({ timeout: 20_000 });
-  await expect(nbaOption.locator("em")).toHaveText("· offseason");
+  await page.getByTestId("league-switcher-add-more").click({ timeout: 20_000 });
+  const sheet = page.getByRole("dialog", { name: "More leagues" });
+  await sheet.getByRole("button", { name: "Show offseason leagues" }).click();
+  const nbaOption = sheet.getByRole("button", { name: /^NBA offseason/ });
+  await expect(nbaOption.locator("em")).toHaveText("offseason");
   await nbaOption.click();
 
   await expect(page.getByRole("heading", { name: "NBA", exact: true })).toBeVisible();

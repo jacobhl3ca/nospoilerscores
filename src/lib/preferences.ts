@@ -227,6 +227,11 @@ export interface Preferences {
   // by hand. Off by default: Settings is the durable catalog and a first-time
   // visitor should see everything HideScore carries.
   hideOffseasonInCatalog?: boolean;
+  // The column switcher's "Add more…" sheet: draw the offseason leagues too.
+  // Off by default so the sheet opens on leagues with games; saved so it
+  // opens the way it was left (Jacob 9/29). No Settings row — the toggle
+  // lives in the sheet's footer.
+  showOffseasonInPicker?: boolean;
   // v2 changed opt-in leagues from implicitly checked to default-off. A saved
   // version means this prefs blob has either received the one-time legacy
   // preservation migration or was created after the new defaults launched.

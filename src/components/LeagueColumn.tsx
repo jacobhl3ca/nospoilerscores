@@ -19,6 +19,7 @@ import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
 import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
 import { compareRatedLive } from "@/lib/liveSort";
+import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
@@ -57,6 +58,9 @@ interface LeagueColumnProps {
   // the switcher so Auto isn't an opaque choice (Jacob 8/9).
   autoSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
+  // "Add more…" row above Remove col: opens HomeContent's league sheet for
+  // this column, where the offseason leagues live now (Jacob 9/29).
+  onAddMore?: () => void;
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
   showSwapChevron?: boolean;
@@ -945,6 +949,7 @@ export default function LeagueColumn({
   swappableOptions,
   autoSport,
   onSwapLeague,
+  onAddMore,
   showSwapChevron,
   switcherMode,
   onCycleLeague,
@@ -2007,7 +2012,7 @@ export default function LeagueColumn({
                         maybe show every league here?"). Grey is reserved for
                         offseason, the one state that actually limits what
                         picking it gets you. */}
-                    {[...swappableOptions!].sort((a, b) => {
+                    {inSeasonSwitcherOptions(swappableOptions!, league.sport).sort((a, b) => {
                       // The cross-league pills lead the list wherever they
                       // appear: Best of yesterday first (Jacob 9/26), then
                       // ESPN front page.
@@ -2046,6 +2051,26 @@ export default function LeagueColumn({
                         </button>
                       );
                     })}
+                    {/* Add more… opens the full league sheet (offseason leagues
+                        behind its toggle). It and Remove col share one rule
+                        above them, so the two read as the list's footer. */}
+                    {onAddMore && (
+                      <button
+                        type="button"
+                        data-testid="league-switcher-add-more"
+                        onClick={() => { setSwapOpen(false); onAddMore(); }}
+                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                        style={{
+                          color: "var(--text-muted)",
+                          fontWeight: 400,
+                          borderTop: "1px solid var(--border)",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        Add more…
+                      </button>
+                    )}
                     {/* Remove col — hides the column entirely until switched back. */}
                     <button
                       type="button"
@@ -2054,7 +2079,7 @@ export default function LeagueColumn({
                       style={{
                         color: "var(--text-muted)",
                         fontWeight: 400,
-                        borderTop: "1px solid var(--border)",
+                        borderTop: onAddMore ? undefined : "1px solid var(--border)",
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
