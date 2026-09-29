@@ -1615,7 +1615,7 @@ export default function SettingsPanel({
             <div className="pt-3" style={{ borderTop: "1px solid var(--border)" }}>
               <Field
                 label="Reminder link"
-                hint="Opens this URL from an upcoming game's details. Placeholders: {minutes} {title} {iso} {time} {date}. Leave blank to hide the button."
+                hint="Opens this URL from an upcoming game's details. Placeholders: {minutes} {minutes-5} {title} {iso} {time} {date}. Leave blank to hide the button."
               >
                 <input
                   type="url"
@@ -1635,7 +1635,10 @@ export default function SettingsPanel({
                 />
               </Field>
               <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-muted)" }}>
-                Example: raycast://script-commands/timer?arguments={"{minutes}"}m%20{"{title}"}
+                Mac (Raycast): raycast://script-commands/game-reminder?arguments={"{minutes-5}"}&amp;arguments={"{title}"}
+              </p>
+              <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-muted)" }}>
+                iPhone (Shortcuts): shortcuts://run-shortcut?name=Game%20Reminder&amp;input=text&amp;text={"{minutes-5}"}%20{"{title}"}
               </p>
             </div>
             {/* TV channel links — personal, off by default (lib/tvChannelLinks.ts).
