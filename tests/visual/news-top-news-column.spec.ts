@@ -113,7 +113,7 @@ test("Settings lists both cross-league columns and unticking them saves the pref
   await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
   await seedPrefs(page, { showNews: false, defaultLandingView: "scores" });
   await page.goto("/");
-  await page.getByRole("button", { name: /^Settings$/ }).first().click();
+  await page.getByRole("button", { name: "Open settings" }).first().click();
   await page.getByText(/leagues in the switcher · Edit/).click();
   const best = page.getByRole("checkbox", { name: "Best of yesterday" });
   const top = page.getByRole("checkbox", { name: "Top news" });

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Fragment } from "react";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 
 const FAQ_TITLE = "FAQ — Spoiler-Free Sports Scores | HideScore";
@@ -147,9 +148,7 @@ export default function FaqPage() {
         </Link>.
       </p>
 
-      <div className="mt-10">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-faq">← Back to HideScore</Link>
-      </div>
+      <DocFooter route="faq" />
 
       <script
         type="application/ld+json"

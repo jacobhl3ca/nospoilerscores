@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import EmailLink from "@/components/EmailLink";
+import FeedbackBox from "@/components/FeedbackBox";
 import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
 
 // Added 2026-09-25. The AI-visibility scan still flagged "No Contact page" after
@@ -59,11 +61,16 @@ export default function ContactPage() {
           person reads every message.
         </p>
 
-        <h2 className="text-lg font-semibold mt-6">In the app</h2>
+        <h2 id="feedback" className="text-lg font-semibold mt-6 scroll-mt-4">Send feedback</h2>
         <p>
-          Use the Feedback button at the bottom of the board, on the web or in the iPhone and Android apps. Add your email
-          to the note if you want a reply.
+          Send a note from here without opening your email. In the iPhone and Android apps, the Feedback link at the
+          bottom of Settings opens the same form. Add your email to the note if you want a reply.
         </p>
+        {/* The homepage footer's "Feedback" links here (2026-09-28). A div,
+            not a p: FeedbackBox renders its modal (a div + form) in place. */}
+        <div>
+          <FeedbackBox label="Send feedback" />
+        </div>
 
         <h2 className="text-lg font-semibold mt-6">What to send</h2>
         <ul className="list-disc pl-5 space-y-1.5">
@@ -82,14 +89,7 @@ export default function ContactPage() {
         </p>
       </section>
 
-      <div className="mt-10 flex gap-4">
-        <Link href="/about" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
-          About HideScore
-        </Link>
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-contact">
-          ← Back to HideScore
-        </Link>
-      </div>
+      <DocFooter route="contact" />
 
       {/* ContactPage whose subject is the site's Organization (declared with
           its ContactPoint in layout.tsx), plus the same WebPage→#breadcrumb

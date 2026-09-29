@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import EmailLink from "@/components/EmailLink";
 import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
@@ -115,9 +116,9 @@ export default function AboutPage() {
           Contact
         </h2>
         <p>
-          Email <EmailLink />, or use
-          the Feedback button at the bottom of the board. Bug reports, missing leagues and spoilers that got through are
-          all welcome. The <Link href="/contact" className="underline underline-offset-2">contact page</Link> has more.
+          Email <EmailLink />, or send a note from the feedback form on
+          the <Link href="/contact" className="underline underline-offset-2">contact page</Link>. Bug reports, missing
+          leagues and spoilers that got through are all welcome.
         </p>
 
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
@@ -125,11 +126,7 @@ export default function AboutPage() {
         </p>
       </section>
 
-      <div className="mt-10">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-about">
-          ← Back to HideScore
-        </Link>
-      </div>
+      <DocFooter route="about" />
 
       {/* AboutPage node whose subject is the site's Organization (declared with
           its ContactPoint in layout.tsx), plus the same WebPage→#breadcrumb
