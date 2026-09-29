@@ -7,6 +7,7 @@ import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
+import { frontendHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
 
 export interface NewsSource {
@@ -676,7 +677,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // never in what a plain click does.
   const openInNewTab = (e: ReactMouseEvent) => {
     if (!(e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) return false;
-    if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+    if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
     return true;
   };
   if (shouldPopModal) {
@@ -710,7 +711,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
               // Middle-click fires onAuxClick, not onClick. Mirror the modifier
               // path so wheel-click also opens in a background tab.
               if (e.button === 1 && item.articleUrl) {
-                window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+                window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
               }
             }}
             className="shrink-0 cursor-pointer"
@@ -728,7 +729,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
           }}
           onAuxClick={(e) => {
             if (e.button === 1 && item.articleUrl) {
-              window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+              window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
             }
           }}
           className="min-w-0 flex-1 text-left cursor-pointer"
@@ -760,7 +761,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
     <div className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
       {thumbIsTile ? (
         <a
-          href={item.articleUrl || undefined}
+          href={frontendHref(item.articleUrl)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
@@ -774,7 +775,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
           source — same target as the thumbnail and chevron beside it, which
           keeps middle-click, keyboard, and "copy link" honest. */}
       <a
-        href={item.articleUrl || undefined}
+        href={frontendHref(item.articleUrl)}
         target="_blank"
         rel="noopener noreferrer"
         onClick={handleExternalClick(item.articleUrl)}
@@ -785,7 +786,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       </a>
       {!thumbIsTile && (
         <a
-          href={item.articleUrl || undefined}
+          href={frontendHref(item.articleUrl)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
@@ -893,7 +894,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                     // Modifier-click → open the source article in a background
                     // tab instead of replacing the currently-open modal.
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-                      if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+                      if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
                       return;
                     }
                     onPlay!({
@@ -907,7 +908,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                   }}
                   onAuxClick={(e) => {
                     if (e.button === 1 && item.articleUrl) {
-                      window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+                      window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
                     }
                   }}
                   // The button wraps the thumbnail (alt="") + headline, so its
@@ -930,7 +931,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
             return (
               <a
                 key={item.id}
-                href={item.articleUrl || undefined}
+                href={frontendHref(item.articleUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleExternalClick(item.articleUrl)}

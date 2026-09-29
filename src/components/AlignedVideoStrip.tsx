@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import { handleExternalClick } from "@/lib/openExternal";
+import { frontendHref } from "@/lib/frontendLinks";
 import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
 import { isDemoModeActive } from "@/lib/demoMode";
 
@@ -379,14 +380,14 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
         type="button"
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-            if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
             return;
           }
           onPlay!({ ...newsItemToPlayOpts(item), siblings, index });
         }}
         onAuxClick={(e) => {
           if (e.button === 1 && item.articleUrl) {
-            window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
           }
         }}
         // The button wraps the thumbnail (alt="") + headline, so its accessible
@@ -404,7 +405,7 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
     );
   }
   return (
-    <a key={item.id} href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle}>
+    <a key={item.id} href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle}>
       {body}
     </a>
   );
@@ -455,14 +456,14 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
         type="button"
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-            if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
             return;
           }
           onPlay!({ ...newsItemToPlayOpts(item), siblings, index });
         }}
         onAuxClick={(e) => {
           if (e.button === 1 && item.articleUrl) {
-            window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
           }
         }}
         // Same inline-play control as VideoRow's button (its thumb is
@@ -480,7 +481,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
     );
   }
   return (
-    <a href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle}>
+    <a href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle}>
       {thumb}
       <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
     </a>
