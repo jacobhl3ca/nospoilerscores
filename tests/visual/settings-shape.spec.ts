@@ -42,7 +42,7 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
 
   await expect(dialog.locator("section > h3")).toHaveText([
     "Account", "Favorite teams", "Theme", "Default view", "League columns",
-    "News", "Highlight video player", "Share & reset",
+    "News", "Highlight video player", "Links", "Share & reset",
   ]);
   await expect(dialog.locator("summary", { hasText: "More settings" })).toBeVisible();
 
