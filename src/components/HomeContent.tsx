@@ -469,18 +469,6 @@ function kickoffMessage(k: LeagueKickoff): string {
 // was nothing in it to file against.
 const FEEDBACK_LEAGUE_PREFILL = "League request: ";
 
-// Build day (YYYY-MM-DD, New York), set in next.config.ts. Unset in tests.
-const BUILT_ON = process.env.NEXT_PUBLIC_BUILT_ON;
-// "September 25, 2026". Noon UTC is the same calendar day in New York, and a
-// fixed timeZone keeps the server and client strings identical.
-const formatBuiltOn = (day: string) =>
-  new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", {
-    timeZone: "America/New_York",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
   typeof window !== "undefined" && window.matchMedia(WIDE_BOARD_QUERY).matches;
@@ -3219,36 +3207,6 @@ export default function HomeContent({
               </div>
             )}
 
-            {/* Standalone theme toggle (sits where the calendar button used to;
-                the calendar moved to a bare icon at the end of the DateNav row).
-                Shown in every view. */}
-            <button
-              type="button"
-              onClick={() => {
-                const next = resolvedTheme === "dark" ? "light" : "dark";
-                updatePrefs({ theme: next });
-                document.documentElement.setAttribute("data-theme", next);
-              }}
-              className="monkey-toggle w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
-              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
-              title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {resolvedTheme === "dark" ? (
-                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="5" />
-                  <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                  <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                </svg>
-              ) : (
-                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                </svg>
-              )}
-            </button>
-
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
@@ -4767,126 +4725,26 @@ export default function HomeContent({
           return <Heading className="sr-only">Catch up on games without spoilers. Spoiler-free sports scores and highlights.</Heading>;
         })()}
 
-        {/* ONE footer row (Jacob 7/14; reordered 9/25): About · FAQ · Contact ·
-            Feedback · Settings · Privacy · Guides. The row is ~340px wide, so on
-            a 320px phone it wraps to two lines rather than dropping an item.
-            `relative` anchors the Guides panel, which opens ABOVE the row
-            (absolute) so opening it never wraps the row. */}
-        <div className="relative flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+        {/* ONE footer row (Jacob 7/14; reordered 9/25; 9/28: page links only,
+            one style): About · FAQ · Guides · Contact · Feedback · Privacy.
+            Settings came out (the header gear is the one way in), Guides is a
+            real page (/guides) rather than a popup, and Feedback goes to
+            /contact, which hosts the same form. Plain <a href> (not next/link)
+            so crawlers follow them. On a 320px phone the row wraps to two lines
+            rather than dropping an item. The "App Store" and "Google Play" text
+            links that used to sit here are gone (Jacob 8/24): the badges below
+            say the same thing better. */}
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
           <a href="/about" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</a>
           <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
+          <a href="/guides" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</a>
           <a href="/contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
-          <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} />
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="underline underline-offset-2 cursor-pointer hover:opacity-80"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Settings
-          </button>
+          <a href="/contact#feedback" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</a>
           <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
-          {/* Guides = the SEO copy + internal-link graph, rolled up behind a
-              disclosure. Google renders and indexes content inside collapsed
-              <details>, and plain <a href> (not next/link) is what the crawler
-              needs to follow the routes. */}
-          <details>
-            <summary className="cursor-pointer select-none underline underline-offset-2 marker:content-none [&::-webkit-details-marker]:hidden" style={{ color: "var(--text-muted)" }}>
-              Guides
-            </summary>
-            {/* Opaque --bg, not --bg-card: in dark mode --bg-card is
-                rgba(255,255,255,0.05), so this panel was 95% see-through and
-                the game cards it opens over showed straight through the copy
-                (unreadable — Jacob 8/22). z-50 matches the app's other
-                popovers (news source filter, league swap menu); at z-20 the
-                sticky league rows (z-30) painted over the panel as well. */}
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(42rem,90vw)] max-h-[60vh] overflow-y-auto text-left text-xs leading-relaxed space-y-2 z-50 rounded-lg p-3 shadow-lg" style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}>
-            {/* Headings, sections, a list and a dated <time> (2026-09-25): the
-                usegrowhero scan reads only /, /today, /tomorrow and /yesterday,
-                all this same shell with the games still loading, and found no
-                H2/H3, no <section>, no FAQ, no list and no date on any of them.
-                They all live inside this collapsed panel, so the board itself
-                looks the same. The answers match /faq. */}
-            <section aria-labelledby="about-hidescore" className="space-y-2">
-            <h2 id="about-hidescore" className="font-semibold" style={{ color: "var(--text)" }}>What is HideScore?</h2>
-            <p>
-              HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
-              MLB, MLS, the Premier League, La Liga, Serie A, the Bundesliga, Ligue 1, the Champions
-              League, the 2026 World Cup and golf without ever seeing who won — no score or result
-              is written on the board at all.
-            </p>
-            <p>
-              Before you commit to a replay, switch on our competitiveness rating and it tells you
-              whether a game was a blowout or an instant classic, so you can watch the best sports
-              highlights without spoilers and skip the duds — all without learning the final score.
-            </p>
-            </section>
-            <section id="faq" aria-labelledby="about-faq" className="space-y-2">
-            <h2 id="about-faq" className="font-semibold" style={{ color: "var(--text)" }}>Frequently asked questions</h2>
-            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Is HideScore free?</h3>
-            <p>
-              Yes. It is free, with no ads, and you do not need an account. It works in any browser and
-              as an iPhone or Android app.
-            </p>
-            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Which sports does HideScore cover?</h3>
-            <ul className="list-disc pl-4 space-y-0.5">
-              <li>NBA, WNBA, NFL, MLB, NHL, and college football and basketball</li>
-              <li>Soccer: the Premier League, Champions League, La Liga, Serie A, Bundesliga, Ligue 1, MLS and Liga MX</li>
-              <li>Golf, tennis, F1, UFC, cricket, chess and poker</li>
-            </ul>
-            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Can I tell if a game is worth watching?</h3>
-            <p>
-              Yes. Turn on game ratings in Settings. They show how close or exciting a finished game
-              was, without naming the score or the winner.
-            </p>
-            </section>
-            <p>
-              It&apos;s free, has no tracking cookies, and works in any browser or as an iPhone or Android app. Jump to{" "}
-              <a href="/today" style={{ textDecoration: "underline" }}>today&apos;s games</a>,{" "}
-              <a href="/tomorrow" style={{ textDecoration: "underline" }}>tomorrow&apos;s schedule</a>,{" "}
-              <a href="/yesterday" style={{ textDecoration: "underline" }}>yesterday&apos;s results</a>, the{" "}
-              <a href="/worldcup" style={{ textDecoration: "underline" }}>2026 World Cup hub</a>, or the{" "}
-              <a href="/spoiler-free-sports" style={{ textDecoration: "underline" }}>spoiler-free sports guide</a>,{" "}
-              <a href="/no-spoiler-scores" style={{ textDecoration: "underline" }}>no-spoiler scores</a>,{" "}
-              <a href="/how-to-watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>how to watch sports highlights without spoilers</a>,{" "}
-              <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
-              <a href="/watch" style={{ textDecoration: "underline" }}>watch any YouTube link without spoilers</a>,{" "}
-              <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
-              <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>,{" "}
-              <a href="/nhl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NHL highlights</a>,{" "}
-              <a href="/nba-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NBA highlights</a>,{" "}
-              <a href="/college-football-highlights-without-spoilers" style={{ textDecoration: "underline" }}>college football highlights</a>, or{" "}
-              <a href="/soccer-highlights-without-spoilers" style={{ textDecoration: "underline" }}>soccer highlights</a> — including the{" "}
-              <a href="/premier-league-without-spoilers" style={{ textDecoration: "underline" }}>Premier League</a>,{" "}
-              <a href="/champions-league-without-spoilers" style={{ textDecoration: "underline" }}>Champions League</a>,{" "}
-              <a href="/europa-league-without-spoilers" style={{ textDecoration: "underline" }}>Europa League</a>,{" "}
-              <a href="/conference-league-without-spoilers" style={{ textDecoration: "underline" }}>Conference League</a>,{" "}
-              <a href="/nations-league-without-spoilers" style={{ textDecoration: "underline" }}>Nations League</a>,{" "}
-              <a href="/la-liga-without-spoilers" style={{ textDecoration: "underline" }}>La Liga</a>,{" "}
-              <a href="/mls-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLS</a>,{" "}
-              <a href="/liga-mx-scores-without-spoilers" style={{ textDecoration: "underline" }}>Liga MX</a> and{" "}
-              <a href="/cricket-highlights-without-spoilers" style={{ textDecoration: "underline" }}>cricket</a> — plus spoiler-free{" "}
-              <a href="/nba-scores-without-spoilers" style={{ textDecoration: "underline" }}>NBA scores</a>,{" "}
-              <a href="/nhl-scores-without-spoilers" style={{ textDecoration: "underline" }}>NHL scores</a>,{" "}
-              <a href="/f1-without-spoilers" style={{ textDecoration: "underline" }}>F1</a>,{" "}
-              <a href="/nrl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NRL</a> and{" "}
-              <a href="/ufc-results-without-spoilers" style={{ textDecoration: "underline" }}>UFC</a>, or the{" "}
-              <a href="/redzone-for-every-sport" style={{ textDecoration: "underline" }}>RedZone-style view for every sport</a>. Compare us with the other{" "}
-              <a href="/best-spoiler-free-sports-sites" style={{ textDecoration: "underline" }}>spoiler-free sports apps</a>, or see the{" "}
-              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Read our{" "}
-              <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
-            </p>
-            {BUILT_ON && (
-              <p>
-                Updated <time dateTime={BUILT_ON}>{formatBuiltOn(BUILT_ON)}</time>
-              </p>
-            )}
-          </div>
-          </details>
-          {/* The "App Store" and "Google Play" text links used to sit here.
-              Both are gone (Jacob 8/24): each said exactly what the badge below
-              already says, and of the two the badge is the better surface. */}
         </div>
+        {/* No visible trigger: kept mounted only so Settings' "Send feedback"
+            and "Request a league" can open the form in place. */}
+        <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} hideTrigger />
 
         {/* Compact custom Apple-logo pill — superseded by the real App Store
                 badge below. Kept commented in case we want a smaller text-and-
