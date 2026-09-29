@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, PREFS_STORAGE_KEY } from "@/lib/preferences";
+import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
@@ -804,10 +804,7 @@ export default function HomeContent({
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const sharedVideoId = params.get("v");
-      if (
-        params.has("f") || params.has("l") || params.has("fl") || params.has("t") ||
-        params.has("th") || params.has("dd") || params.has("dv") || params.has("dr") || params.has("n")
-      ) {
+      if (SHARE_PARAM_KEYS.some((k) => params.has(k))) {
         // Support new compact format (f=m1.n15&l=m.n) and old format (f=mlb-1,mlb-2&fl=mlb,nba)
         const fParam = params.get("f");
         const oldTeams = fParam?.includes("-") ? fParam.split(",").filter(Boolean) : null;
@@ -828,6 +825,7 @@ export default function HomeContent({
         if (decoded.defaultLandingView) loaded.defaultLandingView = decoded.defaultLandingView;
         if (decoded.defaultRatings) loaded.defaultRatings = decoded.defaultRatings;
         if (decoded.newsThirdLeague) loaded.newsThirdLeague = decoded.newsThirdLeague;
+        Object.assign(loaded, sharedExtrasPatch(decoded));
         noStored = false; // shared setup = explicit league choices, skip the picker
         savePreferences(loaded);
         const keep = new URLSearchParams();
@@ -1738,13 +1736,7 @@ export default function HomeContent({
       prefs.favoriteLeagues,
       prefs.thirdLeague,
       [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague],
-      {
-        theme: prefs.theme,
-        defaultDateMode: prefs.defaultDateMode,
-        defaultLandingView: prefs.defaultLandingView,
-        defaultRatings: prefs.defaultRatings,
-        newsThirdLeague: prefs.newsThirdLeague,
-      },
+      shareExtrasFromPrefs(prefs),
     );
     return `${window.location.origin}?${params.toString()}`;
   };
@@ -5128,7 +5120,8 @@ export default function HomeContent({
           published={videoModal.published}
           body={videoModal.body}
           shareCard={videoModal.shareCard}
-          maskVideoTitle={(prefs.maskVideoTitle ?? false) || !!videoModal.forceTitleMask}
+          maskVideoTitle={prefs.maskVideoTitle ?? false}
+          forceTitleMask={!!videoModal.forceTitleMask}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
