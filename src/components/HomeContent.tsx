@@ -3697,6 +3697,9 @@ export default function HomeContent({
           // Top news (Jacob 5/30); now they get it only where the column board
           // does: a Top news pick, or a scores col 3 with no league news.
           const thirdMirrorEntry = mirrorEntryFor(2);
+          // Scores column 3 set to Empty: news column 3 stays empty too
+          // unless the user picks something for it (Jacob 9/29).
+          const thirdSlotEmpty = selectedSlotLeagues[2] === "empty";
           // A col 3 pick only counts while that league is still in the user's
           // switcher. A stored pick of a league they never added or later
           // turned off (a CFL pick the old sync bug kept bringing back, Jacob
@@ -3713,9 +3716,13 @@ export default function HomeContent({
           // Default column order matches the scores board 1 for 1: news cols
           // 1-3 follow scores cols 1-3 (Jacob 9/25: "shouldn't it match 1 for 1
           // with my leagues on homepage unless manually set there"). Col 3
-          // falls back to the ESPN/general feed when scores col 3 has no league
-          // with news (Empty, Best of yesterday). Before 9/25, col 3
-          // was always that feed unless a 3rd news league was picked.
+          // falls back to the ESPN/general feed only when scores col 3 is Best
+          // of yesterday (a cross-league pick, so Top news fits). An Empty
+          // scores col 3 gives no news col 3 (Jacob 9/29: "not if empty");
+          // before 9/29 it fell back to Top news too, so r/sports showed with
+          // no league of the user's behind it. An explicit col 3 pick (a
+          // league or Top news) still shows. Before 9/25, col 3 was always
+          // that feed unless a 3rd news league was picked.
           const firstTwoEntries = leagueEntries.filter((e) => e.slotIdx === 0 || e.slotIdx === 1);
           // A pick in col 3's own switcher overrides the mirror: a league, or
           // Top news. Old blobs have no newsTopNews; a set newsGenericSlot
@@ -3725,7 +3732,7 @@ export default function HomeContent({
           // fall back to it takes the most relevant league not already in
           // cols 1-2, the way a scores column skips a turned-off league.
           const topNewsOff = !!prefs.topNewsHidden;
-          const nextNewsSport = topNewsOff
+          const nextNewsSport = topNewsOff && !thirdSlotEmpty
             ? switcherSportsByRelevance.find((s) => s !== "top" && s !== "best"
                 && s !== scoreSlotSports[0] && s !== scoreSlotSports[1])
             : undefined;
@@ -3736,13 +3743,14 @@ export default function HomeContent({
             label: thirdLeagueOptions.find((o) => o.sport === nextNewsSport)?.label ?? nextNewsSport.toUpperCase(),
             orderedCascade: leagueSourceCascade(nextNewsSport),
           } : null;
-          const topNewsFallback = topNewsOff ? nextNewsEntry : espnEntry;
+          const topNewsFallback = thirdSlotEmpty ? null : (topNewsOff ? nextNewsEntry : espnEntry);
           const thirdColEntry = prefs.newsGenericHidden
             ? null
             : thirdLeagueEntry ?? (topNewsPicked && !topNewsOff ? espnEntry : thirdMirrorEntry ?? topNewsFallback);
-          // What Auto gives col 3: the mirror, else the fallback above.
+          // What Auto gives col 3: the mirror, else the fallback above
+          // (nothing under an Empty scores col 3).
           const thirdAutoSport = thirdMirrorEntry?.sport ?? nextNewsEntry?.sport;
-          const thirdAutoIsEspn = !thirdMirrorEntry && !topNewsOff;
+          const thirdAutoIsEspn = !thirdSlotEmpty && !thirdMirrorEntry && !topNewsOff;
           // Column 3's entry sits third, phone and desktop alike (Jacob 9/28:
           // "it shouldn't be ordered first if it's the 3rd column"). That
           // covers a league mirror, the ESPN front page mirror, the Auto
@@ -3951,15 +3959,28 @@ export default function HomeContent({
           const narrowCol = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
           // News + button restores column 3 first when removed (with whatever
           // it showed: the mirror, a picked league, or Top news); otherwise it
-          // refills one of the two score-linked league columns.
+          // refills one of the two score-linked league columns; otherwise,
+          // under an Empty scores col 3, it picks a league for news col 3
+          // only (the scores board stays as it is).
           const newsFirstEmptySlot = [0, 1].find((i) => selectedSlotLeagues[i] === "empty");
           const newsAddEligibleSport = switcherOptions.find(
             (o) => !visibleNewsEntries.some((e) => e.sport === o.sport),
           )?.sport;
-          const newsOnAddColumn = visibleNewsEntries.length < 3 && (prefs.newsGenericHidden || newsFirstEmptySlot !== undefined)
+          // Col 3 with nothing to show even when un-hidden: Empty scores col 3
+          // and no col 3 pick of its own.
+          const thirdHasNothing = thirdSlotEmpty && !thirdLeagueEntry && !(topNewsPicked && !topNewsOff);
+          const newsThirdAddSport = thirdHasNothing
+            ? switcherSportsByRelevance.find((s) => s !== "top" && s !== "best"
+                && newsSwitcherOptions.some((o) => o.sport === s)
+                && !visibleNewsEntries.some((e) => e.sport === s))
+            : undefined;
+          const newsUnhideThird = !!prefs.newsGenericHidden && !thirdHasNothing;
+          const newsOnAddColumn = visibleNewsEntries.length < 3
+            && (newsUnhideThird || newsFirstEmptySlot !== undefined || newsThirdAddSport !== undefined)
             ? () => {
-                if (prefs.newsGenericHidden) updatePrefs({ newsGenericHidden: false });
+                if (newsUnhideThird) updatePrefs({ newsGenericHidden: false });
                 else if (newsFirstEmptySlot !== undefined && newsAddEligibleSport) setSlotLeague(newsFirstEmptySlot, newsAddEligibleSport);
+                else if (newsThirdAddSport) setNewsThirdLeague(newsThirdAddSport, "espn");
               }
             : undefined;
           const containerCls = effectiveColCount === 1

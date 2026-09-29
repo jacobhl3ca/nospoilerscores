@@ -24,11 +24,13 @@ async function seedPrefs(page: import("@playwright/test").Page, extra: Record<st
 }
 
 test("Top news is reachable from a league column, not just column 3", async ({ page }) => {
+  // Best of yesterday in scores column 3 falls back to Top news; an Empty
+  // one gives no news column 3 (Jacob 9/29).
   await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
   await seedPrefs(page, {
     firstLeague: "mlb",
     secondLeague: "nfl",
-    thirdLeague: "empty",
+    thirdLeague: "best",
     fourthLeague: "empty",
     fifthLeague: "empty",
   });
@@ -74,7 +76,7 @@ test("the switcher marks what Auto resolves to and dates upcoming leagues as M/D
 // one (Jacob 9/26): straight after Auto, not under a divider at the bottom.
 test("Top news is the first row after Auto in a news switcher", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
-  await seedPrefs(page, { firstLeague: "mlb", secondLeague: "nfl", thirdLeague: "empty", fourthLeague: "empty", fifthLeague: "empty" });
+  await seedPrefs(page, { firstLeague: "mlb", secondLeague: "nfl", thirdLeague: "best", fourthLeague: "empty", fifthLeague: "empty" });
   await page.goto("/");
   const titles = page.locator('button[title="Switch news league"]');
   await expect(titles).toHaveCount(3);
@@ -89,7 +91,7 @@ test("Top news is the first row after Auto in a news switcher", async ({ page })
 test("Top news turned off: column 3 shows a league and no switcher offers it", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-08-07T15:00:00-04:00"));
   await seedPrefs(page, {
-    firstLeague: "mlb", secondLeague: "nfl", thirdLeague: "empty", fourthLeague: "empty", fifthLeague: "empty",
+    firstLeague: "mlb", secondLeague: "nfl", thirdLeague: "best", fourthLeague: "empty", fifthLeague: "empty",
     topNewsHidden: true,
   });
   await page.goto("/");
