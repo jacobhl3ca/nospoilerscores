@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
 import { getTimeZone } from "@/lib/etDay";
 import { handleExternalClick } from "@/lib/openExternal";
+import { frontendHref } from "@/lib/frontendLinks";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
@@ -446,7 +447,7 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
       {item.articleUrl && (
         <div className="flex items-center gap-2 px-4 pt-2 pb-3">
           <a
-            href={item.articleUrl}
+            href={frontendHref(item.articleUrl)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={handleExternalClick(item.articleUrl)}
