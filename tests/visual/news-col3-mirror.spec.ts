@@ -122,14 +122,15 @@ test("phone: a Top news pick still shows Top news", async ({ page }) => {
   expect(await comesBefore(page, "r/baseball", "r/sports")).toBe(true);
 });
 
-test("phone: scores column 3 Empty still falls back to Top news", async ({ page }) => {
+// Jacob 9/29: Best of yesterday → Top news is right, but "not if empty".
+test("phone: scores column 3 Empty shows no Top news", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seedPrefs(page, { thirdLeague: "empty" });
   await page.goto("/");
   const main = page.locator("main");
-  await expect(main.getByText("r/sports", { exact: true })).toBeVisible(LOAD);
   await expect(main.getByText("r/baseball", { exact: true })).toBeVisible(LOAD);
-  expect(await comesBefore(page, "r/baseball", "r/sports")).toBe(true);
+  await expect(main.getByText("r/nfl", { exact: true })).toBeVisible(LOAD);
+  await expect(main.getByText("r/sports", { exact: true })).toHaveCount(0);
 });
 
 // Jacob 9/28: "it shouldn't be ordered first if it's the 3rd column".
@@ -159,7 +160,7 @@ test("phone: scores column 3 ESPN front page puts the headlines after MLB", asyn
 test("a stale newsGenericSlot with no Top news pick leaves column 3 last", async ({ page }) => {
   await seedPrefs(page, { thirdLeague: "empty", newsGenericSlot: 0, newsTopNews: false });
   await page.goto("/");
-  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["MLB", "NFL", "Top news"], LOAD);
+  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["MLB", "NFL"], LOAD);
 });
 
 test("a real Top news pick into column 1 still pulls it left", async ({ page }) => {
@@ -198,10 +199,33 @@ test("an older Top news pick (newsGenericSlot, no newsTopNews) is kept", async (
   await expect(page.locator('button[title="Switch news league"]')).toHaveText(["Top news", "MLB", "NFL"], LOAD);
 });
 
-test("scores column 3 Empty: news column 3 is Top news", async ({ page }) => {
+test("scores column 3 Empty: no news column 3", async ({ page }) => {
   await seedPrefs(page, { thirdLeague: "empty" });
   await page.goto("/");
-  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["MLB", "NFL", "Top news"], LOAD);
+  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["MLB", "NFL"], LOAD);
+});
+
+test("scores column 3 Empty: a league picked for news column 3 still shows", async ({ page }) => {
+  await seedPrefs(page, { thirdLeague: "empty", newsThirdLeague: "wnba" });
+  await page.goto("/");
+  await expect(page.locator('button[title="Switch news league"]')).toHaveText(["MLB", "NFL", "WNBA"], LOAD);
+});
+
+test("scores column 3 Empty: News + adds a news-only column 3", async ({ page }) => {
+  await seedPrefs(page, { thirdLeague: "empty" });
+  await page.goto("/");
+  const titles = page.locator('button[title="Switch news league"]');
+  await expect(titles).toHaveText(["MLB", "NFL"], LOAD);
+  await page.locator("main").getByRole("button", { name: "Add a league column" }).click();
+  await expect(titles).toHaveCount(3);
+  await expect(titles.nth(2)).not.toHaveText("Top news");
+  const p = await saved(page);
+  expect(p.newsThirdLeague).toBeTruthy();
+  expect(p.newsThirdLeague).not.toBe("top");
+  // The scores board was not touched.
+  expect(p.firstLeague).toBe("mlb");
+  expect(p.secondLeague).toBe("nfl");
+  expect(p.thirdLeague).toBe("empty");
 });
 
 test("signed in: a pick the account cleared does not come back from a stale device", async ({ page }) => {
@@ -232,4 +256,17 @@ test("signed in: a pick the account cleared does not come back from a stale devi
   expect((await saved(page)).newsThirdLeague).toBeUndefined();
   await expect.poll(() => puts.length, { timeout: 5000 }).toBeGreaterThan(0);
   for (const body of puts) expect(body).not.toHaveProperty("newsThirdLeague");
+});
+
+test("scores column 3 Empty and news column 3 removed: News + picks a league in one click", async ({ page }) => {
+  await seedPrefs(page, { thirdLeague: "empty", newsGenericHidden: true });
+  await page.goto("/");
+  const titles = page.locator('button[title="Switch news league"]');
+  await expect(titles).toHaveText(["MLB", "NFL"], LOAD);
+  await page.locator("main").getByRole("button", { name: "Add a league column" }).click();
+  await expect(titles).toHaveCount(3);
+  const p = await saved(page);
+  expect(p.newsGenericHidden).toBe(false);
+  expect(p.newsThirdLeague).toBeTruthy();
+  expect(p.thirdLeague).toBe("empty");
 });
