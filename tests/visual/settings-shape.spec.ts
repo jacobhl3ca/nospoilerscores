@@ -59,7 +59,7 @@ async function start(page: Page, viewport: { width: number; height: number }, si
 
 const SIGNED_IN_ORDER = [
   "Theme", "Leagues", "Favorite teams", "Default view", "News",
-  "Highlight video player", "Account", "Share & reset",
+  "Highlight video player", "Links", "Account", "Share & reset",
 ];
 
 test("phone: section order, search first, 3 slots, folds closed, short panel", async ({ page }) => {
