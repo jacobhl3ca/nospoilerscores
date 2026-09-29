@@ -10,6 +10,7 @@ import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
+import { LeaguePickerModal } from "./LeaguePickerModal";
 import type { BestYesterdayOptions } from "@/lib/espn";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
@@ -36,7 +37,7 @@ import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
@@ -716,16 +717,23 @@ export default function HomeContent({
     });
   }, []);
   const namesCompact = Object.values(colAbbrev).some(Boolean);
-  // Dialog container for the first-run league picker — see its Escape/scroll-lock/
-  // focus effect. The ratings/news explainers used to need the same treatment;
-  // as of 2026-08-04 they're non-modal inline bars, so they need none of it.
-  const leaguePickerRef = useRef<HTMLDivElement>(null);
   // First-run league picker (shown once, only on a brand-new install — see the
   // mount effect). pickerSel is the ordered set of chosen leagues (max 3, mapped
   // to slots 1/2/3 on confirm); firstRunRef captures "no stored prefs" at mount
   // so a later savePreferences() can't retroactively hide the picker.
   const [showLeaguePicker, setShowLeaguePicker] = useState(false);
   const [pickerSel, setPickerSel] = useState<Sport[]>([]);
+  // The column whose switcher opened "Add more…" (Jacob 9/29), or null. Data
+  // only — the pick is resolved against the prefs of the moment it lands, so
+  // flipping the sheet's offseason toggle first cannot be undone by it.
+  // `autoId` is what news column 3's Auto lands on (see setNewsThirdLeague).
+  const [addMoreFor, setAddMoreFor] = useState<{
+    kind: "scores" | "news";
+    slotIdx: number;
+    current?: Sport;
+    shownElsewhere: { sport: Sport; col: number }[];
+    autoId?: Sport | "espn";
+  } | null>(null);
   const firstRunRef = useRef(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   // Px the scroll-to-top button is pushed up so it clears the footer instead of
@@ -1695,8 +1703,9 @@ export default function HomeContent({
   // A pick in news column 3's own switcher. A league overrides the column;
   // undefined (Auto) hands it back to scores column 3. `autoId` is the column
   // Auto lands on, so a one-column Focus view can follow it.
-  const setNewsThirdLeague = (sport: Sport | undefined, autoId: Sport | "espn" = "espn") => {
+  const setNewsThirdLeague = (sport: Sport | undefined, autoId: Sport | "espn" = "espn", extra: Partial<Preferences> = {}) => {
     updatePrefs({
+      ...extra,
       newsThirdLeague: sport,
       newsTopNews: false,
       // Drop an old "Top news" pull-left too, so Auto puts col 3 back third.
@@ -2076,20 +2085,20 @@ export default function HomeContent({
     "facup", "copadelrey", "dfbpokal",
     "fifa", "euro", "afcon",
   ];
+  const pickerRank = (s: Sport) => {
+    const i = PICKER_RANK.indexOf(s);
+    // A league missing from the ranking sorts just before the soccer block
+    // rather than vanishing or jumping to the front — adding a new league to
+    // ALL_LEAGUES must never silently reorder the top of this screen.
+    return i === -1 ? PICKER_RANK.indexOf("epl") - 0.5 : i;
+  };
   const pickerOptions = useMemo(() => {
-    const rank = (s: Sport) => {
-      const i = PICKER_RANK.indexOf(s);
-      // A league missing from the ranking sorts just before the soccer block
-      // rather than vanishing or jumping to the front — adding a new league to
-      // ALL_LEAGUES must never silently reorder the top of this screen.
-      return i === -1 ? PICKER_RANK.indexOf("epl") - 0.5 : i;
-    };
     // The first-run picker chooses leagues for every day's board; Best of
     // yesterday and ESPN front page are today-only columns.
     return thirdLeagueOptions
       .filter((o) => o.sport !== "best" && o.sport !== "top")
-      .sort((a, b) => rank(a.sport) - rank(b.sport));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- PICKER_RANK is a literal constant
+      .sort((a, b) => pickerRank(a.sport) - pickerRank(b.sport));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pickerRank reads only the literal PICKER_RANK
   }, [thirdLeagueOptions]);
 
   // Display-only anonymization for the ?demo=1&picker=1 sheet — see
@@ -2145,6 +2154,17 @@ export default function HomeContent({
     }
     return [...options.values()];
   }, [selectedDate]);
+
+  // The "Add more…" sheet (Jacob 9/29): every league HideScore carries, the
+  // way Settings' catalog judges it (against today), in the first-run
+  // picker's popularity order. The sheet itself hides the offseason pills
+  // until its toggle is on. Settings-style, a turned-off league is listed
+  // too, and picking it turns it back on (see pickAddMore).
+  const addMoreOptions = useMemo(
+    () => [...settingsLeagueOptions].sort((a, b) => pickerRank(a.sport) - pickerRank(b.sport)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pickerRank reads only the literal PICKER_RANK
+    [settingsLeagueOptions],
+  );
 
   // One Set per real change, so the cards don't see a new object every render.
   const recordLeagues = useMemo(
@@ -2227,73 +2247,8 @@ export default function HomeContent({
     setShowLeaguePicker(false);
   }, [updatePrefs]);
 
-  // Escape closes the first-run league picker too — same as tapping its
-  // backdrop (both fall back to default leagues). Brings it in line with the
-  // ratings/news explainers and every other modal in the app, which all
-  // dismiss on Escape. This effect also locks body scroll and seats focus into
-  // the dialog while it's open — the same treatment the ratings/news explainers
-  // (and every other modal) already get, which this first-run picker was the
-  // last overlay still missing (it had role="dialog"/aria-modal + Escape but
-  // never pinned the feed behind it or moved focus off the trigger).
-  useEffect(() => {
-    if (!showLeaguePicker) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { skipLeaguePicker(); return; }
-      // Trap Tab within the dialog (WCAG 2.4.3) — same wrap-at-first/last pattern
-      // as the ratings/news explainers and GameDetailModal. Without it a keyboard
-      // user could Tab off the last league pill into the inert feed behind the
-      // overlay. Focusables queried live so the disabled (3-picked) pills and any
-      // hidden control are excluded (offsetParent drops display:none).
-      if (e.key !== "Tab") return;
-      const dialog = leaguePickerRef.current;
-      if (!dialog) return;
-      const focusable = Array.from(
-        dialog.querySelectorAll<HTMLElement>(
-          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-        )
-      ).filter((el) => el.offsetParent !== null);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-      if (e.shiftKey) {
-        if (active === first || active === dialog) { e.preventDefault(); last.focus(); }
-      } else if (active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    // Lock body scroll (position:fixed + negative top pins iOS WebKit too, where
-    // plain overflow:hidden leaks the feed behind the overlay); restore returns
-    // you exactly where you were.
-    const scrollY = window.scrollY;
-    const body = document.body;
-    const prevBody = {
-      overflow: body.style.overflow,
-      position: body.style.position,
-      top: body.style.top,
-      width: body.style.width,
-    };
-    body.style.overflow = "hidden";
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.width = "100%";
-    // Focus management (WCAG 2.4.3): move focus into the dialog (the tabIndex=-1
-    // container, so no ring shows for mouse users) and restore it to the opener
-    // on close.
-    const opener = document.activeElement as HTMLElement | null;
-    leaguePickerRef.current?.focus();
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      body.style.overflow = prevBody.overflow;
-      body.style.position = prevBody.position;
-      body.style.top = prevBody.top;
-      body.style.width = prevBody.width;
-      window.scrollTo(0, scrollY);
-      opener?.focus?.();
-    };
-  }, [showLeaguePicker, skipLeaguePicker]);
+  // Escape, the Tab trap, the body-scroll lock and the focus seat for the
+  // picker live in LeaguePickerModal, shared with the switcher's Add more….
 
   // Homepage switcher options = core auto-rotation leagues by default, plus
   // opt-in leagues the user explicitly enabled, minus explicit hides. This
@@ -2322,6 +2277,34 @@ export default function HomeContent({
     const leagues = switcherOptions.filter((o) => o.sport !== "best");
     return [...leagues.filter((o) => o.sport === "top"), ...leagues.filter((o) => o.sport !== "top")];
   }, [switcherOptions]);
+
+  // A tap in the Add more… sheet does what the dropdown row for that column
+  // does. Like pinning in Settings, picking a turned-off league turns it back
+  // on — otherwise the column would show the next league instead. News
+  // column 3 only keeps a pick that is in the news switcher, so a league from
+  // outside it (an opt-in or offseason one) is added to shownLeagues too.
+  const pickAddMore = (sport: Sport) => {
+    const target = addMoreFor;
+    setAddMoreFor(null);
+    if (!target) return;
+    const hidden = prefs.hiddenLeagues ?? [];
+    const struck = prefs.catalogHiddenLeagues ?? [];
+    const unhide: Partial<Preferences> = {
+      ...(hidden.includes(sport) ? { hiddenLeagues: hidden.length > 1 ? hidden.filter((s) => s !== sport) : undefined } : {}),
+      ...(struck.includes(sport) ? { catalogHiddenLeagues: struck.length > 1 ? struck.filter((s) => s !== sport) : undefined } : {}),
+    };
+    if (target.kind === "news" && target.slotIdx === 2) {
+      const shown = prefs.shownLeagues ?? [];
+      const inSwitcher = newsSwitcherOptions.some((o) => o.sport === sport) || shown.includes(sport);
+      setNewsThirdLeague(sport, target.autoId ?? "espn", inSwitcher ? unhide : { ...unhide, shownLeagues: [...shown, sport] });
+      return;
+    }
+    setSlotLeague(target.slotIdx, sport, unhide);
+  };
+  const leagueLabelFor = (sport: Sport) =>
+    thirdLeagueOptions.find((o) => o.sport === sport)?.label
+    ?? settingsLeagueOptions.find((o) => o.sport === sport)?.label
+    ?? sport.toUpperCase();
 
   // Switcher sports in RELEVANCE order — the auto-picker's own ranking
   // (firstPref pins like the World Cup first, then LEAGUE_PRIORITY). Drives
@@ -2368,8 +2351,10 @@ export default function HomeContent({
   // for the others and can bump NHL out of slot 3 — see lib/espn.ts fetchAllLeagues.
   // Duplicates are allowed; "empty" hides the slot; Auto (undefined) only unsets
   // that one slot, so consecutive Auto clicks across all three drop back to default.
-  const setSlotLeague = (slotIdx: number, sport: Sport | "empty" | undefined) => {
-    updatePrefs(slotPatch(slotIdx, sport));
+  // `extra` rides the same save: updatePrefs spreads the render's prefs, so a
+  // second call in one handler would drop the first one's change.
+  const setSlotLeague = (slotIdx: number, sport: Sport | "empty" | undefined, extra: Partial<Preferences> = {}) => {
+    updatePrefs({ ...extra, ...slotPatch(slotIdx, sport) });
   };
 
   // The five slot prefs after one column changes — see setSlotLeague.
@@ -3686,7 +3671,9 @@ export default function HomeContent({
             // cross-league pick, not a league). The board keeps its other
             // mirrors plus the News column rather than an empty column.
             if (sport === "best") return null;
-            const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
+            // Settings' catalog as a fallback: an offseason league pinned
+            // from Add more… is not in the in-season list.
+            const label = leagueLabelFor(sport);
             const orderedCascade = leagueSourceCascade(sport);
             return { slotIdx, sport, id: sport as string, label, orderedCascade };
           };
@@ -3705,13 +3692,16 @@ export default function HomeContent({
           // switcher. A stored pick of a league they never added or later
           // turned off (a CFL pick the old sync bug kept bringing back, Jacob
           // 9/26: "still see cfl ... when its not my league") falls back to Auto.
+          // A league added from Add more… (shownLeagues) counts too, even
+          // offseason, since that pick was made on purpose (Jacob 9/29).
           const newsThirdPick = prefs.newsThirdLeague
-            && newsSwitcherOptions.some((o) => o.sport === prefs.newsThirdLeague)
+            && (newsSwitcherOptions.some((o) => o.sport === prefs.newsThirdLeague)
+              || (prefs.shownLeagues?.includes(prefs.newsThirdLeague) && !prefs.hiddenLeagues?.includes(prefs.newsThirdLeague)))
             ? prefs.newsThirdLeague
             : undefined;
           const thirdLeagueEntry = newsThirdPick === "top" ? frontPageEntryFor(2) : newsThirdPick ? (() => {
             const sport = newsThirdPick;
-            const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
+            const label = leagueLabelFor(sport);
             return { slotIdx: 2, sport, id: sport as string, label, orderedCascade: leagueSourceCascade(sport) };
           })() : null;
           // Default column order matches the scores board 1 for 1: news cols
@@ -3832,6 +3822,15 @@ export default function HomeContent({
               }
               setSlotLeague(slotIdx, s);
             };
+          // Add more… from a news column: same slot rules as newsSwapFor.
+          const newsAddMoreFor = (entry: { slotIdx: number; sport?: Sport }, otherSports: { sport: Sport; col: number }[]) =>
+            () => setAddMoreFor({
+              kind: "news",
+              slotIdx: entry.slotIdx,
+              current: entry.sport,
+              shownElsewhere: otherSports,
+              autoId: thirdAutoSport ?? "espn",
+            });
           // Force the ESPN "Top news" feed back as a column: clear any 3rd-league
           // override and explicitly show the independent generic column.
           // When called from a column's switcher, `position` is that column's
@@ -4038,6 +4037,7 @@ export default function HomeContent({
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
+                            onAddMore={newsAddMoreFor(entry, otherSports)}
                             onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                             espnActive={isEspn}
                             autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
@@ -4100,6 +4100,7 @@ export default function HomeContent({
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
+                      onAddMore={newsAddMoreFor(entry, otherSports)}
                       onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                       espnActive={isEspn}
                       autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
@@ -4309,6 +4310,15 @@ export default function HomeContent({
                 .filter((e) => e.slotIdx !== idx)
                 .map(({ sport, col }) => ({ sport, col })),
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
+              onAddMore: () => setAddMoreFor({
+                kind: "scores",
+                slotIdx: idx,
+                current: slotEntries.find((e) => e.slotIdx === idx)?.league.sport,
+                shownElsewhere: slotEntries
+                  .map((e, i) => ({ sport: e.league.sport, col: i + 1, slotIdx: e.slotIdx }))
+                  .filter((e) => e.slotIdx !== idx)
+                  .map(({ sport, col }) => ({ sport, col })),
+              }),
               // An Auto column that Best of yesterday took over: Auto IS that
               // column today, so it carries the "· default" mark.
               autoSport: selectedSlotLeagues[idx] === undefined
@@ -4985,138 +4995,34 @@ export default function HomeContent({
       )}
 
       {showLeaguePicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={skipLeaguePicker}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div
-            ref={leaguePickerRef}
-            // tabIndex=-1 makes the container programmatically focusable (see the
-            // focus-management effect) without joining the tab order; outline
-            // none suppresses the ring since it's focused only to seat SR focus.
-            tabIndex={-1}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="league-picker-title"
-            // Capped to the viewport (the backdrop's p-4 is the 2rem) and laid
-            // out as a column so the league grid — not the dialog — absorbs the
-            // overflow. Without this the modal simply grew past a short window
-            // and, because the backdrop is a non-scrolling fixed layer, the
-            // "Use defaults" / confirm row below was unreachable: Escape or a
-            // backdrop click were the only ways out (Jacob 8/23, small Firefox
-            // window). Worse on desktop than phone, since pickerMax = slotCount
-            // offers five slots and a longer list on a wide viewport.
-            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl flex flex-col max-h-[calc(100dvh-2rem)]"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-center mb-2 shrink-0">
-              <svg className="w-9 h-9" viewBox="0 0 32 32" fill="none" aria-hidden>
-                <rect width="32" height="32" rx="6" className="header-logo-bg" />
-                <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
-              </svg>
-            </div>
-            <h3 id="league-picker-title" className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>Pick your leagues</h3>
-            <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
-              Choose up to <strong>{pickerMax} leagues</strong> for your score columns.<br />You can change these anytime in Settings.
-            </p>
-            {/* Popularity-ordered, soccer grouped at the bottom (pickerOptions).
-                Two rules keep this list STILL while you tap through it, which is
-                the whole complaint (Jacob 8/9): nothing re-sorts on selection,
-                and the order badge lives in a fixed-width slot that is present
-                (blank) on every pill — the old `1. ` prefix grew the pill on
-                click, which reflowed the wrap and made unrelated pills jump. */}
-            {/* The only scrolling part: min-h-0 lets this flex child shrink
-                below its content height (without it the grid keeps its natural
-                size and the cap above does nothing), and the negative-margin /
-                padding pair keeps the pills' focus rings from being clipped by
-                the new overflow box. */}
-            <div className="flex flex-wrap justify-center gap-2 mb-4 overflow-y-auto min-h-0 -mx-1 px-1">
-              {pickerOptions.map((o) => {
-                const idx = pickerSel.indexOf(o.sport);
-                const on = idx >= 0;
-                const full = pickerSel.length >= pickerMax && !on;
-                const demoOption = demoPickerLabels?.get(o.sport);
-                return (
-                  <button
-                    key={o.sport}
-                    type="button"
-                    disabled={full}
-                    onClick={() => togglePick(o.sport)}
-                    // Multi-select toggle: expose the picked state to assistive
-                    // tech, since it's otherwise conveyed only by the accent
-                    // background (and a "1. " number prefix). Matches the
-                    // aria-pressed pattern every other toggle pill in the app
-                    // already uses (view tabs, the news reveal/text-post pills,
-                    // the World Cup groups band/day pills) — this picker was the
-                    // lone group missing it.
-                    aria-pressed={on}
-                    className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={on
-                      ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
-                      : { background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
-                  >
-                    {/* Fixed 1rem slot, reserved whether or not this pill is
-                        picked, so selecting one never changes any pill's width. */}
-                    <span aria-hidden className="inline-block w-4 shrink-0 text-center text-xs font-bold tabular-nums">
-                      {on ? idx + 1 : ""}
-                    </span>
-                    {/* The mark always sits on a white chip. Most of these are
-                        dark-on-transparent, so on the accent-blue selected fill
-                        they'd disappear; knocking them to solid white instead
-                        turned filled marks (MLB) into a featureless blob. The
-                        chip keeps every logo legible and identical in both
-                        states, so selecting a pill changes only its background. */}
-                    <span className="inline-flex items-center justify-center w-[20px] h-[20px] rounded-full shrink-0 bg-white">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={demoOption?.logo ?? LEAGUE_LOGO[o.sport]}
-                        alt=""
-                        width={16}
-                        height={16}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-[16px] h-[16px] object-contain"
-                        draggable={false}
-                        // Remote ESPN/Wikimedia mark: a blocked hotlink would leave
-                        // the browser's broken-image glyph. Collapse it and let the
-                        // pill read as text, matching every other logo in the app.
-                        onError={(e) => { e.currentTarget.style.display = "none"; }}
-                      />
-                    </span>
-                    <span>{demoOption?.label ?? o.label}</span>
-                    {/* Start dates dropped here on purpose (Jacob 8/9): six
-                        "· starts Aug 21" tails made the grid unreadable and are
-                        noise at signup. The kickoff banner still announces them
-                        and the column switcher still shows them. "offseason"
-                        stays — that one changes whether the column has games. */}
-                    {o.offseason && <em className="font-normal text-xs" style={{ color: on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={skipLeaguePicker}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-              >
-                Use defaults
-              </button>
-              <button
-                type="button"
-                onClick={confirmLeaguePicker}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                style={{ background: "var(--accent)", color: "white" }}
-                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
-              >
-                {pickerSel.length ? `Show ${pickerSel.length} league${pickerSel.length > 1 ? "s" : ""}` : "Done"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <LeaguePickerModal
+          title="Pick your leagues"
+          subtitle={<>Choose up to <strong>{pickerMax} leagues</strong> for your score columns.<br />You can change these anytime in Settings.</>}
+          options={pickerOptions}
+          mode="multi"
+          selected={pickerSel}
+          max={pickerMax}
+          onPick={togglePick}
+          onConfirm={confirmLeaguePicker}
+          onClose={skipLeaguePicker}
+          demoLabels={demoPickerLabels}
+        />
+      )}
+
+      {/* A column switcher's Add more… (Jacob 9/29): the same sheet, one tap
+          switches the column. */}
+      {addMoreFor && (
+        <LeaguePickerModal
+          title="More leagues"
+          options={addMoreOptions}
+          mode="single"
+          selected={addMoreFor.current ? [addMoreFor.current] : []}
+          onPick={pickAddMore}
+          onClose={() => setAddMoreFor(null)}
+          showOffseason={!!prefs.showOffseasonInPicker}
+          onToggleOffseason={() => updatePrefs({ showOffseasonInPicker: prefs.showOffseasonInPicker ? undefined : true })}
+          shownElsewhere={addMoreFor.shownElsewhere}
+        />
       )}
 
       {/* Undo-close pill. Deliberately says nothing about WHAT was closed — a
