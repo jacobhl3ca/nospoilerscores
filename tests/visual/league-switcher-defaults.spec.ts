@@ -14,9 +14,8 @@ const switcherRow = (league: string) =>
 
 async function openSwitcherSettings(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Open settings", exact: true }).click();
-  // The catalog sits in a closed fold since 9/25; open it and show every row
-  // (the fold starts with offseason rows hidden).
-  await page.locator("summary", { hasText: /leagues in the switcher · Edit/ }).click();
+  await page.getByRole("button", { name: "More leagues", exact: true }).click();
+  // Show every row (the catalog starts with offseason rows hidden).
   const hide = page.getByRole("checkbox", { name: /Hide offseason/ });
   if (await hide.isChecked()) await hide.uncheck();
 }

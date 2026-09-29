@@ -114,7 +114,7 @@ test("Settings lists both cross-league columns and unticking them saves the pref
   await seedPrefs(page, { showNews: false, defaultLandingView: "scores" });
   await page.goto("/");
   await page.getByRole("button", { name: "Open settings" }).first().click();
-  await page.getByText(/leagues in the switcher · Edit/).click();
+  await page.getByRole("button", { name: "More leagues", exact: true }).click();
   const best = page.getByRole("checkbox", { name: "Best of yesterday" });
   const top = page.getByRole("checkbox", { name: "Top news" });
   await expect(best).toBeChecked();

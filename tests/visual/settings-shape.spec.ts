@@ -138,33 +138,90 @@ test("signed out: the email form waits behind Use email instead", async ({ page 
   await expect(dialog.locator('input[type="email"]')).toBeVisible();
 });
 
-test("switcher catalog: closed fold, offseason hidden by default, a tick persists", async ({ page }) => {
+test("switcher catalog: chips open by default, offseason hidden by default, a tick persists", async ({ page }) => {
   await start(page, DESKTOP);
   const dialog = page.getByRole("dialog", { name: "Settings" });
-  const summary = dialog.locator("summary", { hasText: /\d+ leagues in the switcher · Edit/ });
-  await expect(summary).toBeVisible();
-  const fold = dialog.locator("details", { has: page.locator("summary", { hasText: /leagues in the switcher/ }) });
-  await expect(fold).not.toHaveAttribute("open", "");
-  await summary.click();
+  const catalog = dialog.getByRole("group", { name: "Leagues in the header switcher" });
+  await expect(catalog).toBeVisible();
+  // Signed out: right after Account and Theme, first thing in its section.
+  await expect(dialog.locator("section > h3").nth(2)).toHaveText("Leagues");
+  // Ticked leagues only, until More leagues opens the rest.
+  await expect(catalog.locator('[role="checkbox"][aria-checked="false"]')).toHaveCount(0);
+  await expect(dialog.getByRole("checkbox", { name: /Hide offseason/ })).toHaveCount(0);
+  await catalog.getByRole("button", { name: "More leagues", exact: true }).click();
 
-  const filter = fold.getByRole("checkbox", { name: /Hide offseason/ });
+  const filter = dialog.getByRole("checkbox", { name: /Hide offseason/ });
   await expect(filter).toBeChecked();
-  await expect(fold.getByRole("checkbox", { name: /· offseason$/ })).toHaveCount(0);
+  await expect(catalog.getByRole("checkbox", { name: /· offseason$/ })).toHaveCount(0);
   // The default is a view, not a write.
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
   expect(saved.hideOffseasonInCatalog).toBeUndefined();
 
-  // The Hide offseason filter is checked, so this finds a league row.
-  const target = fold.locator('input[type="checkbox"]:not(:checked)').first();
-  const name = await target.evaluate((el) => el.closest("label")?.textContent?.trim() ?? "");
+  const target = catalog.locator('[role="checkbox"][aria-checked="false"]').first();
+  const name = (await target.getAttribute("aria-label")) ?? "";
   expect(name).not.toBe("");
-  await target.check();
+  await target.click();
 
   await page.reload();
   await openSettings(page);
-  await dialog.locator("summary", { hasText: /leagues in the switcher/ }).click();
+  // Now ticked, so it shows without opening the rest.
   await expect(dialog.getByRole("checkbox", { name, exact: true })).toBeChecked();
 });
+
+test("Edit list: × strikes a league off the catalog and the switcher; N hidden · Show restores", async ({ page }) => {
+  await start(page, DESKTOP);
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  const catalog = dialog.getByRole("group", { name: "Leagues in the header switcher" });
+  const read = () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+
+  // A league the first column's switcher offers now.
+  await page.getByRole("button", { name: "Close settings" }).click();
+  const header = page.locator('button[title="Switch league"]').first();
+  await header.click();
+  const switcher = page.getByRole("dialog", { name: "Switch league" });
+  const offered = (await switcher.getByRole("button").allTextContents()).map((t) => t.trim());
+  await page.keyboard.press("Escape");
+  await openSettings(page);
+  const checked = await catalog.locator('[role="checkbox"][aria-checked="true"]').evaluateAll((els) => els.map((el) => el.getAttribute("aria-label") ?? ""));
+  const pick = checked.find((n) => !["Best of yesterday", "ESPN front page", "Top news"].includes(n) && offered.some((o) => o.startsWith(n)));
+  expect(pick, `a switcher league among ${checked.join(", ")}`).toBeTruthy();
+
+  await expect(dialog.getByRole("button", { name: /^Hide .* from this list$/ })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Edit list" }).click();
+  await dialog.getByRole("button", { name: `Hide ${pick} from this list` }).click();
+  await expect(catalog.getByRole("checkbox", { name: pick, exact: true })).toHaveCount(0);
+  expect((await read()).catalogHiddenLeagues).toHaveLength(1);
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(dialog.getByRole("button", { name: /^Hide .* from this list$/ })).toHaveCount(0);
+
+  // Gone from the column switcher too.
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await header.click();
+  await expect(switcher).toBeVisible();
+  const after = (await switcher.getByRole("button").allTextContents()).map((t) => t.trim());
+  expect(after.some((o) => o.startsWith(pick!))).toBe(false);
+  await page.keyboard.press("Escape");
+
+  await openSettings(page);
+  await dialog.getByRole("button", { name: /1 hidden from this list/ }).click();
+  await expect(catalog.getByRole("checkbox", { name: pick, exact: true })).toBeVisible();
+  expect((await read()).catalogHiddenLeagues).toBeUndefined();
+});
+
+for (const viewport of [PHONE, DESKTOP]) {
+  test(`columns ${viewport.width}: one row of pills, a pick saves the slot pref`, async ({ page }) => {
+    await start(page, viewport);
+    const dialog = page.getByRole("dialog", { name: "Settings" });
+    const pills = dialog.locator('select[aria-label^="Slot"]');
+    await expect(pills).toHaveCount(viewport === PHONE ? 3 : 5);
+    const tops = await pills.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
+    // Phone: all three on one row. Desktop drawer: five pills may wrap once.
+    expect(new Set(tops).size).toBeLessThanOrEqual(viewport === PHONE ? 1 : 2);
+    await pills.nth(1).selectOption("nhl");
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+    expect(saved.secondLeague).toBe("nhl");
+  });
+}
 
 test("records: the leagues are chips, a tap opens the picker in place, a pick persists", async ({ page }) => {
   await start(page, PHONE);

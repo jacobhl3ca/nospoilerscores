@@ -57,6 +57,9 @@ interface LeagueColumnProps {
   // the switcher so Auto isn't an opaque choice (Jacob 8/9).
   autoSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
+  // ESPN front page only: tapping a league block's label opens the "Add
+  // {league}" popover (owned by HomeContent) to give it a column of its own.
+  onAddLeague?: (sport: Sport, anchor: DOMRect) => void;
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
   showSwapChevron?: boolean;
@@ -945,6 +948,7 @@ export default function LeagueColumn({
   swappableOptions,
   autoSport,
   onSwapLeague,
+  onAddLeague,
   showSwapChevron,
   switcherMode,
   onCycleLeague,
@@ -1571,9 +1575,26 @@ export default function LeagueColumn({
   // ESPN front page body: a block per league, each under a small league
   // label the way espn.com's strip labels its blocks. The label stands in for
   // the per-card league chip (off since 9/26), so demo mode drops it too.
-  const espnLabelRow = (text: string) => (
+  // The label is also the one-tap way to give that league a column of its own
+  // (Jacob 9/28): "NFL +" opens the Add popover. The cards stay chip-free.
+  const canAddFromLabel = league.sport === "top" && !!onAddLeague && !isDemoModeActive();
+  const espnLabelRow = (text: string, sport: Sport) => (
     <div className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
-      <span className="text-[11px] font-semibold uppercase tracking-wide">{text}</span>
+      {canAddFromLabel ? (
+        <button type="button"
+          onClick={(e) => { e.stopPropagation(); onAddLeague!(sport, e.currentTarget.getBoundingClientRect()); }}
+          aria-label={`Add ${text} to a column`}
+          aria-haspopup="dialog"
+          data-espn-add={sport}
+          className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide cursor-pointer hover:underline underline-offset-2"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <span>{text}</span>
+          <span aria-hidden="true" className="text-[12px] leading-none font-bold">+</span>
+        </button>
+      ) : (
+        <span className="text-[11px] font-semibold uppercase tracking-wide">{text}</span>
+      )}
       <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
     </div>
   );
@@ -1582,7 +1603,7 @@ export default function LeagueColumn({
       {groupEspnFrontPage(games, league.espnFeatured).map((group, i) => {
         return (
           <div key={group.sport} className="flex flex-col gap-1.5 sm:gap-2" data-espn-league={group.sport}>
-            {!isDemoModeActive() && !(i === 0 && leadLabelSlot) && espnLabelRow(espnGroupLabel(group))}
+            {!isDemoModeActive() && !(i === 0 && leadLabelSlot) && espnLabelRow(espnGroupLabel(group), group.sport)}
             {group.games.map((game) => (
               <GameCard
                 key={game.id}
@@ -2080,7 +2101,7 @@ export default function LeagueColumn({
             // instead of riding ~16px higher.
             <span aria-hidden className="text-[9px] sm:text-[10px] mt-0.5 block whitespace-nowrap">{" "}</span>
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : undefined} fallbackText={lastPlayedLabel ?? (leadLabelSlot === "subtitle" ? leadLabel : undefined)} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : canAddFromLabel && leadLabelSlot === "subtitle" && espnGroups?.length ? () => onAddLeague!(espnGroups[0].sport, columnRef.current!.getBoundingClientRect()) : undefined} fallbackText={lastPlayedLabel ?? (leadLabelSlot === "subtitle" ? leadLabel : undefined)} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
           )}
         </div>
       )}
@@ -2089,7 +2110,7 @@ export default function LeagueColumn({
         // bottom-2 then sits on the spacer's bottom edge, 8px over the card.
         <div className="relative flex flex-col" data-espn-lead-label>
           {topCard}
-          <div className="absolute inset-x-0 bottom-2">{espnLabelRow(leadLabel!)}</div>
+          <div className="absolute inset-x-0 bottom-2">{espnLabelRow(leadLabel!, espnGroups![0].sport)}</div>
         </div>
       ) : topCard}
       {teamViewTeam && !league.golfTournament ? (

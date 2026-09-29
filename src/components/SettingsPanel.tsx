@@ -473,10 +473,11 @@ export default function SettingsPanel({
       return pref ?? shown;
     });
     resolved[slotIdx] = sport;
-    // Pinning a league that is turned off in the switcher list turns it back
-    // on: the board shows the next league in place of a turned-off one, so
-    // the pin would otherwise do nothing.
+    // Pinning a league that is turned off in the switcher list (or struck off
+    // the catalog) turns it back on: the board shows the next league in place
+    // of a turned-off one, so the pin would otherwise do nothing.
     const hiddenLeagues = (prefs.hiddenLeagues ?? []).filter((s) => s !== sport);
+    const catalogHiddenLeagues = (prefs.catalogHiddenLeagues ?? []).filter((s) => s !== sport);
     updatePrefs({
       firstLeague: resolved[0],
       secondLeague: resolved[1],
@@ -485,6 +486,9 @@ export default function SettingsPanel({
       fifthLeague: resolved[4],
       ...(hiddenLeagues.length !== (prefs.hiddenLeagues ?? []).length
         ? { hiddenLeagues: hiddenLeagues.length ? hiddenLeagues : undefined }
+        : {}),
+      ...(catalogHiddenLeagues.length !== (prefs.catalogHiddenLeagues ?? []).length
+        ? { catalogHiddenLeagues: catalogHiddenLeagues.length ? catalogHiddenLeagues : undefined }
         : {}),
     });
   };
@@ -557,6 +561,12 @@ export default function SettingsPanel({
   // nothing; untick "Hide offseason" to reach it. The five slot dropdowns
   // follow the same filter (they had kept all 17 "· offseason" entries).
   const hideOffseason = !!prefs.hideOffseasonInCatalog;
+  // Struck off the catalog with its × (Jacob 9/28). Gone from the chips, the
+  // switchers and the board; "N hidden · Show" brings them all back.
+  const catalogHidden = prefs.catalogHiddenLeagues ?? [];
+  const catalogHiddenCount = leagueOptions.filter((option) => catalogHidden.includes(option.sport)).length;
+  const [editingCatalog, setEditingCatalog] = useState(false);
+  const [catalogAll, setCatalogAll] = useState(false);
   // The catalog itself (not the slot dropdowns) now starts with offseason rows
   // hidden when the pref was never set (Jacob 9/25). This is a view default
   // only: nothing is written until the checkbox is tapped, and an untick
@@ -566,21 +576,20 @@ export default function SettingsPanel({
   const offseasonRowCount = leagueOptions.filter((option) => option.offseason).length;
   const keepOffseasonRow = (option: LeagueOption) => slotValues.includes(option.sport);
   const hiddenOffseasonCount = leagueOptions.filter(
-    (option) => option.offseason && !keepOffseasonRow(option),
+    (option) => option.offseason && !keepOffseasonRow(option) && !(prefs.catalogHiddenLeagues ?? []).includes(option.sport),
   ).length;
-  const visibleLeagueGroups = catalogHideOffseason
-    ? groupedLeagueOptions.flatMap((group) => {
-        const options = group.options.filter((option) => !option.offseason || keepOffseasonRow(option));
-        return options.length ? [{ ...group, options }] : [];
-      })
-    : groupedLeagueOptions;
+  const visibleLeagueGroups = groupedLeagueOptions.flatMap((group) => {
+    const options = group.options.filter((option) =>
+      !catalogHidden.includes(option.sport)
+      && (!catalogHideOffseason || !option.offseason || keepOffseasonRow(option)));
+    return options.length ? [{ ...group, options }] : [];
+  });
   const slotDropdownGroups = (current: Sport | "empty" | undefined) => hideOffseason
     ? groupedLeagueOptions.flatMap((group) => {
         const options = group.options.filter((option) => !option.offseason || option.sport === current || keepOffseasonRow(option));
         return options.length ? [{ ...group, options }] : [];
       })
     : groupedLeagueOptions;
-  const switcherCheckedCount = leagueOptions.filter(isSwitcherChecked).length;
   // Team-picker chips show in-season leagues first; the catalog options carry
   // the season flag (the team list itself does not).
   const inSeasonSports = useMemo(
@@ -588,41 +597,49 @@ export default function SettingsPanel({
     [leagueOptions],
   );
 
+  // What a column pill says: the pinned league, or Auto and what it shows.
+  const slotPillText = (value: Sport | "empty" | undefined, fallbackLabel: string | undefined) => {
+    if (value === "empty") return "Removed";
+    if (value === "best") return BEST_YESTERDAY_LABEL;
+    if (value === "top") return ESPN_FRONT_PAGE_LABEL;
+    if (value) return SPORT_LABEL[value] ?? value;
+    return fallbackLabel ? `Auto · ${fallbackLabel}` : "Auto";
+  };
+
   const optionText = (option: LeagueOption) =>
     `${SPORT_LABEL[option.sport] ?? option.label}${option.offseason ? " · offseason" : option.upcomingLabel ? ` · starts ${option.upcomingLabel}` : ""}`;
 
-  const renderSwitcherToggle = (option: LeagueOption) => {
+  // One catalog chip. A tick keeps the same hidden/shown rule the checkbox
+  // rows had. In "Edit list" mode a × strikes the league off the catalog
+  // itself (catalogHiddenLeagues), which also takes it out of every switcher.
+  const renderSwitcherChip = (option: LeagueOption, editing: boolean) => {
     const pinned = slotValues.includes(option.sport);
     const preferred = option.defaultInSwitcher !== false || pinned || prefs.favoriteLeagues.includes(option.sport);
-    const checked = isSwitcherChecked(option);
+    const label = SPORT_LABEL[option.sport] ?? option.label;
+    const note = option.offseason ? "offseason" : option.upcomingLabel ? `starts ${option.upcomingLabel}` : undefined;
     return (
-      <label key={option.sport} className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => {
-            const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
-            const shownLeagues = new Set(prefs.shownLeagues ?? []);
-            hiddenLeagues.delete(option.sport);
-            shownLeagues.delete(option.sport);
-            if (event.target.checked && !preferred) {
-              shownLeagues.add(option.sport);
-            } else if (!event.target.checked && preferred) {
-              hiddenLeagues.add(option.sport);
-            }
-            updatePrefs({
-              hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined,
-              shownLeagues: shownLeagues.size ? [...shownLeagues] : undefined,
-            });
-          }}
-          className="cursor-pointer accent-[var(--accent)]"
-        />
-        <span>
-          {SPORT_LABEL[option.sport] ?? option.label}
-          {option.offseason && <em style={{ color: "var(--text-muted)" }}> · offseason</em>}
-          {!option.offseason && option.upcomingLabel && <em style={{ color: "var(--text-muted)" }}> · starts {option.upcomingLabel}</em>}
-        </span>
-      </label>
+      <SwitcherChip
+        key={option.sport}
+        label={label}
+        note={note}
+        checked={isSwitcherChecked(option)}
+        onToggle={(on) => {
+          const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
+          const shownLeagues = new Set(prefs.shownLeagues ?? []);
+          hiddenLeagues.delete(option.sport);
+          shownLeagues.delete(option.sport);
+          if (on && !preferred) {
+            shownLeagues.add(option.sport);
+          } else if (!on && preferred) {
+            hiddenLeagues.add(option.sport);
+          }
+          updatePrefs({
+            hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined,
+            shownLeagues: shownLeagues.size ? [...shownLeagues] : undefined,
+          });
+        }}
+        onRemove={editing ? () => updatePrefs({ catalogHiddenLeagues: [...catalogHidden, option.sport] }) : undefined}
+      />
     );
   };
 
@@ -818,6 +835,52 @@ export default function SettingsPanel({
     newsTypeFilters: undefined,
     catalogHiddenLeagues: undefined,
   });
+
+  // The catalog's three cross-league rows, as chips with their ticked state.
+  const bestOn = !(prefs.hiddenLeagues ?? []).includes("best");
+  const topOption: LeagueOption = { sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: false };
+  const acrossChips: { checked: boolean; node: React.ReactNode }[] = [
+    ...(BEST_YESTERDAY_ENABLED ? [{
+      checked: bestOn,
+      node: (
+        <SwitcherChip
+          key="best"
+          label={BEST_YESTERDAY_LABEL}
+          checked={bestOn}
+          onToggle={(on) => {
+            const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
+            if (on) hiddenLeagues.delete("best");
+            else hiddenLeagues.add("best");
+            updatePrefs({ hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined });
+          }}
+        />
+      ),
+    }] : []),
+    // ESPN front page starts off (Jacob 9/26), like an opt-in league: on =
+    // shownLeagues, and off only needs hiddenLeagues while a column pins it.
+    ...(TOP_EVENTS_ENABLED ? [{ checked: isSwitcherChecked(topOption), node: renderSwitcherChip(topOption, false) }] : []),
+    {
+      checked: !prefs.topNewsHidden,
+      node: (
+        <SwitcherChip
+          key="topnews"
+          label="Top news"
+          checked={!prefs.topNewsHidden}
+          onToggle={(on) => updatePrefs({ topNewsHidden: on ? undefined : true })}
+        />
+      ),
+    },
+  ];
+  const allLeaguesChip = (
+    <LeagueChip
+      key="all-leagues"
+      label={catalogAll ? "Fewer" : "More leagues"}
+      on={false}
+      ariaExpanded={catalogAll}
+      onClick={() => setCatalogAll((v) => !v)}
+      title={catalogAll ? "Show only the leagues in your switcher" : "Show every league HideScore carries"}
+    />
+  );
 
   // The email form: signed out it sits under the sign-in buttons; signed in it
   // is the "Link another way" disclosure in the bottom row.
@@ -1052,93 +1115,18 @@ export default function SettingsPanel({
           </Section>
 
           {/* Leagues — second (Jacob 9/28: the switcher was the hardest thing
-              in the panel to reach). Was "League columns", fifth. */}
+              in the panel to reach). Was "League columns", fifth. My leagues
+              first, as chips (a tick = in the header switcher), then the
+              columns as one row of pills like the board header. */}
           <Section title="Leagues">
-            <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
-              Pick a league per column, or tap its header on the board.
-            </p>
-            {/* Slots 4-5 only when the board itself is wide enough for five
-                columns. Their saved prefs stay untouched either way. */}
-            {(isWideBoard ? [0, 1, 2, 3, 4] : [0, 1, 2]).map((idx) => {
-              const fallbackLabel = displayedLeagues[idx]?.label ?? "—";
-              const saved = slotValues[idx];
-              // A "top" or "best" pin while that column is switched off reads
-              // as Auto here, which is what resolveSlot makes of it.
-              const value = (saved === "top" && !TOP_EVENTS_ENABLED) || (saved === "best" && !BEST_YESTERDAY_ENABLED) ? undefined : saved;
-              const selectedOption = value && value !== "empty"
-                ? leagueOptions.find((option) => option.sport === value)
-                : undefined;
-              const hint = value === "empty"
-                ? "Hidden"
-                : value === "best" || value === "top"
-                  ? "Today's board only · other days show the Auto league"
-                : selectedOption?.offseason
-                  ? `Offseason · saved for its return${fallbackLabel !== "—" ? `; showing ${fallbackLabel}` : ""}`
-                  : value
-                    ? undefined
-                    : `Auto · currently ${fallbackLabel}`;
-              return (
-                <Field
-                  key={idx}
-                  label={`Slot ${idx + 1}${idx >= 3 ? " (wide screens)" : ""}`}
-                  hint={hint}
-                >
-                  <select
-                    value={value ?? ""}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setSlot(idx, v === "" ? undefined : v === "empty" ? "empty" : (v as Sport));
-                    }}
-                    aria-label={`Slot ${idx + 1} league`}
-                    className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
-                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                  >
-                    <option value="">Auto</option>
-                    {BEST_YESTERDAY_ENABLED && <option value="best">{BEST_YESTERDAY_LABEL}</option>}
-                    {TOP_EVENTS_ENABLED && <option value="top">{ESPN_FRONT_PAGE_LABEL}</option>}
-                    {slotDropdownGroups(value).map((group) => (
-                      <optgroup key={group.key} label={group.label}>
-                        {group.options.map((option) => (
-                          <option key={option.sport} value={option.sport}>{optionText(option)}</option>
-                        ))}
-                      </optgroup>
-                    ))}
-                    <option value="empty">Remove col</option>
-                  </select>
-                </Field>
-              );
-            })}
-            {/* Was the only row left in its own "Board layout" section once the
-                keys hint moved to More settings (Jacob 9/25). Same pref, same
-                device-only storage — only where the row sits changed. Was also
-                called just "Single column", same as the old News one — flipping
-                the wrong one looked like a bug (Jacob 8/31). */}
-            <ToggleRow
-              label="One wide column"
-              hint="Stack your leagues in one wide column with bigger cards, instead of side-by-side columns. This device only."
-              checked={prefs.singleColumn ?? false}
-              onChange={(v) => updatePrefs({ singleColumn: v })}
-            />
-            {/* The switcher catalog, folded behind a count (Jacob 9/25): 40-odd
-                checkboxes were a third of the panel on a phone. Core leagues
-                start checked; tick any others for the header switcher. */}
-            <details className="group/catalog">
-              <summary
-                className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-semibold cursor-pointer select-none marker:content-none [&::-webkit-details-marker]:hidden"
-                style={{ color: "var(--text-muted)" }}
-              >
-                <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open/catalog:rotate-90">
-                  <polyline points="9 6 15 12 9 18" />
-                </svg>
-                {switcherCheckedCount} leagues in the switcher · Edit
-              </summary>
-              <div className="mt-3">
-                <div className="space-y-3">
-                  {(offseasonRowCount > 0 || catalogHideOffseason) && (
+            <div>
+              <div className="flex items-center justify-between gap-3 mb-1.5">
+                <span className="text-sm font-medium" style={{ color: "var(--text)" }}>My leagues</span>
+                <span className="flex items-center gap-3 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  {catalogAll && (offseasonRowCount > 0 || catalogHideOffseason) && (
                     <label
-                      className="flex items-center justify-end gap-2 text-[11px] cursor-pointer select-none"
-                      style={{ color: "var(--text-muted)" }}
-                      title="Leagues you have checked stay listed even when they are between seasons"
+                      className="flex items-center gap-1.5 cursor-pointer select-none"
+                      title="Leagues pinned to a column stay listed even when they are between seasons"
                     >
                       <input
                         type="checkbox"
@@ -1155,67 +1143,159 @@ export default function SettingsPanel({
                       </span>
                     </label>
                   )}
-                  {/* The cross-league columns and the news feed (Jacob 9/26):
-                      on by default, and unticking one takes it out of every
-                      switcher and off the board, like a league. */}
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>Across leagues</p>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                      {BEST_YESTERDAY_ENABLED && (
-                        <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
-                          <input
-                            type="checkbox"
-                            checked={!(prefs.hiddenLeagues ?? []).includes("best")}
-                            onChange={(event) => {
-                              const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
-                              if (event.target.checked) hiddenLeagues.delete("best");
-                              else hiddenLeagues.add("best");
-                              updatePrefs({ hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined });
-                            }}
-                            className="cursor-pointer accent-[var(--accent)]"
-                          />
-                          <span>{BEST_YESTERDAY_LABEL}</span>
-                        </label>
-                      )}
-                      {/* ESPN front page starts off (Jacob 9/26), like an
-                          opt-in league: on = shownLeagues, and off only needs
-                          hiddenLeagues while a column pins it. */}
-                      {TOP_EVENTS_ENABLED && renderSwitcherToggle({ sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: false })}
-                      <label className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
-                        <input
-                          type="checkbox"
-                          checked={!prefs.topNewsHidden}
-                          onChange={(event) => updatePrefs({ topNewsHidden: event.target.checked ? undefined : true })}
-                          className="cursor-pointer accent-[var(--accent)]"
-                        />
-                        <span>Top news</span>
-                      </label>
-                    </div>
-                  </div>
-                  {visibleLeagueGroups.map((group) => (
-                    <div key={group.key}>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>{group.label}</p>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                        {group.options.map(renderSwitcherToggle)}
-                      </div>
-                    </div>
-                  ))}
-                  {onRequestLeague && (
-                    // Last line of the catalog, italic and quiet: the person
-                    // reading it has just scanned every league we carry and not
-                    // found theirs, which is the only moment the ask is useful.
-                    <button
-                      type="button"
-                      onClick={onRequestLeague}
-                      className="text-xs italic underline underline-offset-2 cursor-pointer hover:opacity-80"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Request a league
-                    </button>
-                  )}
-                </div>
+                  <button type="button"
+                    onClick={() => setEditingCatalog((v) => !v)}
+                    aria-pressed={editingCatalog}
+                    className="underline underline-offset-2 cursor-pointer hover:opacity-80"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {editingCatalog ? "Done" : "Edit list"}
+                  </button>
+                </span>
               </div>
-            </details>
+              {/* Ticked leagues only until "More leagues" opens the whole
+                  catalog, like the Favorite teams league row (Jacob 9/28). */}
+              <div className="space-y-2" role="group" aria-label="Leagues in the header switcher">
+                {catalogAll ? (
+                  <>
+                    {/* The cross-league columns and the news feed (Jacob 9/26):
+                        on by default, and unticking one takes it out of every
+                        switcher and off the board, like a league. No × here —
+                        each is already its own on/off. */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide mr-0.5" style={{ color: "var(--text-muted)" }}>Across leagues</span>
+                      {acrossChips.map((c) => c.node)}
+                    </div>
+                    {/* Groups as before, each heading inline at the start of
+                        its own row of chips so the list stays short. */}
+                    {visibleLeagueGroups.map((group, gi) => (
+                      <div key={group.key} className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide mr-0.5" style={{ color: "var(--text-muted)" }}>{group.label}</span>
+                        {group.options.map((option) => renderSwitcherChip(option, editingCatalog))}
+                        {gi === visibleLeagueGroups.length - 1 && allLeaguesChip}
+                      </div>
+                    ))}
+                    {visibleLeagueGroups.length === 0 && allLeaguesChip}
+                  </>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {acrossChips.filter((c) => c.checked).map((c) => c.node)}
+                    {visibleLeagueGroups.flatMap((group) => group.options)
+                      .filter(isSwitcherChecked)
+                      .map((option) => renderSwitcherChip(option, editingCatalog))}
+                    {allLeaguesChip}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs">
+                {catalogHiddenCount > 0 && (
+                  <button type="button"
+                    onClick={() => updatePrefs({ catalogHiddenLeagues: undefined })}
+                    className="underline underline-offset-2 cursor-pointer hover:opacity-80"
+                    style={{ color: "var(--text-muted)" }}
+                    aria-label={`${catalogHiddenCount} hidden from this list. Show them again`}
+                  >
+                    {catalogHiddenCount} hidden · Show
+                  </button>
+                )}
+                {onRequestLeague && (
+                  // Last line of the catalog, italic and quiet: the person
+                  // reading it has just scanned every league we carry and not
+                  // found theirs, which is the only moment the ask is useful.
+                  <button
+                    type="button"
+                    onClick={onRequestLeague}
+                    className="italic underline underline-offset-2 cursor-pointer hover:opacity-80"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Request a league
+                  </button>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm font-medium" style={{ color: "var(--text)" }}>Columns</div>
+              <div className="text-[11px] mb-1.5" style={{ color: "var(--text-muted)" }}>
+                Left to right, as on the board. You can also tap a column header there.
+              </div>
+              {/* One pill per column, like the board header (Jacob 9/28); it
+                  was a labelled full-width select per slot. Slots 4-5 only
+                  when the board itself is wide enough for five columns. Their
+                  saved prefs stay untouched either way. */}
+              <div className="flex flex-wrap gap-1.5">
+                {(isWideBoard ? [0, 1, 2, 3, 4] : [0, 1, 2]).map((idx) => {
+                  const fallbackLabel = displayedLeagues[idx]?.label;
+                  const saved = slotValues[idx];
+                  // A "top" or "best" pin while that column is switched off reads
+                  // as Auto here, which is what resolveSlot makes of it.
+                  const value = (saved === "top" && !TOP_EVENTS_ENABLED) || (saved === "best" && !BEST_YESTERDAY_ENABLED) ? undefined : saved;
+                  return (
+                    // The pill is our own text; the real <select> lies over
+                    // it, invisible, so the native picker opens on tap. A
+                    // visible select would be 16px on a phone (globals.css, no
+                    // iOS focus zoom) and far too wide for three in a row.
+                    <span
+                      key={idx}
+                      className="relative inline-flex items-center gap-1 rounded-full pl-3 pr-2.5 py-1 text-xs font-semibold focus-within:ring-2 focus-within:ring-[var(--accent)]"
+                      style={{
+                        background: value ? "var(--bg-card-hover)" : "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        color: value === "empty" ? "var(--text-muted)" : "var(--text)",
+                      }}
+                    >
+                      <span className="truncate max-w-[7.5rem]">{slotPillText(value, fallbackLabel)}</span>
+                      <span aria-hidden="true" className="text-[10px]" style={{ color: "var(--text-muted)" }}>▾</span>
+                      <select
+                        value={value ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setSlot(idx, v === "" ? undefined : v === "empty" ? "empty" : (v as Sport));
+                        }}
+                        aria-label={`Slot ${idx + 1} league`}
+                        title={`Column ${idx + 1}`}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      >
+                        <option value="">{fallbackLabel ? `Auto (${fallbackLabel})` : "Auto"}</option>
+                        {BEST_YESTERDAY_ENABLED && <option value="best">{BEST_YESTERDAY_LABEL}</option>}
+                        {TOP_EVENTS_ENABLED && <option value="top">{ESPN_FRONT_PAGE_LABEL}</option>}
+                        {slotDropdownGroups(value).map((group) => (
+                          <optgroup key={group.key} label={group.label}>
+                            {group.options.map((option) => (
+                              <option key={option.sport} value={option.sport}>{optionText(option)}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                        <option value="empty">Remove col</option>
+                      </select>
+                    </span>
+                  );
+                })}
+              </div>
+              {/* A pinned league between seasons keeps its pill; say what the
+                  board shows meanwhile. */}
+              {(isWideBoard ? [0, 1, 2, 3, 4] : [0, 1, 2]).map((idx) => {
+                const saved = slotValues[idx];
+                const option = saved && saved !== "empty" ? leagueOptions.find((o) => o.sport === saved) : undefined;
+                if (!option?.offseason) return null;
+                const showing = displayedLeagues[idx]?.label;
+                return (
+                  <p key={idx} className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
+                    Column {idx + 1}: Offseason · saved for its return{showing ? `; showing ${showing}` : ""}
+                  </p>
+                );
+              })}
+            </div>
+            {/* Was the only row left in its own "Board layout" section once the
+                keys hint moved to More settings (Jacob 9/25). Same pref, same
+                device-only storage — only where the row sits changed. Was also
+                called just "Single column", same as the old News one — flipping
+                the wrong one looked like a bug (Jacob 8/31). */}
+            <ToggleRow
+              label="One wide column"
+              hint="Stack your leagues in one wide column with bigger cards, instead of side-by-side columns. This device only."
+              checked={prefs.singleColumn ?? false}
+              onChange={(v) => updatePrefs({ singleColumn: v })}
+            />
           </Section>
 
           {/* Favorite teams — right under Leagues (Jacob 9/28; 9/25 it moved
@@ -1546,7 +1626,7 @@ export default function SettingsPanel({
             <div className="pt-3" style={{ borderTop: "1px solid var(--border)" }}>
               <Field
                 label="Reminder link"
-                hint="Opens this URL from an upcoming game's details. Placeholders: {minutes} {title} {iso} {time} {date}. Leave blank to hide the button."
+                hint="Opens this URL from an upcoming game's details. Placeholders: {minutes} {minutes-5} {title} {iso} {time} {date}. Leave blank to hide the button."
               >
                 <input
                   type="url"
@@ -1566,7 +1646,10 @@ export default function SettingsPanel({
                 />
               </Field>
               <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-muted)" }}>
-                Example: raycast://script-commands/timer?arguments={"{minutes}"}m%20{"{title}"}
+                Mac (Raycast): raycast://script-commands/game-reminder?arguments={"{minutes-5}"}&amp;arguments={"{title}"}
+              </p>
+              <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-muted)" }}>
+                iPhone (Shortcuts): shortcuts://run-shortcut?name=Game%20Reminder&amp;input=text&amp;text={"{minutes-5}"}%20{"{title}"}
               </p>
             </div>
             {/* TV channel links — personal, off by default (lib/tvChannelLinks.ts).
@@ -1998,6 +2081,56 @@ function LeagueChip({
     >
       {label}
     </button>
+  );
+}
+
+// A league chip in the switcher catalog: LeagueChip's look, a checkbox's
+// meaning (ticked = in the header switcher). The name reads "NBA · offseason"
+// the way the old checkbox row did. In Edit list mode a small × follows it.
+function SwitcherChip({
+  label,
+  note,
+  checked,
+  onToggle,
+  onRemove,
+}: {
+  label: string;
+  note?: string;
+  checked: boolean;
+  onToggle: (on: boolean) => void;
+  onRemove?: () => void;
+}) {
+  const name = note ? `${label} · ${note}` : label;
+  return (
+    <span className="inline-flex items-center">
+      <button type="button"
+        role="checkbox"
+        aria-checked={checked}
+        aria-label={name}
+        onClick={() => onToggle(!checked)}
+        title={note ? name : undefined}
+        className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
+        style={{
+          background: checked ? "var(--accent)" : "var(--bg-card)",
+          border: `1px solid ${checked ? "var(--accent)" : "var(--border)"}`,
+          color: checked ? "white" : "var(--text)",
+          opacity: note === "offseason" ? 0.6 : 1,
+        }}
+      >
+        {label}
+      </button>
+      {onRemove && (
+        <button type="button"
+          onClick={onRemove}
+          aria-label={`Hide ${label} from this list`}
+          title="Hide from this list"
+          className="w-5 h-5 -ml-0.5 flex items-center justify-center rounded-full cursor-pointer hover:opacity-80"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <svg aria-hidden="true" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 5l14 14M19 5L5 19" /></svg>
+        </button>
+      )}
+    </span>
   );
 }
 

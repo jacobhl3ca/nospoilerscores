@@ -29,7 +29,7 @@ async function switchColumnTo(page: Page, settingsLabel: string, switcherLabel: 
   // Share URL: skips onboarding, one MLB column, Today, Scores view.
   await page.goto("/?l=m&s=m.0.0&dd=t&dv=s");
   await page.getByRole("button", { name: "Open settings", exact: true }).click();
-  await page.locator("summary", { hasText: /leagues in the switcher · Edit/ }).click();
+  await page.getByRole("button", { name: "More leagues", exact: true }).click();
   const hide = page.getByRole("checkbox", { name: /Hide offseason/ });
   if (await hide.isChecked()) await hide.uncheck();
   const box = page.getByRole("checkbox", { name: new RegExp(`^${settingsLabel}`) });
