@@ -89,9 +89,10 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
   await expect(dialog.getByRole("radiogroup").or(dialog.getByRole("group", { name: "Header league switcher" }))).toBeVisible();
   await dialog.locator("summary", { hasText: "More settings" }).click();
 
-  // The 9/25 pass left the phone panel at 2,171 px; this one may not grow it.
+  // The 9/25 pass left the phone panel at 2,171 px; the 9/28 Links section
+  // (two URL rows) adds 120 px. Nothing else may grow it.
   const height = await dialog.locator(".overflow-y-auto").first().evaluate((el) => el.scrollHeight);
-  expect(height).toBeLessThanOrEqual(2171);
+  expect(height).toBeLessThanOrEqual(2291);
   expect(errors).toEqual([]);
 });
 
