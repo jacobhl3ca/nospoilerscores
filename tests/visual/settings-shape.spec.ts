@@ -41,10 +41,19 @@ async function mockSignedIn(page: Page) {
 }
 
 async function openSettings(page: Page) {
-  const defaults = page.getByRole("button", { name: "Use defaults" });
-  if (await defaults.isVisible().catch(() => false)) await defaults.click();
   await page.getByRole("button", { name: "Open settings", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+}
+
+// A fresh profile gets the first-run "Pick your leagues" sheet once the day's
+// leagues load. Against hidescore.com that is often after the page is usable —
+// a one-time check at load missed it, and its scrim then swallowed the next
+// click (6 of 15 failed live 9/29). Dismiss it whenever it turns up instead.
+// A DOM click, because it can also open under an already-open Settings (z-60).
+async function dismissLeaguePicker(page: Page) {
+  await page.addLocatorHandler(page.getByRole("button", { name: "Use defaults" }), async (defaults) => {
+    await defaults.evaluate((el) => (el as HTMLElement).click());
+  });
 }
 
 async function start(page: Page, viewport: { width: number; height: number }, signedIn = false) {
@@ -52,6 +61,7 @@ async function start(page: Page, viewport: { width: number; height: number }, si
   page.on("pageerror", (e) => errors.push(e.message));
   await page.setViewportSize(viewport);
   await (signedIn ? mockSignedIn(page) : mockSignedOut(page));
+  await dismissLeaguePicker(page);
   await page.goto("/");
   await openSettings(page);
   return errors;
