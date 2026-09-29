@@ -334,6 +334,11 @@ export interface Preferences {
   // league leaves every switcher and the board. A league added to the app
   // later is never on it, so it shows. Reset to defaults clears it.
   catalogHiddenLeagues?: Sport[];
+  // The column switcher's "Add more…" sheet: draw the offseason leagues too.
+  // Off by default so the sheet opens on leagues with games; saved so it
+  // opens the way it was left (Jacob 9/29). No Settings row — the toggle
+  // lives in the sheet's footer.
+  showOffseasonInPicker?: boolean;
   // v2 changed opt-in leagues from implicitly checked to default-off. A saved
   // version means this prefs blob has either received the one-time legacy
   // preservation migration or was created after the new defaults launched.

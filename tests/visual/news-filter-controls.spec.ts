@@ -125,15 +125,20 @@ for (const viewport of [
     // Not exact: both now carry a "· col N" suffix in their accessible name.
     const nfl = switcher.getByRole("button", { name: "NFL Preseason" });
     const mls = switcher.getByRole("button", { name: "MLS" });
-    const nba = switcher.getByRole("button", { name: "NBA · offseason", exact: true });
 
     for (const shownElsewhere of [nfl, mls]) {
       await expect(shownElsewhere).not.toHaveAttribute("style", /--text-muted/);
     }
     await expect(nfl).toContainText("· col 2");
     await expect(mls).toContainText("· col 3");
-    // The one state that actually limits what picking it gets you stays grey.
-    await expect(nba).toHaveAttribute("style", /--text-muted/);
+    // Offseason leagues left the dropdown for the Add more… sheet (Jacob
+    // 9/29). There, the one state that actually limits what picking it gets
+    // you stays grey.
+    await expect(switcher.getByRole("button", { name: /^NBA/ })).toHaveCount(0);
+    await switcher.getByTestId("league-switcher-add-more").click();
+    const sheet = page.getByRole("dialog", { name: "More leagues" });
+    await sheet.getByRole("button", { name: "Show offseason leagues" }).click();
+    await expect(sheet.getByRole("button", { name: /^NBA offseason/ })).toHaveAttribute("style", /--text-muted/);
   });
 }
 

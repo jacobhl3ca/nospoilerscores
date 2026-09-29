@@ -40,7 +40,9 @@ test("core leagues default on and expansion leagues default off", async ({ page 
   await page.getByRole("button", { name: "Close settings" }).click();
   await page.getByRole("button", { name: "MLB", exact: true }).click();
   const switcher = page.getByRole("dialog", { name: "Switch league" });
-  await expect(switcher.getByRole("button", { name: "NBA · offseason", exact: true })).toBeVisible();
+  // Offseason rows moved to the Add more… sheet (Jacob 9/29), so the NBA
+  // stays checked in Settings but is not a dropdown row in August.
+  await expect(switcher.getByRole("button", { name: /^NBA/ })).toHaveCount(0);
   for (const league of CORE_SWITCHER_LEAGUES) {
     await expect(switcher.getByRole("button", { name: switcherRow(league) })).toBeVisible();
   }
