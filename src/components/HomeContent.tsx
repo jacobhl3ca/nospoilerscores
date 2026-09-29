@@ -49,6 +49,8 @@ import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsB
 import { formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
 import Link from "next/link";
 import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
+import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
+import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -730,6 +732,10 @@ export default function HomeContent({
   // overlapping its text once you reach the bottom of the page.
   const [scrollTopLift, setScrollTopLift] = useState(0);
   const footerRef = useRef<HTMLElement>(null);
+  // Native shells only: drives the footer's ♥ Rate link, which also hides
+  // after a tap and rests when ignored (rules in rateApp.ts).
+  const appStore = useAppStore();
+  const rateLinkVisible = useRateLinkVisible();
   // sortByMatchups removed — monkey toggle now controls both ratings visibility AND sort order
   const [prefs, setPrefs] = useState<Preferences>({
     favoriteLeagues: [],
@@ -4785,7 +4791,8 @@ export default function HomeContent({
         })()}
 
         {/* ONE footer row (Jacob 7/14; reordered 9/25; 9/28: page links only,
-            one style): About · FAQ · Guides · Contact · Feedback · Privacy.
+            one style): About · FAQ · Guides · Contact · Feedback · Privacy
+            (+ ♥ Rate in the native shells, 9/29).
             Settings came out (the header gear is the one way in), Guides is a
             real page (/guides) rather than a popup, and Feedback goes to
             /contact, which hosts the same form. Plain <a href> (not next/link)
@@ -4800,6 +4807,25 @@ export default function HomeContent({
           <a href="/contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
           <a href="/contact#feedback" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</a>
           <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
+          {/* Native shells only (9/29): the web has no store to rate on. A plain
+              <a> with no target, like Settings' "Rate this app", so the store
+              app opens on the review sheet. A link is all the store rules
+              allow: no pre-question, no reward. */}
+          {appStore && rateLinkVisible && (
+            <a
+              href={storeReviewHref(appStore)}
+              onClick={noteRateTapped}
+              data-umami-event="footer-rate"
+              aria-label={appStore === "ios" ? "Rate HideScore on the App Store" : "Rate HideScore on Google Play"}
+              className="inline-flex items-center gap-1 underline underline-offset-2 hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z" />
+              </svg>
+              Rate
+            </a>
+          )}
         </div>
         {/* No visible trigger: kept mounted only so Settings' "Send feedback"
             and "Request a league" can open the form in place. */}
