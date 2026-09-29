@@ -17,6 +17,7 @@ import {
   DefaultLandingView,
   DefaultRatings,
 } from "@/lib/preferences";
+import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { getAuthState, cachedAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
 interface LeagueOption {
@@ -305,14 +306,13 @@ export default function SettingsPanel({
   // Columns 4-5 exist only on a wide board, so their slots hide elsewhere.
   const isWideBoard = useMediaQuery(WIDE_BOARD_QUERY);
   // Native shells only — see the Rate link in the legal row below.
-  const [appStore, setAppStore] = useState<"ios" | "android" | null>(null);
+  const appStore = useAppStore();
   useEffect(() => {
     if (!open) return;
-    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
     setCanUseGoogle(!cap?.isNativePlatform?.() || hasNativeGoogleBridge());
     setShowLinkMore(false);
     setShowEmailForm(false);
-    setAppStore(cap?.isNativePlatform?.() ? (cap?.getPlatform?.() === "android" ? "android" : "ios") : null);
     let alive = true;
     getAuthState().then((a) => { if (alive) setAuthState(a); });
     return () => { alive = false; };
@@ -1908,11 +1908,7 @@ export default function SettingsPanel({
               <>
                 <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
                 <a
-                  href={
-                    appStore === "ios"
-                      ? "https://apps.apple.com/app/id6766885311?action=write-review"
-                      : "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
-                  }
+                  href={storeReviewHref(appStore)}
                   className="underline underline-offset-2 transition-opacity hover:opacity-80"
                   style={{ color: "var(--text-muted)" }}
                 >

@@ -78,7 +78,7 @@ const FAQ: { q: string; a: string; links?: FaqLink[] }[] = [
     // and no reward. Keep it that way.
     a: "Yes. HideScore is a free app for iPhone and Android, and it also works in any web browser at hidescore.com. If it helps you, a rating on the store is what helps other fans find it. Get it on",
     links: [
-      { href: "https://apps.apple.com/app/hidescore/id6766885311", text: "the App Store" },
+      { href: "https://apps.apple.com/app/hidescore/id6766885311?action=write-review", text: "the App Store" },
       { href: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore", text: "Google Play" },
     ],
   },
