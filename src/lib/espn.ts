@@ -5995,6 +5995,19 @@ export function fetchBestYesterday(todayYmd: string, opts: BestYesterdayOptions 
   return data;
 }
 
+// One league's games for one slate day, with the same NHL/MLB video
+// enrichment a board column gets — for the Watch queue strip, whose queued
+// games may sit on a day or a league the board is not showing. Games only:
+// event-tile sports (golf, F1, UFC, chess, boxing, poker) have no game card
+// and so can never be queued.
+export async function fetchSlateGames(sport: Sport, date: string): Promise<Game[]> {
+  if (sport === "esports") return fetchEsportsGames(date);
+  const { games } = await fetchGames(sport, date);
+  if (sport === "nhl") await enrichNhlVideos(games, date);
+  if (sport === "mlb") await enrichMlbVideos(games, date);
+  return games;
+}
+
 export async function fetchAllLeagues(
   date?: string,
   thirdLeagueSport?: Sport | "empty",

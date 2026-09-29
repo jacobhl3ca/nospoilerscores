@@ -1,8 +1,8 @@
 import Link from "next/link";
 import DocReadProgress from "@/components/DocReadProgress";
 
-// Shared top bar for the static doc pages (/about, /contact, /faq, /privacy and
-// every SeoLandingPage route), added 2026-09-25. Before it, the only way back to
+// Shared top bar for the static doc pages (/about, /contact, /faq, /privacy,
+// /guides and every SeoLandingPage route), added 2026-09-25. Before it, the only way back to
 // the board was a text link at the very bottom of the page. Deliberately NOT the
 // app header: no date nav, no league icons.
 // `route` = the canonical path without its leading slash, used to tell the top
@@ -28,12 +28,18 @@ export default function DocTopBar({
       <DocReadProgress />
       <div className="doc-topbar mb-6 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
+          {/* A "‹" before the logo makes the link read as a way back, not
+              just branding (Jacob 9/28: articles still felt stuck-ish). */}
           <Link
             href="/"
-            aria-label="HideScore home"
-            className="hover:opacity-80 transition-opacity flex shrink-0 items-center gap-2"
+            aria-label="Back to HideScore"
+            className="hover:opacity-80 transition-opacity flex shrink-0 items-center gap-1.5"
             style={{ color: "var(--text)" }}
+            data-umami-event={`doc-top-back-${route}`}
           >
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
             <svg className="w-7 h-7 header-logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
               <rect width="32" height="32" rx="6" className="header-logo-bg" />
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>

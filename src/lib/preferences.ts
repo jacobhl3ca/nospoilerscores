@@ -1,6 +1,7 @@
 import { Sport } from "./types";
 import { ALL_RECORD_LEAGUES, type RecordLeague } from "./upcomingRecords";
-import { setServiceTimeZone } from "./etDay";
+import { setServiceTimeZone, getEtServiceDate, toYmd } from "./etDay";
+import { pruneWatchQueue, type WatchQueueEntry } from "./watchQueue";
 import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
 
 const STORAGE_KEY = "nss-preferences";
@@ -347,6 +348,14 @@ export interface Preferences {
   // sticks — session counting has stopped by then. See STARS_AUTO_HIDE_SESSION
   // in lib/sessionVisits.ts.
   hideTeamStars?: boolean;
+  // Games queued with the card's "Later" pill, shown in the Watch queue strip
+  // above the board until marked Done (Jacob 9/27). Newest last, at most 20;
+  // anything older than 3 days is dropped on load. Syncs like favoriteTeams.
+  // See lib/watchQueue.ts.
+  watchQueue?: WatchQueueEntry[];
+  // Hides the "Later" pill on game cards. The strip itself still shows
+  // whatever is already queued.
+  hideWatchLaterPill?: boolean;
   // `showTeamRecords` (W-L records on game cards) was REMOVED 2026-09-05. It was
   // opt-in from 8/4 and not one of the 21 accounts ever turned it on, and the
   // record is a second-order spoiler by nature — today's 63-49 encodes whether
@@ -665,6 +674,8 @@ export function loadPreferences(): Preferences {
     // before the first fetch/render after a load.
     setServiceTimeZone(prefs.timezone);
     setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
+    // After setServiceTimeZone, so "today" is the user's chosen zone.
+    prefs.watchQueue = pruneWatchQueue(prefs.watchQueue, toYmd(getEtServiceDate()));
     return prefs;
   } catch {
     return defaults;

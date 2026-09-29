@@ -41,11 +41,12 @@ for (const width of [390, 430]) {
     const toggle = page.getByRole("button", { name: "Toggle single-column view" }).locator("visible=true");
     await expect(toggle).toHaveCount(1);
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
-    // Inside the viewport and not under the theme button.
+    // Inside the viewport and not under the settings gear (the theme button
+    // that used to sit between them left the header 9/28).
     const box = (await toggle.boundingBox())!;
     expect(box.x + box.width).toBeLessThanOrEqual(width);
-    const theme = (await page.getByRole("button", { name: /Switch to (dark|light) mode/ }).boundingBox())!;
-    expect(box.x + box.width).toBeLessThanOrEqual(theme.x);
+    const gear = (await page.getByRole("button", { name: "Open settings" }).locator("visible=true").boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(gear.x);
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
@@ -57,7 +58,7 @@ test("375px phone: no header toggle (no room in the row)", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await seed(page, { singleColumn: true });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /Switch to (dark|light) mode/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open settings" }).locator("visible=true")).toBeVisible();
   await expect(page.getByRole("button", { name: "Toggle single-column view" }).locator("visible=true")).toHaveCount(0);
 });
 

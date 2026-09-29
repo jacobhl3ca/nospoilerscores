@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 
 const KEY = "umami.disabled";
@@ -63,6 +64,7 @@ export function NoTrackToggle() {
         )}
       </section>
       <p className="mt-4 text-xs" style={{ color: "var(--text-muted)" }}>Repeat once in each browser. Clearing this site&rsquo;s browser data resets the choice.</p>
+      <DocFooter route="notrack" />
     </main>
   );
 }

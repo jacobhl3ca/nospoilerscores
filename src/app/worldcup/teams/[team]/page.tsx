@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import { notFound } from "next/navigation";
 import { getWorldCupTeam, WORLD_CUP_TEAMS } from "@/lib/worldCupTeams";
@@ -189,6 +190,7 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
           Soccer highlights
         </Link>
       </div>
+      <DocFooter route={canonical.replace(/^\//, "")} />
 
       <script
         type="application/ld+json"

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import EmailLink from "@/components/EmailLink";
 
@@ -89,9 +90,7 @@ export default function PrivacyPage() {
         </p>
       </section>
 
-      <div className="mt-10">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-privacy">← Back to HideScore</Link>
-      </div>
+      <DocFooter route="privacy" />
 
       {/* Page graph: a WebPage node linked into the site's shared #website entity
           (declared in layout.tsx) plus its own BreadcrumbList, so Google renders a

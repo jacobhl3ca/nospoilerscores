@@ -14,6 +14,7 @@ import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
 import { usePairingHidden } from "@/lib/pairingMask";
+import { useWatchQueue } from "@/components/WatchQueueContext";
 
 interface GameCardProps {
   game: Game;
@@ -59,6 +60,9 @@ interface GameCardProps {
   // Leagues whose upcoming cards show the italic current W-L (Settings picks
   // them) — see lib/upcomingRecords.ts for why pre-game and live only.
   upcomingRecordLeagues?: ReadonlySet<RecordLeague>;
+  // No "Later" pill on this card. The Watch queue strip's own cards set it:
+  // they carry a Done button instead.
+  hideWatchLater?: boolean;
 }
 
 // Poll name for the rank-chip tooltip, keyed on sport. Anything absent reads
@@ -380,8 +384,13 @@ function PairingMaskCard({ game, nextGameDate, leagueTag, onReveal }: { game: Ga
   );
 }
 
-function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues }: GameCardProps) {
+function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues, hideWatchLater }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
+  // "Later" pill (Jacob 9/27): queue the game for the Watch queue strip above
+  // the board. Null outside the board (no provider) or when Settings hides it.
+  const watchQueue = useWatchQueue();
+  const showWatchLater = !!watchQueue && !hideWatchLater;
+  const queued = showWatchLater && watchQueue.isQueued(game);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
   // before this, overlays only closed via the tiny ✕ and piled up across cards.
   // Capture phase so other handlers' stopPropagation (e.g. another card's "+N"
@@ -1236,6 +1245,28 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 pre-season placeholder and says nothing, so it is skipped. */}
             {recordKey && recordShowsForState(game.state) && !effectivePastDate && !isTBD && team.record && !/^0-0(-0)?$/.test(team.record) ? (
               <span className="text-[10px] sm:text-xs italic tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }} title={recordTitle(recordKey)}>{team.record}</span>
+            ) : null}
+            {/* "Later" pill on the home row's right edge — the one spot every
+                card state leaves free (no score is ever drawn there). The
+                3-column phone board swaps the word for a glyph (globals.css,
+                .ns-board-tight). stopPropagation keeps the card's details
+                popup shut, same as the star. */}
+            {idx === 1 && showWatchLater ? (
+              <button
+                type="button"
+                data-watch-later={queued ? "queued" : "off"}
+                onClick={(e) => { e.stopPropagation(); watchQueue.toggle(game); }}
+                className="watch-later-pill shrink-0 text-[10px] leading-none rounded-full px-1.5 py-0.5 cursor-pointer whitespace-nowrap transition-colors"
+                style={queued
+                  ? { border: "1px solid var(--accent)", color: "var(--accent)" }
+                  : { border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                title={queued ? "Remove from your Watch queue" : "Watch later: pin this game to the top of the board"}
+                aria-label={queued ? "Remove from Watch queue" : "Add to Watch queue"}
+                aria-pressed={queued}
+              >
+                <span className="watch-later-full">{queued ? "Queued ✓" : "Later"}</span>
+                <span className="watch-later-short" aria-hidden>{queued ? "✓" : "+"}</span>
+              </button>
             ) : null}
           </div>
         ))}
