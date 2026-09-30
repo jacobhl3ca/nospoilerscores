@@ -1615,7 +1615,7 @@ export default function SettingsPanel({
                 see the pref's note. The row reads the way you'd expect. */}
             <ToggleRow
               label="Keyboard shortcuts hint"
-              hint="A small “Keys” tag in the bottom-right corner listing what ↓/↑, ←/→ and Space do. Desktop only."
+              hint="The “Keys” tag in the bottom-right corner, and the Keys button on an open post. Lists what ↓/↑, ←/→ and Space do. Desktop only."
               checked={!prefs.hideControlsHint}
               onChange={(v) => updatePrefs({ hideControlsHint: !v })}
             />

@@ -44,17 +44,18 @@ const ITEMS = [
   { ...base, id: "k3", headline: "Key post three: the last one", articleUrl: "https://www.reddit.com/r/nfl/comments/k3/", body: "More." },
 ];
 
-async function setup(page: Page, opts: { width?: number; height?: number; staleDismissal?: boolean } = {}) {
+async function setup(page: Page, opts: { width?: number; height?: number; staleDismissal?: boolean; hintOff?: boolean } = {}) {
   await page.setViewportSize({ width: opts.width ?? 1280, height: opts.height ?? 800 });
-  await page.addInitScript((stale) => {
+  await page.addInitScript(([stale, hintOff]) => {
     localStorage.setItem("nss-preferences", JSON.stringify({
       favoriteLeagues: ["nfl"], favoriteTeams: [], theme: "dark", showRatings: false,
       skipExplainer: true, skipNewsExplainer: true, showNews: true, leaguesOnboarded: true,
       switcherDefaultsVersion: 2, defaultLandingView: "news", defaultDateMode: "today",
+      ...(hintOff ? { hideControlsHint: true } : {}),
     }));
     // The old build's "dismissed for good" flag. It means nothing now.
     if (stale) localStorage.setItem("hs.keyHintsOff", "1");
-  }, !!opts.staleDismissal);
+  }, [!!opts.staleDismissal, !!opts.hintOff] as const);
   await page.route("**/news/*.json", (route) => {
     if (route.request().url().includes("highlights.json")) {
       return route.fulfill({ status: 200, contentType: "application/json", body: '{"games":{}}' });
@@ -258,4 +259,17 @@ test("? does nothing in fullscreen, so the legend never shows up unasked on the 
   await expect(keysBtn(page)).toBeVisible();
   await expect(keysBtn(page)).toHaveAttribute("aria-expanded", "false");
   await expect(panel(page)).toHaveCount(0);
+});
+
+// Settings → "Keyboard shortcuts hint" off clears the post's Keys button too,
+// not only the board's corner pill (Jacob 9/29: "setting to hide keys hints
+// off but its still on screen"). "?" still opens the legend on demand.
+test("the hint setting off hides the Keys button on a post; ? still opens the legend", async ({ page }) => {
+  await setup(page, { hintOff: true });
+  await expect(page.locator(".hs-controls-hint")).toHaveCount(0);
+  await openPost(page, "Key post one");
+  await expect(keysBtn(page)).toHaveCount(0);
+  await expect(panel(page)).toHaveCount(0);
+  await page.keyboard.press("?");
+  await expect(panel(page)).toBeVisible();
 });
