@@ -2203,7 +2203,8 @@ function SwitcherChip({
         }}
       >
         {/* The negative margin keeps the chip as tall as its text-only neighbours. */}
-        {sport && <LeagueMark sport={sport} className="-my-0.5" />}
+        {/* A ticked chip is accent-filled, so it takes the dark-theme mark in light mode too. */}
+        {sport && <LeagueMark sport={sport} tone={checked ? "dark" : "auto"} className="-my-0.5" />}
         {label}
       </button>
       {onRemove && (

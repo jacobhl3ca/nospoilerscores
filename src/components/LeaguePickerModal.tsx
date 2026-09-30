@@ -227,7 +227,7 @@ export function LeaguePickerModal({
                     turned filled marks (MLB) into a featureless blob. The
                     chip keeps every logo legible and identical in both
                     states, so selecting a pill changes only its background. */}
-                <LeagueMark sport={o.sport} size={16} src={demoOption?.logo} />
+                <LeagueMark sport={o.sport} size={16} src={demoOption?.logo} plate />
                 <span>{demoOption?.label ?? o.label}</span>
                 {/* Start dates dropped here on purpose (Jacob 8/9): six
                     "· starts Aug 21" tails made the grid unreadable and are

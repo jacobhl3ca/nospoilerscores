@@ -33,9 +33,13 @@ async function seedPrefs(page: Page, extra: Record<string, unknown> = {}) {
 
 async function openSettings(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Open settings", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Settings" });
-  await expect(dialog).toBeVisible();
+  // A tap before hydration does nothing (seen on WebKit over the mini tunnel),
+  // so tap again until the dialog opens.
+  await expect(async () => {
+    if (!(await dialog.isVisible())) await page.getByRole("button", { name: "Open settings", exact: true }).click();
+    await expect(dialog).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 45_000 });
   const catalog = dialog.getByRole("group", { name: "Leagues in the header switcher" });
   await expect(catalog).toBeVisible();
   return { dialog, catalog };
@@ -112,7 +116,8 @@ for (const width of [390, 1280]) {
     });
 
     test("a blocked logo leaves the chip as text, with no white dot", async ({ page }) => {
-      await page.route(/teamlogos\/leagues\/500\/mlb\.png/, (route) => route.abort());
+      // Both copies: a ticked chip asks for the dark one first.
+      await page.route(/teamlogos\/leagues\/500(-dark)?\/mlb\.png/, (route) => route.abort());
       await seedPrefs(page);
       const { catalog } = await openSettings(page);
 
@@ -155,3 +160,99 @@ for (const width of [390, 1280]) {
     });
   });
 }
+
+// Jacob 9/30 follow-up: ~45 white discs read as dots. The logo now sits on the
+// chip itself: ESPN's dark-theme copy in dark mode and on a ticked (accent)
+// chip, a sport emoji for a league with no mark of its own. The signup
+// picker keeps its white plate.
+const imgSrc = (markEl: Locator) => markEl.locator("img").getAttribute("src");
+
+async function setTicked(catalog: Locator, name: string, on: boolean) {
+  const c = chip(catalog, name);
+  if ((await c.getAttribute("aria-checked")) !== String(on)) await c.click();
+  await expect(c).toHaveAttribute("aria-checked", String(on));
+}
+
+for (const width of [390, 1280]) {
+  test.describe(`no plate, ${width}px`, () => {
+    test.use({ viewport: { width, height: 844 } });
+
+    test("dark theme: dark-set logos, no white plate, one chip height", async ({ page }) => {
+      await seedPrefs(page, { theme: "dark" });
+      const { dialog, catalog } = await openSettings(page);
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+      // Open first: an unticked league lives under More leagues.
+      await catalog.getByRole("button", { name: "More leagues", exact: true }).click();
+
+      for (const on of [true, false]) {
+        await setTicked(catalog, "MLB", on);
+        await expectLoaded(mark(chip(catalog, "MLB")));
+        expect(await imgSrc(mark(chip(catalog, "MLB")))).toContain("/500-dark/mlb.png");
+      }
+
+      await expect(catalog.locator("[data-league-plate]")).toHaveCount(0);
+      const whiteBacked = await catalog.locator("[data-league-mark]").evaluateAll((els) =>
+        els.filter((el) => getComputedStyle(el).backgroundColor === "rgb(255, 255, 255)").length);
+      expect(whiteBacked).toBe(0);
+
+      const heights = await catalog.locator('[role="checkbox"], button[aria-expanded]')
+        .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height * 2) / 2));
+      expect(new Set(heights).size, `chip heights ${[...new Set(heights)].join(", ")}`).toBe(1);
+      const scroller = dialog.locator(".overflow-y-auto").first();
+      expect(await scroller.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+    });
+
+    test("light theme: normal logos, but a ticked chip takes the dark copy", async ({ page }) => {
+      await seedPrefs(page, { theme: "light" });
+      const { catalog } = await openSettings(page);
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+      await catalog.getByRole("button", { name: "More leagues", exact: true }).click();
+
+      await setTicked(catalog, "MLB", false);
+      await expectLoaded(mark(chip(catalog, "MLB")));
+      expect(await imgSrc(mark(chip(catalog, "MLB")))).toContain("/500/mlb.png");
+
+      await setTicked(catalog, "MLB", true);
+      await expectLoaded(mark(chip(catalog, "MLB")));
+      expect(await imgSrc(mark(chip(catalog, "MLB")))).toContain("/500-dark/mlb.png");
+    });
+
+    test("a league with no mark of its own shows its sport emoji", async ({ page }) => {
+      await seedPrefs(page, { theme: "dark" });
+      const { catalog } = await openSettings(page);
+      await catalog.getByRole("button", { name: "More leagues", exact: true }).click();
+
+      const ncaaf = catalog.locator('[data-league-mark="ncaaf"]');
+      await expect(ncaaf).toHaveCount(1);
+      await expect(ncaaf).toHaveText("🏈");
+      await expect(ncaaf).toHaveAttribute("aria-hidden", "true");
+      await expect(ncaaf.locator("img")).toHaveCount(0);
+      // Every rugby union competition too: no shared ball icon left.
+      await expect(catalog.locator('[data-league-mark="sixnations"] img')).toHaveCount(0);
+    });
+
+    test("a blocked dark copy falls back to the normal logo", async ({ page }) => {
+      await page.route(/teamlogos\/leagues\/500-dark\/mlb\.png/, (route) => route.abort());
+      await seedPrefs(page, { theme: "dark" });
+      const { catalog } = await openSettings(page);
+
+      await expectLoaded(mark(chip(catalog, "MLB")));
+      const src = await imgSrc(mark(chip(catalog, "MLB")));
+      expect(src).toContain("/500/mlb.png");
+      expect(src).not.toContain("500-dark");
+    });
+  });
+}
+
+test("the league picker keeps its white plate", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedPrefs(page, { theme: "dark", secondLeague: "nfl", thirdLeague: "wnba" });
+  await page.goto("/");
+  await page.locator('button[title="Switch league"]').first().click({ timeout: 45_000 });
+  await page.getByRole("dialog", { name: "Switch league" }).getByRole("button", { name: "Add more…" }).click();
+  const sheet = page.locator('[role="dialog"][aria-labelledby="league-add-more-title"]');
+  await expect(sheet).toBeVisible();
+  const plates = sheet.locator("[data-league-plate]");
+  expect(await plates.count()).toBeGreaterThan(5);
+  await expect(sheet.locator("[data-league-emoji]")).toHaveCount(0);
+});
