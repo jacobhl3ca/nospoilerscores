@@ -420,6 +420,18 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   best: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f5a524' d='M7 4.5v15l12.5-7.5z'/%3E%3C/svg%3E",
 };
 
+// The same mark at 40×40 for the 14-16px league chips (LeagueMark). The soccer,
+// rugby and sport-icon URLs above are raw 500px PNGs (15-25 KB each); ESPN's
+// combiner returns the same image at about 1-3 KB. Wikimedia and local marks
+// pass through. LEAGUE_LOGO itself stays as is: the news badges read it.
+export function leagueLogoSmall(sport: Sport): string {
+  const url = LEAGUE_LOGO[sport];
+  const raw = url.match(/^https:\/\/a\.espncdn\.com(\/(?:i|redesign)\/[^?]+)$/);
+  if (raw) return `https://a.espncdn.com/combiner/i?img=${raw[1]}&w=40&h=40&transparent=true`;
+  if (/^https:\/\/a\.espncdn\.com\/combiner\/i\?img=[^&]+$/.test(url)) return `${url}&w=40&h=40&transparent=true`;
+  return url;
+}
+
 // ESPN brand mark — used as the source-card logo for ESPN-branded feeds
 // (ESPN Videos, ESPN top headlines, ESPN <league>) so those headers don't
 // inherit the league logo and look identical to MLB.com / NBA.com cards.

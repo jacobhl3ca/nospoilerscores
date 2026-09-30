@@ -7,6 +7,7 @@ import { TEAM_PICKER_SKIP } from "@/lib/teamLogos";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
 import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
+import { LeagueMark } from "./LeagueMark";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
 import { ALL_RECORD_LEAGUES, FREQUENT_RECORD_LEAGUES, WEEKLY_RECORD_LEAGUES, toggleAllRecordLeagues, toggleRecordLeague, upcomingRecordLeagues, type RecordLeague } from "@/lib/upcomingRecords";
@@ -529,7 +530,7 @@ export default function SettingsPanel({
       if (bucket) bucket.push(option);
       else byGroup.set(key, [option]);
     }
-    return SPORT_GROUP_ORDER.flatMap(({ key, label }) => {
+    return SPORT_GROUP_ORDER.flatMap(({ key, label, emoji }) => {
       const options = byGroup.get(key);
       if (!options?.length) return [];
       // Stable within a group: in-season first, then the catalog's own order
@@ -541,7 +542,7 @@ export default function SettingsPanel({
       const sorted = [...options].sort(
         (a, b) => catalogSortRank(a.sport, !!a.offseason) - catalogSortRank(b.sport, !!b.offseason),
       );
-      return [{ key, label, options: sorted }];
+      return [{ key, label, emoji, options: sorted }];
     });
   }, [leagueOptions]);
 
@@ -607,6 +608,11 @@ export default function SettingsPanel({
     return fallbackLabel ? `Auto · ${fallbackLabel}` : "Auto";
   };
 
+  // The league whose logo a chip or pill shows (Jacob 9/30). The cross-league
+  // columns (Best of yesterday, ESPN front page) stay text only.
+  const markSport = (sport: Sport | "empty" | undefined): Sport | undefined =>
+    sport && sport !== "empty" && sport !== "best" && sport !== "top" ? sport : undefined;
+
   const optionText = (option: LeagueOption) =>
     `${SPORT_LABEL[option.sport] ?? option.label}${option.offseason ? " · offseason" : option.upcomingLabel ? ` · starts ${option.upcomingLabel}` : ""}`;
 
@@ -623,6 +629,7 @@ export default function SettingsPanel({
         key={option.sport}
         label={label}
         note={note}
+        sport={markSport(option.sport)}
         checked={isSwitcherChecked(option)}
         onToggle={(on) => {
           const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
@@ -1171,6 +1178,7 @@ export default function SettingsPanel({
                         its own row of chips so the list stays short. */}
                     {visibleLeagueGroups.map((group, gi) => (
                       <div key={group.key} className="flex flex-wrap items-center gap-1.5">
+                        <span aria-hidden="true" className="text-xs leading-none -mr-0.5">{group.emoji}</span>
                         <span className="text-[10px] font-semibold uppercase tracking-wide mr-0.5" style={{ color: "var(--text-muted)" }}>{group.label}</span>
                         {group.options.map((option) => renderSwitcherChip(option, editingCatalog))}
                         {gi === visibleLeagueGroups.length - 1 && allLeaguesChip}
@@ -1230,6 +1238,8 @@ export default function SettingsPanel({
                   // A "top" or "best" pin while that column is switched off reads
                   // as Auto here, which is what resolveSlot makes of it.
                   const value = (saved === "top" && !TOP_EVENTS_ENABLED) || (saved === "best" && !BEST_YESTERDAY_ENABLED) ? undefined : saved;
+                  // Auto shows the mark of the league it resolves to.
+                  const mark = markSport(value ?? displayedLeagues[idx]?.sport);
                   return (
                     // The pill is our own text; the real <select> lies over
                     // it, invisible, so the native picker opens on tap. A
@@ -1237,13 +1247,14 @@ export default function SettingsPanel({
                     // iOS focus zoom) and far too wide for three in a row.
                     <span
                       key={idx}
-                      className="relative inline-flex items-center gap-1 rounded-full pl-3 pr-2.5 py-1 text-xs font-semibold focus-within:ring-2 focus-within:ring-[var(--accent)]"
+                      className={`relative inline-flex items-center gap-1 rounded-full ${mark ? "pl-1.5" : "pl-3"} pr-2.5 py-1 text-xs font-semibold focus-within:ring-2 focus-within:ring-[var(--accent)]`}
                       style={{
                         background: value ? "var(--bg-card-hover)" : "var(--bg-card)",
                         border: "1px solid var(--border)",
                         color: value === "empty" ? "var(--text-muted)" : "var(--text)",
                       }}
                     >
+                      {mark && <LeagueMark sport={mark} className="-my-0.5" />}
                       <span className="truncate max-w-[7.5rem]">{slotPillText(value, fallbackLabel)}</span>
                       <span aria-hidden="true" className="text-[10px]" style={{ color: "var(--text-muted)" }}>▾</span>
                       <select
@@ -2158,15 +2169,18 @@ function LeagueChip({
 // A league chip in the switcher catalog: LeagueChip's look, a checkbox's
 // meaning (ticked = in the header switcher). The name reads "NBA · offseason"
 // the way the old checkbox row did. In Edit list mode a small × follows it.
+// `sport` puts that league's logo left of the name.
 function SwitcherChip({
   label,
   note,
+  sport,
   checked,
   onToggle,
   onRemove,
 }: {
   label: string;
   note?: string;
+  sport?: Sport;
   checked: boolean;
   onToggle: (on: boolean) => void;
   onRemove?: () => void;
@@ -2180,7 +2194,7 @@ function SwitcherChip({
         aria-label={name}
         onClick={() => onToggle(!checked)}
         title={note ? name : undefined}
-        className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
+        className={`inline-flex items-center gap-1.5 ${sport ? "pl-1.5 pr-2" : "px-2"} py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors`}
         style={{
           background: checked ? "var(--accent)" : "var(--bg-card)",
           border: `1px solid ${checked ? "var(--accent)" : "var(--border)"}`,
@@ -2188,6 +2202,8 @@ function SwitcherChip({
           opacity: note === "offseason" ? 0.6 : 1,
         }}
       >
+        {/* The negative margin keeps the chip as tall as its text-only neighbours. */}
+        {sport && <LeagueMark sport={sport} className="-my-0.5" />}
         {label}
       </button>
       {onRemove && (

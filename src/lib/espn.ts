@@ -998,11 +998,13 @@ export function sportGlyph(sport: Sport): string {
 //   pro wrestling when they land).
 export type SportGroup = "us" | "soccer" | "majors" | "other";
 
-export const SPORT_GROUP_ORDER: { key: SportGroup; label: string }[] = [
-  { key: "us", label: "US leagues" },
-  { key: "soccer", label: "Soccer" },
-  { key: "majors", label: "Golf & tennis majors" },
-  { key: "other", label: "Racing, combat & more" },
+// `emoji` leads the heading in the Settings catalog only (Jacob 9/30); the
+// column <optgroup> labels stay text.
+export const SPORT_GROUP_ORDER: { key: SportGroup; label: string; emoji: string }[] = [
+  { key: "us", label: "US leagues", emoji: "🇺🇸" },
+  { key: "soccer", label: "Soccer", emoji: "⚽" },
+  { key: "majors", label: "Golf & tennis majors", emoji: "⛳" },
+  { key: "other", label: "Racing, combat & more", emoji: "🏁" },
 ];
 
 // Partial on purpose: an unlisted sport falls through to "other" rather than

@@ -100,9 +100,10 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
   await dialog.locator("summary", { hasText: "More settings" }).click();
 
   // The 9/25 pass left the phone panel at 2,171 px; the 9/28 Links section
-  // (two URL rows) adds 120 px. Nothing else may grow it.
+  // (two URL rows) adds 120 px, and the 9/30 league logos widen the My leagues
+  // chips into one more row (32 px). Nothing else may grow it.
   const height = await dialog.locator(".overflow-y-auto").first().evaluate((el) => el.scrollHeight);
-  expect(height).toBeLessThanOrEqual(2291);
+  expect(height).toBeLessThanOrEqual(2323);
   expect(errors).toEqual([]);
 });
 
