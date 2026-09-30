@@ -533,12 +533,13 @@ export default function SettingsPanel({
     return SPORT_GROUP_ORDER.flatMap(({ key, label, emoji }) => {
       const options = byGroup.get(key);
       if (!options?.length) return [];
-      // Stable within a group: in-season first, then the catalog's own order
-      // (ALL_LEAGUES, which is arranged by season calendar) — except that the
-      // short-window minority events sort to the tail regardless of season, so
-      // Little League cannot outrank the NBA for three weeks in August. See
-      // catalogSortRank / CATALOG_TAIL. Array.prototype.sort is stable in every
-      // engine we ship to, so equal keys keep the catalog order.
+      // Within a group: in-season first, then a fixed stature order
+      // (CATALOG_STATURE, 9/30; it replaced the season-calendar ALL_LEAGUES
+      // order) — except that the short-window minority events sort to the tail
+      // regardless of season, so Little League cannot outrank the NBA for three
+      // weeks in August. See catalogSortRank / CATALOG_TAIL. A sport missing
+      // from CATALOG_STATURE ties at the end, and the stable sort keeps those
+      // in catalog order.
       const sorted = [...options].sort(
         (a, b) => catalogSortRank(a.sport, !!a.offseason) - catalogSortRank(b.sport, !!b.offseason),
       );

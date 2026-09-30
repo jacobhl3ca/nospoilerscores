@@ -1052,10 +1052,41 @@ const CATALOG_TAIL: ReadonlySet<Sport> = new Set<Sport>([
   "nrl", "afl",
 ]);
 
+// Fixed stature order inside each Settings group (Jacob 9/30: "the order
+// seems a bit odd"). With "Hide offseason" on, every visible row is in season,
+// so the old fallback, ALL_LEAGUES = season calendar, was the whole order and
+// read as random: WNBA under NCAA Volleyball, MLS 15th in Soccer, DFB-Pokal
+// apart from the Bundesliga. One numbering serves all groups (groups never
+// mix). Pro before college in US; domestic leagues, then continental, national
+// teams, domestic cups, college in Soccer; racing, combat, cricket, rugby,
+// mind sports in "Racing, combat & more". An unlisted sport sorts to the end
+// of its group.
+const CATALOG_STATURE: Partial<Record<Sport, number>> = Object.fromEntries(
+  ([
+    // US leagues
+    "nfl", "nba", "mlb", "nhl", "wnba", "cfl", "ufl",
+    "ncaaf", "ncaam", "ncaaw", "ncaah", "ncaawh", "ncaavb", "ncaabase", "ncaasoft", "llws",
+    // Soccer
+    "epl", "laliga", "seriea", "bundesliga", "ligue1", "mls", "ligamx", "nwsl", "efl", "saudi",
+    "ucl", "uel", "uecl", "libertadores",
+    "fifa", "euro", "afcon", "nations",
+    "facup", "copadelrey", "dfbpokal",
+    "ncaamsoc", "ncaawsoc",
+    // Golf & tennis majors
+    "golf", "tennis",
+    // Racing, combat & more
+    "f1", "nascar", "indycar", "ufc", "boxing", "cricket", "cricketintl",
+    "sixnations", "rugbywc", "rugbytest", "nationschamp", "rugbychamp", "superrugby", "premrugby", "urc",
+    "top14", "challengecup", "mlr", "nrl", "afl",
+    "chess", "poker", "esports",
+  ] as Sport[]).map((sport, i) => [sport, i]),
+);
+
 // Sort rank within a Settings group: minority events last, then in-season
-// before offseason, then the catalog's own (season-calendar) order.
+// before offseason, then CATALOG_STATURE.
 export function catalogSortRank(sport: Sport, offseason: boolean): number {
-  return (CATALOG_TAIL.has(sport) ? 2 : 0) + (offseason ? 1 : 0);
+  const major = (CATALOG_TAIL.has(sport) ? 2 : 0) + (offseason ? 1 : 0);
+  return major * 1000 + (CATALOG_STATURE[sport] ?? 999);
 }
 
 // "8/21" — the compact form used in the league switcher's "EPL · 8/21" tail.
