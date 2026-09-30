@@ -13,17 +13,34 @@
 // (NRL Finals Week 1; AFL Wildcard Round and Qualifying Finals; CFL division
 // semi-finals), so those cards stay as they are. An unknown round masks: a
 // needless tap costs less than a spoiler.
+//
+// The US leagues joined on 2026-09-29 (Jacob, "hide"): a series is no different.
+// ESPN listed the Division Series as "TBD @ LAD" during the Wild Card round and
+// fills each winner in the moment a series ends, so an ALDS/NLDS card names who
+// won the Wild Card round. MLB shows its Wild Card round, the NBA and NHL their
+// first round, the NFL its Wild Card weekend; every later round masks. The NBA
+// first round still follows the play-in (the 7 and 8 seeds), a known gap; the
+// play-in's own "8th Seed Game" masks.
 
 import { useCallback, useSyncExternalStore } from "react";
 import type { Game, Sport } from "@/lib/types";
 
 // Rounds that are safe to show, per league. Anything else in that league's
 // finals masks. Labels come from parseGame (NRL_FINALS_WEEKS, the AFL note
-// abbreviations) and the /api/cfl worker (theScore's game_description).
+// abbreviations, ESPN's notes headline for the US leagues) and the /api/cfl
+// worker (theScore's game_description). US headlines read 2026-09-29:
+// "NLWC - Game 3 If Necessary", "East 1st Round - Game 2", "NFC Wild Card
+// Playoffs", "NBA Play-In - East - 7th Place vs 8th Place". The NBA and NHL
+// Finals carry no note at all, so they mask as an unknown round.
 const LADDER_SEEDED_ROUND: Partial<Record<Sport, RegExp>> = {
   nrl: /^finals week 1$/i,
   afl: /^(wildcard round|qualifying final)$/i,
   cfl: /\bsemi-?final\b/i,
+  mlb: /^(?:AL|NL)WC\b|\bwild ?card\b/i,
+  nba: /\b(?:1st|first) round\b|\bplace vs\b/i,
+  nhl: /\b(?:1st|first) round\b/i,
+  // The Pro Bowl is filed as postseason too; it is AFC v NFC, not a pairing.
+  nfl: /\bwild ?card\b|\bpro bowl\b/i,
 };
 
 export function pairingSpoilsEarlierRound(game: Pick<Game, "sport" | "isPlayoff" | "playoffLabel">): boolean {

@@ -19,6 +19,16 @@ test("MLB Division Series day with both leagues", () => {
   assert.deepEqual(playoffSubtitleTiers(["ALCS - Game 3", "NLCS - Game 2"]), ["LCS"]);
 });
 
+test("a Game 3 listed before it is needed merges like any other game", () => {
+  // ESPN's Oct 1 slate, read 2026-09-29.
+  const day = ["NLWC - Game 3 If Necessary", "ALWC - Game 3 If Necessary", "ALWC - Game 3 If Necessary", "NLWC - Game 3 If Necessary"];
+  assert.deepEqual(playoffSubtitleTiers(day, "Postseason"), [
+    "Wild Card · Game 3 If Necessary",
+    "Wild Card · G3 If Necessary",
+    "WC · G3 If Necessary",
+  ]);
+});
+
 test("a one-league day keeps the league", () => {
   assert.deepEqual(playoffSubtitleTiers(["NLCS - Game 2"]), ["NLCS · Game 2", "NLCS · G2"]);
   assert.deepEqual(playoffSubtitleTiers(["NLWC - Game 2", "NLWC - Game 3"]), ["NLWC"]);

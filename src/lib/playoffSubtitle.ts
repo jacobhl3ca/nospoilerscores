@@ -50,13 +50,15 @@ interface ParsedLabel {
   side: string | null; // "East", "AL", "South Region"
   core: string;        // the round with the side removed: "1st Round", "WC"
   mlb: boolean;
-  game: string | null; // "7"
+  game: string | null; // "7", "3 If Necessary"
 }
 
 function parseLabel(label: string): ParsedLabel {
   const segments = label.split(" · ");
   let game: string | null = null;
-  const last = segments[segments.length - 1].match(/^Game (\d+)$/);
+  // ESPN lists a series' last game before it is known to be needed:
+  // "NLWC - Game 3 If Necessary" (read 2026-09-29 for Oct 1).
+  const last = segments[segments.length - 1].match(/^Game (\d+(?: If Necessary)?)$/i);
   if (last && segments.length > 1) {
     game = last[1];
     segments.pop();
