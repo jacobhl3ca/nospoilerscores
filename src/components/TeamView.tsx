@@ -8,7 +8,7 @@ import { type ShareCardMeta } from "@/lib/shareCard";
 import { fetchTeamSchedule, fetchScheduleRatings } from "@/lib/espn";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { SHORT_LEAGUE_LABELS } from "@/lib/leagueLabels";
-import GameCard from "./GameCard";
+import GameCard, { PairingRevealAll } from "./GameCard";
 import { getDateString } from "@/components/DateNav";
 
 interface TeamViewProps {
@@ -424,6 +424,8 @@ export default function TeamView({
         <p role="status" aria-live="polite" className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>No games found</p>
       ) : (
         <div className="flex flex-col gap-1.5 sm:gap-2">
+          {/* One tap for every covered playoff card listed (Jacob 9/30). */}
+          <PairingRevealAll games={[...pastShown, ...upcomingShown]} />
           {pastShown.length > 0 && (
             <>
               {/* Recent divider — inline at first-card Y, pins below the team

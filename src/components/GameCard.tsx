@@ -14,8 +14,9 @@ import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/w
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
-import { usePairingHidden } from "@/lib/pairingMask";
+import { revealPairings, useHiddenPairingIds, usePairingHidden } from "@/lib/pairingMask";
 import { shortenPlayoffLabel } from "@/lib/playoffSubtitle";
+import { shouldShowRating } from "@/lib/ratingGate";
 import { useWatchQueue } from "@/components/WatchQueueContext";
 
 interface GameCardProps {
@@ -343,11 +344,33 @@ export function CompactUpcomingCard({
 // so the full card's hooks never run in a different order across the reveal.
 export default function GameCard(props: GameCardProps) {
   const { hidden, reveal } = usePairingHidden(props.game);
-  if (hidden) return <PairingMaskCard game={props.game} nextGameDate={props.nextGameDate} leagueTag={props.leagueTag} onReveal={reveal} />;
+  if (hidden) return <PairingMaskCard game={props.game} nextGameDate={props.nextGameDate} leagueTag={props.leagueTag} showRatings={props.showRatings} onReveal={reveal} />;
   return <GameCardBody {...props} />;
 }
 
-function PairingMaskCard({ game, nextGameDate, leagueTag, onReveal }: { game: Game; nextGameDate?: string; leagueTag?: string; onReveal: () => void }) {
+// One tap opens every covered card in a column (Jacob 9/30): an MLB postseason
+// day holds up to four covered games, a tap each for about a month. Shown only
+// for 2 or more covers; a lone cover's own "Show teams" is enough. Same quiet
+// style as that button, and the same per-visit rule.
+export function PairingRevealAll({ games, className = "" }: { games: Game[]; className?: string }) {
+  const hiddenIds = useHiddenPairingIds(games);
+  if (hiddenIds.length < 2) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => revealPairings(hiddenIds)}
+      className={`w-full text-xs rounded px-2 py-1 cursor-pointer transition-colors whitespace-nowrap ${className}`}
+      style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+      data-testid="pairing-reveal-all"
+      aria-label={`Show teams for all ${hiddenIds.length} covered games (reveals who advanced)`}
+      title="The teams in these games show who won the round before"
+    >
+      Show all teams
+    </button>
+  );
+}
+
+function PairingMaskCard({ game, nextGameDate, leagueTag, showRatings, onReveal }: { game: Game; nextGameDate?: string; leagueTag?: string; showRatings: boolean; onReveal: () => void }) {
   // ESPN's raw headline ("NLDS - Game 1") in the column subtitle's form ("NLDS · Game 1").
   const round = game.playoffLabel ? shortenPlayoffLabel(game.playoffLabel) : "Finals";
   let time = game.state === "in" ? "Live" : game.state === "post" ? "Final" : "";
@@ -375,7 +398,14 @@ function PairingMaskCard({ game, nextGameDate, leagueTag, onReveal }: { game: Ga
         </span>
         {leagueTag && <span className="font-semibold uppercase tracking-wide truncate">{leagueTag}</span>}
       </div>
-      <div className="mt-1.5 text-sm font-medium truncate" style={{ color: "var(--text)" }}>{round}</div>
+      {/* The rating names no team, so a live or final cover keeps it (Jacob 9/30):
+          the reader sees which covered game is worth a look before the tap.
+          Nothing else from the full card joins it: no series line, no venue
+          (it names the home club), no highlights (the video names both). */}
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <span className="text-sm font-medium truncate min-w-0" style={{ color: "var(--text)" }}>{round}</span>
+        {shouldShowRating(game, showRatings) && <span className="shrink-0 flex"><RatingBadge rating={game.rating!} /></span>}
+      </div>
       <button
         type="button"
         onClick={onReveal}
@@ -442,9 +472,8 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
     return () => { cancelled = true; setCardWeather(null); };
   }, [game.id, game.state, game.venueRoof, game.venueLocation, game.date]);
   // Hide the rating badge while a live game is in a delay — rating returns
-  // once play resumes.
-  const isDelayed = game.state === "in" && /delay/i.test(game.statusDetail);
-  const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null && !isDelayed;
+  // once play resumes (shouldShowRating, shared with the pairing cover).
+  const showRating = shouldShowRating(game, showRatings);
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
   // Held before first pitch/kickoff: yellow label beside the start time.
