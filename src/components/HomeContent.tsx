@@ -5102,6 +5102,7 @@ export default function HomeContent({
           maskVideoTitle={prefs.maskVideoTitle ?? false}
           forceTitleMask={!!videoModal.forceTitleMask}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
+          keysButton={!prefs.hideControlsHint}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
           allowEnd={prefs.videoAllowEnd ?? false}

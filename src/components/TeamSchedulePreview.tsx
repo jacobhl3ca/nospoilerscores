@@ -70,12 +70,14 @@ export default function TeamSchedulePreview({
   // turned them on there (or set "Ratings on launch: on").
   const [showRatings, setShowRatings] = useState(false);
   const [maskTitle, setMaskTitle] = useState(false);
+  const [keysButton, setKeysButton] = useState(true);
   const [modal, setModal] = useState<ModalState | null>(null);
 
   useEffect(() => {
     const p = loadPreferences();
     setShowRatings(p.defaultRatings === "on" || (p.defaultRatings !== "off" && p.showRatings));
     setMaskTitle(p.maskVideoTitle ?? false);
+    setKeysButton(!p.hideControlsHint);
   }, []);
 
   useEffect(() => {
@@ -204,6 +206,7 @@ export default function TeamSchedulePreview({
           alternates={modal.alternates}
           maskVideoTitle={maskTitle}
           youtubeNativeControls
+          keysButton={keysButton}
           onClose={() => setModal(null)}
         />
       )}
