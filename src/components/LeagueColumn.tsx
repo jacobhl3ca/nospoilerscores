@@ -12,6 +12,7 @@ import { displayShortName, loadBigInningSchedule, getSeasonOpener, sportDisplayL
 import { handleExternalClick, watchLinkProps } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
+import { playoffSubtitleTiers } from "@/lib/playoffSubtitle";
 import { etWallToUtc, formatInZone, getWhiparoundShow, parseEtTime, whiparoundStartsLater, whiparoundSubtitle } from "@/lib/whiparound";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { groupEspnFrontPage } from "@/lib/topEvents";
@@ -144,27 +145,6 @@ const PLAYOFF_START_DATES: Record<string, { date: string; label: string; singula
   nfl: { date: "2027-01-09", label: "Playoffs" },
   ncaam: { date: "2026-03-17", label: "March Madness", singularLabel: true },
 };
-
-// Strip generic "Stanley Cup Playoffs" / "NBA Playoffs" / "NCAA … Championship"
-// prefix segments so a label like "Stanley Cup Playoffs - First Round" reads
-// "First Round". Real round info (e.g. "East 1st Round" for NBA/NHL playoffs)
-// gets preserved and joined with the game number when both are present.
-const GENERIC_LABEL_SEGMENT = /^(?:stanley cup playoffs?|nba playoffs?|wnba playoffs?|nhl playoffs?|playoffs?|postseason|ncaa (?:men'?s|women'?s)?\s*basketball championship|ncaa basketball championship)$/i;
-
-// Extract round + game info from ESPN's playoff headline.
-// e.g. "East 1st Round - Game 7" → "East 1st Round · Game 7"
-// e.g. "Stanley Cup Playoffs - First Round" → "First Round"
-// e.g. "NCAA Men's Basketball Championship - National Championship" → "National Championship"
-// ESPN sometimes tacks on "Nth Seed Game" as the last segment — strip that.
-function shortenPlayoffLabel(headline: string): string {
-  const parts = headline
-    .split(" - ")
-    .map(p => p.trim())
-    .filter(p => p && !/^\d+(?:st|nd|rd|th)?\s+seed\s+game$/i.test(p))
-    .filter(p => !GENERIC_LABEL_SEGMENT.test(p));
-  if (!parts.length) return headline.trim();
-  return parts.join(" · ");
-}
 
 interface SubtitleResult {
   tiers: string[];
@@ -477,17 +457,12 @@ function getPlayoffSubtitle(
   const playoffDate = new Date(config.date + "T12:00:00");
   const diff = playoffDate.getTime() - viewDate.getTime();
 
-  // Playoffs already started — show round + game number from game data
+  // Playoffs already started — show round + game number from game data, read
+  // across every game on the day (see @/lib/playoffSubtitle).
   if (diff <= 0) {
-    if (!games?.length) return null;
-    const label = games.find(g => g.playoffLabel)?.playoffLabel;
-    if (!label) return null;
-    const text = shortenPlayoffLabel(label);
-    // Compact fallback: "Game 7" → "G7" so a long round + game tag still fits
-    // narrow columns when the full version overflows.
-    const short = text.replace(/Game (\d+)/g, "G$1");
-    const tiers = short !== text ? [text, short] : [text];
-    return { tiers };
+    const labels = (games ?? []).map((g) => g.playoffLabel).filter(Boolean) as string[];
+    const tiers = playoffSubtitleTiers(labels, config.label);
+    return tiers.length ? { tiers } : null;
   }
 
   if (sport === "mlb" && bigInningSchedule) {
