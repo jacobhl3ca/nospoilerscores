@@ -42,3 +42,29 @@ test("no list hit and no web stream = nothing to open", () => {
   setTvChannelLinks("", "auto");
   assert.equal(liveWatchUrl({ broadcasts: ["NBC"], streamUrl: null }), null);
 });
+
+test("a per-game {game} line fills from the game; a known no-stream answer falls to the next listed broadcaster", async () => {
+  const { setGameCheckFetch } = await import("../src/lib/tvChannelLinks.ts");
+  const game = {
+    broadcasts: ["Peacock", "NBC"],
+    streamUrl: WEB,
+    homeTeam: { displayName: "Houston Astros", shortDisplayName: "Astros", abbreviation: "HOU" } as never,
+    awayTeam: { displayName: "Chicago White Sox", shortDisplayName: "White Sox", abbreviation: "CHW" } as never,
+    date: "2026-09-29T21:00Z",
+  };
+  let status = 200;
+  setGameCheckFetch(async () => ({ status }));
+  setTvChannelLinks(`Peacock = http://tuner.test:9192/game?{game}\nNBC = ${NBC}`, "raw");
+  const first = liveWatchUrl(game)!;
+  assert.equal(first.network, "Peacock");
+  assert.match(first.url, /^http:\/\/tuner\.test:9192\/game\?net=Peacock&home=Houston\+Astros/);
+  // No game on the call (older callers): the {game} line is skipped, NBC wins.
+  assert.equal(liveWatchUrl({ broadcasts: ["Peacock", "NBC"], streamUrl: WEB })?.network, "NBC");
+  setGameCheckFetch(async () => ({ status: 404 }));
+  status = 404;
+  liveWatchUrl(game);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(liveWatchUrl(game), { url: NBC, network: "NBC", scheme: true });
+  setGameCheckFetch(null);
+  setTvChannelLinks("", "auto");
+});
