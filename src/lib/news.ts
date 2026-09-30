@@ -432,6 +432,62 @@ export function leagueLogoSmall(sport: Sport): string {
   return url;
 }
 
+// ESPN's dark-theme copies: the same path with /500-dark/ for /500/. Every
+// /500/ mark in LEAGUE_LOGO was fetched both ways on 2026-09-30; these three
+// 404 in the dark set. MLS and UFC are coloured marks that read on dark as
+// they are; IPL is dark blue, so it goes white in dark (INVERT_IN_DARK).
+export const NO_DARK_LOGO: ReadonlySet<Sport> = new Set<Sport>(["mls", "ufc", "cricket"]);
+
+// The dark-theme mark at leagueLogoSmall's size, or undefined when ESPN has
+// none (the sport icons, Wikimedia and local marks, NO_DARK_LOGO).
+export function leagueLogoDark(sport: Sport): string | undefined {
+  if (NO_DARK_LOGO.has(sport)) return undefined;
+  const small = leagueLogoSmall(sport);
+  if (!small.startsWith("https://a.espncdn.com/combiner/") || !small.includes("/500/")) return undefined;
+  return small.replace("/500/", "/500-dark/");
+}
+
+// Marks with no dark copy that are one dark colour: turned white on a dark
+// background (checked by eye on #111, 2026-09-30). The rest with no dark copy
+// read as they are: MLS, UFC (coloured), CFL (its own white shield), ITF
+// (green wordmark). Chess and poker are here for their emoji: ♟️ and ♠️ are
+// black and vanish on the dark panel.
+export const INVERT_IN_DARK: ReadonlySet<Sport> = new Set<Sport>(["cricket", "indycar", "chess", "poker"]);
+
+// Leagues with no logo of their own: the Settings chips show the sport's emoji
+// in place of ESPN's generic sport icon or a mark shared by several leagues
+// (the NCAA disc, one rugby ball for every union competition). The signup
+// picker still shows LEAGUE_LOGO.
+export const LEAGUE_EMOJI: Partial<Record<Sport, string>> = {
+  ncaaf: "🏈",
+  ncaam: "🏀",
+  ncaaw: "🏀",
+  ncaah: "🏒",
+  ncaawh: "🏒",
+  ncaavb: "🏐",
+  ncaawsoc: "⚽",
+  ncaamsoc: "⚽",
+  ncaabase: "⚾",
+  llws: "⚾",
+  sixnations: "🏉",
+  rugbywc: "🏉",
+  rugbychamp: "🏉",
+  superrugby: "🏉",
+  rugbytest: "🏉",
+  nationschamp: "🏉",
+  premrugby: "🏉",
+  urc: "🏉",
+  top14: "🏉",
+  challengecup: "🏉",
+  mlr: "🏉",
+  cricketintl: "🏏",
+  chess: "♟️",
+  poker: "♠️",
+  esports: "🎮",
+  boxing: "🥊",
+  nascar: "🏁",
+};
+
 // ESPN brand mark — used as the source-card logo for ESPN-branded feeds
 // (ESPN Videos, ESPN top headlines, ESPN <league>) so those headers don't
 // inherit the league logo and look identical to MLB.com / NBA.com cards.
