@@ -15,6 +15,7 @@ import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
 import { usePairingHidden } from "@/lib/pairingMask";
+import { shortenPlayoffLabel } from "@/lib/playoffSubtitle";
 import { useWatchQueue } from "@/components/WatchQueueContext";
 
 interface GameCardProps {
@@ -347,11 +348,15 @@ export default function GameCard(props: GameCardProps) {
 }
 
 function PairingMaskCard({ game, nextGameDate, leagueTag, onReveal }: { game: Game; nextGameDate?: string; leagueTag?: string; onReveal: () => void }) {
-  const round = game.playoffLabel || "Finals";
+  // ESPN's raw headline ("NLDS - Game 1") in the column subtitle's form ("NLDS · Game 1").
+  const round = game.playoffLabel ? shortenPlayoffLabel(game.playoffLabel) : "Finals";
   let time = game.state === "in" ? "Live" : game.state === "post" ? "Final" : "";
   if (game.state === "pre") {
     const d = new Date(game.date);
-    if (!isNaN(d.getTime())) time = formatTime(d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() }));
+    // A series slot with no start time yet sits at local midnight in the feed
+    // ("TBD @ LAD", 10/3 04:00Z) — read ESPN's "TBD" the way CompactUpcomingCard does.
+    if (/\bTBD\b/i.test(cleanStatusDetail(game.statusDetail, true))) time = "TBD";
+    else if (!isNaN(d.getTime())) time = formatTime(d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() }));
   }
   // Same three bands as a full card (meta row, then two team-row heights), so
   // the column keeps its rhythm: the round sits where the away team would and

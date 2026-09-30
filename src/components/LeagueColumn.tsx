@@ -13,6 +13,7 @@ import { handleExternalClick, watchLinkProps } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
 import { playoffSubtitleTiers } from "@/lib/playoffSubtitle";
+import { pairingSpoilsEarlierRound } from "@/lib/pairingMask";
 import { etWallToUtc, formatInZone, getWhiparoundShow, parseEtTime, whiparoundStartsLater, whiparoundSubtitle } from "@/lib/whiparound";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { groupEspnFrontPage } from "@/lib/topEvents";
@@ -1688,7 +1689,9 @@ export default function LeagueColumn({
     const named = compactableMatchups(games, firstFull, alsoShown);
     return games.map((game, i) => {
       const nextGameDate = formatDateCompact(etDayString(game.date) || league.nextGameDay!.date);
-      if (isCompactLeague && named.has(matchupKey(game)) && !(firstFull && i === 0)) {
+      // A masked pairing stays a full card: the compact row prints "@ HOME",
+      // and from Game 3 of a series the home club can be the one that advanced.
+      if (isCompactLeague && named.has(matchupKey(game)) && !(firstFull && i === 0) && !pairingSpoilsEarlierRound(game)) {
         return (
           <CompactUpcomingCard
             key={game.id}

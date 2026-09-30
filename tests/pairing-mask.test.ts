@@ -67,7 +67,66 @@ test("CFL: division semi-finals show, division finals and the Grey Cup mask", ()
   assert.equal(pairingSpoilsEarlierRound({ sport: "cfl", isPlayoff: false, playoffLabel: null }), false);
 });
 
-test("other leagues' playoffs are untouched", () => {
-  assert.equal(pairingSpoilsEarlierRound({ sport: "nfl", isPlayoff: true, playoffLabel: "Super Bowl" }), false);
-  assert.equal(pairingSpoilsEarlierRound({ sport: "mlb", isPlayoff: true, playoffLabel: "World Series" }), false);
+// US leagues (2026-09-29): every label below is a real ESPN notes headline.
+test("MLB: the Wild Card round shows, the Division Series on masks", () => {
+  const g = (playoffLabel: string | null) => ({ sport: "mlb", isPlayoff: true, playoffLabel });
+  assert.equal(pairingSpoilsEarlierRound(g("ALWC - Game 1")), false);
+  assert.equal(pairingSpoilsEarlierRound(g("NLWC - Game 3 If Necessary")), false);
+  assert.equal(pairingSpoilsEarlierRound(g("NLDS - Game 1")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("ALCS - Game 2")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("World Series - Game 2")), true);
+  assert.equal(pairingSpoilsEarlierRound(g(null)), true, "a postseason game with no note masks");
+  assert.equal(pairingSpoilsEarlierRound({ sport: "mlb", isPlayoff: false, playoffLabel: null }), false);
+});
+
+test("MLB: an NLDS event shaped like ESPN's Oct 3 listing parses as a masked playoff game", () => {
+  const ev = {
+    id: "401900001", date: "2026-10-03T04:00Z", name: "TBD at Los Angeles Dodgers", shortName: "TBD @ LAD",
+    season: { year: 2026, type: 3 },
+    status: { period: 0, type: { name: "STATUS_SCHEDULED", state: "pre", completed: false } },
+    competitions: [{
+      notes: [{ type: "event", headline: "NLDS - Game 1" }],
+      broadcasts: [],
+      competitors: [
+        { homeAway: "home", score: "0", team: { id: "19", abbreviation: "LAD", displayName: "Los Angeles Dodgers", shortDisplayName: "Dodgers" } },
+        { homeAway: "away", score: "0", team: { id: "-1", abbreviation: "TBD", displayName: "TBD", shortDisplayName: "TBD" } },
+      ],
+    }],
+  };
+  const g = espn.parseGame(ev, "mlb");
+  assert.equal(g.isPlayoff, true);
+  assert.equal(pairingSpoilsEarlierRound(g), true);
+});
+
+test("NBA: play-in seed games and the first round show, the 8th Seed Game and later rounds mask", () => {
+  const g = (playoffLabel: string | null) => ({ sport: "nba", isPlayoff: true, playoffLabel });
+  assert.equal(pairingSpoilsEarlierRound(g("NBA Play-In - East - 7th Place vs 8th Place")), false);
+  assert.equal(pairingSpoilsEarlierRound(g("NBA Play-In - West - 9th Place vs 10th Place")), false);
+  assert.equal(pairingSpoilsEarlierRound(g("NBA Play-In - East - 8th Seed Game")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("East 1st Round - Game 1")), false);
+  assert.equal(pairingSpoilsEarlierRound(g("West 2nd Round - Game 2")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("West Finals - Game 2")), true);
+  assert.equal(pairingSpoilsEarlierRound(g(null)), true, "the NBA Finals carry no note");
+});
+
+test("NHL: the first round shows, every later round masks", () => {
+  const g = (playoffLabel: string | null) => ({ sport: "nhl", isPlayoff: true, playoffLabel });
+  assert.equal(pairingSpoilsEarlierRound(g("East 1st Round - Game 2")), false);
+  assert.equal(pairingSpoilsEarlierRound(g("West 2nd Round - Game 2")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("East Final - Game 1")), true);
+  assert.equal(pairingSpoilsEarlierRound(g(null)), true, "the Stanley Cup Final carries no note");
+});
+
+test("NFL: Wild Card weekend and the Pro Bowl show, the Divisional round on masks", () => {
+  const g = (playoffLabel: string | null) => ({ sport: "nfl", isPlayoff: true, playoffLabel });
+  assert.equal(pairingSpoilsEarlierRound(g("NFC Wild Card Playoffs")), false);
+  assert.equal(pairingSpoilsEarlierRound(g("Pro Bowl")), false);
+  assert.equal(pairingSpoilsEarlierRound(g("AFC Divisional Playoffs")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("NFC Championship")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("Super Bowl LX")), true);
+});
+
+test("leagues with no entry are untouched", () => {
+  assert.equal(pairingSpoilsEarlierRound({ sport: "wnba", isPlayoff: true, playoffLabel: null }), false);
+  assert.equal(pairingSpoilsEarlierRound({ sport: "ncaam", isPlayoff: true, playoffLabel: "NCAA Men's Basketball Championship - Final Four" }), false);
 });
