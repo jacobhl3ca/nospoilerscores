@@ -1621,7 +1621,11 @@ function redlibOrder(seed, { sticky = true } = {}) {
 // whenever perennialte blipped. `mustContain` is what a REAL page has, so a
 // 200-with-a-challenge is treated as a miss, not as success.
 async function redlibGet(base, path, mustContain) {
-  for (const headers of [{ "User-Agent": UA }, {}]) {
+  // use_hls=on: without it a current redlib build renders every v.redd.it post
+  // as <video src="" poster=""> with no video id anywhere in the card, so video
+  // posts baked blank. With it the card carries /hls/<id> (9/30, mini redlib).
+  const hls = { Cookie: "use_hls=on" };
+  for (const headers of [{ "User-Agent": UA, ...hls }, hls]) {
     try {
       const res = await fetch(`${base}${path}`, { headers, signal: AbortSignal.timeout(9000) });
       if (!res.ok) continue;
@@ -1785,7 +1789,10 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
       // miss it and EVERY i.redd.it/preview image post renders image-less (the
       // RSS image fix never runs because redlib "succeeds" first). Grab the
       // <img src> after the post_media_image anchor, attribute-order-agnostic.
-      (block.match(/post_media_image[^>]*>\s*<img[^>]+\bsrc="([^"]+)"/) || [])[1];
+      // The mini's own redlib (9/29 build) also puts an HTML comment between the
+      // anchor and the <img> ("<!-- i.redd.it images speical case -->"), so skip
+      // any comments there too — without it r/soccer baked 0 image thumbnails.
+      (block.match(/post_media_image[^>]*>\s*(?:<!--[\s\S]*?-->\s*)*<img[^>]+\bsrc="([^"]+)"/) || [])[1];
     if (imgPath) {
       imageUrl = redlibMediaToReddit(imgPath);
       imageFullUrl = imageUrl;
