@@ -12,7 +12,9 @@ import PlayoffPictureModal from "@/components/PlayoffPictureModal";
 // is a September term, so the page's payoff is the last weeks of each regular
 // season.
 //
-// This page opens the Odds tab on the SEED sort, the one view with the bye
+// Once the field is set the Odds tab is gone and this page opens on Bracket
+// (settledTab in lib/playoffPicture); the URL stays live. Before that it
+// opens the Odds tab on the SEED sort, the one view with the bye
 // line and the "still alive" list (the default playoff-% sort is one flat
 // list). Seeds come from buildPicture, which orders by record and does NOT
 // apply MLB's tiebreakers, so never claim the panel settles a tie. The games-
@@ -89,7 +91,7 @@ export default function MlbWildCardStandingsPage() {
       subject="MLB wild card"
       lead={<PlayoffPictureModal variant="page" initialTab="odds" initialSort="seed" />}
       intro={[
-        "These are the 2026 American League and National League wild card standings, laid out in seed order. MLB's standings feed and ESPN's odds load fresh with the page, so the race updates as the last weekend of the season is played.",
+        "These are the 2026 American League and National League wild card standings, laid out in seed order. MLB's standings feed and ESPN's odds load fresh with the page, so the race updates as the last weekend of the season is played. The 2026 field is now set, so the panel opens on the bracket, which shows all twelve seeds and the matchups they produce.",
         "On HideScore's main board this table sits under a cover, because a wild-card position is a running tally of results and a glance at it can give away a game you meant to watch later. Here it is open, since the race is what you came for.",
       ]}
       sections={[

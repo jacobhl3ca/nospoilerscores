@@ -104,6 +104,21 @@ export interface PlayoffPicture {
   leagues: PlayoffLeague[];
 }
 
+// Every seed clinched = the regular season is over and the field is final.
+export function fieldIsSet(p: PlayoffPicture): boolean {
+  return p.leagues.length > 0 && p.leagues.every((l) => l.seeded.length === 6 && l.seeded.every((t) => t.clinched));
+}
+
+// Once the field is set the Odds view is twelve rows of 100% and the rest 0%,
+// so it leaves the tab strip and the board pill (Jacob 9/29). A stored or
+// requested "odds" then opens on the bracket instead.
+export function withoutSettledOdds<T extends { key: string }>(tabs: T[], fieldSet: boolean): T[] {
+  return fieldSet ? tabs.filter((t) => t.key !== "odds") : tabs;
+}
+export function settledTab<K extends string>(tab: K, fieldSet: boolean): K | "bracket" {
+  return fieldSet && tab === "odds" ? "bracket" : tab;
+}
+
 // Stable MLB division ids (verified live against /api/v1/divisions?sportId=1).
 const DIVISIONS: Record<number, { league: LeagueKey; name: string; short: string }> = {
   200: { league: "AL", name: "American League West", short: "AL West" },

@@ -50,10 +50,11 @@ page.on("pageerror", (e) => console.log("  [page error]", e.message));
 // season-kickoff banner), some of them only after the first fetches land. They
 // swallow every click underneath, so clear them before each board interaction —
 // dismissing once on load is not enough.
-// Today's MLB "Playoffs" pill opens the picture: its Odds button, or the
-// bracket icon on a day that also has a recap. The pill is TODAY's only, and an
+// Today's MLB "Playoffs" pill opens the picture: its Bracket button, or the
+// bracket icon on a day that also has a recap. (Odds leaves the pill once the
+// field is set, so it is no opener.) The pill is TODAY's only, and an
 // early-morning visit can land on yesterday, so step over to Today first.
-const PILL_OPENER = '[data-recap-playoffs-tab="odds"], [data-recap-bracket]';
+const PILL_OPENER = '[data-recap-playoffs-tab="bracket"], [data-recap-bracket]';
 async function toTodayBoard() {
   if (await page.locator(PILL_OPENER).count()) return;
   const todayBtn = page.getByRole("button", { name: "Today", exact: true }).first();
@@ -242,7 +243,7 @@ try {
 
   // ── MLB playoff picture ───────────────────────────────────────────────────
   await clearOverlays();
-  // The picture opens from today's MLB "Playoffs" pill: its Odds button, or the
+  // The picture opens from today's MLB "Playoffs" pill: its Bracket button, or the
   // bracket icon on a day that also has a recap. The "Playoff picture" subtitle
   // link is gone (9/25), so the header line must not carry it.
   await toTodayBoard();
@@ -267,17 +268,31 @@ try {
     }
 
     // Three tabs since Picks landed (#114), and ALL of them sit behind the one
-    // cover — switching views is not a way around the spoiler gate.
+    // cover — switching views is not a way around the spoiler gate. Once every
+    // seed has clinched, Odds is gone (Jacob 9/29): Bracket and Picks only,
+    // and the panel opens on Bracket even from the pill.
     const tabs = dialog.locator('[role="tab"]');
     const tabNames = await tabs.allInnerTexts();
-    ok("the picture has Odds, Bracket and Picks tabs", tabNames.length === 3 && /odds/i.test(tabNames[0]) && /bracket/i.test(tabNames[1]) && /picks/i.test(tabNames[2]), tabNames.join(" | "));
-    await tabs.nth(1).click();
+    const fieldSet = !tabNames.some((t) => /odds/i.test(t));
+    const bracketTab = dialog.locator("#mlb-picture-tab-bracket");
+    const oddsTab = dialog.locator("#mlb-picture-tab-odds");
+    if (fieldSet) {
+      ok("field set: the picture has Bracket and Picks tabs only", tabNames.length === 2 && /bracket/i.test(tabNames[0]) && /picks/i.test(tabNames[1]), tabNames.join(" | "));
+      ok("field set: no Odds tab in the DOM", (await oddsTab.count()) === 0);
+      ok("field set: the panel opens on Bracket", (await bracketTab.getAttribute("aria-selected")) === "true");
+      ok("field set: the pill has no Odds button", (await page.locator('[data-recap-playoffs-tab="odds"]').count()) === 0);
+    } else {
+      ok("the picture has Odds, Bracket and Picks tabs", tabNames.length === 3 && /odds/i.test(tabNames[0]) && /bracket/i.test(tabNames[1]) && /picks/i.test(tabNames[2]), tabNames.join(" | "));
+    }
+    await bracketTab.click();
     await page.waitForTimeout(300);
     const coveredBracket = await coverState(page);
     ok("the bracket tab starts covered too", !!coveredBracket && coveredBracket.blur.includes("blur") && coveredBracket.hidden === "true",
       JSON.stringify(coveredBracket && { blur: coveredBracket.blur, hidden: coveredBracket.hidden }));
-    await tabs.nth(0).click();
-    await page.waitForTimeout(300);
+    if (!fieldSet) {
+      await oddsTab.click();
+      await page.waitForTimeout(300);
+    }
 
     await dialog.getByRole("button", { name: /Show the playoff picture/i }).click();
     await page.waitForTimeout(400);
@@ -285,6 +300,8 @@ try {
     ok("tapping reveals the playoff picture", revealed?.blur === "none" && revealed?.hidden === null, JSON.stringify(revealed && { blur: revealed.blur, hidden: revealed.hidden }));
     ok("both leagues render their six seeds", (revealed?.rows ?? 0) >= 12, `${revealed?.rows} lines`);
 
+    if (fieldSet) skip("odds table, sorting and games back", "field is set, no Odds tab");
+    else {
     // The numbers on a row are chances, never the W-L record; games back is
     // opt-in behind its own toggle, off by default.
     const gridText = await dialog.locator("[data-picture-body]").innerText();
@@ -370,9 +387,10 @@ try {
     // is unambiguous proof the stored preference won.
     const keptSort = await dialog.locator("table").first().locator("th").first().getAttribute("aria-sort");
     ok("the sort is remembered across a reload", keptSort === "ascending", `seed header: ${keptSort}`);
+    }
 
     // ── Bracket tab ─────────────────────────────────────────────────────────
-    await dialog.locator('[role="tab"]').nth(1).click();
+    await bracketTab.click();
     await page.waitForTimeout(400);
     const bracket = await dialog.evaluate(() => {
       const body = document.querySelector('[role="dialog"][aria-label="MLB playoff picture"] [data-picture-body]');
@@ -410,7 +428,7 @@ try {
     ok("bracket tab renders", bracket !== null);
     if (bracket) {
       ok("the bracket shows all twelve seeded clubs", bracket.teams === 12, `${bracket.teams} team tiles`);
-      ok("every later seat is still empty", bracket.slots >= 6, `${bracket.slots} empty slots`);
+      ok("every later seat is still empty", fieldSet || bracket.slots >= 6, `${bracket.slots} empty slots`);
       ok("every round carries a channel line as text", bracket.channels.length >= 6, bracket.channels.join(" | "));
       // Team logos only: no round marks, no network logos, no sponsor art.
       ok("the only images in the bracket are team logos",
@@ -421,7 +439,8 @@ try {
       const bracketText = bracket.text.toLowerCase();
       ok("the bracket names every round in text", ["AL Wild Card", "ALDS", "ALCS", "NL Wild Card", "NLDS", "NLCS", "World Series"]
         .every((r) => bracketText.includes(r.toLowerCase())), bracket.text.split("\n").slice(0, 4).join(" / "));
-      ok("the bracket says it is a snapshot", /If the season ended today/i.test(bracket.text));
+      ok(fieldSet ? "the bracket says the field is set" : "the bracket says it is a snapshot",
+        fieldSet ? /The field is set/.test(bracket.text) : /If the season ended today/i.test(bracket.text));
       // Same conditional format as the odds table: a percentage on every seat,
       // shaded by its own number.
       ok("every seated club carries an odds or a clinch mark",
@@ -471,8 +490,9 @@ try {
     let foot = await readFoot();
     ok("bracket footer is the seed line only", foot?.text === "Seeds 1\u20133 are the division winners, 4\u20136 the wild cards.", foot?.text);
     ok("seed line shares the Updated row", foot?.sameRow === true, JSON.stringify(foot));
+    if (!fieldSet) {
     // Odds tab carries the same one-line footer.
-    await dialog.locator('[role="tab"]').nth(0).click();
+    await oddsTab.click();
     await page.waitForTimeout(400);
     foot = await readFoot();
     ok("odds footer is the seed line only", foot?.text === "Seeds 1\u20133 are the division winners, 4\u20136 the wild cards.", foot?.text);
@@ -504,6 +524,7 @@ try {
       ok(`all six odds columns show at ${w}px`, fit.every((f) => f.cols === 6), fit.map((f) => f.cols).join(" / "));
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
+    }
 
     // The picture locks the board behind it: scrolling in the dialog or on the
     // dim backdrop must not move the page, and closing it must leave the board

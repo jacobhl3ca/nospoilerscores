@@ -24,7 +24,7 @@ import { syncPicksWithAccount } from "@/lib/picksAccount";
 import { fetchAllLeagues, fetchSlateGames, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
-import LeagueColumn, { playoffPictureInWindow } from "@/components/LeagueColumn";
+import LeagueColumn, { mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
 import EventDetailModal from "@/components/EventDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
@@ -45,6 +45,7 @@ import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
+import { fetchPlayoffPicture, fieldIsSet } from "@/lib/playoffPicture";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
 import { formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
@@ -2889,6 +2890,22 @@ export default function HomeContent({
     .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
     .some((l) => l.sport === "mlb");
   const bracketPillShown = bracketPillDue && mlbColumnShown;
+  // Odds leave the pill once the field is set (Jacob 9/29). From the
+  // postseason's first day that is a given; in the last week before it the
+  // standings say so, fetched only then since no earlier day can have all
+  // twelve seeds clinched.
+  const mlbPostDay = mlbPostseasonDay(selectedDate);
+  const fieldCheckDue = bracketPillShown && mlbPostDay != null && mlbPostDay < 0 && mlbPostDay >= -7;
+  const [mlbFieldSet, setMlbFieldSet] = useState(false);
+  useEffect(() => {
+    if (!fieldCheckDue) return;
+    const ctrl = new AbortController();
+    fetchPlayoffPicture(ctrl.signal)
+      .then((p) => { if (!ctrl.signal.aborted) setMlbFieldSet(!!p && fieldIsSet(p)); })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [fieldCheckDue]);
+  const hidePlayoffOdds = (mlbPostDay != null && mlbPostDay >= 0) || (fieldCheckDue && mlbFieldSet);
   const reviewPillShown = reviewPillDue && mlbColumnShown;
   // Nov 2 on the MLB column is off the board (ALL_LEAGUES endDate), so the
   // pill gets its own strip above the columns while no MLB column shows. Only
@@ -4260,6 +4277,7 @@ export default function HomeContent({
                   onShowPlayoffs={bracketPillDue && league.sport === "mlb"
                     ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
                     : null}
+                  hidePlayoffOdds={hidePlayoffOdds}
                   onShowReview={reviewPillDue && league.sport === "mlb"
                     ? (section) => { setReviewSection(section); setReviewOpen(true); }
                     : null}
