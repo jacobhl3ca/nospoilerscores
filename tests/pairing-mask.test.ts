@@ -130,3 +130,49 @@ test("leagues with no entry are untouched", () => {
   assert.equal(pairingSpoilsEarlierRound({ sport: "wnba", isPlayoff: true, playoffLabel: null }), false);
   assert.equal(pairingSpoilsEarlierRound({ sport: "ncaam", isPlayoff: true, playoffLabel: "NCAA Men's Basketball Championship - Final Four" }), false);
 });
+
+// "Show all teams" (Jacob 9/30): one tap reveals a whole column.
+test("revealPairings adds every id in one storage write and keeps earlier taps", async () => {
+  const store = new Map<string, string>([["hs:pairing-revealed", "a"]]);
+  let writes = 0;
+  (globalThis as { window?: unknown }).window = {
+    sessionStorage: {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { writes++; store.set(k, v); },
+    },
+  };
+  try {
+    const { revealPairings, revealPairing } = await jiti.import<{
+      revealPairings: (ids: string[]) => void;
+      revealPairing: (id: string) => void;
+    }>("../src/lib/pairingMask.ts");
+    revealPairings(["b", "c", "d", "b"]);
+    assert.equal(writes, 1);
+    assert.deepEqual(store.get("hs:pairing-revealed")!.split(",").sort(), ["a", "b", "c", "d"]);
+    revealPairing("e");
+    assert.equal(writes, 2);
+    assert.ok(store.get("hs:pairing-revealed")!.split(",").includes("e"));
+  } finally {
+    delete (globalThis as { window?: unknown }).window;
+  }
+});
+
+// The cover and the full card share one rating gate (src/lib/ratingGate.ts).
+test("shouldShowRating: live or final with a rating and ratings on, never in a delay", async () => {
+  const { shouldShowRating } = await jiti.import<{
+    shouldShowRating: (g: { state: string; statusDetail: string; rating: number | null }, on: boolean) => boolean;
+  }>("../src/lib/ratingGate.ts");
+  const rows: [string, string, number | null, boolean, boolean][] = [
+    ["pre", "7:08 PM ET", 80, true, false],
+    ["in", "Top 5th", 80, true, true],
+    ["in", "Rain Delay", 80, true, false],
+    ["in", "Delayed", 80, true, false],
+    ["post", "Final", 80, true, true],
+    ["post", "Final", null, true, false],
+    ["post", "Final", 80, false, false],
+    ["in", "Top 5th", 80, false, false],
+  ];
+  for (const [state, statusDetail, rating, on, want] of rows) {
+    assert.equal(shouldShowRating({ state, statusDetail, rating }, on), want, `${state} / ${statusDetail} / ${rating} / ratings ${on}`);
+  }
+});

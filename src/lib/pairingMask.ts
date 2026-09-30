@@ -59,13 +59,19 @@ function readRevealed(): string {
   try { return window.sessionStorage.getItem(KEY) ?? ""; } catch { return memoryFallback; }
 }
 
-export function revealPairing(gameId: string): void {
+// "Show all teams" (Jacob 9/30) opens a whole column's covered cards in one
+// tap: one storage write and one listener pass, so the column re-renders once.
+export function revealPairings(gameIds: string[]): void {
   const ids = new Set(readRevealed().split(",").filter(Boolean));
-  ids.add(gameId);
+  for (const id of gameIds) ids.add(id);
   const next = [...ids].join(",");
   memoryFallback = next;
   try { window.sessionStorage.setItem(KEY, next); } catch { /* memoryFallback holds it */ }
   for (const l of listeners) l();
+}
+
+export function revealPairing(gameId: string): void {
+  revealPairings([gameId]);
 }
 
 function subscribe(listener: () => void): () => void {
@@ -80,4 +86,15 @@ export function usePairingHidden(game: Game): { hidden: boolean; reveal: () => v
   const revealed = useSyncExternalStore(subscribe, readRevealed, () => "");
   const reveal = useCallback(() => revealPairing(game.id), [game.id]);
   return { hidden: spoils && !revealed.split(",").includes(game.id), reveal };
+}
+
+// The ids of the games in `games` that still show a cover, for the column's
+// "Show all teams" control (Jacob 9/30). Same store and server snapshot as
+// usePairingHidden, so the prerendered column lists every covered card.
+export function useHiddenPairingIds(games: Game[]): string[] {
+  const revealed = useSyncExternalStore(subscribe, readRevealed, () => "");
+  const open = new Set(revealed.split(","));
+  const ids = new Set<string>();
+  for (const g of games) if (pairingSpoilsEarlierRound(g) && !open.has(g.id)) ids.add(g.id);
+  return [...ids];
 }

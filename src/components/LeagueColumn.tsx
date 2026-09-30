@@ -18,7 +18,7 @@ import { etWallToUtc, formatInZone, getWhiparoundShow, parseEtTime, whiparoundSt
 import { isDemoModeActive } from "@/lib/demoMode";
 import { groupEspnFrontPage } from "@/lib/topEvents";
 import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
-import GameCard, { CompactUpcomingCard } from "./GameCard";
+import GameCard, { CompactUpcomingCard, PairingRevealAll } from "./GameCard";
 import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
 import { compareRatedLive } from "@/lib/liveSort";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
@@ -1868,6 +1868,28 @@ export default function LeagueColumn({
     : null;
   const headerStartsLabel = notStartedDate ?? openerSlateDate;
 
+  // Every game the body below renders as a full GameCard, for the one "Show all
+  // teams" control over the first card (Jacob 9/30). Mirrors the body's
+  // branches; team view lists its own (TeamView), and a covered game is never
+  // a compact row (renderUpcomingSlate).
+  const cardGames: Game[] = (() => {
+    if (teamViewTeam || league.golfTournament || league.eventCard) return [];
+    if (sorted.length === 0) {
+      if (!renderUpcoming || league.fetchFailed) return [];
+      if (isPastDate) {
+        if (league.previousGameDay?.games.length) return league.previousGameDay.games;
+        return notStartedDate && league.nextGameDay ? league.nextGameDay.games : [];
+      }
+      return league.nextGameDay?.games ?? league.previousGameDay?.games ?? [];
+    }
+    if (condense) return sorted.length > 5 && !condenseExpanded ? sorted.slice(0, CONDENSE_LIMIT) : sorted;
+    if (espnGroups || isPastDate) return sorted;
+    return [
+      ...(renderUpcoming ? [...liveGames, ...preGames, ...(league.nextGameDay?.games ?? [])] : []),
+      ...(renderFinished ? postGames : []),
+    ];
+  })();
+
   return (
     <div
       ref={columnRef}
@@ -2129,6 +2151,7 @@ export default function LeagueColumn({
           <div className="absolute inset-x-0 bottom-2">{espnLabelRow(leadLabel!, espnGroups![0].sport)}</div>
         </div>
       ) : topCard}
+      <PairingRevealAll games={cardGames} className="mb-1.5 sm:mb-2" />
       {teamViewTeam && !league.golfTournament ? (
         section === "finished" ? null : (
           <TeamView
