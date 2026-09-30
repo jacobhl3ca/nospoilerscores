@@ -298,12 +298,18 @@ const PICTURE_TRAIL_DAYS = 35; // the postseason runs about four weeks
 // column.
 export function playoffPictureInWindow(sport: Sport, selectedDate: string): boolean {
   if (sport !== "mlb") return false;
+  const days = mlbPostseasonDay(selectedDate);
+  return days != null && days >= -PICTURE_LEAD_DAYS && days <= PICTURE_TRAIL_DAYS;
+}
+
+// Days from the MLB postseason's first day to `selectedDate`: 0 on that day,
+// negative before it. null when no start date is configured.
+export function mlbPostseasonDay(selectedDate: string): number | null {
   const config = PLAYOFF_START_DATES.mlb;
-  if (!config) return false;
+  if (!config) return null;
   const viewDate = new Date(+selectedDate.slice(0, 4), +selectedDate.slice(4, 6) - 1, +selectedDate.slice(6, 8), 12, 0, 0);
   const start = new Date(config.date + "T12:00:00");
-  const days = (viewDate.getTime() - start.getTime()) / 86400_000;
-  return days >= -PICTURE_LEAD_DAYS && days <= PICTURE_TRAIL_DAYS;
+  return Math.round((viewDate.getTime() - start.getTime()) / 86400_000);
 }
 
 // MLB regular season: nod to MLB Network's nightly Big Inning whip-around
