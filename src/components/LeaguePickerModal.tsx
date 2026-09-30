@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import type { Sport } from "@/lib/types";
-import { LEAGUE_LOGO } from "@/lib/news";
+import { LeagueMark } from "./LeagueMark";
 
 export interface LeaguePickerOption {
   sport: Sport;
@@ -227,23 +227,7 @@ export function LeaguePickerModal({
                     turned filled marks (MLB) into a featureless blob. The
                     chip keeps every logo legible and identical in both
                     states, so selecting a pill changes only its background. */}
-                <span className="inline-flex items-center justify-center w-[20px] h-[20px] rounded-full shrink-0 bg-white">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={demoOption?.logo ?? LEAGUE_LOGO[o.sport]}
-                    alt=""
-                    width={16}
-                    height={16}
-                    loading="lazy"
-                    decoding="async"
-                    className="w-[16px] h-[16px] object-contain"
-                    draggable={false}
-                    // Remote ESPN/Wikimedia mark: a blocked hotlink would leave
-                    // the browser's broken-image glyph. Collapse it and let the
-                    // pill read as text, matching every other logo in the app.
-                    onError={(e) => { e.currentTarget.style.display = "none"; }}
-                  />
-                </span>
+                <LeagueMark sport={o.sport} size={16} src={demoOption?.logo} />
                 <span>{demoOption?.label ?? o.label}</span>
                 {/* Start dates dropped here on purpose (Jacob 8/9): six
                     "· starts Aug 21" tails made the grid unreadable and are
