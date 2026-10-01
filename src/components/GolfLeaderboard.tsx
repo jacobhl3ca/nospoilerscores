@@ -509,7 +509,7 @@ export default function GolfLeaderboard({
               return (
                 <a
                   key={key}
-                  {...watchLinkProps(name, href)}
+                  {...watchLinkProps(name, href, undefined, "golf")}
                   className="hover:underline transition-colors"
                   style={{ color: "var(--text-muted)" }}
                 >

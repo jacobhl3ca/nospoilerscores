@@ -323,7 +323,7 @@ export default function GameDetailModal({
     return (
       <a
         key={key}
-        {...watchLinkProps(name, href, gameRef(game))}
+        {...watchLinkProps(name, href, gameRef(game), game.sport)}
         className="underline underline-offset-2 hover:opacity-80 transition-opacity"
         style={{ color: "var(--accent)" }}
       >

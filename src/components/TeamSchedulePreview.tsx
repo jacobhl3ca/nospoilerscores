@@ -207,6 +207,8 @@ export default function TeamSchedulePreview({
           maskVideoTitle={maskTitle}
           youtubeNativeControls
           keysButton={keysButton}
+          trackLeague={sport}
+          trackPage="team"
           onClose={() => setModal(null)}
         />
       )}
