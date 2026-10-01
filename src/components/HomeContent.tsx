@@ -3492,6 +3492,21 @@ export default function HomeContent({
               borderLeft: "3px solid var(--accent)",
             }}
           >
+            {/* Added 2026-09-30: after the final, 44 of 50 /worldcup visits in
+                30 days left without a click. This gives them the soccer that is
+                on now. */}
+            {worldCupEnded && (
+              <p className="mb-2 text-sm font-semibold">
+                <Link
+                  href="/soccer-highlights-without-spoilers"
+                  data-umami-event="wc-hub-soccer-now"
+                  className="underline underline-offset-2"
+                  style={{ color: "var(--accent)" }}
+                >
+                  The World Cup is over. This week&apos;s soccer, no spoilers →
+                </Link>
+              </p>
+            )}
             <h1 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--text)" }}>
               <span aria-hidden="true">⚽</span>
               <span>{worldCupHubCopy.title}</span>
