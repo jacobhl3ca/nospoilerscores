@@ -8,6 +8,7 @@ import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
 import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
 import { LeagueMark } from "./LeagueMark";
+import { trackEvent } from "@/lib/track";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
 import { ALL_RECORD_LEAGUES, FREQUENT_RECORD_LEAGUES, WEEKLY_RECORD_LEAGUES, toggleAllRecordLeagues, toggleRecordLeague, upcomingRecordLeagues, type RecordLeague } from "@/lib/upcomingRecords";
@@ -248,7 +249,7 @@ export default function SettingsPanel({
   open,
   onClose,
   prefs,
-  updatePrefs,
+  updatePrefs: applyPrefs,
   resolvedTheme,
   leagueOptions,
   onRequestLeague,
@@ -261,6 +262,26 @@ export default function SettingsPanel({
   shareUrl,
 }: SettingsPanelProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
+  // Umami usage counts (2026-10-01): settings-open per open, then
+  // settings-change {key} the first time each setting changes in that open. A
+  // text box writes on every keystroke, so once per key per open keeps it to
+  // one event. The key names only, never the value.
+  const changedKeysRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!open) return;
+    changedKeysRef.current = new Set();
+    trackEvent("settings-open");
+  }, [open]);
+  const updatePrefs = useCallback((update: Partial<Preferences>) => {
+    // A league pin or Reset writes many keys at once: those count as "many".
+    const keys = Object.keys(update).sort();
+    const key = keys.length > 2 ? "many" : keys.join(",");
+    if (key && !changedKeysRef.current.has(key)) {
+      changedKeysRef.current.add(key);
+      trackEvent("settings-change", { key });
+    }
+    applyPrefs(update);
+  }, [applyPrefs]);
   // Safari ignores the text/x-moz-url + text/html drag overrides below and
   // names a dragged bookmark after the link's visible text instead. So on
   // Safari we make the chip's text read "HideScore" (the desired bookmark

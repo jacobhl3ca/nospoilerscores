@@ -3,19 +3,12 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { Sport } from "@/lib/types";
 import { LeagueMark } from "./LeagueMark";
+import { trackEvent } from "@/lib/track";
 
 export interface LeaguePickerOption {
   sport: Sport;
   label: string;
   offseason?: boolean;
-}
-
-// The tracker script loads with defer, so on a fast first paint the sheet can
-// open before window.umami exists. Retry for ~5 s instead of losing the
-// "shown" event the drop-off count depends on.
-function trackSoon(name: string, data?: Record<string, string>, tries = 20) {
-  if (window.umami) { window.umami.track(name, data); return; }
-  if (tries > 0) setTimeout(() => trackSoon(name, data, tries - 1), 250);
 }
 
 // The league pill sheet. Two callers share one look (Jacob 9/29: "a nice modal
@@ -71,14 +64,16 @@ export function LeaguePickerModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef(trackPrefix);
   const trackedShownRef = useRef(false);
+  // trackEvent retries for ~5 s: the deferred tracker can load after the
+  // sheet opens, and the drop-off count depends on the "shown" event.
   const track = (what: string, data?: Record<string, string>) => {
-    if (trackRef.current) trackSoon(`${trackRef.current}-${what}`, data);
+    if (trackRef.current) trackEvent(`${trackRef.current}-${what}`, data, 100);
   };
   // The ref guard keeps React's dev double-mount from counting one open twice.
   useEffect(() => {
     if (trackedShownRef.current || !trackRef.current) return;
     trackedShownRef.current = true;
-    trackSoon(`${trackRef.current}-shown`);
+    trackEvent(`${trackRef.current}-shown`);
   }, []);
   const multi = mode === "multi";
   const titleId = multi ? "league-picker-title" : "league-add-more-title";
@@ -99,7 +94,7 @@ export function LeaguePickerModal({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (trackRef.current) trackSoon(`${trackRef.current}-escape`);
+        if (trackRef.current) trackEvent(`${trackRef.current}-escape`);
         onCloseRef.current();
         return;
       }

@@ -10,6 +10,7 @@ import { handleExternalClick } from "@/lib/openExternal";
 import { frontendHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
+import { trackEvent } from "@/lib/track";
 
 export interface NewsSource {
   label: string;
@@ -375,7 +376,7 @@ export function NewsColumnTitle({
                   <button
                     type="button"
                     data-testid="news-switcher-add-more"
-                    onClick={() => { setSwapOpen(false); onAddMore(); }}
+                    onClick={() => { setSwapOpen(false); trackEvent("switcher-add-more"); onAddMore(); }}
                     className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                     style={{
                       color: "var(--text-muted)",
