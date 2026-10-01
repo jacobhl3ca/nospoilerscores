@@ -78,6 +78,21 @@ const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"])
 const AHA_CHANNEL = "atlantic hockey america";
 const AHA_SCORELINE_RX = /^\s*\S.*?\s\d{1,2},\s\S.*?\s\d{1,2}(?:\s(?:\d?OT|SO))?\s-\s(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s\d{1,2},\s\d{4}\s*$/i;
 
+// A press conference is never a highlight, whatever else its title says. The
+// WNBA channel streams one per playoff game — "Minnesota Lynx vs. New York
+// Liberty Game 2 Postgame Press Conference": both teams, the series game, no
+// date, no year — so it passed the bare-WNBA-recap carve-out, landed in a
+// standard tier, and beat the real "… | FULL GAME HIGHLIGHTS | September 29,
+// 2026" cut (demoted as full-game) on all 8 first-round cards (2026-10-01).
+// Applies to every channel. Keep scripts/prebake-news.mjs HL_NOT_HIGHLIGHT_RX
+// in sync by hand.
+const NOT_HIGHLIGHT_RX = /\b(?:press conferences?|pressers?|media availability)\b/i;
+
+// The WNBA bare recap's own shape: "Team A vs. Team B | Month D, YYYY". The
+// carve-out below requires the dated tail, so an undated bare title from the
+// same channel (a stream, a show) never counts as a highlight.
+const WNBA_BARE_RECAP_DATE_RX = /\|\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},\s+\d{4}\s*$/i;
+
 // Chess organizers who post the ROUND itself as a full broadcast VOD, with no
 // "highlights"/"recap" keyword in the title. Lowercased YouTube author_name —
 // mirrors CHESS_ORGANIZER_CHANNELS in src/lib/espn.ts, keep the two in step.
@@ -999,10 +1014,12 @@ export default {
                 titleLower.includes(`${queryRoundOrdinal} round`)));
           // WNBA sometimes publishes its normal 10-minute recap as only
           // "Team A vs. Team B | Month D, YYYY". It is still a highlight when
-          // (and only when) the caller requested the strict WNBA channel; the
-          // team/date gates below still have to match exactly.
+          // (and only when) the caller requested the strict WNBA channel and the
+          // title ends in that dated tail; the team/date gates below still have
+          // to match exactly.
           const isStrictBareWnbaRecap =
-            strictChannelParam && isFromChannel && preferChannelLower === "wnba" && queryHasSpecificTeams;
+            strictChannelParam && isFromChannel && preferChannelLower === "wnba" && queryHasSpecificTeams &&
+            WNBA_BARE_RECAP_DATE_RX.test(title);
           // Chess publishes NO highlight package at all — verified 2026-08-10
           // across every organizer that broadcasts on Lichess. What exists is
           // the round itself, posted as a full VOD titled "2026 Sinquefield
@@ -1076,7 +1093,7 @@ export default {
             isStrictBareWnbaRecap ||
             isChessRoundBroadcast ||
             isStrictBareNflPreseason;
-          if (!isHighlight) continue;
+          if (!isHighlight || NOT_HIGHLIGHT_RX.test(title)) continue;
 
           // Racing race gate (see the `race` param above). The official channel
           // posts one reel per race all season, so without this the F1 /

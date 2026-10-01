@@ -2927,6 +2927,17 @@ async function hlOembedMeta(id) {
   }
 }
 
+// Mirrors NOT_HIGHLIGHT_RX in public/_worker.js (hand copy, same reason as
+// HL_WEEK_WORDS). The worker refuses these titles for new lookups, but an id
+// baked before that fix is CARRIED, not re-resolved, so the carried-slot
+// revalidation must refuse it too: 8 WNBA playoff cards carried a postgame
+// press conference as their 1st button (2026-10-01).
+const HL_NOT_HIGHLIGHT_RX = /\b(?:press conferences?|pressers?|media availability)\b/i;
+async function hlVideoIsNotHighlight(id) {
+  const meta = await hlOembedMeta(id);
+  return !!meta?.title && HL_NOT_HIGHLIGHT_RX.test(meta.title);
+}
+
 async function hlVideoMatchesTeams(id, away, home) {
   const meta = await hlOembedMeta(id);
   return !!meta?.title && hlTitleHasTeam(meta.title, away) && hlTitleHasTeam(meta.title, home);
@@ -3786,7 +3797,7 @@ async function bakeGameHighlights() {
 
         // Revalidate every carried slot against both its uploader and matchup.
         // A channel marker proves provenance, not that the clip is for this game.
-        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
+        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || (await hlVideoIsNotHighlight(prevOfficial)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
         }
@@ -3795,7 +3806,7 @@ async function bakeGameHighlights() {
           prevOfficial = null;
           ageRejected++;
         }
-        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
+        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || (await hlVideoIsNotHighlight(prevExtended)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevExtended = null;
         }
@@ -3867,6 +3878,10 @@ async function bakeGameHighlights() {
             officialFotmob = fotmob;
           }
         }
+        // A rejected carried official can re-resolve to the carried 2nd-button
+        // clip (the WNBA press-conference cleanup: the full-game cut moves up).
+        // Drop it from slot 2 so both buttons never play the same video.
+        if (prevExtended && prevExtended === official) prevExtended = null;
         let extended = prevExtended ?? null;
         if (!extended) {
           extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, week, compTokens);
