@@ -5040,6 +5040,9 @@ export default function HomeContent({
           onConfirm={confirmLeaguePicker}
           onClose={skipLeaguePicker}
           demoLabels={demoPickerLabels}
+          // First-run drop-off counts (2026-10-01). Off for ?demo=1 screenshot
+          // sessions so they never land in Umami.
+          trackPrefix={demoPickerLabels ? undefined : "league-picker"}
         />
       )}
 

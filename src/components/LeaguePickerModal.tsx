@@ -10,6 +10,14 @@ export interface LeaguePickerOption {
   offseason?: boolean;
 }
 
+// The tracker script loads with defer, so on a fast first paint the sheet can
+// open before window.umami exists. Retry for ~5 s instead of losing the
+// "shown" event the drop-off count depends on.
+function trackSoon(name: string, data?: Record<string, string>, tries = 20) {
+  if (window.umami) { window.umami.track(name, data); return; }
+  if (tries > 0) setTimeout(() => trackSoon(name, data, tries - 1), 250);
+}
+
 // The league pill sheet. Two callers share one look (Jacob 9/29: "a nice modal
 // popup that we already built"):
 // - "multi": the first-run "Pick your leagues" sheet. Tap order numbers the
@@ -31,6 +39,7 @@ export function LeaguePickerModal({
   onToggleOffseason,
   demoLabels,
   shownElsewhere,
+  trackPrefix,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -54,8 +63,23 @@ export function LeaguePickerModal({
   // single only: leagues in the other columns, tagged "· col N" like the
   // dropdown rows.
   shownElsewhere?: { sport: Sport; col: number }[];
+  // Umami events `<prefix>-shown`, then one of -done / -defaults / -backdrop /
+  // -escape (2026-10-01). Shown minus those = left with the sheet open.
+  // Unset = no events.
+  trackPrefix?: string;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef(trackPrefix);
+  const trackedShownRef = useRef(false);
+  const track = (what: string, data?: Record<string, string>) => {
+    if (trackRef.current) trackSoon(`${trackRef.current}-${what}`, data);
+  };
+  // The ref guard keeps React's dev double-mount from counting one open twice.
+  useEffect(() => {
+    if (trackedShownRef.current || !trackRef.current) return;
+    trackedShownRef.current = true;
+    trackSoon(`${trackRef.current}-shown`);
+  }, []);
   const multi = mode === "multi";
   const titleId = multi ? "league-picker-title" : "league-add-more-title";
   // The column's own league stays even when offseason, so the sheet always
@@ -74,7 +98,11 @@ export function LeaguePickerModal({
   useEffect(() => { onCloseRef.current = onClose; });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { onCloseRef.current(); return; }
+      if (e.key === "Escape") {
+        if (trackRef.current) trackSoon(`${trackRef.current}-escape`);
+        onCloseRef.current();
+        return;
+      }
       // Trap Tab within the dialog (WCAG 2.4.3) — same wrap-at-first/last pattern
       // as the ratings/news explainers and GameDetailModal. Without it a keyboard
       // user could Tab off the last league pill into the inert feed behind the
@@ -132,7 +160,7 @@ export function LeaguePickerModal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { track("backdrop"); onClose(); }}>
       <div className="absolute inset-0 bg-black/50" />
       <div
         ref={dialogRef}
@@ -244,7 +272,7 @@ export function LeaguePickerModal({
           <div className="flex gap-2 shrink-0">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => { track("defaults"); onClose(); }}
               className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
@@ -254,7 +282,10 @@ export function LeaguePickerModal({
             </button>
             <button
               type="button"
-              onClick={onConfirm}
+              onClick={() => {
+                track("done", { picks: String(selected.length), leagues: selected.join(",").slice(0, 100) });
+                onConfirm?.();
+              }}
               className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
               style={{ background: "var(--accent)", color: "white" }}
               onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
