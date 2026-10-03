@@ -121,6 +121,8 @@ export interface NewsItem {
   // v.redd.it CMAF fallback URL — single muxed MP4 that plays in <video>
   // without hls.js. Set on Reddit posts where Reddit hosts the clip directly.
   videoUrl?: string | null;
+  // Clip length in seconds, when the source gives one (ESPN Videos).
+  durationSec?: number | null;
   // Brightcove default-player iframe URL — set on NHL.com videos, which are
   // Brightcove-hosted rather than YouTube/raw-HLS. The modal renders it in a
   // plain <iframe> (embedMode), letting Brightcove handle policy key/geo/DRM.
@@ -276,13 +278,23 @@ export async function fetchPrebaked(name: string): Promise<NewsItem[]> {
         return [];
       }
       const data = await res.json();
-      return (data.items ?? []) as NewsItem[];
+      const items = (data.items ?? []) as NewsItem[];
+      return name === "espn-videos" ? items.map(gateEspnVideoUrl) : items;
     } catch {
       if (attempt === 0) { await new Promise((r) => setTimeout(r, 400)); continue; }
       return [];
     }
   }
   return [];
+}
+
+// An ESPN Videos item plays in the modal only from a direct mp4 on ESPN's
+// akamaized CDN (the bake's own rule, scripts/lib/espn-clip.mjs). Anything
+// else falls back to the image + "Open on ESPN".
+const ESPN_MP4_RX = /^https:\/\/[a-z0-9.-]+\.akamaized\.net\/.+\.mp4(\?|$)/i;
+export function gateEspnVideoUrl(item: NewsItem): NewsItem {
+  if (!item.videoUrl || ESPN_MP4_RX.test(item.videoUrl)) return item;
+  return { ...item, videoUrl: null };
 }
 
 // Leagues that have a prebaked official-site feed. Add here as new scrapers land.
