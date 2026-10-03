@@ -3109,12 +3109,11 @@ async function hlVideoMatchesWeek(id, week, requireWeek = false) {
 async function hlVideoMatchesComp(id, compTokens) {
   if (!compTokens?.length) return true;
   const meta = await hlOembedMeta(id);
-  const title = String(meta?.title ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  if (!title) return false;
-  return compTokens.some((tok) => {
-    const t = String(tok || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    return t && title.includes(t);
-  });
+  // titleHasCompToken folds accents. oEmbed gives the ORIGINAL title, not the
+  // English one the search page shows: TOP 14 - Officiel's are French ("TOP 14
+  // Saison 2026-2027 - J04 - Résumé Stade Toulousain - …"), and without the
+  // fold "Résumé" read as "r sum" and refused every cut (2026-10-03).
+  return !!meta?.title && titleHasCompToken(meta.title, compTokens);
 }
 
 async function hlVideoMatchesChannel(id, channel) {

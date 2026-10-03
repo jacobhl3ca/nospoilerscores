@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import worker from "../public/_worker.js";
 import { channelSearchTitleTokens, titleHasCompToken } from "../scripts/lib/channel-search.mjs";
 
@@ -131,4 +132,16 @@ test("the bake's own search of the channel keeps the cut and drops the try clips
   assert.equal(ok("TOP 14 Season 2026-2027 - Round 4 - Match Summary: Stade Toulousain - Montpellier Hérault Rugby"), true);
   assert.equal(ok("TOP 14 - Essai de Romain NTAMACK (ST) - Stade Toulousain - Montpellier Hérault Rugby"), false);
   assert.equal(ok("TOP 14 - Try by Lucas MARTIN (AB) - Racing 92 - Aviron Bayonnais"), false);
+});
+
+test("the bake reads oEmbed's French original titles", () => {
+  // oEmbed gives each cut's ORIGINAL title, not the English one the search
+  // page shows (QUqwj9ovZlY, read 2026-10-03). The bake's competition and
+  // title-word checks must fold the accent in "Résumé".
+  const fr = "TOP 14 Saison 2026-2027 - J04 - Résumé Stade Toulousain - Montpellier Hérault Rugby";
+  assert.equal(titleHasCompToken(fr, ["top 14"]), true);
+  assert.equal(titleHasCompToken(fr, channelSearchTitleTokens("TOP 14 - Officiel")), true);
+  assert.equal(titleHasCompToken("TOP 14 - Essai de Antoine DUPONT (ST) - Stade Toulousain - Montpellier Hérault Rugby", channelSearchTitleTokens("TOP 14 - Officiel")), false);
+  const bake = readFileSync(new URL("../scripts/prebake-news.mjs", import.meta.url), "utf8");
+  assert.ok(bake.includes("return !!meta?.title && titleHasCompToken(meta.title, compTokens);"));
 });
