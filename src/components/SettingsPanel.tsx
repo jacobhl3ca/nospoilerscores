@@ -19,6 +19,7 @@ import {
   DefaultRatings,
 } from "@/lib/preferences";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
+import { clearRememberedPairings, restoreRememberedPairings } from "@/lib/pairingMask";
 import { getAuthState, cachedAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
 interface LeagueOption {
@@ -727,10 +728,14 @@ export default function SettingsPanel({
   const [resetUndo, setResetUndo] = useState<Partial<Preferences> | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); }, []);
+  // The remembered "Show teams" taps live outside prefs (lib/pairingMask).
+  const pairingUndoRef = useRef<string | null>(null);
   const undoReset = () => {
     if (!resetUndo) return;
     updatePrefs(resetUndo);
     applyThemeAttr(resetUndo.theme ?? "system");
+    if (pairingUndoRef.current) restoreRememberedPairings(pairingUndoRef.current);
+    pairingUndoRef.current = null;
     setResetUndo(null);
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
   };
@@ -743,9 +748,11 @@ export default function SettingsPanel({
     }
     updatePrefs(patch);
     applyThemeAttr("system");
+    // A second Reset inside the window keeps the first one's list too.
+    pairingUndoRef.current = [pairingUndoRef.current, clearRememberedPairings()].filter(Boolean).join(",") || null;
     setResetUndo(undo);
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    resetTimerRef.current = setTimeout(() => setResetUndo(null), 15_000);
+    resetTimerRef.current = setTimeout(() => { setResetUndo(null); pairingUndoRef.current = null; }, 15_000);
   };
 
   const resetPatch = (): Partial<Preferences> => ({
