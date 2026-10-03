@@ -806,7 +806,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   const hasUrl = !!item.articleUrl;
   return (
     <div className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
-      {thumbIsTile ? (
+      {thumbIsTile && hasUrl ? (
         <a
           href={frontendHref(item.articleUrl)}
           target="_blank"
@@ -820,18 +820,26 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       ) : thumb}
       {/* No modal on this surface, so the headline is a real link to the
           source — same target as the thumbnail and chevron beside it, which
-          keeps middle-click, keyboard, and "copy link" honest. */}
-      <a
-        href={frontendHref(item.articleUrl)}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={handleExternalClick(item.articleUrl)}
-        className="min-w-0 flex-1 text-left cursor-pointer"
-        aria-label="Open post"
-      >
-        <span className={titleCls}>{item.headline}</span>
-      </a>
-      {!thumbIsTile && (
+          keeps middle-click, keyboard, and "copy link" honest. With no URL to
+          open, render the headline as plain text (no role-less <a>, no
+          "Open post" label on something that can't open). */}
+      {hasUrl ? (
+        <a
+          href={frontendHref(item.articleUrl)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleExternalClick(item.articleUrl)}
+          className="min-w-0 flex-1 text-left cursor-pointer"
+          aria-label="Open post"
+        >
+          <span className={titleCls}>{item.headline}</span>
+        </a>
+      ) : (
+        <div className="min-w-0 flex-1 text-left">
+          <span className={titleCls}>{item.headline}</span>
+        </div>
+      )}
+      {!thumbIsTile && hasUrl && (
         <a
           href={frontendHref(item.articleUrl)}
           target="_blank"
