@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 
 // Covered playoff cards (src/lib/pairingMask.ts) keep their rating once live or
 // final, and a column with 2+ covers gets one "Show all teams" (Jacob 9/30).
@@ -62,9 +62,9 @@ async function openBoard(page: Page, events: unknown[]) {
 }
 
 const covers = (page: Page) => page.locator("[data-pairing-mask]");
-const revealAll = (page: Page) => page.getByTestId("pairing-reveal-all");
+const revealAll = (page: Page | Locator) => page.getByTestId("pairing-reveal-all");
 const badge = '[role="img"][aria-label^="Worth-watching rating: "]';
-const revealed = (page: Page, s: { away: Side; home: Side }) => page.getByRole("button", { name: new RegExp(`${s.away.name} at ${s.home.name}`) });
+const revealed = (page: Page | Locator, s: { away: Side; home: Side }) => page.getByRole("button", { name: new RegExp(`${s.away.name} at ${s.home.name}`) });
 
 for (const width of [390, 1440]) {
   test.describe(`${width}px`, () => {
@@ -184,6 +184,102 @@ for (const width of [390, 1440]) {
       await openBoard(page, [event(SERIES[0], 0, "post")]);
       await expect(covers(page)).toHaveCount(1, { timeout: 30_000 });
       await expect(revealAll(page)).toHaveCount(0);
+    });
+  });
+}
+
+// ESPN front page column (Jacob 10/3): an NCAAF block leads, the MLB block
+// with the covered Division Series games sits below it. "Show all teams" goes
+// in the MLB block, over its cards, not at the top of the column. Header strip
+// + homepage feed mocked as in espn-front-page.spec.ts.
+const NCAAF = [
+  { id: "401910001", away: { id: "87", name: "Fighting Irish", abbr: "ND" }, home: { id: "153", name: "Tar Heels", abbr: "UNC" } },
+  { id: "401910002", away: { id: "61", name: "Bulldogs", abbr: "UGA" }, home: { id: "2", name: "Tigers", abbr: "AUB" } },
+];
+function ncaafEvent(g: (typeof NCAAF)[number], i: number) {
+  const e = event({ ...g, label: "" }, i, "pre");
+  return { ...e, season: { year: 2026, type: 2 }, competitions: [{ ...e.competitions[0], notes: [] }] };
+}
+const STRIP = {
+  sports: [
+    { slug: "football", leagues: [{ slug: "college-football", events: NCAAF.map((g, i) => ({ id: g.id, priority: i })) }] },
+    { slug: "baseball", leagues: [{ slug: "mlb", events: SERIES.map((s, i) => ({ id: s.id, priority: 2 + i })) }] },
+  ],
+};
+
+async function openEspnBoard(page: Page) {
+  const boards: Record<string, unknown[]> = {
+    "football/college-football": NCAAF.map(ncaafEvent),
+    "baseball/mlb": SERIES.map((s, i) => event(s, i, "post")),
+  };
+  await page.route("**/apis/site/v2/sports/**", (route) => {
+    const url = new URL(route.request().url());
+    const m = /\/sports\/(.+)\/scoreboard$/.exec(url.pathname);
+    if (!m) return route.fallback();
+    const events = (url.searchParams.get("dates") ?? "").startsWith("20261003") ? (boards[m[1]] ?? []) : [];
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ events }) });
+  });
+  await page.route("**/apis/v2/scoreboard/header**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(STRIP) }));
+  await page.route("**/oneFeed/frontpage**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ feed: [] }) }));
+  await page.route("**/api/youtube?**", (route) =>
+    route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"No results"}' }));
+  await page.route(/gc\.zgo\.at|stats\.hidescore\.com|goatcounter|sentry\.io/, (r) => r.abort());
+  await page.clock.setFixedTime(new Date("2026-10-03T20:00:00-04:00"));
+  await page.addInitScript((p) => { if (!localStorage.getItem("nss-preferences")) localStorage.setItem("nss-preferences", JSON.stringify(p)); },
+    { ...prefs, favoriteLeagues: [], secondLeague: "top", hiddenLeagues: ["best"] });
+  await page.goto("/");
+}
+
+const espnCol = (page: Page) => page.locator('[data-league-column="top"]');
+const mlbCol = (page: Page) => page.locator('[data-league-column="mlb"]');
+
+for (const width of [390, 1440]) {
+  test.describe(`ESPN front page ${width}px`, () => {
+    test.use({ viewport: { width, height: 1000 } });
+
+    test("Show all teams sits in the MLB block, opens both columns, and stays open on a new page", async ({ page, context }) => {
+      await openEspnBoard(page);
+      await expect(espnCol(page).locator("[data-pairing-mask]")).toHaveCount(4, { timeout: 30_000 });
+      await expect(mlbCol(page).locator("[data-pairing-mask]")).toHaveCount(4);
+      expect(await espnCol(page).locator("[data-espn-league]").evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league")))).toEqual(["ncaaf", "mlb"]);
+
+      await expect(revealAll(espnCol(page))).toHaveCount(1);
+      await expect(espnCol(page).locator('[data-espn-league="ncaaf"] [data-testid="pairing-reveal-all"]')).toHaveCount(0);
+      const control = espnCol(page).locator('[data-espn-league="mlb"] [data-testid="pairing-reveal-all"]');
+      await expect(control).toHaveCount(1);
+      const controlBox = (await control.boundingBox())!;
+      const ncaafBox = (await espnCol(page).locator('[data-espn-league="ncaaf"]').boundingBox())!;
+      const firstCover = (await espnCol(page).locator("[data-pairing-mask]").first().boundingBox())!;
+      expect(controlBox.y, "control is above the NCAAF block's end").toBeGreaterThanOrEqual(ncaafBox.y + ncaafBox.height);
+      expect(controlBox.y + controlBox.height, "control is not above the first covered card").toBeLessThanOrEqual(firstCover.y);
+
+      await control.click();
+      await expect(covers(page)).toHaveCount(0);
+      for (const s of SERIES) {
+        await expect(revealed(espnCol(page), s)).toBeVisible();
+        await expect(revealed(mlbCol(page), s)).toBeVisible();
+      }
+      await expect(revealAll(page)).toHaveCount(0);
+
+      const next = await context.newPage();
+      await openEspnBoard(next);
+      for (const s of SERIES) await expect(revealed(espnCol(next), s)).toBeVisible({ timeout: 30_000 });
+      await expect(covers(next)).toHaveCount(0);
+      await expect(revealAll(next)).toHaveCount(0);
+    });
+
+    test("a tap in the MLB column opens the ESPN column copy", async ({ page }) => {
+      await openEspnBoard(page);
+      await expect(espnCol(page).locator("[data-pairing-mask]")).toHaveCount(4, { timeout: 30_000 });
+      await mlbCol(page).locator(`[data-pairing-mask="${SERIES[0].id}"]`).getByRole("button", { name: /^Show teams for the / }).click();
+      await expect(revealed(espnCol(page), SERIES[0])).toBeVisible();
+      await expect(espnCol(page).locator("[data-pairing-mask]")).toHaveCount(3);
+
+      await revealAll(mlbCol(page)).click();
+      await expect(espnCol(page).locator("[data-pairing-mask]")).toHaveCount(0);
+      for (const s of SERIES) await expect(revealed(espnCol(page), s)).toBeVisible();
     });
   });
 }

@@ -351,7 +351,8 @@ export default function GameCard(props: GameCardProps) {
 }
 
 // One tap opens every covered card in a column (Jacob 9/30): an MLB postseason
-// day holds up to four covered games, a tap each for about a month. Shown only
+// day holds up to four covered games, a tap each for about a month. One per
+// column, or one per league block in the ESPN front page column. Shown only
 // for 2 or more covers; a lone cover's own "Show teams" is enough. Same quiet
 // style as that button, and the same rule: each matchup stays open after.
 export function PairingRevealAll({ games, className = "" }: { games: Game[]; className?: string }) {

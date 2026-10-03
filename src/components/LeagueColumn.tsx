@@ -1591,6 +1591,7 @@ export default function LeagueColumn({
         return (
           <div key={group.sport} className="flex flex-col gap-1.5 sm:gap-2" data-espn-league={group.sport}>
             {!isDemoModeActive() && !(i === 0 && leadLabelSlot) && espnLabelRow(espnGroupLabel(group), group.sport)}
+            <PairingRevealAll games={group.games} />
             {group.games.map((game) => (
               <GameCard
                 key={game.id}
@@ -1871,9 +1872,10 @@ export default function LeagueColumn({
   // Every game the body below renders as a full GameCard, for the one "Show all
   // teams" control over the first card (Jacob 9/30). Mirrors the body's
   // branches; team view lists its own (TeamView), and a covered game is never
-  // a compact row (renderUpcomingSlate).
+  // a compact row (renderUpcomingSlate). The ESPN front page column has none:
+  // each league block holds its own, over that block's cards (Jacob 10/3).
   const cardGames: Game[] = (() => {
-    if (teamViewTeam || league.golfTournament || league.eventCard) return [];
+    if (espnGroups || teamViewTeam || league.golfTournament || league.eventCard) return [];
     if (sorted.length === 0) {
       if (!renderUpcoming || league.fetchFailed) return [];
       if (isPastDate) {
@@ -1883,7 +1885,7 @@ export default function LeagueColumn({
       return league.nextGameDay?.games ?? league.previousGameDay?.games ?? [];
     }
     if (condense) return sorted.length > 5 && !condenseExpanded ? sorted.slice(0, CONDENSE_LIMIT) : sorted;
-    if (espnGroups || isPastDate) return sorted;
+    if (isPastDate) return sorted;
     return [
       ...(renderUpcoming ? [...liveGames, ...preGames, ...(league.nextGameDay?.games ?? [])] : []),
       ...(renderFinished ? postGames : []),
