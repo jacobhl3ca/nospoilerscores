@@ -479,6 +479,26 @@ export function parseWatchPagePlayable(html) {
   return m[1] === "OK";
 }
 
+// A watch page's own title, owner channel id and owner name (videoDetails), or
+// null. oEmbed answers 401 for an upload whose owner refuses embeds (the SEC's
+// volleyball cuts), so it cannot name the owner; this can. Read from the start
+// of videoDetails only: the page holds other videos' titles and owners.
+export function parseWatchPageOwner(html) {
+  const str = String(html ?? "");
+  const at = str.indexOf('"videoDetails":{"videoId":"');
+  if (at < 0) return null;
+  const block = str.slice(at, at + 20000);
+  const field = (name) => {
+    const m = block.match(new RegExp(`"${name}":"((?:[^"\\\\]|\\\\.)*)"`));
+    if (!m) return null;
+    try { return JSON.parse(`"${m[1]}"`); } catch { return m[1]; }
+  };
+  const title = field("title");
+  const channelId = field("channelId");
+  const author = field("author");
+  return title && channelId && author ? { title, channelId, author } : null;
+}
+
 // ── Candidate pick ───────────────────────────────────────────────────────────
 
 // The European season that is running on an ET date: it starts in August, so

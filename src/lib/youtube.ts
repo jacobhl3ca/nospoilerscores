@@ -622,6 +622,24 @@ export function leadChannelBlocksEmbeds(channels: string[]): boolean {
   return channels.length > 0 && (EMBED_BLOCKED_CHANNELS.has(channels[0]) || isNflTeamChannel(channels[0]));
 }
 
+// Channels that refuse embeds for ONE sport only, so they cannot join
+// EMBED_BLOCKED_CHANNELS. The SEC's volleyball cuts refuse every embed
+// (oEmbed 401, playableInEmbed false: 5 of 5 on 2026-10-03) while its soccer
+// cuts play in-app. Their cards open straight on the "Watch on YouTube" card
+// (GameHighlights adds `nss_embed_blocked=1`). The YouTube description of each
+// SEC volleyball cut opens with the result ("No. 16 Texas A&M opened SEC play
+// with a dominant sweep of South Carolina, winning 25-14, 25-14, 25-18 …"), so
+// the card warns about it (`nss_desc_result=1`). Mirrored by embedOffChannelId
+// in scripts/lib/channel-search.mjs: the bake reads these ids' title and owner
+// off the watch page, since oEmbed answers 401.
+const EMBED_BLOCKED_SPORT_CHANNELS: Record<string, readonly string[]> = {
+  ncaavb: ["SEC"],
+};
+
+export function sportChannelBlocksEmbeds(sport: string, channel: string | null | undefined): boolean {
+  return !!channel && (EMBED_BLOCKED_SPORT_CHANNELS[sport]?.includes(channel) ?? false);
+}
+
 // Channels whose clip title bar must stay masked no matter what the spoiler
 // filter says. The mask is normally lifted once SPOILER_RX clears the real
 // YouTube title, which is right for a team sport: "Mets vs Braves | Game

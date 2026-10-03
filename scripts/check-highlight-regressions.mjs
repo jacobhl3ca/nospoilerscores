@@ -561,6 +561,22 @@ check(
     prebake.includes("titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home) && homeFirstOk(title),"),
 );
 check(
+  "SEC volleyball cuts open on the Watch on YouTube card, warn that the description gives the result, and bake through the watch page",
+  youtube.sportChannelBlocksEmbeds("ncaavb", "SEC") === true &&
+    youtube.sportChannelBlocksEmbeds("ncaawsoc", "SEC") === false &&
+    youtube.leadChannelBlocksEmbeds(["SEC"]) === false &&
+    gameHighlights.includes("sportChannelBlocksEmbeds(game.sport, channel) ? `${url}&nss_embed_blocked=1&nss_desc_result=1` : url;") &&
+    gameHighlights.includes("const secondaryModalFallbackUrl = channelModalFallbackUrl(secondaryChannel);") &&
+    !/modalFallbackUrl\(\[(?:primaryChannel|officialFallback\.channel|fb\.channel|secondaryChannel)\]/.test(gameHighlights) &&
+    videoModal.includes('fallbackFlag(fallbackUrl, "nss_desc_result")') &&
+    prebake.includes("hlNoteEmbedOff(lg.sport, officialChannel, prevOfficial);") &&
+    prebake.includes("hlNoteEmbedOff(lg.sport, primaryChannel, official);") &&
+    prebake.includes("hlNoteEmbedOff(lg.sport, fb.channel, id);") &&
+    prebake.includes("hlNoteEmbedOff(sport, channel, videoId);") &&
+    prebake.includes("channelSearchNeedsEmbed(channel, sport)") &&
+    prebake.includes("if (owner?.channelId !== channelId || parseWatchPagePlayable(html) !== true) {"),
+);
+check(
   "prebaker bakes NCAA volleyball from each match's conference chain behind the volleyball token",
   prebake.includes('{ sport: "ncaavb",') &&
     prebake.includes('ncaavb: ["volleyball"]') &&

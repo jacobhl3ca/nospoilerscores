@@ -108,16 +108,32 @@ export function channelSearchTitleTokens(channel) {
 // so the embed check would refuse every cut they post.
 const EMBED_BLOCKED_SEARCH_CHANNELS = new Set(["NFL"]);
 
-export function channelSearchNeedsEmbed(channel) {
-  return !EMBED_BLOCKED_SEARCH_CHANNELS.has(channel);
+// Channels that refuse embeds for one sport only (EMBED_BLOCKED_SPORT_CHANNELS
+// in src/lib/youtube.ts): the SEC's volleyball cuts, while its soccer cuts
+// embed. oEmbed answers 401 for each such upload, so the bake reads its title
+// and owner off the watch page and checks the owner against the channel id in
+// CHANNEL_FEED_IDS (see hlEmbedOffMeta in scripts/prebake-news.mjs).
+const EMBED_OFF_SPORTS_BY_CHANNEL = {
+  "SEC": ["ncaavb"],
+};
+
+/** The channel id a watch page must name for this channel's uploads in this sport, or null. */
+export function embedOffChannelId(channel, sport) {
+  return EMBED_OFF_SPORTS_BY_CHANNEL[channel]?.includes(sport) ? channelFeedId(channel) : null;
+}
+
+export function channelSearchNeedsEmbed(channel, sport) {
+  return !EMBED_BLOCKED_SEARCH_CHANNELS.has(channel) && !embedOffChannelId(channel, sport);
 }
 
 // Channels read for some sports only. The conference channels are in the
-// ncaaf and ncaavb chains too; their feeds are read for college soccer only.
+// ncaaf and ncaavb chains too; their feeds are read for college soccer only,
+// and the SEC's for volleyball as well: the live search missed 1 of 5 SEC
+// volleyball cuts on 2026-10-03 (No. 8 Florida vs. Oklahoma), all 5 in its feed.
 const CHANNEL_SEARCH_SPORTS = {
   "ACC Digital Network": ["ncaawsoc", "ncaamsoc"],
   "Big 12 Conference": ["ncaawsoc", "ncaamsoc"],
-  "SEC": ["ncaawsoc", "ncaamsoc"],
+  "SEC": ["ncaawsoc", "ncaamsoc", "ncaavb"],
 };
 
 export function channelSearchServesSport(channel, sport) {

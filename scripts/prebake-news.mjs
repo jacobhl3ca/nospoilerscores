@@ -9,7 +9,7 @@ import { dirname } from "node:path";
 import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
   parseRelativeTime, isoDurationToSec, etYmd, shiftYmd, dailyCoversDate, weekdayCoversDate,
-  weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, parseWatchPagePlayable, matchSeriesTitle, pickNewest, stripRecapRecord,
+  weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, parseWatchPagePlayable, parseWatchPageOwner, matchSeriesTitle, pickNewest, stripRecapRecord,
   fillHeading, pickShorterClub, promoteLoneExtended, eplSeasonYear, uploadFitsGameDate, keepCarriedRecap,
   RECAP_ARCHIVE_START, recapEndYmd, monthsBetween, recapMonths, recapInMainFile, splitEmptyByMonth,
   recapEmptyIsFinal, recapFileBody,
@@ -20,7 +20,7 @@ import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
 } from "./lib/fotmob.mjs";
-import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchServesSport, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
+import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchServesSport, channelSearchTitleTokens, embedOffChannelId, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 import { createTitleForTeam, teamNameIndex } from "./lib/team-names.mjs";
 import { pickEspnGameClip, attachEspnVideoClips } from "./lib/espn-clip.mjs";
@@ -3011,8 +3011,10 @@ async function hlOembedMeta(id) {
   try {
     const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(id)}&format=json`, { headers: { "User-Agent": UA } });
     if (!res.ok) {
-      HL_OEMBED_META_CACHE.set(id, null);
-      return null;
+      // 401 = the owner refuses embeds. Only a noted embed-off id goes on.
+      const meta = res.status === 401 && hlEmbedOffIds.has(id) ? await hlEmbedOffMeta(id, hlEmbedOffIds.get(id)) : null;
+      HL_OEMBED_META_CACHE.set(id, meta);
+      return meta;
     }
     const data = await res.json();
     const meta = { title: String(data?.title ?? ""), author: String(data?.author_name ?? "") };
@@ -3022,6 +3024,46 @@ async function hlOembedMeta(id) {
     HL_OEMBED_META_CACHE.set(id, null);
     return null;
   }
+}
+
+// Channels that refuse embeds for one sport only: the SEC's volleyball cuts
+// (embedOffChannelId in scripts/lib/channel-search.mjs, mirrored by
+// EMBED_BLOCKED_SPORT_CHANNELS in src/lib/youtube.ts, where the card opens on
+// the "Watch on YouTube" hand-off). oEmbed answers 401 for these uploads, so
+// it cannot give the title and owner every gate below reads. Each id a lookup
+// returns from such a channel is noted here with the channel id its watch page
+// must name; hlOembedMeta then reads the title and owner off that page.
+const hlEmbedOffIds = new Map();
+function hlNoteEmbedOff(sport, channel, id) {
+  const channelId = embedOffChannelId(channel, sport);
+  if (!channelId || !id || hlEmbedOffIds.has(id)) return;
+  hlEmbedOffIds.set(id, channelId);
+  // A read made before the note cached the 401 as null.
+  if (HL_OEMBED_META_CACHE.get(id) === null) HL_OEMBED_META_CACHE.delete(id);
+}
+
+// Title and owner of a noted embed-off id, as hlOembedMeta returns them, or
+// null. Taken only when the watch page names the expected channel id and the
+// clip plays on youtube.com. One good read per id is kept in the channel-search
+// state file: a title and an owner do not change, and the page is ~1.4 MB.
+async function hlEmbedOffMeta(id, channelId) {
+  const state = await hlCsState();
+  const kept = state.embedOff[id];
+  if (kept?.c === channelId && kept.title && kept.author) return { title: kept.title, author: kept.author };
+  let html = "";
+  try {
+    html = await getText(`https://www.youtube.com/watch?v=${encodeURIComponent(id)}`);
+  } catch (e) {
+    console.warn(`HIGHLIGHT-EMBED-OFF-FAIL ${id}: ${e?.cause?.message || e?.message || e}`);
+    return null;
+  }
+  const owner = parseWatchPageOwner(html);
+  if (owner?.channelId !== channelId || parseWatchPagePlayable(html) !== true) {
+    console.warn(`HIGHLIGHT-EMBED-OFF-REJECT ${id} owner=${owner?.channelId ?? "?"} expected=${channelId}`);
+    return null;
+  }
+  state.embedOff[id] = { title: owner.title, author: owner.author, c: channelId, at: Date.now() };
+  return { title: owner.title, author: owner.author };
 }
 
 // Mirrors NOT_HIGHLIGHT_RX in public/_worker.js (hand copy, same reason as
@@ -3520,7 +3562,8 @@ async function hlCsState() {
   if (hlCs.state) return hlCs.state;
   let state = null;
   try { state = JSON.parse(await readFile(HL_CS_STATE_PATH, "utf8")); } catch { /* first run */ }
-  hlCs.state = { asked: state?.asked && typeof state.asked === "object" ? state.asked : {} };
+  const map = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
+  hlCs.state = { asked: map(state?.asked), embedOff: map(state?.embedOff) };
   return hlCs.state;
 }
 
@@ -3537,7 +3580,9 @@ function hlSearchName(team) {
 // cached read the upload-date gate makes.
 async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, compTokens, picks, minSec, week, homeFirst = false) {
   const titleTokens = channelSearchTitleTokens(channel);
+  const sport = key.split(":")[0];
   for (const { videoId, durationSec } of picks) {
+    hlNoteEmbedOff(sport, channel, videoId);
     const sec = Number.isFinite(durationSec) ? durationSec : await fetchYtDurationSec(videoId);
     if ((Number.isFinite(sec) && sec < minSec)
       || !(await hlVideoMatchesChannel(videoId, channel))
@@ -3546,7 +3591,7 @@ async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, com
       || !(await hlVideoMatchesComp(videoId, titleTokens))
       || !(await hlVideoMatchesWeek(videoId, week))
       || !(await hlVideoMatchesDate(videoId, gameIso))
-      || (channelSearchNeedsEmbed(channel) && (await fetchYtEmbeddable(videoId)) !== true)) {
+      || (channelSearchNeedsEmbed(channel, sport) && (await fetchYtEmbeddable(videoId)) !== true)) {
       console.warn(`${tag}-REJECT ${key} ${videoId} ${channel} (${away} vs ${home})`);
       continue;
     }
@@ -3627,6 +3672,7 @@ async function hlChannelSearchFinish() {
   if (!hlCs.state) return;
   const cutoff = Date.now() - HL_ENTRY_TTL_MS;
   for (const [k, at] of Object.entries(hlCs.state.asked)) if (!(at > cutoff)) delete hlCs.state.asked[k];
+  for (const [id, row] of Object.entries(hlCs.state.embedOff)) if (!(row?.at > cutoff)) delete hlCs.state.embedOff[id];
   try {
     await mkdir(dirname(HL_CS_STATE_PATH), { recursive: true });
     await writeFile(HL_CS_STATE_PATH, JSON.stringify(hlCs.state));
@@ -3921,6 +3967,7 @@ async function bakeGameHighlights() {
 
         // Revalidate every carried slot against both its uploader and matchup.
         // A channel marker proves provenance, not that the clip is for this game.
+        hlNoteEmbedOff(lg.sport, officialChannel, prevOfficial);
         if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || (await hlVideoIsNotHighlight(prevOfficial)) || !(await teamsOk(prevOfficial)) || !(await hlVideoMatchesWeek(prevOfficial, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
@@ -3944,6 +3991,7 @@ async function bakeGameHighlights() {
         if (!official) {
           officialChannel = primaryChannel;
           official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, primaryTokens, gates);
+          hlNoteEmbedOff(lg.sport, primaryChannel, official);
           if (official && (!(await teamsOk(official)) || !(await hlVideoMatchesWeek(official, week, cflWeekRequired)) || !(await hlVideoMatchesComp(official, primaryTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
@@ -3958,6 +4006,7 @@ async function bakeGameHighlights() {
             const tokens = officialTokensFor(fb);
             const id = await hlResolve(away, home, dateStr, series, fb.channel, undefined, competition, false, week, tokens, gates);
             if (!id) continue;
+            hlNoteEmbedOff(lg.sport, fb.channel, id);
             if (!(await teamsOk(id)) || !(await hlVideoMatchesWeek(id, week, cflWeekRequired)) || !(await hlVideoMatchesComp(id, tokens))) {
               console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home})`);
               continue;
