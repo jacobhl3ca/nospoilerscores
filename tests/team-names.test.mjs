@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createTitleForTeam } from "../scripts/lib/team-names.mjs";
+import { createTitleForTeam, teamNameIndex } from "../scripts/lib/team-names.mjs";
 
 // The bake's and the audit's team-title blanking (scripts/lib/team-names.mjs),
 // run with copies of both callers' normalizers. The worker's own copy is
@@ -85,4 +85,14 @@ test("the bake and the audit both use the shared guard", () => {
   assert.ok(bake.includes("const hlTitleForTeamGuard = createTitleForTeam(hlNormalizeTeam);"));
   assert.ok(audit.includes("const titleForTeam = createTitleForTeam(normalizeMatchText);"));
   assert.ok(audit.includes("const normalizedTitle = titleForTeam(title, variants);"));
+});
+
+test("teamNameIndex: names under four letters stand as words, longer names are substrings", () => {
+  assert.equal(teamNameIndex("stanford vs cal match highlights", "cal"), 12);
+  assert.equal(teamNameIndex("cal vs stanford", "cal"), 0);
+  assert.equal(teamNameIndex("stanford vs pacific a physical game", "cal"), -1);
+  assert.equal(teamNameIndex("juventus vs necaxa", "nec"), -1);
+  assert.equal(teamNameIndex("juventus vs nec nijmegen", "nec"), 12);
+  assert.equal(teamNameIndex("north carolina tar heels", "carolina"), 6);
+  assert.equal(teamNameIndex("anything", ""), -1);
 });

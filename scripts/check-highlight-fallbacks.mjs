@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { createTitleForTeam } from "./lib/team-names.mjs";
+import { createTitleForTeam, teamNameIndex } from "./lib/team-names.mjs";
 // Highlight-button fallback check.
 //
 // For every finished game from the past ~36h across the in-season leagues,
@@ -115,9 +115,10 @@ const ESPN_PATHS = {
   // (no approved per-match uploader, so no YouTube button). ncaah / ufl /
   // ncaabase / ncaasoft / uecl / copadelrey / dfbpokal are in
   // NO_HIGHLIGHT_FALLBACK — see src/lib/youtube.ts. ncaavb and ncaawh (lit
-  // 2026-09-23) have no fixed channel: each game resolves from its schools'
-  // conference chain (collegeHighlightChannels.json), which this monitor does
-  // not model, so they stay out of this table.
+  // 2026-09-23) and ncaawsoc / ncaamsoc (lit 2026-10-03) have no fixed
+  // channel: each game resolves from its schools' conference chain
+  // (collegeHighlightChannels.json), which this monitor does not model, so
+  // they stay out of this table.
 };
 
 // Matches OFFICIAL_CHANNELS in src/lib/youtube.ts. Keep in sync.
@@ -391,8 +392,9 @@ const LLWS_REGION_NAMES = JSON.parse(
 );
 // ncaaf titles use ESPN's team.location ("Western Kentucky"), not the short
 // name ("Western KY") — mirrors LOCATION_NAME_SPORTS in src/lib/youtube.ts.
+const LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb", "ncaawsoc", "ncaamsoc"]);
 function highlightTeamName(sport, name, location) {
-  if (sport === "ncaaf" || sport === "ncaavb") return (location && String(location).trim()) || name;
+  if (LOCATION_NAME_SPORTS.has(sport)) return (location && String(location).trim()) || name;
   if (sport !== "llws") return name;
   const code = String(name ?? "").trim().split(/\s+/).pop() ?? "";
   return LLWS_REGION_NAMES[code.toUpperCase()] ?? name;
@@ -537,7 +539,7 @@ function titleHasTeam(title, team) {
     ...(WORKER_TEAM_VARIANTS[normalizedTeam] ?? []),
   ]);
   const normalizedTitle = titleForTeam(title, variants);
-  if ([...variants].some((variant) => variant && normalizedTitle.includes(variant))) return true;
+  if ([...variants].some((variant) => teamNameIndex(normalizedTitle, variant) >= 0)) return true;
   // Name-order tolerance, same rule as hlTitleHasTeam in the prebake: ESPN
   // names Chinese tennis players family-name-first ("Zheng Qinwen") and the
   // channel titles them given-name-first. A two-word name matches when both

@@ -535,13 +535,21 @@ check(
       !youtube.channelAlwaysMasksTitle(["CBS Sports Golazo - Europe"]),
   );
 }
-// NCAA women's and men's soccer (added 2026-09-26) are dark: the only cut
-// found for the 9/10 Penn State–Ohio State women's game was on a fan channel,
-// and no conference channel has been probed. Never scanned.
+// NCAA women's and men's soccer (lit 2026-10-03) resolve like ncaavb: the
+// first channel of each match's conference chain (ACC, Big 12, SEC) is the
+// official one, behind the soccer tokens. The monitor does not model chains.
 check(
-  "NCAA soccer (both feeds) stays dark and unmonitored",
-  youtube.hasNoTrustedHighlightSource("ncaawsoc") === true &&
-    youtube.hasNoTrustedHighlightSource("ncaamsoc") === true &&
+  "prebaker bakes NCAA soccer (both feeds) from each match's conference chain behind the soccer tokens, and reads the conference uploads feeds for soccer only",
+  prebake.includes('{ sport: "ncaawsoc",') &&
+    prebake.includes('{ sport: "ncaamsoc",') &&
+    prebake.includes(`ncaawsoc: ["women's soccer", "sec soccer"]`) &&
+    prebake.includes(`ncaamsoc: ["acc men's soccer"]`) &&
+    youtube.highlightPrimaryFromChain("ncaawsoc") &&
+    youtube.highlightPrimaryFromChain("ncaamsoc") &&
+    JSON.stringify(youtube.getCompetitionTitleTokens("ncaamsoc")) === JSON.stringify(["acc men's soccer"]) &&
+    youtube.highlightTeamName("ncaawsoc", "Alcorn St", "Alcorn State") === "Alcorn State" &&
+    prebake.includes("!channelSearchServesSport(channel, sport)) return null;") &&
+    prebake.includes("womensGame: isWomensSport(sport),") &&
     !monitor.includes("usa.ncaa.w.1") &&
     !monitor.includes("usa.ncaa.m.1"),
 );

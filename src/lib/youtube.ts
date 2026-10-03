@@ -449,13 +449,10 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // Re-probe once the 2026-27 knockouts exist; any relight needs ≥4/5 and a
 // competition title token.
 //
-// ncaawsoc / ncaamsoc (NCAA soccer, added 2026-09-26, both DARK). The cut
-// Jacob found for Penn State at Ohio State (women's, 9/10) is on "Real Woso
-// Fan", a fan channel, not an uploader the app can trust; no conference or
-// network channel has been probed for either sport yet. Regular-season matches
-// stream on ESPN+ with no official upload. Light either the way ncaavb was:
-// a per-school conference chain in collegeHighlightChannels.json once a
-// conference channel measures ≥4/5 strict with a title token.
+// ncaawsoc / ncaamsoc (NCAA soccer) left this set 2026-10-03: each match
+// resolves from its schools' conference chain in collegeHighlightChannels.json
+// (ACC Digital Network, Big 12 Conference and SEC for women; ACC for men),
+// like ncaavb. A match with no school in those conferences stays dark.
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "copadelrey",
   "cricket",
@@ -477,10 +474,7 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   // "nations league" token). See OFFICIAL_CHANNELS above.
   "ncaah",
   "ncaabase",
-  // Both college soccer feeds: no trusted uploader yet (see the note above).
-  "ncaamsoc",
   "ncaasoft",
-  "ncaawsoc",
   "rugbychamp",
   "rugbytest",
   // Club rugby, probed 2026-09-27 (lib/espn.ts has the ids). Only URC lit.
@@ -760,6 +754,14 @@ const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   // America's titles carry neither word, so that channel opts out through its
   // own empty list in collegeHighlightChannels.json (`ownTokens`).
   ncaawh: ["women"],
+  // NCAA soccer (2026-10-03). The conference channels post every sport, and
+  // the ACC posts the men's and the women's cut of the same two schools. ACC
+  // and Big 12 titles end "2026 ACC Women's Soccer" / "2026 Big 12 Women's
+  // Soccer"; the SEC sponsors only the women's game and titles "2026 SEC
+  // Soccer". The men's token must be "acc men's soccer": "men's soccer" alone
+  // is inside "women's soccer" once punctuation folds to spaces.
+  ncaawsoc: ["women's soccer", "sec soccer"],
+  ncaamsoc: ["acc men's soccer"],
 };
 
 // NFL preseason — the same failure one season-phase over. The NFL channel
@@ -923,8 +925,9 @@ function aliasTeam(name: string): string {
 // Football: every game the short name found, the location found too, plus
 // Western Kentucky–Georgia and Eastern Michigan–Michigan State.
 // ncaavb (same date): location 11 hits over 143 conference-channel probes,
-// shortDisplayName 1 over 35.
-const LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb"]);
+// shortDisplayName 1 over 35. NCAA soccer (2026-10-03): the ACC, Big 12 and SEC
+// title with the school name too ("Alcorn State", not ESPN's "Alcorn St").
+const LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb", "ncaawsoc", "ncaamsoc"]);
 
 // Rewrite a team name into the form the sport's official uploader puts in its
 // titles. Identity for every sport but LLWS and the LOCATION_NAME_SPORTS, so

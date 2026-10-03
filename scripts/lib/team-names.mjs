@@ -49,6 +49,19 @@ const ownsName = (variants, phrase) => {
 };
 
 /**
+ * Where a team name stands in a normalized title, or -1. A name under four
+ * characters ("Cal", "SMU", "NEC") must stand as a whole word: "cal" is inside
+ * "physical", "nec" inside "connecticut". Mirrors teamNameIndex in
+ * public/_worker.js.
+ */
+export function teamNameIndex(title, name) {
+  if (!name) return -1;
+  if (name.length >= 4) return title.indexOf(name);
+  const m = new RegExp(`(?:^|[^a-z0-9])(${escapeRegex(name)})(?![a-z0-9])`).exec(title);
+  return m ? m.index + m[0].length - m[1].length : -1;
+}
+
+/**
  * Returns titleForTeam(title, variants): the title in `normalize`'s form as
  * matched for one team, with every longer team name that holds one of
  * `variants` and that the team does not own blanked to spaces of the same

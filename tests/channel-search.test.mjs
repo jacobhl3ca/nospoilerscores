@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CHANNEL_FEED_IDS, CHANNEL_SEARCH_HANDLES, channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed,
+  CHANNEL_FEED_IDS, CHANNEL_SEARCH_HANDLES, channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchServesSport, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed,
   pickChannelSearchCards, titleDateYmd, titleHasCompToken, NOT_FIRST_TEAM_RX,
 } from "../scripts/lib/channel-search.mjs";
 
@@ -189,4 +189,46 @@ test("MAC: this game's dated cut, not the 2019 meeting", () => {
   const picks = pickChannelSearchCards(cards, { titleHasTeams: teams("buffalo", "robert morris"), gameMs: game });
   assert.deepEqual(picks.map((c) => c.videoId), ["NnwzIwJdfBQ", "wPGqhAcWYjM"]);
   assert.equal(channelSearchHandle("Get Some MACtion"), "GetSomeMACtion");
+});
+
+test("college soccer: the conference feeds keep the cut, not the full replay, and serve soccer only", () => {
+  // Uploads on the ACC Digital Network and Big 12 Conference feeds, 2026-10-03.
+  const game = Date.parse("2026-10-02T23:00Z");
+  const now = game + 17 * 3600e3;
+  const womens = ["women's soccer", "sec soccer"];
+  const accTokens = channelSearchTitleTokens("ACC Digital Network");
+  assert.deepEqual(accTokens, ["highlight", "recap"]);
+  const acc = [
+    { videoId: "yXZQGBtb5R8", title: "Florida State vs. Louisville Full Match Replay | 2026 ACC Women's Soccer", durationSec: null, publishedMs: now - 3600e3 },
+    { videoId: "V6DEfTnKZJY", title: "Florida State vs. Louisville Match Highlights | 2026 ACC Women's Soccer", durationSec: null, publishedMs: now - 2 * 3600e3 },
+    { videoId: "VS0APLJrXXo", title: "West Florida vs. North Carolina Full Match Replay | 2026 ACC Men's Soccer", durationSec: null, publishedMs: now - 3600e3 },
+  ];
+  const compOk = (tokens) => (t) => titleHasCompToken(t, tokens) && titleHasCompToken(t, accTokens);
+  assert.deepEqual(pickChannelSearchCards(acc, { titleHasTeams: teams("florida state", "louisville"), compOk: compOk(womens), gameMs: game, womensGame: isWomensSport("ncaawsoc"), limit: 3 })
+    .map((c) => c.videoId), ["V6DEfTnKZJY"]);
+  // A men's game never takes the women's cut of the same pair, nor a replay.
+  assert.deepEqual(pickChannelSearchCards(acc, { titleHasTeams: teams("florida state", "louisville"), compOk: compOk(["acc men's soccer"]), gameMs: game, womensGame: isWomensSport("ncaamsoc") }), []);
+  assert.deepEqual(pickChannelSearchCards(acc, { titleHasTeams: teams("west florida", "north carolina"), compOk: compOk(["acc men's soccer"]), gameMs: game }), []);
+
+  // The Big 12 cut names its date; "Women's" is the game itself, not a side.
+  const b12 = [{ videoId: "hB5S51HUBCY", title: "Kansas vs. Baylor Highlights (10.2.26) | 2026 Big 12 Women's Soccer", durationSec: null, publishedMs: Date.parse("2026-10-03T02:58Z") }];
+  const b12Opts = { titleHasTeams: teams("kansas", "baylor"), compOk: (t) => titleHasCompToken(t, womens) && titleHasCompToken(t, channelSearchTitleTokens("Big 12 Conference")), gameMs: game };
+  assert.deepEqual(pickChannelSearchCards(b12, { ...b12Opts, womensGame: isWomensSport("ncaawsoc") }).map((c) => c.videoId), ["hB5S51HUBCY"]);
+  assert.deepEqual(pickChannelSearchCards(b12, b12Opts), []);
+  assert.deepEqual(pickChannelSearchCards(b12, { ...b12Opts, womensGame: true, gameMs: game - DAY }), []);
+
+  // Feed only, and for soccer only: the same channels lead the ncaaf and
+  // ncaavb chains, which keep their old lookups.
+  for (const channel of ["ACC Digital Network", "Big 12 Conference", "SEC"]) {
+    assert.ok(channelFeedId(channel), channel);
+    assert.equal(channelSearchHandle(channel), null, channel);
+    assert.equal(channelSearchServesSport(channel, "ncaawsoc"), true, channel);
+    assert.equal(channelSearchServesSport(channel, "ncaamsoc"), true, channel);
+    assert.equal(channelSearchServesSport(channel, "ncaaf"), false, channel);
+    assert.equal(channelSearchServesSport(channel, "ncaavb"), false, channel);
+    assert.equal(channelSearchNeedsEmbed(channel), true, channel);
+  }
+  assert.equal(channelSearchServesSport("Major League Soccer", "mls"), true);
+  assert.equal(channelSearchServesSport("Get Some MACtion", "ncaaf"), true);
+  assert.equal(isWomensSport("ncaamsoc"), false);
 });

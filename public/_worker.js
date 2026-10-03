@@ -268,6 +268,17 @@ function blankContainingSchoolNames(title, ownNames) {
   return t;
 }
 
+// Where a team name stands in a normalized title, or -1. A name under four
+// characters ("Cal", "SMU", "NEC") must stand as a whole word: "cal" is inside
+// "physical", "nec" inside "connecticut". Longer names keep the plain
+// substring test. Mirrored in scripts/lib/team-names.mjs (teamNameIndex).
+function teamNameIndex(title, name) {
+  if (!name) return -1;
+  if (name.length >= 4) return title.indexOf(name);
+  const m = new RegExp(`(?:^|[^a-z0-9])(${escapeRegex(name)})(?![a-z0-9])`).exec(title);
+  return m ? m.index + m[0].length - m[1].length : -1;
+}
+
 function raceTitleMatches(tokens, titleLower) {
   if (tokens.length === 0) return true; // no gate requested → unchanged behaviour
   if (NON_RACE_SESSION_RX.test(titleLower)) return false;
@@ -1274,6 +1285,13 @@ export default {
           // "Athletics" as shortDisplayName, so we map both.
           "athletics": ["athletics", "a's", "oakland"],
           "st. john's": ["st. john's", "st johns", "saint john's", "saint johns", "st john's"],
+          // ESPN's school name (team.location) vs. the ACC's titles: "Duke vs.
+          // Pitt Match Highlights", "Fresno St. vs. Cal Match Highlights | 2026
+          // ACC Women's Soccer" (2026-10-03). "cal" only matches as a whole
+          // word (teamNameIndex), and the school-name guard blanks "Cal Poly",
+          // "Cal State" and "Cal Baptist" first.
+          "pittsburgh": ["pittsburgh", "pitt"],
+          "california": ["california", "cal"],
           // EPL — ESPN compact form ↔ club name(s) used in YouTube titles
           "nottm forest": ["nottm forest", "nottingham forest", "nottingham"],
           "man united": ["man united", "manchester united", "man utd"],
@@ -1476,7 +1494,7 @@ export default {
           const t = titleForTeam(titleLower, variants);
           let best = -1;
           for (const v of variants) {
-            const i = t.indexOf(normalizeTeamMatch(v));
+            const i = teamNameIndex(t, normalizeTeamMatch(v));
             if (i >= 0 && (best < 0 || i < best)) best = i;
           }
           return best;
@@ -1485,7 +1503,7 @@ export default {
         function titleHasTeam(titleLower, teamName) {
           const variants = getTeamVariants(teamName);
           const normalizedTitle = titleForTeam(titleLower, variants);
-          if (variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)))) return true;
+          if (variants.some((v) => teamNameIndex(normalizedTitle, normalizeTeamMatch(v)) >= 0)) return true;
           // Singular-nickname tolerance. Not hypothetical: the OFFICIAL NFL
           // channel's Week 15 recap of Dec 14 2025 is titled "Washington
           // Commanders vs New York Giant Game Highlights | 2025 NFL Season

@@ -20,9 +20,9 @@ import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
 } from "./lib/fotmob.mjs";
-import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
+import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchServesSport, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
-import { createTitleForTeam } from "./lib/team-names.mjs";
+import { createTitleForTeam, teamNameIndex } from "./lib/team-names.mjs";
 import { pickEspnGameClip, attachEspnVideoClips } from "./lib/espn-clip.mjs";
 import { isRealEspnClip, mergeVideos, orderVideos } from "./lib/video-order.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
@@ -2651,6 +2651,13 @@ const HL_LEAGUES = [
   // below. Every other game has an empty chain and costs no lookup. See
   // src/lib/collegeHighlights.ts for the channel probe.
   { sport: "ncaawh", path: "/hockey/womens-college-hockey/scoreboard",       channel: null },
+  // NCAA soccer (lit 2026-10-03). No fixed uploader, like ncaavb: the first
+  // channel of each match's conference chain is the official one (ACC Digital
+  // Network, Big 12 Conference, SEC for women; ACC Digital Network for men),
+  // behind the soccer tokens below. A match with no school in those
+  // conferences has an empty chain and costs no lookup.
+  { sport: "ncaawsoc", path: "/soccer/usa.ncaa.w.1/scoreboard",              channel: null },
+  { sport: "ncaamsoc", path: "/soccer/usa.ncaa.m.1/scoreboard",              channel: null },
 ];
 // Origin for the worker-served leagues above. Overridable so a local
 // `wrangler pages dev` run can be baked against.
@@ -2667,6 +2674,8 @@ const HL_COMPETITION_TOKENS = {
   ligue1: ["ligue 1"],
   nations: ["nations league"],
   ncaawh: ["women"],
+  ncaawsoc: ["women's soccer", "sec soccer"],
+  ncaamsoc: ["acc men's soccer"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts. Sent per
 // EVENT: TSN titles the postseason by round with no year, and a playoff card
@@ -2751,7 +2760,7 @@ const HL_LLWS_REGION_NAMES = JSON.parse(
 // College football titles use the full school name ESPN keeps in team.location
 // ("Western Kentucky"), not the shortDisplayName ("Western KY"). Mirrors
 // LOCATION_NAME_SPORTS in src/lib/youtube.ts.
-const HL_LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb"]);
+const HL_LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb", "ncaawsoc", "ncaamsoc"]);
 // Per-game fallback uploaders (conference + TV network) for the official slot.
 // SAME FILE src/lib/youtube.ts reads; the chain builder mirrors
 // buildCollegeFallbackChain in src/lib/collegeHighlights.ts.
@@ -2965,7 +2974,7 @@ function hlTeamTitleIndex(title, team) {
   const t = hlTitleForTeam(title, variants);
   let best = -1;
   for (const v of variants) {
-    const i = v ? t.indexOf(v) : -1;
+    const i = teamNameIndex(t, v);
     if (i >= 0 && (best < 0 || i < best)) best = i;
   }
   return best;
@@ -2974,7 +2983,7 @@ function hlTeamTitleIndex(title, team) {
 function hlTitleHasTeam(title, team) {
   const variants = hlTeamVariants(team);
   const normalizedTitle = hlTitleForTeam(title, variants);
-  if ([...variants].some((variant) => variant && normalizedTitle.includes(variant))) return true;
+  if ([...variants].some((variant) => teamNameIndex(normalizedTitle, variant) >= 0)) return true;
   // Name-order tolerance, mirroring titleHasTeam in public/_worker.js: ESPN
   // names Chinese tennis players family-name-first ("Zheng Qinwen") and the US
   // Open channel titles them given-name-first ("Qinwen Zheng vs. Elena
@@ -3454,7 +3463,9 @@ async function hlEspnClipFinish() {
 // ── Channel search: our own pass for an empty official slot ──────────────
 // See scripts/lib/channel-search.mjs for why. Runs after the /api/youtube
 // lookups miss and BEFORE FotMob, on the primary channel and then each chain
-// channel, only for channels with a known search page (CHANNEL_SEARCH_HANDLES).
+// channel, only for channels with a known search page (CHANNEL_SEARCH_HANDLES)
+// or uploads feed (CHANNEL_FEED_IDS; the conference channels are feed only,
+// read for the sports CHANNEL_SEARCH_SPORTS lists).
 // A searchOnly chain (efl clubs, LIGA BBVA MX) is asked here and nowhere else.
 //
 // Limits — YouTube throttles a burst of results pages with a redirect loop
@@ -3544,7 +3555,8 @@ async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, com
 // gated, or null.
 async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTokens, exclude, week) {
   const handle = channelSearchHandle(channel);
-  if (!HL_CS_ON || (!handle && !channelFeedId(channel))) return null;
+  const sport = key.split(":")[0];
+  if (!HL_CS_ON || (!handle && !channelFeedId(channel)) || !channelSearchServesSport(channel, sport)) return null;
   const minSec = channelSearchMinSec(channel);
   const titleTokens = channelSearchTitleTokens(channel);
   // Gridiron: a card naming another week is a different meeting of the pair.
@@ -3558,7 +3570,7 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
     gameMs: Date.parse(gameIso),
     exclude,
     minSec,
-    womensGame: isWomensSport(key.split(":")[0]),
+    womensGame: isWomensSport(sport),
   };
   // Feed cards have no length yet, so one more candidate is let through for
   // the watch-page length check to drop a goal clip.

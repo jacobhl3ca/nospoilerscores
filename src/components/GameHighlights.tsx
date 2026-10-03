@@ -50,8 +50,9 @@ const BASEBALL_SPORTS = new Set<string>(["mlb", "ncaabase", "ncaasoft"]);
 // 18 cards (Jacob's 9/17 screenshot: Illinois, Stanford, Purdue …). A sport in
 // here never reserves; the rare card that lands a clip is simply the taller one,
 // the same way the mixed slate has always worked ("bigger box not until it has
-// actual highlight", Jacob 8/10).
-const NEVER_RESERVE_SPORTS = new Set<string>(["ncaavb"]);
+// actual highlight", Jacob 8/10). NCAA soccer (2026-10-03) is the same shape:
+// only ACC, Big 12 and SEC schools have a channel.
+const NEVER_RESERVE_SPORTS = new Set<string>(["ncaavb", "ncaawsoc", "ncaamsoc"]);
 
 const highlightBufferHours: Record<string, number> = {
   nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5, ncaawh: 4.5, ncaavb: 3, ncaawsoc: 3, ncaamsoc: 3, mlb: 5, ufl: 4,

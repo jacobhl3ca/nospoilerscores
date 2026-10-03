@@ -168,3 +168,31 @@ test("a team owns a longer name that holds a blanked phrase (Southern Miss Golde
   const { body } = await lookup({ query: "Troy Trojans vs Southern Miss Golden Eagles highlights Oct 2, 2026", channel: "Sun Belt Conference", html });
   assert.equal(body.videoId, "usmTroyxxxx");
 });
+
+const ACC_WSOC = "women's soccer|sec soccer";
+
+test("ACC titles shorten Pittsburgh and California: Pitt and Cal match", async () => {
+  const pitt = searchHtml([{ id: "dukePittxxx", title: "Duke vs. Pitt Match Highlights | 2026 ACC Women's Soccer", owner: "ACC Digital Network", length: "12:53" }]);
+  assert.equal((await lookup({ query: "Pittsburgh vs Duke highlights Sep 24, 2026", channel: "ACC Digital Network", comp: ACC_WSOC, html: pitt })).body.videoId, "dukePittxxx");
+  const cal = searchHtml([{ id: "stanCalxxxx", title: "Stanford vs. Cal Match Highlights | 2026 ACC Women's Soccer", owner: "ACC Digital Network", length: "12:40" }]);
+  assert.equal((await lookup({ query: "California vs Stanford highlights Oct 2, 2026", channel: "ACC Digital Network", comp: ACC_WSOC, html: cal })).body.videoId, "stanCalxxxx");
+});
+
+test("Cal never matches Cal Poly, Cal State or a word that holds it", async () => {
+  for (const title of [
+    "Stanford vs. Cal Poly Match Highlights | 2026 ACC Women's Soccer",
+    "Stanford vs. Cal State Fullerton Match Highlights | 2026 ACC Women's Soccer",
+    "Stanford vs. Pacific Match Highlights, a physical game | 2026 ACC Women's Soccer",
+  ]) {
+    const html = searchHtml([{ id: "notCalxxxxx", title, owner: "ACC Digital Network", length: "12:00" }]);
+    const { status } = await lookup({ query: "California vs Stanford highlights Oct 2, 2026", channel: "ACC Digital Network", comp: ACC_WSOC, html });
+    assert.equal(status, 404, title);
+  }
+});
+
+test("a name under four letters must stand as a word: NEC is not Necaxa", async () => {
+  const html = searchHtml([{ id: "necaxaxxxxx", title: "Juventus vs. Necaxa: Extended Highlights | Friendly | CBS Sports Golazo", owner: "CBS Sports Golazo - Europe", length: "9:50" }]);
+  assert.equal((await lookup({ query: "NEC vs Juventus highlights Sep 17, 2026", channel: "CBS Sports Golazo - Europe", html })).status, 404);
+  const ok = searchHtml([{ id: "juveNecxxxx", title: "Juventus vs. NEC Nijmegen: Extended Highlights | UEL League Phase MD1 | CBS Sports Golazo", owner: "CBS Sports Golazo - Europe", length: "9:50" }]);
+  assert.equal((await lookup({ query: "NEC vs Juventus highlights Sep 17, 2026", channel: "CBS Sports Golazo - Europe", html: ok })).body.videoId, "juveNecxxxx");
+});
