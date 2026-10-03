@@ -206,6 +206,16 @@ const SECONDARY_CHANNELS = {
   // World Rugby posts the northern-hosted fixtures, SANZAAR's channel the
   // southern-hosted ones. See the block in src/lib/youtube.ts.
   nationschamp: "Super Rugby Pacific",
+  // FOX Sports cuts only the Nations League games it airs; TUDN USA (Spanish
+  // commentary) cuts nearly all of them. See the block in src/lib/youtube.ts.
+  nations: "TUDN USA",
+};
+
+// Mirrors HIGHLIGHT_MATCH_GATES in src/lib/youtube.ts (home-first order +
+// duration floor). Keep in sync, or the audit resolves without the gates the
+// app sends and can count the OTHER leg of a pair as a hit.
+const MATCH_GATES = {
+  nations: { homeFirst: true, minSec: 300 },
 };
 
 const TENNIS_CHANNELS = new Set([
@@ -401,12 +411,14 @@ function extractTeams(ev, sport) {
   };
 }
 
-async function youtubeLookup(query, channel, strict = !!channel, { raceTokens = [], compTokens = [] } = {}) {
+async function youtubeLookup(query, channel, strict = !!channel, { raceTokens = [], compTokens = [], gates = null } = {}) {
   let url = `${BASE}/api/youtube?q=${encodeURIComponent(query)}`;
   if (channel) url += `&channel=${encodeURIComponent(channel)}`;
   if (strict && channel) url += "&strict=1";
   if (raceTokens.length) url += `&race=${encodeURIComponent(raceTokens.join("|"))}`;
   if (compTokens.length) url += `&comp=${encodeURIComponent(compTokens.join("|"))}`;
+  if (gates?.homeFirst) url += "&order=home";
+  if (gates?.minSec) url += `&minsec=${gates.minSec}`;
   try {
     const res = await tfetch(url);
     if (!res.ok) return null;
@@ -631,7 +643,7 @@ async function resolve(away, home, dateStr, channel, sport, compOverride = null)
   const dated = `${a} vs ${h} highlights ${dateStr}`;
   if (!channel) return { videoId: null, via: "no-approved-channel" };
   const compTokens = compOverride ?? COMPETITION_TITLE_TOKENS[sport] ?? [];
-  const hit = await youtubeLookup(dated, channel, true, { compTokens });
+  const hit = await youtubeLookup(dated, channel, true, { compTokens, gates: MATCH_GATES[sport] ?? null });
   return hit
     ? { videoId: hit, via: "strict-channel+date" }
     : { videoId: null, via: "channel-exhausted" };
