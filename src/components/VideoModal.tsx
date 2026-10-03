@@ -265,6 +265,20 @@ function compFallbackParam(fallbackUrl: string): string {
   }
 }
 
+// Home-first order gate + duration floor carried the same way (`nss_order=`,
+// `nss_minsec=` — see HIGHLIGHT_MATCH_GATES in lib/youtube.ts). A Nations
+// League pair meets twice under undated titles, so a retry without the order
+// gate can serve the other leg.
+function matchGateFallbackParam(fallbackUrl: string): string {
+  try {
+    const sp = new URL(fallbackUrl).searchParams;
+    const minSec = sp.get("nss_minsec");
+    return `${sp.get("nss_order") === "home" ? "&order=home" : ""}${minSec && /^\d{1,4}$/.test(minSec) ? `&minsec=${minSec}` : ""}`;
+  } catch {
+    return "";
+  }
+}
+
 // Minimal Reddit selftext renderer. Reddit selftext is markdown but we only
 // care about the structural bits that matter for readability — paragraphs,
 // line breaks, and autolinked URLs. Full markdown (headings, bold, code
@@ -1777,6 +1791,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       const raceParam = raceFallbackParam(fallbackUrl);
       const weekParam = weekFallbackParam(fallbackUrl);
       const compParam = compFallbackParam(fallbackUrl);
+      const matchGateParam = matchGateFallbackParam(fallbackUrl);
       // Fail closed if a highlight caller ever forgets to carry its channel
       // contract. The old unscoped branch was how NFL (and every other league)
       // could resolve correctly, hit an embed error, then silently swap to a
@@ -1794,7 +1809,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // EventCard's UFC chain is sequential).
         for (const channel of strictChannels) {
           const res = await fetch(
-            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}${weekParam}${compParam}`
+            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}${weekParam}${compParam}${matchGateParam}`
           );
           const data = res.ok ? await res.json() : null;
           if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }

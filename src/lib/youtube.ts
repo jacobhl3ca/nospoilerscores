@@ -554,6 +554,19 @@ const SECONDARY_CHANNELS: Record<string, string[]> = {
   // looks like the obvious answer, but it is 0/5 on strict — its uploads do not
   // survive the resolver's own gates. Verified, not assumed.
   nationschamp: ["Super Rugby Pacific"],
+  // UEFA Nations League (2026-10-03): FOX Sports cuts only the games it airs
+  // (8 of the 70 league-phase games, 9/24–10/2). TUDN USA — already the Liga
+  // MX channel, embeddable — cuts nearly all of them, with SPANISH commentary.
+  // Probed 2026-10-03 against the worker with strict=1, the "nations league"
+  // token and the home-first + 5-minute gates (HIGHLIGHT_MATCH_GATES below):
+  //   FOX Sports 8/70, TUDN USA 60/70, union 63/70, 0 wrong on either.
+  // TUDN also posts 1–2 min goal clips ("PORTUGAL GOAL! Denmark vs Portugal")
+  // and Concacaf Nations League cuts under the same token; the "highlights"
+  // title gate, the score-in-title skip, the duration floor and the both-teams
+  // gate drop them.
+  // ⛔ Not UEFA (old "Classic" re-uploads), FOX Soccer (old competitions), CBS
+  // Sports Golazo or ESPN FC (reaction shows whose titles print the result).
+  nations: ["TUDN USA"],
   golf_masters: ["Golf Channel", "ESPN"],
   golf_pgachamp: ["Golf Channel", "ESPN"],
   golf_usopen: ["Golf Channel"],
@@ -784,6 +797,35 @@ export function cflPlayoffTitleTokens(playoffLabel?: string | null): string[] {
   return ["grey cup", "semi final", "east final", "eastern final", "west final", "western final", "playoff"];
 }
 
+// MATCH GATES (`order=` / `minsec=` on /api/youtube). Two more title filters
+// for a league where the token, team and date gates cannot tell one meeting
+// from another.
+//
+// nations: each pair plays twice, the return leg 10–12 days later, and neither
+// FOX Sports nor TUDN USA puts a date in the title. Both put the HOME team
+// first (99/99 TUDN titles, 8/8 FOX hits, 2026-10-03), so the title's team
+// order picks the leg: `homeFirst`. TUDN's goal clips run 50–180 s and its
+// match cuts 500–1,500 s, so anything under 5 minutes is refused: `minSec`.
+// Mirrored by HL_MATCH_GATES in scripts/prebake-news.mjs — keep in sync.
+export type HighlightMatchGates = { homeFirst?: boolean; minSec?: number };
+const HIGHLIGHT_MATCH_GATES: Record<string, HighlightMatchGates> = {
+  nations: { homeFirst: true, minSec: 300 },
+};
+
+export function getHighlightMatchGates(sport: string): HighlightMatchGates | undefined {
+  return HIGHLIGHT_MATCH_GATES[sport];
+}
+
+// The query-string half of a match gate for a live lookup. The modal's retry
+// carries the same gates as nss_order / nss_minsec (see GameHighlights).
+export function highlightMatchGateParams(gates?: HighlightMatchGates): string {
+  if (!gates) return "";
+  let p = "";
+  if (gates.homeFirst) p += "&order=home";
+  if (gates.minSec) p += `&minsec=${gates.minSec}`;
+  return p;
+}
+
 export function getCompetitionTitleTokens(
   sport: string,
   opts?: { preseason?: boolean; playoff?: boolean; playoffLabel?: string | null },
@@ -927,7 +969,7 @@ export function resolvedLengthSec(id: string | null | undefined): number | null 
   return id ? resolvedLengths.get(id) ?? null : null;
 }
 
-export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[], weekNumber?: number | null, compTokens?: string[]): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[], weekNumber?: number | null, compTokens?: string[], gates?: HighlightMatchGates): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
@@ -941,6 +983,8 @@ export async function fetchFirstVideoId(query: string, channel?: string, exclude
     // carry a week, never a date, so two meetings of the same teams in one
     // season are identical to the date and year gates. See Game.weekNumber.
     if (weekNumber) url += `&week=${weekNumber}`;
+    // Home-first order + duration floor — see HIGHLIGHT_MATCH_GATES.
+    url += highlightMatchGateParams(gates);
     const excludeIds = (exclude ?? []).filter((id): id is string => !!id);
     if (excludeIds.length) url += `&exclude=${encodeURIComponent(excludeIds.join(","))}`;
     if (preferExtended) url += `&prefer=extended`;
@@ -1096,8 +1140,9 @@ export async function resolveHighlightVideo(
   preferExtended?: boolean,
   weekNumber?: number | null,
   compTokens?: string[],
+  gates?: HighlightMatchGates,
 ): Promise<string | null> {
   const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
   if (!channel) return null;
-  return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true, undefined, weekNumber, compTokens);
+  return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true, undefined, weekNumber, compTokens, gates);
 }
