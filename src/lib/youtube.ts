@@ -212,9 +212,18 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // rounds (Sep 25 → Sep 27), 0 wrong, once ESPN's "Cardiff Blues" and
   // "Benetton Treviso" are aliased to the title forms (see TEAM_NAME_ALIASES).
   // Titles read "Highlights | Leinster Rugby v Munster Rugby | Round 1 | URC
-  // 2026/27" — no score. The other four club competitions stay DARK (see
+  // 2026/27" — no score. The other three club competitions stay DARK (see
   // NO_HIGHLIGHT_FALLBACK).
   urc: "United Rugby Championship",
+  // Top 14: "TOP 14 - Officiel", 14/14 strict over rounds 3 and 4 (Sep
+  // 19–27), 0 wrong, once ESPN's "Pau", "La Rochelle", "Bayonne", "Lyon" and
+  // "Bordeaux Begles" are aliased to the title forms (see TEAM_ALIASES in
+  // public/_worker.js). Titles read "TOP 14 2026-2027 Season - R4 - RC Toulon
+  // vs RC Vannes Highlights" or "… - Match Summary: Stade Toulousain -
+  // Montpellier Hérault Rugby" — no score, no date, home club first. ESPN has
+  // no round number, so the home-first order gate tells the two meetings of a
+  // season apart (HIGHLIGHT_MATCH_GATES).
+  top14: "TOP 14 - Officiel",
   // euro + cricket deliberately have NO entry — see the block comment below.
   //
   // ── La Liga + Ligue 1, LIT 2026-09-19. Both were dark because the LEAGUE's
@@ -477,16 +486,14 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "ncaasoft",
   "rugbychamp",
   "rugbytest",
-  // Club rugby, probed 2026-09-27 (lib/espn.ts has the ids). Only URC lit.
+  // Club rugby, probed 2026-09-27 (lib/espn.ts has the ids). URC lit then,
+  // Top 14 on 2026-10-03 (see OFFICIAL_CHANNELS).
   // premrugby: "PREM Rugby" and "Premiership Rugby" both 0/5 strict; the
   //   league's clips carry no "A v B" pairing in the title.
-  // top14: "TOP 14 - Officiel" 2 unique hits out of 20 probed, and the older
-  //   uploads print the score in the title.
   // challengecup: no fixture played yet (pool round 1 is 2026-10-16).
   //   RE-PROBE the EPCR channel after round 1.
   // mlr: 4/8 with one WRONG match, and titles hint at the result.
   "premrugby",
-  "top14",
   "challengecup",
   "mlr",
   "ufl",
@@ -762,6 +769,9 @@ const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   // is inside "women's soccer" once punctuation folds to spaces.
   ncaawsoc: ["women's soccer", "sec soccer"],
   ncaamsoc: ["acc men's soccer"],
+  // top14: every match cut on "TOP 14 - Officiel" starts "TOP 14". The token
+  // keeps out anything else the channel may post about the same two clubs.
+  top14: ["top 14"],
 };
 
 // NFL preseason — the same failure one season-phase over. The NFL channel
@@ -808,10 +818,17 @@ export function cflPlayoffTitleTokens(playoffLabel?: string | null): string[] {
 // first (99/99 TUDN titles, 8/8 FOX hits, 2026-10-03), so the title's team
 // order picks the leg: `homeFirst`. TUDN's goal clips run 50–180 s and its
 // match cuts 500–1,500 s, so anything under 5 minutes is refused: `minSec`.
+//
+// top14: each pair meets twice a season, home and away, and ESPN gives no
+// round to tell the meetings apart. "TOP 14 - Officiel" names the home club
+// first (14/14 cuts, rounds 3 and 4, Sep 19–27). Its try clips ("TOP 14 - Essai de
+// Antoine DUPONT (ST) - Stade Toulousain - Montpellier Hérault Rugby") name
+// both clubs and run 30–100 s; the match cuts run 137–306 s.
 // Mirrored by HL_MATCH_GATES in scripts/prebake-news.mjs — keep in sync.
 export type HighlightMatchGates = { homeFirst?: boolean; minSec?: number };
 const HIGHLIGHT_MATCH_GATES: Record<string, HighlightMatchGates> = {
   nations: { homeFirst: true, minSec: 300 },
+  top14: { homeFirst: true, minSec: 120 },
 };
 
 export function getHighlightMatchGates(sport: string): HighlightMatchGates | undefined {

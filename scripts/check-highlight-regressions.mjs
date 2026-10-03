@@ -554,6 +554,13 @@ check(
     !monitor.includes("usa.ncaa.m.1"),
 );
 check(
+  "prebaker's own channel search clears the league's match gates (home first, duration floor) like every other id",
+  prebake.includes("hlChannelSearchOfficial(key, c.channel, away, home, item.date, c.tokens, [prevExtended], week, gates)") &&
+    prebake.includes("const minSec = Math.max(channelSearchMinSec(channel), gates?.minSec ?? 0);") &&
+    prebake.includes("hlVideoMatchesTeams(videoId, away, home, homeFirst)") &&
+    prebake.includes("titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home) && homeFirstOk(title),"),
+);
+check(
   "prebaker bakes NCAA volleyball from each match's conference chain behind the volleyball token",
   prebake.includes('{ sport: "ncaavb",') &&
     prebake.includes('ncaavb: ["volleyball"]') &&

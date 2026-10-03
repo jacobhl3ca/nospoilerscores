@@ -76,6 +76,11 @@ const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"])
 // agree with the query, which is what separates the 9/24 and 9/25 cuts of the
 // same pair; an undated exhibition ("Robert Morris 8, Post 3") never matches.
 const AHA_CHANNEL = "atlantic hockey america";
+// "TOP 14 - Officiel" titles some match cuts "Match Summary" rather than
+// "Highlights" ("TOP 14 Season 2026-2027 - Round 4 - Match Summary: Stade
+// Toulousain - Montpellier Hérault Rugby", 220 s). See isStrictTop14Summary.
+const TOP14_CHANNEL = "top 14 - officiel";
+const TOP14_SUMMARY_RX = /\bsummary\b|\br[eé]sum[eé](?![a-z])/;
 const AHA_SCORELINE_RX = /^\s*\S.*?\s\d{1,2},\s\S.*?\s\d{1,2}(?:\s(?:\d?OT|SO))?\s-\s(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s\d{1,2},\s\d{4}\s*$/i;
 
 // A press conference is never a highlight, whatever else its title says. The
@@ -1292,6 +1297,19 @@ export default {
           // "Cal State" and "Cal Baptist" first.
           "pittsburgh": ["pittsburgh", "pitt"],
           "california": ["california", "cal"],
+          // Top 14 (2026-10-03): ESPN's club names vs. the "TOP 14 - Officiel"
+          // titles ("Section Paloise vs. Stade Rochelais Highlights", "USA
+          // Perpignan vs. Union Bordeaux-Bègles", "Stade Français Paris - LOU
+          // Rugby"). The other seven clubs' ESPN names are in their titles.
+          "bayonne": ["bayonne", "aviron bayonnais"],
+          "bordeaux begles": ["bordeaux begles", "bordeaux-begles", "union bordeaux-begles"],
+          "castres olympique": ["castres olympique", "castres"],
+          "clermont auvergne": ["clermont auvergne", "asm clermont", "clermont"],
+          "la rochelle": ["la rochelle", "stade rochelais", "rochelais"],
+          "lyon": ["lyon", "lou rugby"],
+          "montpellier herault": ["montpellier herault", "montpellier"],
+          "pau": ["pau", "section paloise", "paloise"],
+          "stade francais paris": ["stade francais paris", "stade francais"],
           // EPL — ESPN compact form ↔ club name(s) used in YouTube titles
           "nottm forest": ["nottm forest", "nottingham forest", "nottingham"],
           "man united": ["man united", "manchester united", "man utd"],
@@ -1723,12 +1741,23 @@ export default {
             preferChannelLower === AHA_CHANNEL &&
             queryHasSpecificTeams &&
             AHA_SCORELINE_RX.test(title);
+          // See TOP14_SUMMARY_RX. Strict + the channel + both teams; its try
+          // clips ("Essai de …", 30–100 s) carry neither word, and the
+          // 2-minute floor (HIGHLIGHT_MATCH_GATES in src/lib/youtube.ts)
+          // refuses them as well.
+          const isStrictTop14Summary =
+            strictChannelParam &&
+            isFromChannel &&
+            preferChannelLower === TOP14_CHANNEL &&
+            queryHasSpecificTeams &&
+            TOP14_SUMMARY_RX.test(titleLower);
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
             isStrictBareCflWeek ||
             isStrictAhaScoreline ||
+            isStrictTop14Summary ||
             roundOnlyTitleOk ||
             isStrictBareWnbaRecap ||
             isChessRoundBroadcast ||

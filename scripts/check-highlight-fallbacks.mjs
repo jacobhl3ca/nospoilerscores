@@ -105,6 +105,7 @@ const ESPN_PATHS = {
   nrl:          "/rugby-league/3/scoreboard",
   afl:          "/australian-football/afl/scoreboard",
   urc:          "/rugby/270557/scoreboard",
+  top14:        "/rugby/270559/scoreboard",
   // CFL (added 2026-09-13): NOT an ESPN path. ESPN stopped serving the CFL
   // after 2023, so fetchScoreboard reads this one from our own worker route
   // (theScore reshaped to the ESPN scoreboard — public/_worker.js).
@@ -173,6 +174,7 @@ const OFFICIAL_CHANNELS = {
   nrl: "NRL - National Rugby League",
   afl: "AFL",
   urc: "United Rugby Championship",
+  top14: "TOP 14 - Officiel",
 };
 
 // Mirrors COMPETITION_TITLE_TOKENS in src/lib/youtube.ts. Keep in sync.
@@ -186,6 +188,7 @@ const COMPETITION_TITLE_TOKENS = {
   laliga: ["laliga", "la liga"],
   ligue1: ["ligue 1"],
   nations: ["nations league"],
+  top14: ["top 14"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts (per
 // event: the round from the card's playoff note). Keep in sync.
@@ -218,6 +221,7 @@ const SECONDARY_CHANNELS = {
 // app sends and can count the OTHER leg of a pair as a hit.
 const MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
+  top14: { homeFirst: true, minSec: 120 },
 };
 
 const TENNIS_CHANNELS = new Set([
@@ -236,7 +240,7 @@ const HIGHLIGHT_BUFFER_HOURS = {
   ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3, facup: 3, nations: 3, ncaawsoc: 3, ncaamsoc: 3,
   // Rugby union: 80 minutes plus stoppages, so the same 3h window soccer uses.
   sixnations: 3, superrugby: 3, rugbywc: 3, nationschamp: 3,
-  nrl: 3, afl: 4, urc: 3,
+  nrl: 3, afl: 4, urc: 3, top14: 3,
 };
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5,
@@ -244,7 +248,7 @@ const REGULATION_PERIODS = {
   seriea: 2, bundesliga: 2, laliga: 2, ligue1: 2,
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2, facup: 2, nations: 2, ncaawsoc: 2, ncaamsoc: 2,
   sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,
-  nrl: 2, afl: 4, urc: 2,
+  nrl: 2, afl: 4, urc: 2, top14: 2,
 };
 
 // Matches TEAM_NAME_ALIASES in src/lib/youtube.ts. Keep in sync.

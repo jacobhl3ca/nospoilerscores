@@ -2637,8 +2637,11 @@ const HL_LEAGUES = [
   // for the strict probes (NRL 12/12, AFL 6/8, 0 wrong).
   { sport: "nrl",          path: "/rugby-league/3/scoreboard",                 channel: "NRL - National Rugby League" },
   { sport: "afl",          path: "/australian-football/afl/scoreboard",        channel: "AFL" },
-  // URC (added 2026-09-27, 8/8 strict). The other club competitions are dark.
+  // URC (added 2026-09-27, 8/8 strict). Top 14 (added 2026-10-03) behind the
+  // home-first + 2-minute gates (HL_MATCH_GATES). Premiership Rugby, the
+  // Challenge Cup and MLR stay dark.
   { sport: "urc",          path: "/rugby/270557/scoreboard",                   channel: "United Rugby Championship" },
+  { sport: "top14",        path: "/rugby/270559/scoreboard",                   channel: "TOP 14 - Officiel" },
   // CFL (added 2026-09-13). ESPN no longer serves the CFL, so `worker: true`
   // reads the slate from our own /api/cfl route (theScore, reshaped to the
   // ESPN scoreboard — see public/_worker.js) instead of site.api.espn.com.
@@ -2676,6 +2679,7 @@ const HL_COMPETITION_TOKENS = {
   ncaawh: ["women"],
   ncaawsoc: ["women's soccer", "sec soccer"],
   ncaamsoc: ["acc men's soccer"],
+  top14: ["top 14"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts. Sent per
 // EVENT: TSN titles the postseason by round with no year, and a playoff card
@@ -2705,6 +2709,7 @@ const HL_NFL_PRESEASON_TOKENS = ["preseason", "hall of fame"];
 // gate existed must not survive as the other leg.
 const HL_MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
+  top14: { homeFirst: true, minSec: 120 },
 };
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };
@@ -3530,13 +3535,13 @@ function hlSearchName(team) {
 // The first card that clears every gate an official id must clear, or null.
 // Feed cards carry no length, so theirs is read off the watch page — the same
 // cached read the upload-date gate makes.
-async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, compTokens, picks, minSec, week) {
+async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, compTokens, picks, minSec, week, homeFirst = false) {
   const titleTokens = channelSearchTitleTokens(channel);
   for (const { videoId, durationSec } of picks) {
     const sec = Number.isFinite(durationSec) ? durationSec : await fetchYtDurationSec(videoId);
     if ((Number.isFinite(sec) && sec < minSec)
       || !(await hlVideoMatchesChannel(videoId, channel))
-      || !(await hlVideoMatchesTeams(videoId, away, home))
+      || !(await hlVideoMatchesTeams(videoId, away, home, homeFirst))
       || !(await hlVideoMatchesComp(videoId, compTokens))
       || !(await hlVideoMatchesComp(videoId, titleTokens))
       || !(await hlVideoMatchesWeek(videoId, week))
@@ -3552,20 +3557,29 @@ async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, com
 }
 
 // The id this channel's uploads feed or own search page holds for this game,
-// gated, or null.
-async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTokens, exclude, week) {
+// gated, or null. `gates` (HL_MATCH_GATES) apply here as on every other id:
+// the home club named first, and the league's duration floor when it is above
+// the channel's own.
+async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTokens, exclude, week, gates) {
   const handle = channelSearchHandle(channel);
   const sport = key.split(":")[0];
   if (!HL_CS_ON || (!handle && !channelFeedId(channel)) || !channelSearchServesSport(channel, sport)) return null;
-  const minSec = channelSearchMinSec(channel);
+  const minSec = Math.max(channelSearchMinSec(channel), gates?.minSec ?? 0);
+  const homeFirst = !!gates?.homeFirst;
   const titleTokens = channelSearchTitleTokens(channel);
   // Gridiron: a card naming another week is a different meeting of the pair.
   const weekOk = (title) => {
     const titleWeek = week ? hlParseWeekFromTitle(title) : null;
     return titleWeek === null || titleWeek === week;
   };
+  const homeFirstOk = (title) => {
+    if (!homeFirst) return true;
+    const homeAt = hlTeamTitleIndex(title, home);
+    const awayAt = hlTeamTitleIndex(title, away);
+    return homeAt >= 0 && awayAt >= 0 && homeAt < awayAt;
+  };
   const pickOpts = {
-    titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home),
+    titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home) && homeFirstOk(title),
     compOk: (title) => titleHasCompToken(title, compTokens) && titleHasCompToken(title, titleTokens) && weekOk(title),
     gameMs: Date.parse(gameIso),
     exclude,
@@ -3576,7 +3590,7 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
   // the watch-page length check to drop a goal clip.
   const feed = await hlChannelFeed(channel);
   const feedPicks = pickChannelSearchCards(feed?.cards ?? [], { ...pickOpts, limit: 3 });
-  const fromFeed = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-FEED", key, channel, away, home, gameIso, compTokens, feedPicks, minSec, week);
+  const fromFeed = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-FEED", key, channel, away, home, gameIso, compTokens, feedPicks, minSec, week, homeFirst);
   if (fromFeed) {
     hlCs.feedHits++;
     return fromFeed;
@@ -3603,7 +3617,7 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
     hlCs.lastAt = Date.now();
   }
   state.asked[askKey] = Date.now();
-  const id = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-SEARCH", key, channel, away, home, gameIso, compTokens, pickChannelSearchCards(cards, pickOpts), minSec, week);
+  const id = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-SEARCH", key, channel, away, home, gameIso, compTokens, pickChannelSearchCards(cards, pickOpts), minSec, week, homeFirst);
   if (id) hlCs.hits++;
   return id;
 }
@@ -3967,7 +3981,7 @@ async function bakeGameHighlights() {
             ...fallbacks.map((fb) => ({ channel: fb.channel, tokens: officialTokensFor(fb) })),
           ];
           for (const c of channels) {
-            const id = await hlChannelSearchOfficial(key, c.channel, away, home, item.date, c.tokens, [prevExtended], week);
+            const id = await hlChannelSearchOfficial(key, c.channel, away, home, item.date, c.tokens, [prevExtended], week, gates);
             if (!id) continue;
             official = id;
             officialChannel = c.channel;

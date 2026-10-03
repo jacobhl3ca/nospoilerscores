@@ -76,6 +76,9 @@ export const CHANNEL_SEARCH_HANDLES = {
   // Robert Morris at Buffalo (9/26) to the 2019 meeting; its own search page
   // put the 9.26.26 cut first.
   "Get Some MACtion": "GetSomeMACtion",
+  // Top 14 (added 2026-10-03). Round 4 posted 49 try clips beside its 7
+  // match cuts, so the feed rolls past a Saturday's cuts within hours.
+  "TOP 14 - Officiel": "top14",
 };
 
 // A card title must carry one of these words on this channel's search page.
@@ -90,6 +93,10 @@ const TITLE_TOKENS_BY_CHANNEL = {
   "ACC Digital Network": ["highlight", "recap"],
   "Big 12 Conference": ["highlight", "recap"],
   "SEC": ["highlight", "recap"],
+  // Its try clips name both clubs ("TOP 14 - Essai de Antoine DUPONT (ST) -
+  // Stade Toulousain - Montpellier Hérault Rugby"); a match cut says
+  // "Highlights" or "Match Summary" (TOP14_SUMMARY_RX in public/_worker.js).
+  "TOP 14 - Officiel": ["highlight", "summary", "resume"],
 };
 
 export function channelSearchTitleTokens(channel) {
@@ -170,6 +177,7 @@ export const CHANNEL_FEED_IDS = {
   "ACC Digital Network": "UC0hy7TcR1gGD8nQBqrF2FaA",
   "Big 12 Conference": "UCLnfOCTbfqMy_3ah8OmTHEQ",
   "SEC": "UC60q_WUDde_NK-ze3frvtiA",
+  "TOP 14 - Officiel": "UCWrD2VhZdO-_W8QDBxiXmeg",
 };
 
 export function channelFeedId(channel) {
