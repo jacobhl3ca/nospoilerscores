@@ -424,6 +424,9 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   boxing: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-boxing.png",
   chess: "/chess.svg",
   poker: "/poker.svg",
+  // World Climbing's mark is a wordmark that does not read at 16px, so a
+  // local glyph in the chess/poker style.
+  climbing: "/climbing.svg",
   esports: "/esports.svg",
   // ESPN front page: the ESPN mark (same file as ESPN_BRAND_LOGO below), since
   // the column is ESPN's own picks.
@@ -495,6 +498,7 @@ export const LEAGUE_EMOJI: Partial<Record<Sport, string>> = {
   cricketintl: "🏏",
   chess: "♟️",
   poker: "♠️",
+  climbing: "🧗",
   esports: "🎮",
   boxing: "🥊",
   nascar: "🏁",
@@ -653,6 +657,9 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   // ESPN has no poker desk/league feed. Do not manufacture an "ESPN POKER"
   // card that can only return empty; the score/event view remains complete.
   if (sport === "poker") return [];
+  // Climbing has no ESPN desk either, and r/climbing is mostly outdoor photos,
+  // not World Cup news. No feed in v1, like poker.
+  if (sport === "climbing") return [];
   const logoUrl = LEAGUE_LOGO[sport];
   // ESPN has no CFL feed any more (its CFL endpoints froze in 2023), so an
   // "ESPN CFL" card could only ever be empty. r/CFL leads and theScore's CFL
@@ -714,7 +721,7 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "cricketintl", "cricket", "nrl", "afl",
   "sixnations", "rugbywc", "nationschamp", "rugbytest", "superrugby", "rugbychamp",
   "urc", "premrugby", "top14", "challengecup", "mlr",
-  "ufc", "boxing", "f1", "nascar", "indycar", "poker",
+  "ufc", "boxing", "f1", "nascar", "indycar", "poker", "climbing",
 ];
 
 // Col 3's default (no league picked): Reddit-first (Jacob 7/16) — r/sports leads,

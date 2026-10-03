@@ -2083,7 +2083,7 @@ export default function HomeContent({
     "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw", "ncaah", "cfl", "ncaawh", "ncaavb", "ufl", "ncaabase", "ncaasoft",
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricketintl", "cricket", "nrl", "afl",
     "urc", "premrugby", "top14", "challengecup", "mlr",
-    "chess", "poker", "esports",
+    "climbing", "chess", "poker", "esports",
     // ── soccer block, bottom ──
     "epl", "ucl", "uel", "uecl", "nations", "laliga", "seriea", "bundesliga", "ligue1",
     "mls", "ligamx", "nwsl", "efl", "libertadores", "saudi",

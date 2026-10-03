@@ -3,7 +3,7 @@
 // Both are deliberately absent from ALL_LEAGUES, so nothing that walks the catalog
 // (season windows, news feeds, prebake scripts) ever sees them — they exist as a
 // Sport only so a slot pref, a switcher row and a LeagueData can carry them.
-export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "ufl" | "nhl" | "ncaah" | "cfl" | "ncaawh" | "ncaavb" | "ncaawsoc" | "ncaamsoc" | "llws" | "ncaabase" | "ncaasoft" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "ligamx" | "nwsl" | "efl" | "libertadores" | "euro" | "afcon" | "saudi" | "uecl" | "facup" | "copadelrey" | "dfbpokal" | "nations" | "cricket" | "cricketintl" | "sixnations" | "rugbywc" | "rugbychamp" | "superrugby" | "rugbytest" | "nationschamp" | "premrugby" | "urc" | "top14" | "challengecup" | "mlr" | "nrl" | "afl" | "f1" | "nascar" | "indycar" | "ufc" | "boxing" | "chess" | "poker" | "esports" | "top" | "best";
+export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "ufl" | "nhl" | "ncaah" | "cfl" | "ncaawh" | "ncaavb" | "ncaawsoc" | "ncaamsoc" | "llws" | "ncaabase" | "ncaasoft" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "ligamx" | "nwsl" | "efl" | "libertadores" | "euro" | "afcon" | "saudi" | "uecl" | "facup" | "copadelrey" | "dfbpokal" | "nations" | "cricket" | "cricketintl" | "sixnations" | "rugbywc" | "rugbychamp" | "superrugby" | "rugbytest" | "nationschamp" | "premrugby" | "urc" | "top14" | "challengecup" | "mlr" | "nrl" | "afl" | "f1" | "nascar" | "indycar" | "ufc" | "boxing" | "chess" | "poker" | "climbing" | "esports" | "top" | "best";
 
 export interface Game {
   id: string;
@@ -237,7 +237,9 @@ export interface LeagueEventCard {
   // "f1" is the single-event RACE layout (shared by F1/NASCAR/IndyCar), "ufc"
   // the fight-card layout. Boxing, chess, and poker reuse the single-event
   // shape; poker is a curated multi-day major or a dated TV final table.
-  kind: "f1" | "ufc" | "boxing" | "chess" | "poker";
+  // "climbing" is one World Cup day: a row per round (ClimbRound), like UFC's
+  // card per bout.
+  kind: "f1" | "ufc" | "boxing" | "chess" | "poker" | "climbing";
   title: string;            // "Spanish Grand Prix" / "UFC Fight Night: Kape vs. Horiguchi"
   subtitle?: string;        // circuit + city (F1) / venue city (UFC)
   // Progressively shorter renderings of `title` / `subtitle`, longest first and
@@ -288,6 +290,37 @@ export interface LeagueEventCard {
   chessTimeControl?: string;// "25 min + 10 sec / move"
   chessPlayers?: string[];  // ["Caruana", "Keymer", …] — the draw, not the table
   chessTier?: number;       // Lichess tier; 5 = marquee, 4 = strong international
+  // ── Climbing (kind: "climbing") ──
+  // The rounds on this ET day, in start order. No athlete names, ranks, scores
+  // or heights anywhere: the worker reduces a finished final to one 0-100
+  // number (`rating`) and sends nothing else from the results.
+  climbRounds?: ClimbRound[];
+  // How many rounds of this day are hidden because they have no stream
+  // (qualifications without a stream URL). Shown as a footer line.
+  climbNotStreamed?: number;
+  // World Climbing's own "where to watch" article for the event, when it is
+  // published (Europe = Eurosport / HBO Max). Undefined until it exists.
+  climbWhereToWatch?: string;
+  // Set on the copy of the card that a tapped round passes to the detail
+  // sheet, so the sheet leads with that round.
+  climbFocus?: string;
+}
+
+// One round of a World Cup day, one category. "Men's & Women's Lead Final" in
+// the calendar becomes two rows with the same stream URL.
+export interface ClimbRound {
+  id: string;
+  label: string;                 // "Men's Boulder Final"
+  kind: "qualification" | "semi-final" | "final";
+  discipline: "boulder" | "lead" | "speed";
+  category: "men" | "women";
+  startsAt: string;              // ISO with offset
+  endsAt: string | null;
+  provisional: boolean;          // schedule_status is not "confirmed"
+  streamUrl: string | null;      // World Climbing YouTube live/replay
+  blockedRegions: string[];      // ISO country codes where that stream is blocked
+  state: "pre" | "in" | "post";
+  rating: number | null;         // finals only, once finished
 }
 
 // What an event-tile feed (boxing / chess / poker) returns. There are THREE

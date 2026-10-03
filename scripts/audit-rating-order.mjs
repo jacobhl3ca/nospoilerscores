@@ -11,7 +11,7 @@ const jiti = createJiti(import.meta.url);
 const { fetchGames } = await jiti.import("../src/lib/espn.ts");
 
 const BASE = "https://site.web.api.espn.com/apis/site/v2/sports";
-const SKIP = new Set(["chess", "boxing", "poker", "esports", "f1", "nascar", "indycar", "ufc", "golf", "tennis"]);
+const SKIP = new Set(["chess", "boxing", "poker", "climbing", "esports", "f1", "nascar", "indycar", "ufc", "golf", "tennis"]);
 const SAMPLE_DAYS = 4;
 const VERBOSE = process.argv.includes("--verbose");
 

@@ -74,6 +74,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
     guides: [{ href: "/ufc-results-without-spoilers", label: "UFC results without spoilers" }],
   },
   {
+    sport: "Climbing",
+    guides: [{ href: "/climbing-replays-without-spoilers", label: "Climbing World Cup replays without spoilers" }],
+  },
+  {
     sport: "Cricket",
     guides: [{ href: "/cricket-highlights-without-spoilers", label: "Cricket highlights without spoilers" }],
   },
