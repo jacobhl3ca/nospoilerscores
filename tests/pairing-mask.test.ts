@@ -126,8 +126,19 @@ test("NFL: Wild Card weekend and the Pro Bowl show, the Divisional round on mask
   assert.equal(pairingSpoilsEarlierRound(g("Super Bowl LX")), true);
 });
 
+test("WNBA: the first round and the Commissioner's Cup final show, the semifinals on mask", () => {
+  const g = (playoffLabel: string | null) => ({ sport: "wnba", isPlayoff: true, playoffLabel });
+  assert.equal(pairingSpoilsEarlierRound(g("First Round - Game 2")), false);
+  assert.equal(pairingSpoilsEarlierRound(g("Semifinals - Game 1")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("WNBA Semifinals - Game 4")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("WNBA Finals - Game 2")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("WNBA Commissioner's Cup Championship")), false);
+  assert.equal(pairingSpoilsEarlierRound(g(null)), true);
+  assert.equal(pairingSpoilsEarlierRound({ sport: "wnba", isPlayoff: false, playoffLabel: "Semifinals - Game 1" }), false);
+});
+
 test("leagues with no entry are untouched", () => {
-  assert.equal(pairingSpoilsEarlierRound({ sport: "wnba", isPlayoff: true, playoffLabel: null }), false);
+  assert.equal(pairingSpoilsEarlierRound({ sport: "mls", isPlayoff: true, playoffLabel: null }), false);
   assert.equal(pairingSpoilsEarlierRound({ sport: "ncaam", isPlayoff: true, playoffLabel: "NCAA Men's Basketball Championship - Final Four" }), false);
 });
 
