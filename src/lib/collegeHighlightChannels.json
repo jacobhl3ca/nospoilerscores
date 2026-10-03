@@ -390,5 +390,15 @@
     "maskTitle": [
       "LIGA BBVA MX"
     ]
+  },
+  "uel": {
+    "titleTokens": [
+      "europa league"
+    ],
+    "always": [
+      "TUDN USA"
+    ],
+    "conferences": {},
+    "networks": []
   }
 }

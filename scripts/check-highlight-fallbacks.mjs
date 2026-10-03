@@ -222,6 +222,7 @@ const SECONDARY_CHANNELS = {
 const MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
+  uel: { homeFirst: true, minSec: 300 },
 };
 
 const TENNIS_CHANNELS = new Set([

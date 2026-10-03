@@ -87,6 +87,10 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // stays on as the strict 2nd slot (SECONDARY_CHANNELS) in case an older tie
   // or a stray upload still lives there. ⚠️ UCL is NOT changed here — probe it
   // the same way on its own next matchday before touching `ucl`.
+  // 2026-10-03: TUDN USA (Spanish commentary) is the fallback when CBS skips a
+  // game (the uel chain in collegeHighlightChannels.json), behind the
+  // home-first + 5-minute gates (HIGHLIGHT_MATCH_GATES). MD1 with the gates:
+  // CBS 18/18 once four clubs were aliased in public/_worker.js, TUDN 14/18.
   uel: "CBS Sports Golazo - Europe",
   // Serie A: Paramount+ / CBS holds the US rights, same as UCL/UEL, and the
   // same Golazo channel posts the per-match Extended Highlights.
@@ -824,11 +828,17 @@ export function cflPlayoffTitleTokens(playoffLabel?: string | null): string[] {
 // first (14/14 cuts, rounds 3 and 4, Sep 19–27). Its try clips ("TOP 14 - Essai de
 // Antoine DUPONT (ST) - Stade Toulousain - Montpellier Hérault Rugby") name
 // both clubs and run 30–100 s; the match cuts run 137–306 s.
+//
+// uel: knockout ties play two legs under undated titles. CBS Sports Golazo -
+// Europe and TUDN USA both name the home club first (CBS 18/18, TUDN 14/14 on
+// MD1, 2026-09-16/17). CBS's cuts run 507–642 s, TUDN's 743–1,523 s, and
+// TUDN's goal clips 96–115 s, so the same 5-minute floor as nations.
 // Mirrored by HL_MATCH_GATES in scripts/prebake-news.mjs — keep in sync.
 export type HighlightMatchGates = { homeFirst?: boolean; minSec?: number };
 const HIGHLIGHT_MATCH_GATES: Record<string, HighlightMatchGates> = {
   nations: { homeFirst: true, minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
+  uel: { homeFirst: true, minSec: 300 },
 };
 
 export function getHighlightMatchGates(sport: string): HighlightMatchGates | undefined {

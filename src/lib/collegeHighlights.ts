@@ -89,6 +89,16 @@
 //     ("Birmingham 2 Boro 2"), so every club channel is in `maskTitle`.
 //   ligamx: LIGA BBVA MX, the league's own channel, behind TUDN USA. Its
 //     titles print the result too ("JUÁREZ 2-0 TIGRES J9 AP26").
+//   uel (added 2026-10-03, NOT searchOnly): TUDN USA (Spanish commentary)
+//     after CBS Sports Golazo - Europe, live and in the bake, like its
+//     Nations League slot. Its titles are clean ("HIGHLIGHTS - Juventus vs
+//     NEC | UEFA Europa League - League Phase | TUDN") and name the home club
+//     first; the "europa league" token is per link because CBS titles read
+//     "UEL League Phase MD1". Matchday 1 (9/16–17), probed 2026-10-03
+//     with the gates: CBS 18/18 (four only through the club aliases in
+//     public/_worker.js), TUDN 14/18, 0 wrong on either. The home-first +
+//     5-minute gates (HIGHLIGHT_MATCH_GATES in youtube.ts) drop TUDN's goal
+//     clips.
 //
 // Two ncaaf gaps closed 2026-09-27 (Sep 26 slate, both ESPN+ games that ESPN
 // College Football skipped):

@@ -1359,6 +1359,24 @@ export default {
           "københavn": ["københavn", "kobenhavn", "copenhagen", "fc copenhagen"],
           "real madrid": ["real madrid", "madrid"],
           "barcelona": ["barcelona", "barça", "barca", "fc barcelona"],
+          // UEL (2026-10-03): the four Matchday 1 games CBS Sports Golazo -
+          // Europe and TUDN USA both cut but no lookup matched, ESPN's name
+          // first, then the CBS and TUDN title forms ("Bayer Leverkusen vs.
+          // Celje", "Hapoel Beer-Sheva", "H Beer Sheva", "Lillestrøm",
+          // "Union Saint-Gilloise"), and TUDN's Spanish or short forms of five
+          // more clubs ("Besiktas vs Marsella", "Omonia vs Celta de Vigo",
+          // "Levski Sofia vs Salzburg", "Sturm vs Rennes", "OFI vs
+          // Hoffenheim"). TUDN's own titles are the Spanish ones; its search
+          // cards show an English translation.
+          "nk celje": ["nk celje", "celje"],
+          "hapoel be'er": ["hapoel be'er", "hapoel be'er sheva", "hapoel beer sheva", "hapoel beer-sheva", "h. beer sheva", "beer sheva", "beer-sheva"],
+          "lillestrom": ["lillestrom", "lillestrøm", "lillestrom sk", "lillestrøm sk"],
+          "union sg": ["union sg", "union st.-gilloise", "union saint-gilloise", "union st-gilloise", "union saint gilloise", "royale union saint-gilloise"],
+          "marseille": ["marseille", "olympique de marseille", "marsella"],
+          "celta vigo": ["celta vigo", "celta de vigo"],
+          "rb salzburg": ["rb salzburg", "red bull salzburg", "salzburg"],
+          "sturm graz": ["sturm graz", "sk sturm graz", "sturm"],
+          "ofi crete": ["ofi crete", "ofi"],
           // League title forms the FotMob step rejected as "teams" on the
           // 2026-09-19/20 weekend: Serie A "ROMA-INTER", Bundesliga "1. FC KÖLN",
           // Sheffield United's own channel, Portsmouth's "Pompey v Blackburn",

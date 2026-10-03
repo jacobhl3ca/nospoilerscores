@@ -2710,6 +2710,7 @@ const HL_NFL_PRESEASON_TOKENS = ["preseason", "hall of fame"];
 const HL_MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
+  uel: { homeFirst: true, minSec: 300 },
 };
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };
