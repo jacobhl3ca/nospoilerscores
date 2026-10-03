@@ -43,8 +43,8 @@ export default function DocFooter({ route }: { route: string }) {
         ))}
       </nav>
       {/* Legal line (10/3): the same sentence the About page carries, left out
-          on /about itself, where it already sits just above. */}
-      {route !== "about" && (
+          on /about and /contact, where it already sits just above. */}
+      {route !== "about" && route !== "contact" && (
         <p className="mt-3 text-xs" style={muted}>
           HideScore is not affiliated with, endorsed by, or sponsored by any league, team or broadcaster.
         </p>
