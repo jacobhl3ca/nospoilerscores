@@ -22,7 +22,8 @@ import {
 } from "./lib/fotmob.mjs";
 import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
-import { pickEspnGameClip } from "./lib/espn-clip.mjs";
+import { pickEspnGameClip, attachEspnVideoClips } from "./lib/espn-clip.mjs";
+import { mergeVideos, orderVideos } from "./lib/video-order.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
 import { etServiceYmd, mergeEspnFrontSnapshot, parseFrontPageFeedIds, trimEspnHeader } from "./lib/espn-front.mjs";
 
@@ -1313,7 +1314,48 @@ async function fetchESPNTopVideos() {
       }
     }
   }
-  return await persistVideos("espn-videos", scraped, icymi?.id);
+  let prior = null;
+  try { prior = JSON.parse(await readFile(`${OUT_DIR}/espn-videos.json`, "utf8")); } catch { /* first run */ }
+  const merged = await persistVideos("espn-videos", scraped, icymi?.id);
+  return await espnVideoClips(merged, prior?.items);
+}
+
+// ── ESPN Videos: a direct mp4 per item, so the modal plays it ────────────
+// See attachEspnVideoClips in scripts/lib/espn-clip.mjs. Mini bake only (off
+// under GitHub Actions, which still carries clips the prior file has);
+// ESPN_VIDEO_PLAY=0 turns it off and drops every carried videoUrl. ≤8 clip
+// requests per bake, 1 per second; an answered id is never asked again.
+const ESPN_VIDEO_PLAY_OFF = process.env.ESPN_VIDEO_PLAY === "0";
+const ESPN_VIDEO_PLAY_ON = !ESPN_VIDEO_PLAY_OFF && process.env.GITHUB_ACTIONS !== "true";
+// Outside public/news for the same reason as HL_FOTMOB_STATE_PATH.
+const ESPN_VIDEO_STATE_PATH = ".bake-state/espn-video-clip.json";
+const ESPN_VIDEO_STATE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+
+async function espnVideoClips(items, priorItems) {
+  let saved = null;
+  try { saved = JSON.parse(await readFile(ESPN_VIDEO_STATE_PATH, "utf8")); } catch { /* first run */ }
+  const state = { clips: saved?.clips && typeof saved.clips === "object" ? saved.clips : {} };
+  const prior = new Map((Array.isArray(priorItems) ? priorItems : []).map((i) => [i.id, i]));
+  const { items: out, requests } = await attachEspnVideoClips(items, {
+    on: ESPN_VIDEO_PLAY_ON,
+    off: ESPN_VIDEO_PLAY_OFF,
+    prior,
+    state,
+    fetchClip: async (id) => {
+      const res = await fetch(`https://api-app.espn.com/v1/video/clips/${encodeURIComponent(id)}`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+      return res.ok ? await res.json() : null;
+    },
+  });
+  console.log(`ESPN-VIDEO-CLIP-REQUESTS n=${requests} playable=${out.filter((i) => i.videoUrl).length}/${out.length}${ESPN_VIDEO_PLAY_OFF ? " (off)" : ""}`);
+  const cutoff = Date.now() - ESPN_VIDEO_STATE_TTL_MS;
+  for (const [k, v] of Object.entries(state.clips)) if (!(v?.at > cutoff)) delete state.clips[k];
+  try {
+    await mkdir(dirname(ESPN_VIDEO_STATE_PATH), { recursive: true });
+    await writeFile(ESPN_VIDEO_STATE_PATH, JSON.stringify(state));
+  } catch (e) {
+    console.warn(`ESPN-VIDEO-CLIP state not saved: ${e?.message || e}`);
+  }
+  return out;
 }
 
 function scrapeESPNTopVideosFromHtml(html, icymi) {
@@ -1404,17 +1446,8 @@ async function persistVideos(name, fresh, pinnedId) {
     name === "espn-videos"
       ? carryRaw.filter((i) => !isEspnAnalystTake(i.headline || ""))
       : carryRaw;
-  const byId = new Map();
-  // Seed with carry so unseen items survive the merge; fresh items overwrite
-  // (so headline/description/imageUrl edits propagate) while preserving the
-  // earliest firstSeenAt we've ever recorded for that id.
-  for (const item of carry) {
-    byId.set(item.id, { ...item, firstSeenAt: item.firstSeenAt || nowMs });
-  }
-  for (const item of fresh) {
-    const prior = byId.get(item.id);
-    byId.set(item.id, { ...item, firstSeenAt: prior?.firstSeenAt || item.firstSeenAt || nowMs });
-  }
+  // Seed with carry so unseen items survive the merge.
+  const byId = mergeVideos(carry, fresh, nowMs);
   // Repair carry-forward items written before commit ce??? — earlier scrapes
   // captured a sibling-story href as articleUrl on some videos (SGA, Rocky).
   // The id is the canonical clip id, so rebuild articleUrl from it for the
@@ -1426,15 +1459,8 @@ async function persistVideos(name, fresh, pinnedId) {
       }
     }
   }
-  // Order: newest big-format video first, ICYMI second, then the rest by
-  // firstSeenAt ascending so morning videos anchor the body of the list.
-  const all = [...byId.values()];
-  const pinned = pinnedId ? all.filter((i) => i.id === pinnedId) : [];
-  const rest = all
-    .filter((i) => i.id !== pinnedId)
-    .sort((a, b) => (a.firstSeenAt || 0) - (b.firstSeenAt || 0));
-  const ordered = rest.length > 0 ? [rest[0], ...pinned, ...rest.slice(1)] : pinned;
-  return ordered.slice(0, 10);
+  // Order: newest first, ICYMI second, rest newest-first.
+  return orderVideos([...byId.values()], pinnedId);
 }
 
 // ── Reddit top posts (per-league + general /r/sports) ────────────

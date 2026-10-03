@@ -1455,21 +1455,18 @@ export default function HomeContent({
     if (!silent) setLoading(true);
     setError(false);
     // Watchdog lifecycle across fetchData's five concurrent callers, all sharing
-    // one watchdogRef slot. Capture THIS call's timer locally so the finally can
-    // tell whether the shared ref still points at our timer or a newer call's.
-    // Only a non-silent call owns a watchdog: clear the previous one and install
-    // ours here, guarded by !silent so a silent poll can't clear a visible load's
-    // watchdog and then install no replacement (that left the skeleton with no
-    // safety net).
-    let myWatchdog: ReturnType<typeof setTimeout> | null = null;
+    // one watchdogRef slot. Only a non-silent call owns a watchdog: clear the
+    // previous one and install ours here, guarded by !silent so a silent poll
+    // can't clear a visible load's watchdog and then install no replacement
+    // (that left the skeleton with no safety net). The newest call clears it
+    // in the finally below.
     if (!silent) {
       if (watchdogRef.current) clearTimeout(watchdogRef.current);
-      myWatchdog = setTimeout(() => {
+      watchdogRef.current = setTimeout(() => {
         watchdogRef.current = null;
         setLoading(false);
         setError(true);
       }, 40_000);
-      watchdogRef.current = myWatchdog;
     }
     const firstPull = firstPullRef.current;
     firstPullRef.current = false;
@@ -1527,12 +1524,19 @@ export default function HomeContent({
       setLeagues([]);
       setError(true);
     } finally {
-      // Clear the shared watchdog only if it's still OURS. A newer non-silent
-      // fetch may have replaced it while we awaited; cancelling that call's timer
-      // (the old bug) would defeat the very safety net it just installed, so an
-      // earlier call resolving must leave the latest call's watchdog running.
-      if (myWatchdog && watchdogRef.current === myWatchdog) { clearTimeout(myWatchdog); watchdogRef.current = null; }
-      if (!silent) setLoading(false);
+      // Only the newest pull ends the load, silent or not. A superseded call
+      // must leave the watchdog and skeleton alone: cancelling a newer call's
+      // timer (the old bug) defeats its safety net, and dropping the skeleton
+      // while the newest pull is still out painted an empty board. On first
+      // load the isWide flip fires a silent pull that supersedes the visible
+      // one, so the news view painted Top news, then jumped to the league
+      // columns when the silent pull landed (Jacob 10/2). The newest call
+      // clears whichever watchdog is set; a stale visible call's watchdog
+      // keeps running until then, so a hung newest pull still hits it.
+      if (myReq === reqSeqRef.current) {
+        if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+        setLoading(false);
+      }
     }
   }, [showSavedBoard]);
 
@@ -2482,7 +2486,7 @@ export default function HomeContent({
     { value: "topvideos", label: "Top videos" },
     { value: "reddit", label: "Reddit" },
     { value: "espn", label: "ESPN" },
-    { value: "homepage", label: "Homepage" },
+    { value: "homepage", label: "League sites" },
   ];
   const orderedNewsFilterOptions = applyOrder(
     NEWS_FILTER_OPTIONS.map((o) => ({ ...o, label: o.value })),
@@ -3647,7 +3651,13 @@ export default function HomeContent({
             </p>
           </section>
         )}
-        {showNews ? (() => {
+        {/* News columns derive from the board's leagues, which start empty.
+            Until the first board load lands, show the skeleton instead: with
+            no leagues every mirror is empty and column 3 paints Top news, then
+            the layout jumps to league columns ~1.5 s later (Jacob 10/2). Both
+            conditions: a refresh poll keeps the news up, and an offline or
+            failed load (loading false, no leagues) still falls through to it. */}
+        {showNews && !(loading && leagues.length === 0) ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
               label: c.label,
@@ -4174,7 +4184,7 @@ export default function HomeContent({
           // they're aria-hidden and only the sr-only text is voiced (WCAG 4.1.3,
           // matching the role=status pattern in FeedbackBox / SettingsPanel).
           <div role="status" aria-live="polite" className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-            <span className="sr-only">Loading games…</span>
+            <span className="sr-only">{showNews ? "Loading news…" : "Loading games…"}</span>
             {Array.from({ length: slotCount }, (_, i) => i + 1).map((i) => (
               <div key={i} aria-hidden="true" className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>

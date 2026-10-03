@@ -44,3 +44,64 @@ export function pickEspnGameClip(videos, isScoreSpoiler) {
     reason: "ok",
   };
 }
+
+// ── ESPN Videos feed: play the clip in our modal ─────────────────────────
+// The col-3 ESPN Videos items are scraped from espn.com with no stream, so the
+// modal showed a still and "Open on ESPN". ESPN's app API
+// (api-app.espn.com/v1/video/clips/<id>, no auth, verified 2026-10-01) lists
+// the same direct mp4 on espnmedia-cdn.akamaized.net as the La Liga package.
+// mp4 only: the HLS entries sit on a different, signed host.
+
+// { url, sec? } for one clip-API payload, or null: no video, a different id,
+// a premium (ESPN+) clip, or no akamaized mp4.
+export function pickEspnVideoClip(payload, id) {
+  const v = Array.isArray(payload?.videos) ? payload.videos[0] : null;
+  if (!v || v.premium === true) return null;
+  if (id != null && v.id != null && String(v.id) !== String(id)) return null;
+  const url = espnVideoMp4(v);
+  if (!url) return null;
+  const sec = Number(v.duration);
+  return { url, ...(Number.isFinite(sec) && sec > 0 ? { sec: Math.round(sec) } : {}) };
+}
+
+// Give each ESPN Videos item its videoUrl + durationSec. A clip is asked at
+// most once: the prior feed file (by id) and the state's answered ids
+// (hit or miss) are read first. Only an unknown id costs a request, `gapMs`
+// apart and at most `max` per call. A failed request is not recorded, so the
+// next bake asks again.
+//   off    → every videoUrl is dropped (the ESPN_VIDEO_PLAY=0 switch).
+//   on     → false still carries known clips but asks nothing new.
+//   prior  → Map id → item from the last written feed.
+//   state  → { clips: { [id]: { at, url?, sec? } } }, updated in place.
+//   fetchClip(id) → the API payload, or null on any failure.
+export async function attachEspnVideoClips(items, { on, off, prior, state, fetchClip, max = 8, gapMs = 1000, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+  let requests = 0;
+  let lastAt = 0;
+  const out = [];
+  for (const item of items) {
+    const bare = { ...item };
+    delete bare.videoUrl;
+    delete bare.durationSec;
+    if (off || !/^\d+$/.test(String(item.id))) { out.push(bare); continue; }
+    const carried = prior?.get(item.id);
+    let clip = null;
+    if (carried?.videoUrl && MP4_HOST_RX.test(carried.videoUrl)) {
+      clip = { url: carried.videoUrl, ...(Number.isFinite(carried.durationSec) ? { sec: carried.durationSec } : {}) };
+    } else if (state.clips[item.id]) {
+      const known = state.clips[item.id];
+      clip = known.url && MP4_HOST_RX.test(known.url) ? known : null;
+    } else if (on && requests < max) {
+      const wait = lastAt + gapMs - now();
+      if (wait > 0) await sleep(wait);
+      requests++;
+      const payload = await fetchClip(item.id).catch(() => null);
+      lastAt = now();
+      if (payload) {
+        clip = pickEspnVideoClip(payload, item.id);
+        state.clips[item.id] = { at: now(), ...(clip ?? {}) };
+      }
+    }
+    out.push(clip ? { ...bare, videoUrl: clip.url, ...(clip.sec ? { durationSec: clip.sec } : {}) } : bare);
+  }
+  return { items: out, requests };
+}
