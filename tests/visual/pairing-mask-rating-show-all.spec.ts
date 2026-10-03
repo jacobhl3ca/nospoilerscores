@@ -2,6 +2,8 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 
 // Covered playoff cards (src/lib/pairingMask.ts) keep their rating once live or
 // final, and a column with 2+ covers gets one "Show all teams" (Jacob 9/30).
+// A tap is remembered per matchup (Jacob 10/2): a new page in the same browser
+// opens it, a new browser does not, and a TBD card is for this visit only.
 // Four Division Series Game 1s on Oct 3, shaped like ESPN's listing that day
 // ("NLDS - Game 1" in notes; see tests/pairing-mask.test.ts).
 
@@ -15,7 +17,7 @@ const SERIES: { id: string; label: string; away: Side; home: Side }[] = [
 ];
 const TEAM_TEXT = new RegExp(`${SERIES.flatMap((s) => [s.away.name, s.home.name]).join("|")}|\\b(?:${SERIES.flatMap((s) => [s.away.abbr, s.home.abbr]).join("|")})\\b`);
 
-function event(s: (typeof SERIES)[number], i: number, state: State) {
+function event(s: { id: string; label: string; away: Side; home: Side }, i: number, state: State) {
   const iso = `2026-10-03T${String(17 + i * 2).padStart(2, "0")}:08Z`;
   const type = state === "pre"
     ? { name: "STATUS_SCHEDULED", state: "pre", completed: false, detail: "Sat, October 3rd at 1:08 PM EDT", shortDetail: "10/3 - 1:08 PM EDT" }
@@ -62,7 +64,7 @@ async function openBoard(page: Page, events: unknown[]) {
 const covers = (page: Page) => page.locator("[data-pairing-mask]");
 const revealAll = (page: Page) => page.getByTestId("pairing-reveal-all");
 const badge = '[role="img"][aria-label^="Worth-watching rating: "]';
-const revealed = (page: Page, s: (typeof SERIES)[number]) => page.getByRole("button", { name: new RegExp(`${s.away.name} at ${s.home.name}`) });
+const revealed = (page: Page, s: { away: Side; home: Side }) => page.getByRole("button", { name: new RegExp(`${s.away.name} at ${s.home.name}`) });
 
 for (const width of [390, 1440]) {
   test.describe(`${width}px`, () => {
@@ -99,7 +101,7 @@ for (const width of [390, 1440]) {
       expect(await height(SERIES[1].id)).toBe(await height(SERIES[3].id));
     });
 
-    test("one Show teams opens one card; Show all teams opens the rest for this visit", async ({ page, browser }) => {
+    test("one Show teams opens one card; Show all teams opens the rest; a new browser is covered", async ({ page, browser }) => {
       await openBoard(page, SERIES.map((s, i) => event(s, i, "post")));
       await expect(covers(page)).toHaveCount(4, { timeout: 30_000 });
 
@@ -118,6 +120,64 @@ for (const width of [390, 1440]) {
       await expect(covers(page)).toHaveCount(0);
 
       await expectNewVisitCovers(browser, width);
+    });
+
+    test("a Show teams tap stays open on a new page; another matchup stays covered", async ({ page, context }) => {
+      await openBoard(page, SERIES.map((s, i) => event(s, i, "post")));
+      await expect(covers(page)).toHaveCount(4, { timeout: 30_000 });
+      await page.locator(`[data-pairing-mask="${SERIES[0].id}"]`).getByRole("button", { name: /^Show teams for the / }).click();
+      await expect(revealed(page, SERIES[0])).toBeVisible();
+
+      const next = await context.newPage();
+      await openBoard(next, SERIES.map((s, i) => event(s, i, "post")));
+      await expect(revealed(next, SERIES[0])).toBeVisible({ timeout: 30_000 });
+      await expect(covers(next)).toHaveCount(3);
+      await expect(next.locator(`[data-pairing-mask="${SERIES[1].id}"]`)).toBeVisible();
+
+      // Game 2 of the same series, home and away swapped, opens too.
+      const s0 = SERIES[0];
+      const game2 = { id: "401900011", label: "NLDS - Game 2", away: s0.home, home: s0.away };
+      const third = await context.newPage();
+      await openBoard(third, [event(game2, 0, "post"), event(SERIES[1], 1, "post")]);
+      await expect(revealed(third, game2)).toBeVisible({ timeout: 30_000 });
+      await expect(covers(third)).toHaveCount(1);
+    });
+
+    test("Show all teams stays open on a new page", async ({ page, context }) => {
+      await openBoard(page, SERIES.map((s, i) => event(s, i, "post")));
+      await expect(covers(page)).toHaveCount(4, { timeout: 30_000 });
+      await revealAll(page).click();
+      await expect(covers(page)).toHaveCount(0);
+
+      const next = await context.newPage();
+      await openBoard(next, SERIES.map((s, i) => event(s, i, "post")));
+      for (const s of SERIES) await expect(revealed(next, s)).toBeVisible({ timeout: 30_000 });
+      await expect(covers(next)).toHaveCount(0);
+      await expect(revealAll(next)).toHaveCount(0);
+    });
+
+    test("a reveal in one tab opens the same matchup in another open tab", async ({ page, context }) => {
+      await openBoard(page, SERIES.map((s, i) => event(s, i, "post")));
+      const other = await context.newPage();
+      await openBoard(other, SERIES.map((s, i) => event(s, i, "post")));
+      await expect(covers(other)).toHaveCount(4, { timeout: 30_000 });
+      await expect(covers(page)).toHaveCount(4, { timeout: 30_000 });
+      await page.locator(`[data-pairing-mask="${SERIES[2].id}"]`).getByRole("button", { name: /^Show teams for the / }).click();
+      await expect(revealed(other, SERIES[2])).toBeVisible();
+      await expect(covers(other)).toHaveCount(3);
+    });
+
+    test("a TBD card opens for this visit only", async ({ page, context }) => {
+      const tbd = { id: "401900021", label: "NLDS - Game 1", away: { id: "-1", name: "TBD", abbr: "TBD" }, home: SERIES[0].home };
+      await openBoard(page, [event(tbd, 0, "pre")]);
+      await expect(covers(page)).toHaveCount(1, { timeout: 30_000 });
+      await covers(page).getByRole("button", { name: /^Show teams for the / }).click();
+      await expect(covers(page)).toHaveCount(0);
+      expect(await page.evaluate(() => localStorage.getItem("hs:pairing-revealed-v2"))).toBeNull();
+
+      const next = await context.newPage();
+      await openBoard(next, [event(tbd, 0, "pre")]);
+      await expect(covers(next)).toHaveCount(1, { timeout: 30_000 });
     });
 
     test("a single covered game gets no Show all teams", async ({ page }) => {

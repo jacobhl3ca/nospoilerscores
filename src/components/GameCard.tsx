@@ -14,7 +14,7 @@ import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/w
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
-import { revealPairings, useHiddenPairingIds, usePairingHidden } from "@/lib/pairingMask";
+import { revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/pairingMask";
 import { shortenPlayoffLabel } from "@/lib/playoffSubtitle";
 import { shouldShowRating } from "@/lib/ratingGate";
 import { useWatchQueue } from "@/components/WatchQueueContext";
@@ -351,18 +351,18 @@ export default function GameCard(props: GameCardProps) {
 // One tap opens every covered card in a column (Jacob 9/30): an MLB postseason
 // day holds up to four covered games, a tap each for about a month. Shown only
 // for 2 or more covers; a lone cover's own "Show teams" is enough. Same quiet
-// style as that button, and the same per-visit rule.
+// style as that button, and the same rule: each matchup stays open after.
 export function PairingRevealAll({ games, className = "" }: { games: Game[]; className?: string }) {
-  const hiddenIds = useHiddenPairingIds(games);
-  if (hiddenIds.length < 2) return null;
+  const hiddenGames = useHiddenPairingGames(games);
+  if (hiddenGames.length < 2) return null;
   return (
     <button
       type="button"
-      onClick={() => revealPairings(hiddenIds)}
+      onClick={() => revealPairings(hiddenGames)}
       className={`w-full text-xs rounded px-2 py-1 cursor-pointer transition-colors whitespace-nowrap ${className}`}
       style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
       data-testid="pairing-reveal-all"
-      aria-label={`Show teams for all ${hiddenIds.length} covered games (reveals who advanced)`}
+      aria-label={`Show teams for all ${hiddenGames.length} covered games (reveals who advanced)`}
       title="The teams in these games show who won the round before"
     >
       Show all teams
