@@ -1,9 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
-import { LeagueEventCard, FightBout } from "@/lib/types";
+import { LeagueEventCard, FightBout, ClimbRound } from "@/lib/types";
 import { fetchFirstVideoId, leadChannelBlocksEmbeds } from "@/lib/youtube";
 import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
+import { CLIMB_CHANNEL, CLIMB_LIVE_FALLBACK, climbNotStreamedLabel, climbRoundLabelVariants, climbStreamVideoId } from "@/lib/climbing";
+import { shouldShowRating } from "@/lib/ratingGate";
+import { handleExternalClick } from "@/lib/openExternal";
+import { RatingBadge } from "@/components/GameCard";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
 // bout). Never shows results (finishing order / fight outcome). Highlights
@@ -586,6 +590,122 @@ function FightCard({
   );
 }
 
+// ── Climbing: one card per round ─────────────────────────────────────────
+// The FightCard shape (meta row, two text rows, one button), because a World
+// Cup day is a short list of rounds the way a fight night is a list of bouts.
+// ⛔ No athlete names: a semi or final start list shows who advanced. What a
+// round card says is WHAT (category, discipline, round), WHEN, WHERE to watch,
+// and — for a finished final with ratings on — whether it is worth watching.
+function ClimbRoundCard({
+  round, event, showRatings, selectedDate, hideMeta, onShowDetails, onPlayHighlight,
+}: {
+  round: ClimbRound;
+  event: LeagueEventCard;
+  showRatings: boolean;
+  selectedDate?: string;
+  hideMeta: boolean;
+  onShowDetails?: () => void;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
+}) {
+  const isLive = round.state === "in";
+  const isPost = round.state === "post";
+  // "≈" marks a time the calendar still calls provisional/estimated: World
+  // Climbing moves rounds by an hour or more until the week of the event.
+  const when = whenLabel(round.startsAt, selectedDate);
+  const status = isPost ? "Done" : isLive ? "" : `${round.provisional && when ? "≈" : ""}${when}`;
+  const clickable = !!onShowDetails;
+  // A finished round's live stream IS its replay (YouTube keeps the VOD at the
+  // same id). Played in the masked player with World Climbing's channel gate
+  // riding along, so VideoModal keeps the title strip covered (see
+  // TITLE_ALWAYS_MASKED_CHANNELS in lib/youtube.ts).
+  const replayId = isPost ? climbStreamVideoId(round.streamUrl) : null;
+  const liveHref = round.streamUrl || CLIMB_LIVE_FALLBACK;
+  const rated = shouldShowRating({ state: round.state, statusDetail: "", rating: round.rating }, showRatings);
+  const playReplay = () => {
+    if (!replayId || !onPlayHighlight) return;
+    onPlayHighlight(
+      replayId,
+      `https://www.youtube.com/watch?v=${replayId}&nss_strict=1&nss_channels=${encodeURIComponent(CLIMB_CHANNEL)}`,
+    );
+  };
+  const watchNote = round.blockedRegions.length ? "YouTube · geo-blocked" : "YouTube";
+  return (
+    <div className={`ns-card-focus rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      data-climb-round={round.id}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+      onClick={onShowDetails}
+      onKeyDown={clickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(); } } : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `${round.label} — round details` : undefined}>
+      {!hideMeta && <div className="game-meta-row relative flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 sm:gap-x-1.5">
+        <span className="shrink-0 whitespace-nowrap flex items-center gap-1.5" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
+          <span aria-hidden="true" className="text-xs leading-none">🧗</span>
+          {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
+          {isLive && <span className="sr-only">Live</span>}
+          {isPost || isLive ? status : <span className="text-[11px] whitespace-nowrap" title={round.provisional ? "Time not confirmed yet" : undefined}>{status}</span>}
+        </span>
+      </div>}
+      <div className="flex flex-col gap-y-0.5">
+        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
+          <FittedLine
+            variants={climbRoundLabelVariants(round)}
+            lineKind="title"
+            fullText={round.label}
+            floorPx={FIT_FLOOR_TITLE}
+            className="text-sm team-name leading-none truncate min-w-0 flex-1"
+            style={{ color: "var(--text)" }}
+          />
+          {rated && <span className="shrink-0 flex"><RatingBadge rating={round.rating!} /></span>}
+        </div>
+        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
+          <span className="ns-ink-safe text-[10px] sm:text-xs leading-none truncate min-w-0 flex-1" style={{ color: "var(--text-muted)" }}>{watchNote}</span>
+          {event.climbWhereToWatch && (
+            <a
+              href={event.climbWhereToWatch}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={handleExternalClick(event.climbWhereToWatch)}
+              className="shrink-0 text-[10px] sm:text-xs leading-none hover:underline"
+              style={{ color: "var(--text-muted)" }}
+              title="World Climbing: where to watch outside the US (Eurosport / HBO Max in Europe)"
+            >
+              Other regions
+            </a>
+          )}
+        </div>
+      </div>
+      <div className="hl-slot">
+        {!isPost ? (
+          <div className="mt-1 sm:mt-2 flex gap-1">
+            <a
+              href={liveHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={handleExternalClick(liveHref)}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              aria-label={`Watch ${round.label} live on YouTube`}
+            >
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium truncate min-w-0">Watch live</span>
+            </a>
+          </div>
+        ) : replayId && onPlayHighlight ? (
+          <div className="mt-1 sm:mt-2 flex gap-1">
+            <PlayBtn label="Watch replay" loading={false} onClick={playReplay} hint={`full ${round.label} replay`} />
+          </div>
+        ) : (
+          <div className="mt-1 sm:mt-2 flex gap-1">
+            <p role="status" className="flex-1 text-center text-[10px] py-1.5" style={{ color: "var(--text-muted)" }}>No replay yet</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function EventCard({
   event,
   onPlayHighlight,
@@ -593,6 +713,7 @@ export default function EventCard({
   namesCompact,
   selectedDate,
   isPastDate,
+  showRatings = false,
 }: {
   event: LeagueEventCard;
   leagueLabel?: string;
@@ -609,6 +730,8 @@ export default function EventCard({
   // viewed slate.
   selectedDate?: string;
   isPastDate?: boolean;
+  // Climbing finals carry a rating; the same Settings switch as every card.
+  showRatings?: boolean;
 }) {
   const { loadingId, playRace, playUfc, playStrictOnly } = useHighlightPlayer(onPlayHighlight);
   // Where each bout's highlight actually came from, once played (bout id →
@@ -870,6 +993,33 @@ export default function EventCard({
     });
     return () => cancelAnimationFrame(raf);
   }, [fights, compact, colWidth, event.broadcasts, selectedDate]);
+
+  // ── Climbing: one card per round on this day, in start order ──
+  if (event.kind === "climbing") {
+    const rounds = event.climbRounds ?? [];
+    const hidden = climbNotStreamedLabel(event.climbNotStreamed ?? 0);
+    return (
+      <div ref={rootRef} className="flex flex-col gap-1.5 sm:gap-2" data-climb-day>
+        {rounds.map((r) => (
+          <ClimbRoundCard
+            key={r.id}
+            round={r}
+            event={event}
+            showRatings={showRatings}
+            selectedDate={selectedDate}
+            hideMeta={historicalPost(r.state, r.startsAt)}
+            onShowDetails={onShowDetails ? () => onShowDetails({ ...event, climbFocus: r.id }) : undefined}
+            onPlayHighlight={onPlayHighlight}
+          />
+        ))}
+        {hidden && (
+          <p className="text-center text-[10px] sm:text-xs py-1" style={{ color: "var(--text-muted)" }} data-climb-not-streamed>
+            {hidden}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   // ── UFC: one card per bout, main event first ──
   if (event.kind === "ufc" && event.fights?.length) {

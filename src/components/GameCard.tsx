@@ -72,7 +72,9 @@ interface GameCardProps {
 // "Top 25" (AP / CFP for college football).
 const POLL_RANK_TITLE: Partial<Record<Sport, string>> = { ncaah: "Top 20", ncaawh: "Top 15" };
 
-function RatingBadge({ rating }: { rating: number }) {
+// Exported for the climbing round cards (EventCard), which rate finals with
+// the same four words.
+export function RatingBadge({ rating }: { rating: number }) {
   // The badge only renders for a real numeric rating (see showRating gate below),
   // and this chain is exhaustive, so the four tiers below are the only outcomes —
   // GREAT/GOOD/MEH/SKIP, matching the legend and the detail modal's ratingTier.

@@ -194,6 +194,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   boxing: "Boxing",
   chess: "Chess",
   poker: "Poker",
+  climbing: "Climbing",
   esports: "Esports",
   top: "ESPN front page",
   best: "Best of yesterday",
