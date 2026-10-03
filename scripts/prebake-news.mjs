@@ -22,6 +22,7 @@ import {
 } from "./lib/fotmob.mjs";
 import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
+import { createTitleForTeam } from "./lib/team-names.mjs";
 import { pickEspnGameClip, attachEspnVideoClips } from "./lib/espn-clip.mjs";
 import { isRealEspnClip, mergeVideos, orderVideos } from "./lib/video-order.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
@@ -2936,12 +2937,6 @@ const HL_CLUB_DAYS = 3;
 // duration (watch page unreachable) is let through.
 const HL_CLUB_MIN_SEC = 240;
 
-// Mirrors CONTAINING_TEAM_NAMES in public/_worker.js: a team name that holds
-// another one. Blanked out of the title before a lookup for a team that does
-// not own it, so Rep Ireland ("Ireland", "Irlanda") never matches a Northern
-// Ireland title.
-const HL_CONTAINING_TEAM_NAMES = ["northern ireland", "irlanda del norte"];
-
 function hlTeamVariants(team) {
   const normalizedTeam = hlNormalizeTeam(team);
   return new Set([
@@ -2953,14 +2948,14 @@ function hlTeamVariants(team) {
   ]);
 }
 
-// The normalized title as matched for one team (see HL_CONTAINING_TEAM_NAMES).
-// Blanked to spaces of the same length so positions stay true.
+// The normalized title as matched for one team: a longer name that holds one
+// of the team's own ("Northern Ireland", "Texas A&M", "West Virginia") is
+// blanked to spaces of the same length, so positions stay true. Lists and
+// rules in scripts/lib/team-names.mjs, mirroring titleForTeam in
+// public/_worker.js.
+const hlTitleForTeamGuard = createTitleForTeam(hlNormalizeTeam);
 function hlTitleForTeam(title, variants) {
-  let t = hlNormalizeTeam(title);
-  for (const name of HL_CONTAINING_TEAM_NAMES) {
-    if (!variants.has(name)) t = t.split(name).join(" ".repeat(name.length));
-  }
-  return t;
+  return hlTitleForTeamGuard(title, variants);
 }
 
 // Where a team first appears in the title, or -1 — the home-first order gate's

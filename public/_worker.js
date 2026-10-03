@@ -193,6 +193,81 @@ function bylineNamesChannel(byline, preferChannelLower) {
   return b.split(/\s+and\s+/).some((part) => part.trim() === preferChannelLower);
 }
 
+// A results page is JSON inside HTML, so a title or byline arrives with its
+// JSON escapes still in it: "Texas A&M Aggies vs. LSU Tigers", "The
+// R&A". The team gate then looked for "texas a&m" in "texas a&m" and
+// never found it — the strict lookup for Texas A&M at LSU (9/26) and Kentucky
+// at Texas A&M (9/19) returned "No results" with the right cut on the page, on
+// ESPN College Football and SEC alike (measured 2026-10-03). Decode once, where
+// the string is captured. scripts/lib/recaps.mjs parseYtVideoRenderers does the
+// same for the bake.
+function decodeJsonText(raw) {
+  const s = String(raw ?? "");
+  if (!s.includes("\\")) return s;
+  try {
+    return JSON.parse(`"${s}"`);
+  } catch {
+    return s
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\\(["\\/])/g, "$1");
+  }
+}
+
+// School names built on another school's name. The college chains match on
+// ESPN's school name (team.location), and the conference channels title with
+// the same names, so a plain substring test read "Texas A&M Aggies vs. Ole
+// Miss Rebels" as a Texas game, "West Virginia" as Virginia and "Miami (OH)"
+// as Miami. The SEC posts Texas and Texas A&M cuts against the same opponents
+// in the same weeks, with no date in the title (soccer and volleyball alike).
+// Before a team's names are looked for, every "<prefix> <name>" and "<name>
+// <suffix>" phrase built on one of them is blanked to spaces of the same
+// length (positions stay true for the order gate), unless the phrase is one of
+// the team's own names. Checked 2026-10-03 against every team ESPN lists for
+// the pro leagues the bake walks (NBA … Top 14): no club's own name is such a
+// phrase, so nothing outside college changes. ⛔ Never "city" (Leicester City),
+// "united" or a bare "st" (St Kilda). A phrase never spans a title separator
+// (" - ", "|", "@"), so "Chicago Fire FC - St. Louis CITY SC" keeps the Fire;
+// a bare hyphen is part of a name ("Texas A&M-Commerce"). Keep
+// scripts/lib/team-names.mjs (the bake and the audit) in sync by hand.
+const SCHOOL_NAME_PREFIXES = [
+  "west", "east", "north", "south", "western", "eastern", "northern", "southern", "central", "middle",
+  "southeast", "southeastern", "northwest", "northwestern", "southwest", "southwestern", "northeast", "northeastern",
+];
+const SCHOOL_NAME_SUFFIXES = [
+  "state", "st.", "tech", "a&m", "a & m", "a&t", "christian", "southern", "central", "international", "atlantic",
+  "gulf coast", "valley", "poly", "baptist", "(oh)", "(ohio)", "monroe", "duluth", "omaha", "anchorage", "fairbanks",
+  "kearney", "fort wayne", "pine bluff", "little rock", "upstate", "wilmington", "greensboro", "asheville",
+  "rio grande valley", "eastern shore", "lowell", "corpus christi", "commerce", "kingsville",
+];
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const SCHOOL_PREFIX_ALT = SCHOOL_NAME_PREFIXES.map(escapeRegex).join("|");
+const SCHOOL_SUFFIX_ALT = SCHOOL_NAME_SUFFIXES.map(escapeRegex).join("|");
+// A team owns a longer name when one of its own names holds it as whole words:
+// "Sporting Kansas City" owns "Kansas City", "Southern Miss Golden Eagles"
+// owns "Southern Miss".
+function ownsTeamName(ownNames, phrase) {
+  const p = ` ${phrase.replace(/[\s\-–—]+/g, " ")} `;
+  for (const n of ownNames) {
+    if (n && ` ${n.replace(/[\s\-–—]+/g, " ")} `.includes(p)) return true;
+  }
+  return false;
+}
+const schoolPhraseRxCache = new Map();
+function blankContainingSchoolNames(title, ownNames) {
+  let t = title;
+  for (const name of ownNames) {
+    if (!name) continue;
+    let rx = schoolPhraseRxCache.get(name);
+    if (!rx) {
+      const n = escapeRegex(name);
+      rx = new RegExp(`(?<![a-z0-9])(?:(?:${SCHOOL_PREFIX_ALT})(?:\\s+|[-–—])${n}|${n}(?:\\s+|[-–—])(?:${SCHOOL_SUFFIX_ALT}))(?![a-z0-9])`, "g");
+      schoolPhraseRxCache.set(name, rx);
+    }
+    t = t.replace(rx, (m) => (ownsTeamName(ownNames, m) ? m : " ".repeat(m.length)));
+  }
+  return t;
+}
+
 function raceTitleMatches(tokens, titleLower) {
   if (tokens.length === 0) return true; // no gate requested → unchanged behaviour
   if (NON_RACE_SESSION_RX.test(titleLower)) return false;
@@ -1330,7 +1405,18 @@ export default {
         // "Ireland", "Irlanda del Norte" holds "Irlanda". When the team being
         // looked up does not own one of these, it is blanked out of the title
         // first, so a Rep Ireland lookup cannot match a Northern Ireland title.
-        const CONTAINING_TEAM_NAMES = ["northern ireland", "irlanda del norte"];
+        // The college rows (2026-10-03) are the schools the prefix/suffix rule
+        // in blankContainingSchoolNames cannot see: "Kansas City" holds Kansas,
+        // "Sam Houston" Houston, "George Washington" Washington, "Miami (Ohio)"
+        // Ohio, and the "Southern" schools hold Southern (the SWAC Jaguars,
+        // whose SEC volleyball and soccer cuts read "Southern Jaguars vs. …").
+        // Mirrored in scripts/lib/team-names.mjs.
+        const CONTAINING_TEAM_NAMES = [
+          "northern ireland", "irlanda del norte",
+          "kansas city", "sam houston", "george washington", "miami (ohio)",
+          "georgia southern", "texas southern", "southern miss", "southern utah", "southern illinois",
+          "southern indiana", "southern methodist", "southern california",
+        ];
 
         // Extract team names from query: "Away vs Home highlights ..."
         const teamsMatch = query.match(/^(.+?)\s+vs\s+(.+?)\s+(?:highlights|resumen)\b/i);
@@ -1370,14 +1456,16 @@ export default {
 
         // The title as matched for one team: normalized, with every
         // CONTAINING_TEAM_NAMES entry the team does not own blanked to spaces
-        // (same length, so the order gate's positions stay true).
+        // (same length, so the order gate's positions stay true), then every
+        // longer school name built on one of its names (see
+        // blankContainingSchoolNames).
         function titleForTeam(titleLower, variants) {
           let t = normalizeTeamMatch(titleLower);
           const own = new Set(variants.map(normalizeTeamMatch));
           for (const name of CONTAINING_TEAM_NAMES) {
-            if (!own.has(name)) t = t.split(name).join(" ".repeat(name.length));
+            if (!ownsTeamName(own, name)) t = t.split(name).join(" ".repeat(name.length));
           }
-          return t;
+          return blankContainingSchoolNames(t, own);
         }
 
         // Where a team first appears in the title (any variant), or -1. Feeds
@@ -1463,8 +1551,8 @@ export default {
           if (publishedBeforeGame(publishedMatch ? publishedMatch[1] : "", queryGameMs, ageGateNowMs)) return null;
           return {
             videoId: idMatch[1],
-            title: titleMatch ? titleMatch[1] : "",
-            channel: channelMatch ? channelMatch[1] : "",
+            title: titleMatch ? decodeJsonText(titleMatch[1]) : "",
+            channel: channelMatch ? decodeJsonText(channelMatch[1]) : "",
           };
         }).filter(Boolean);
 
@@ -2766,8 +2854,8 @@ export default {
                 const publishedMatch = block.match(/"publishedTimeText":\{"simpleText":"(.*?)"/);
                 // Same age gate as the main loop.
                 if (publishedBeforeGame(publishedMatch ? publishedMatch[1] : "", queryGameMs, ageGateNowMs)) continue;
-                const titleLower = (titleMatch ? titleMatch[1] : "").toLowerCase();
-                const channelLower = (channelMatch ? channelMatch[1] : "").toLowerCase();
+                const titleLower = decodeJsonText(titleMatch ? titleMatch[1] : "").toLowerCase();
+                const channelLower = decodeJsonText(channelMatch ? channelMatch[1] : "").toLowerCase();
                 // Same gates as the main loop: official WC channel, "World Cup"
                 // in the title, a highlight/recap keyword, and BOTH named teams.
                 if (!rescueAllowedChannels.includes(channelLower)) continue;

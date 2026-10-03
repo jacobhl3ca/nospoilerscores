@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { createTitleForTeam } from "./lib/team-names.mjs";
 // Highlight-button fallback check.
 //
 // For every finished game from the past ~36h across the in-season leagues,
@@ -523,8 +524,11 @@ const WORKER_TEAM_VARIANTS = (() => {
   }
 })();
 
+// Same blanking as hlTitleForTeam in the prebake: "Texas A&M" is not Texas,
+// "Northern Ireland" not Ireland.
+const titleForTeam = createTitleForTeam(normalizeMatchText);
+
 function titleHasTeam(title, team) {
-  const normalizedTitle = normalizeMatchText(title);
   const normalizedTeam = normalizeMatchText(team);
   const variants = new Set([
     normalizedTeam,
@@ -532,6 +536,7 @@ function titleHasTeam(title, team) {
     ...(TITLE_TEAM_ALIASES[normalizedTeam] ?? []).map(normalizeMatchText),
     ...(WORKER_TEAM_VARIANTS[normalizedTeam] ?? []),
   ]);
+  const normalizedTitle = titleForTeam(title, variants);
   if ([...variants].some((variant) => variant && normalizedTitle.includes(variant))) return true;
   // Name-order tolerance, same rule as hlTitleHasTeam in the prebake: ESPN
   // names Chinese tennis players family-name-first ("Zheng Qinwen") and the
