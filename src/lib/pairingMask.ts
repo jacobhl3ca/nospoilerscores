@@ -21,7 +21,10 @@
 // won the Wild Card round. MLB shows its Wild Card round, the NBA and NHL their
 // first round, the NFL its Wild Card weekend; every later round masks. The NBA
 // first round still follows the play-in (the 7 and 8 seeds), a known gap; the
-// play-in's own "8th Seed Game" masks.
+// play-in's own "8th Seed Game" masks. The WNBA joined on 2026-10-03: its first
+// round shows, the semifinals and Finals mask, and the in-season Commissioner's
+// Cup final (two standings leaders, filed as a playoff by its "Championship")
+// shows.
 
 import { useCallback, useSyncExternalStore } from "react";
 import type { Game, Sport } from "@/lib/types";
@@ -33,7 +36,10 @@ import { isPlaceholderTeam } from "./teamLogos";
 // worker (theScore's game_description). US headlines read 2026-09-29:
 // "NLWC - Game 3 If Necessary", "East 1st Round - Game 2", "NFC Wild Card
 // Playoffs", "NBA Play-In - East - 7th Place vs 8th Place". The NBA and NHL
-// Finals carry no note at all, so they mask as an unknown round.
+// Finals carry no note at all, so they mask as an unknown round. WNBA headlines
+// read 2026-10-03: "First Round - Game 2", "Semifinals - Game 1", "WNBA
+// Semifinals - Game 4", "WNBA Finals - Game 2", and July's "WNBA Commissioner's
+// Cup Championship".
 const LADDER_SEEDED_ROUND: Partial<Record<Sport, RegExp>> = {
   nrl: /^finals week 1$/i,
   afl: /^(wildcard round|qualifying final)$/i,
@@ -41,6 +47,7 @@ const LADDER_SEEDED_ROUND: Partial<Record<Sport, RegExp>> = {
   mlb: /^(?:AL|NL)WC\b|\bwild ?card\b/i,
   nba: /\b(?:1st|first) round\b|\bplace vs\b/i,
   nhl: /\b(?:1st|first) round\b/i,
+  wnba: /\b(?:1st|first) round\b|\bcommissioner'?s cup\b/i,
   // The Pro Bowl is filed as postseason too; it is AFC v NFC, not a pairing.
   nfl: /\bwild ?card\b|\bpro bowl\b/i,
 };
