@@ -542,6 +542,15 @@ html[data-kbd-nav] .ns-card-focus:focus-visible {
   color: var(--text-muted);
   background: transparent;
   font-weight: 400;
+  /* A long-press on the icon <img> popped iOS's image menu (Share / Save to
+     Photos / Copy Subject — Jacob 9/27, 5EBB8E2E). The bar sits outside
+     .board-noselect, so it needs its own opt-out. Inherited by the img. */
+  -webkit-touch-callout: none;
+}
+/* The iOS shell draws a native UITabBar and marks <html> — the web bar stands
+   down there only (lib/nativeTabBar.ts). */
+html[data-native-tabbar] .web-tab-bar {
+  display: none;
 }
 .view-tab .tab-icon {
   opacity: 0.7;
@@ -640,6 +649,13 @@ select:focus-visible {
 .league-tag-tab { display: none; }
 .ns-board-tight .league-tag-tab { display: block; }
 .ns-board-tight .league-tag-inline { display: none; }
+/* The card's "Later" pill (Watch queue): a word everywhere, a one-glyph
+   "+" / "✓" on the tight 3-column phone board, where the word would squeeze
+   the team name. */
+.watch-later-short { display: none; }
+.ns-board-tight .watch-later-full { display: none; }
+.ns-board-tight .watch-later-short { display: inline; }
+.ns-board-tight .watch-later-pill { padding-left: 0.25rem; padding-right: 0.25rem; }
 
 
 /* The YouTube IFrame API REPLACES the #yt-player <div> with an <iframe> that

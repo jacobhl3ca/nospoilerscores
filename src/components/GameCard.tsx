@@ -9,11 +9,15 @@ import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } 
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick, liveWatchProps, watchLinkProps } from "@/lib/openExternal";
+import { gameRef } from "@/lib/tvChannelLinks";
 import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
-import { usePairingHidden } from "@/lib/pairingMask";
+import { revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/pairingMask";
+import { shortenPlayoffLabel } from "@/lib/playoffSubtitle";
+import { shouldShowRating } from "@/lib/ratingGate";
+import { useWatchQueue } from "@/components/WatchQueueContext";
 
 interface GameCardProps {
   game: Game;
@@ -59,13 +63,18 @@ interface GameCardProps {
   // Leagues whose upcoming cards show the italic current W-L (Settings picks
   // them) — see lib/upcomingRecords.ts for why pre-game and live only.
   upcomingRecordLeagues?: ReadonlySet<RecordLeague>;
+  // No "Later" pill on this card. The Watch queue strip's own cards set it:
+  // they carry a Done button instead.
+  hideWatchLater?: boolean;
 }
 
 // Poll name for the rank-chip tooltip, keyed on sport. Anything absent reads
 // "Top 25" (AP / CFP for college football).
 const POLL_RANK_TITLE: Partial<Record<Sport, string>> = { ncaah: "Top 20", ncaawh: "Top 15" };
 
-function RatingBadge({ rating }: { rating: number }) {
+// Exported for the climbing round cards (EventCard), which rate finals with
+// the same four words.
+export function RatingBadge({ rating }: { rating: number }) {
   // The badge only renders for a real numeric rating (see showRating gate below),
   // and this chain is exhaustive, so the four tiers below are the only outcomes —
   // GREAT/GOOD/MEH/SKIP, matching the legend and the detail modal's ratingTier.
@@ -245,7 +254,7 @@ export function CompactUpcomingCard({
   const networkNode = network ? (
     networkHref ? (
       <a
-        {...watchLinkProps(network, networkHref)}
+        {...watchLinkProps(network, networkHref, gameRef(game))}
         className="text-[11px] hover:underline whitespace-nowrap"
         style={{ color: "var(--text-muted)" }}
       >
@@ -337,16 +346,43 @@ export function CompactUpcomingCard({
 // so the full card's hooks never run in a different order across the reveal.
 export default function GameCard(props: GameCardProps) {
   const { hidden, reveal } = usePairingHidden(props.game);
-  if (hidden) return <PairingMaskCard game={props.game} nextGameDate={props.nextGameDate} leagueTag={props.leagueTag} onReveal={reveal} />;
+  if (hidden) return <PairingMaskCard game={props.game} nextGameDate={props.nextGameDate} leagueTag={props.leagueTag} showRatings={props.showRatings} onReveal={reveal} />;
   return <GameCardBody {...props} />;
 }
 
-function PairingMaskCard({ game, nextGameDate, leagueTag, onReveal }: { game: Game; nextGameDate?: string; leagueTag?: string; onReveal: () => void }) {
-  const round = game.playoffLabel || "Finals";
+// One tap opens every covered card in a column (Jacob 9/30): an MLB postseason
+// day holds up to four covered games, a tap each for about a month. One per
+// column, or one per league block in the ESPN front page column. Shown only
+// for 2 or more covers; a lone cover's own "Show teams" is enough. Same quiet
+// style as that button, and the same rule: each matchup stays open after.
+export function PairingRevealAll({ games, className = "" }: { games: Game[]; className?: string }) {
+  const hiddenGames = useHiddenPairingGames(games);
+  if (hiddenGames.length < 2) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => revealPairings(hiddenGames)}
+      className={`w-full text-xs rounded px-2 py-1 cursor-pointer transition-colors whitespace-nowrap ${className}`}
+      style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+      data-testid="pairing-reveal-all"
+      aria-label={`Show teams for all ${hiddenGames.length} covered games (reveals who advanced)`}
+      title="The teams in these games show who won the round before"
+    >
+      Show all teams
+    </button>
+  );
+}
+
+function PairingMaskCard({ game, nextGameDate, leagueTag, showRatings, onReveal }: { game: Game; nextGameDate?: string; leagueTag?: string; showRatings: boolean; onReveal: () => void }) {
+  // ESPN's raw headline ("NLDS - Game 1") in the column subtitle's form ("NLDS · Game 1").
+  const round = game.playoffLabel ? shortenPlayoffLabel(game.playoffLabel) : "Finals";
   let time = game.state === "in" ? "Live" : game.state === "post" ? "Final" : "";
   if (game.state === "pre") {
     const d = new Date(game.date);
-    if (!isNaN(d.getTime())) time = formatTime(d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() }));
+    // A series slot with no start time yet sits at local midnight in the feed
+    // ("TBD @ LAD", 10/3 04:00Z) — read ESPN's "TBD" the way CompactUpcomingCard does.
+    if (/\bTBD\b/i.test(cleanStatusDetail(game.statusDetail, true))) time = "TBD";
+    else if (!isNaN(d.getTime())) time = formatTime(d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() }));
   }
   // Same three bands as a full card (meta row, then two team-row heights), so
   // the column keeps its rhythm: the round sits where the away team would and
@@ -365,7 +401,14 @@ function PairingMaskCard({ game, nextGameDate, leagueTag, onReveal }: { game: Ga
         </span>
         {leagueTag && <span className="font-semibold uppercase tracking-wide truncate">{leagueTag}</span>}
       </div>
-      <div className="mt-1.5 text-sm font-medium truncate" style={{ color: "var(--text)" }}>{round}</div>
+      {/* The rating names no team, so a live or final cover keeps it (Jacob 9/30):
+          the reader sees which covered game is worth a look before the tap.
+          Nothing else from the full card joins it: no series line, no venue
+          (it names the home club), no highlights (the video names both). */}
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <span className="text-sm font-medium truncate min-w-0" style={{ color: "var(--text)" }}>{round}</span>
+        {shouldShowRating(game, showRatings) && <span className="shrink-0 flex"><RatingBadge rating={game.rating!} /></span>}
+      </div>
       <button
         type="button"
         onClick={onReveal}
@@ -380,8 +423,13 @@ function PairingMaskCard({ game, nextGameDate, leagueTag, onReveal }: { game: Ga
   );
 }
 
-function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues }: GameCardProps) {
+function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues, hideWatchLater }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
+  // "Later" pill (Jacob 9/27): queue the game for the Watch queue strip above
+  // the board. Null outside the board (no provider) or when Settings hides it.
+  const watchQueue = useWatchQueue();
+  const showWatchLater = !!watchQueue && !hideWatchLater;
+  const queued = showWatchLater && watchQueue.isQueued(game);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
   // before this, overlays only closed via the tiny ✕ and piled up across cards.
   // Capture phase so other handlers' stopPropagation (e.g. another card's "+N"
@@ -427,9 +475,8 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
     return () => { cancelled = true; setCardWeather(null); };
   }, [game.id, game.state, game.venueRoof, game.venueLocation, game.date]);
   // Hide the rating badge while a live game is in a delay — rating returns
-  // once play resumes.
-  const isDelayed = game.state === "in" && /delay/i.test(game.statusDetail);
-  const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null && !isDelayed;
+  // once play resumes (shouldShowRating, shared with the pairing cover).
+  const showRating = shouldShowRating(game, showRatings);
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
   // Held before first pitch/kickoff: yellow label beside the start time.
@@ -1012,7 +1059,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                   return (
                     <a
                       key={key}
-                      {...watchLinkProps(name, href)}
+                      {...watchLinkProps(name, href, gameRef(game))}
                       className="hover:underline transition-colors whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
                     >
@@ -1111,7 +1158,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 return (
                   <a
                     key={b}
-                    {...watchLinkProps(b, href)}
+                    {...watchLinkProps(b, href, gameRef(game))}
                     className="hover:underline whitespace-normal break-words"
                     style={{ color: "var(--text-muted)" }}
                   >
@@ -1236,6 +1283,28 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 pre-season placeholder and says nothing, so it is skipped. */}
             {recordKey && recordShowsForState(game.state) && !effectivePastDate && !isTBD && team.record && !/^0-0(-0)?$/.test(team.record) ? (
               <span className="text-[10px] sm:text-xs italic tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }} title={recordTitle(recordKey)}>{team.record}</span>
+            ) : null}
+            {/* "Later" pill on the home row's right edge — the one spot every
+                card state leaves free (no score is ever drawn there). The
+                3-column phone board swaps the word for a glyph (globals.css,
+                .ns-board-tight). stopPropagation keeps the card's details
+                popup shut, same as the star. */}
+            {idx === 1 && showWatchLater ? (
+              <button
+                type="button"
+                data-watch-later={queued ? "queued" : "off"}
+                onClick={(e) => { e.stopPropagation(); watchQueue.toggle(game); }}
+                className="watch-later-pill shrink-0 text-[10px] leading-none rounded-full px-1.5 py-0.5 cursor-pointer whitespace-nowrap transition-colors"
+                style={queued
+                  ? { border: "1px solid var(--accent)", color: "var(--accent)" }
+                  : { border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                title={queued ? "Remove from your Watch queue" : "Watch later: pin this game to the top of the board"}
+                aria-label={queued ? "Remove from Watch queue" : "Add to Watch queue"}
+                aria-pressed={queued}
+              >
+                <span className="watch-later-full">{queued ? "Queued ✓" : "Later"}</span>
+                <span className="watch-later-short" aria-hidden>{queued ? "✓" : "+"}</span>
+              </button>
             ) : null}
           </div>
         ))}

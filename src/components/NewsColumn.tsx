@@ -7,7 +7,9 @@ import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
+import { frontendHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
+import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 
 export interface NewsSource {
   label: string;
@@ -116,6 +118,8 @@ interface NewsColumnProps {
   shownElsewhere?: { sport: Sport; col: number }[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
+  // "Add more…" row above Remove col — see NewsColumnTitle.
+  onAddMore?: () => void;
   // Switch this column to the ESPN "Top news" headlines feed (see NewsColumnTitle).
   onPickEspn?: () => void;
   espnActive?: boolean;
@@ -165,6 +169,7 @@ export function NewsColumnTitle({
   shownElsewhere,
   selectedSport,
   onSwapLeague,
+  onAddMore,
   onPickEspn,
   espnActive,
   autoSport,
@@ -177,6 +182,9 @@ export function NewsColumnTitle({
   shownElsewhere?: { sport: Sport; col: number }[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
+  // "Add more…" row above Remove col: opens HomeContent's league sheet for
+  // this column, where the offseason leagues live now (Jacob 9/29).
+  onAddMore?: () => void;
   // When true (more than one column showing), render a subtle × on the title
   // row that drops this column — a one-tap "stick to 1-2 columns" for a clean
   // view, without digging into the swap dropdown's "Remove col" (Jacob 7/16).
@@ -328,7 +336,7 @@ export function NewsColumnTitle({
                     {autoIsEspn && !espnActive && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
                   </button>
                 )}
-                {swappableOptions!.map((opt) => {
+                {inSeasonSwitcherOptions(swappableOptions!, selectedSport).map((opt) => {
                   const isCurrent = opt.sport === selectedSport;
                   const elsewhere = isCurrent ? undefined : shownElsewhere?.find((e) => e.sport === opt.sport);
                   // The league this column falls back to on Auto — bolded and
@@ -360,6 +368,25 @@ export function NewsColumnTitle({
                     </button>
                   );
                 })}
+                {/* Add more… opens the full league sheet (offseason leagues
+                    behind its toggle). It and Remove col share one rule above
+                    them, so the two read as the list's footer. */}
+                {onAddMore && (
+                  <button
+                    type="button"
+                    data-testid="news-switcher-add-more"
+                    onClick={() => { setSwapOpen(false); onAddMore(); }}
+                    className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                    style={{
+                      color: "var(--text-muted)",
+                      borderTop: "1px solid var(--border)",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    Add more…
+                  </button>
+                )}
                 {/* Remove col hides the column entirely (matches the scores-view
                     behavior). User re-adds via the + button on scores or via
                     the focus pill. */}
@@ -369,7 +396,7 @@ export function NewsColumnTitle({
                   className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                   style={{
                     color: "var(--text-muted)",
-                    borderTop: "1px solid var(--border)",
+                    borderTop: onAddMore ? undefined : "1px solid var(--border)",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -676,7 +703,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // never in what a plain click does.
   const openInNewTab = (e: ReactMouseEvent) => {
     if (!(e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) return false;
-    if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+    if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
     return true;
   };
   if (shouldPopModal) {
@@ -710,7 +737,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
               // Middle-click fires onAuxClick, not onClick. Mirror the modifier
               // path so wheel-click also opens in a background tab.
               if (e.button === 1 && item.articleUrl) {
-                window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+                window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
               }
             }}
             className="shrink-0 cursor-pointer"
@@ -728,7 +755,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
           }}
           onAuxClick={(e) => {
             if (e.button === 1 && item.articleUrl) {
-              window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+              window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
             }
           }}
           className="min-w-0 flex-1 text-left cursor-pointer"
@@ -781,7 +808,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
     <div className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
       {thumbIsTile ? (
         <a
-          href={item.articleUrl}
+          href={frontendHref(item.articleUrl)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
@@ -794,25 +821,19 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       {/* No modal on this surface, so the headline is a real link to the
           source — same target as the thumbnail and chevron beside it, which
           keeps middle-click, keyboard, and "copy link" honest. */}
-      {hasUrl ? (
+      <a
+        href={frontendHref(item.articleUrl)}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={handleExternalClick(item.articleUrl)}
+        className="min-w-0 flex-1 text-left cursor-pointer"
+        aria-label="Open post"
+      >
+        <span className={titleCls}>{item.headline}</span>
+      </a>
+      {!thumbIsTile && (
         <a
-          href={item.articleUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={handleExternalClick(item.articleUrl)}
-          className="min-w-0 flex-1 text-left cursor-pointer"
-          aria-label="Open post"
-        >
-          <span className={titleCls}>{item.headline}</span>
-        </a>
-      ) : (
-        <span className="min-w-0 flex-1 text-left">
-          <span className={titleCls}>{item.headline}</span>
-        </span>
-      )}
-      {!thumbIsTile && hasUrl && (
-        <a
-          href={item.articleUrl}
+          href={frontendHref(item.articleUrl)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
@@ -920,7 +941,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                     // Modifier-click → open the source article in a background
                     // tab instead of replacing the currently-open modal.
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-                      if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+                      if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
                       return;
                     }
                     onPlay!({
@@ -934,7 +955,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                   }}
                   onAuxClick={(e) => {
                     if (e.button === 1 && item.articleUrl) {
-                      window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+                      window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
                     }
                   }}
                   // The button wraps the thumbnail (alt="") + headline, so its
@@ -984,7 +1005,16 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
             // onPlay is absent; both production call sites pass onPlayVideo, so it
             // hardens the latent case rather than changing today's behavior.)
             return (
-              <div key={item.id} className="block w-full text-left" style={commonStyle}>
+              <a
+                key={item.id}
+                href={frontendHref(item.articleUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleExternalClick(item.articleUrl)}
+                className={commonCls}
+                style={commonStyle}
+                data-news-key={item.articleUrl || item.id}
+              >
                 {body}
               </div>
             );
@@ -1096,6 +1126,7 @@ export default function NewsColumn({
   shownElsewhere,
   selectedSport,
   onSwapLeague,
+  onAddMore,
   onPickEspn,
   espnActive,
   autoSport,
@@ -1215,6 +1246,7 @@ export default function NewsColumn({
           shownElsewhere={shownElsewhere}
           selectedSport={selectedSport}
           onSwapLeague={onSwapLeague}
+          onAddMore={onAddMore}
           onPickEspn={onPickEspn}
           espnActive={espnActive}
           autoSport={autoSport}

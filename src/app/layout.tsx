@@ -523,10 +523,12 @@ export default function RootLayout({
                  blank.
             On either, unregister every service worker + delete every cache +
             reload once. sessionStorage rate-limits to one heal per 30s so a
-            genuinely offline device can't reload-loop. */}
+            genuinely offline device can't reload-loop. Never while offline: a
+            chunk that simply can't download there would wipe the very cache the
+            offline board opens from (sw-v16.js), leaving a blank page. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var HK='hs-heal-ts';function heal(){try{var last=+(sessionStorage.getItem(HK)||0);if(Date.now()-last<30000)return;sessionStorage.setItem(HK,String(Date.now()));}catch(e){}var rl=function(){try{location.reload()}catch(e){}};var js=[];try{if('serviceWorker'in navigator)js.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister()}))}));}catch(e){}try{if(window.caches)js.push(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}));}catch(e){}if(js.length){Promise.all(js.map(function(p){return p.catch(function(){})})).then(rl,rl);setTimeout(rl,2500);}else rl();}window.addEventListener('error',function(e){var t=e&&e.target;if(t&&(t.nodeName==='SCRIPT'||t.nodeName==='LINK')){var s=t.src||t.href||'';if(s.indexOf('/_next/')>-1)heal();}},true);window.addEventListener('load',function(){setTimeout(function(){try{if(navigator.onLine===false)return;if(!window.__HS_OK)heal();}catch(e){}},8000);});})()`,
+            __html: `(function(){var HK='hs-heal-ts';function heal(){if(navigator.onLine===false)return;try{var last=+(sessionStorage.getItem(HK)||0);if(Date.now()-last<30000)return;sessionStorage.setItem(HK,String(Date.now()));}catch(e){}var rl=function(){try{location.reload()}catch(e){}};var js=[];try{if('serviceWorker'in navigator)js.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister()}))}));}catch(e){}try{if(window.caches)js.push(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}));}catch(e){}if(js.length){Promise.all(js.map(function(p){return p.catch(function(){})})).then(rl,rl);setTimeout(rl,2500);}else rl();}window.addEventListener('error',function(e){var t=e&&e.target;if(t&&(t.nodeName==='SCRIPT'||t.nodeName==='LINK')){var s=t.src||t.href||'';if(s.indexOf('/_next/')>-1)heal();}},true);window.addEventListener('load',function(){setTimeout(function(){try{if(navigator.onLine===false)return;if(!window.__HS_OK)heal();}catch(e){}},8000);});})()`,
           }}
         />
       </head>

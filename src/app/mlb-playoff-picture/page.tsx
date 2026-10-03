@@ -15,7 +15,8 @@ import PlayoffPictureModal from "@/components/PlayoffPictureModal";
 // the last two weeks of September, every year.
 //
 // This page opens the Odds tab on its default sort (chance of the playoffs,
-// best first). Magic N is the DIVISION magic number (StatsAPI magicNumber),
+// best first). Once the field is set the Odds tab is gone and the panel opens
+// on Bracket (settledTab in lib/playoffPicture); the URL stays live. Magic N is the DIVISION magic number (StatsAPI magicNumber),
 // shown only for a division leader. The four clinch labels are CLINCH_TEXT in
 // PlayoffPictureModal. The odds are ESPN standings-feed fields; do not name a
 // model or a site as their source on this page, the feed does not.
@@ -93,7 +94,7 @@ export default function MlbPlayoffPicturePage() {
       subject="MLB playoff picture"
       lead={<PlayoffPictureModal variant="page" initialTab="odds" />}
       intro={[
-        "Here is the 2026 MLB playoff picture for both leagues, with odds in place of won-lost records. It reloads from MLB and ESPN every time you open it, so it moves as the final week of the regular season is played.",
+        "Here is the 2026 MLB playoff picture for both leagues, with odds in place of won-lost records. It reloads from MLB and ESPN every time you open it, so it moves as the final week of the regular season is played. The 2026 field is now set, so the panel opens on the bracket, which shows all twelve seeds and the matchups they produce.",
         "On HideScore's main board this panel sits under a cover, because a standings table tells a delayed viewer who won last night. Here it is open. Switch to the Bracket tab for the matchups the seeds produce, or to Picks to call every series before the postseason starts.",
       ]}
       sections={[

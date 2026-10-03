@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 
 const TITLE = "How to Watch the 2026 World Cup Without Spoilers | HideScore";
@@ -219,14 +220,7 @@ export default function WatchWorldCupWithoutSpoilersPage() {
         </p>
       </div>
 
-      <div className="mt-10 flex gap-4">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-watch-world-cup-without-spoilers">
-          ← Back to HideScore
-        </Link>
-        <Link href="/faq" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
-          HideScore FAQ
-        </Link>
-      </div>
+      <DocFooter route="watch-world-cup-without-spoilers" />
 
       <script
         type="application/ld+json"

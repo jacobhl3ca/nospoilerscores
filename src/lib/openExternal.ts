@@ -42,7 +42,8 @@
 // lib/youtube.ts. openExternal only runs when no specific video resolves.
 
 import { parseYouTubeId } from "./youtubeLink.ts";
-import { tvChannelLink } from "./tvChannelLinks.ts";
+import { gameRef, tvChannelLink, type GameRef } from "./tvChannelLinks.ts";
+import { frontendConfig, rewriteExternalUrl } from "./frontendLinks.ts";
 import type { Game } from "./types";
 
 // True inside the Capacitor iOS/Android wrapper. Exported for callers that
@@ -200,6 +201,9 @@ async function openViaAppLink(url: string): Promise<void> {
 
 export function openExternal(url: string): void {
   if (!url) return;
+  // The user's own Redlib / Invidious (Settings → Links). First, so a moved
+  // YouTube link goes to the browser below, not the YouTube app.
+  url = rewriteExternalUrl(url, frontendConfig());
   if (isCapacitorNative()) {
     const ytApp = youTubeAppUrl(url);
     if (ytApp) {
@@ -258,9 +262,21 @@ export function handleAppSchemeClick(url: string): (e: React.MouseEvent) => void
 
 // Props for a network chip's `<a>`: the personal TV channel link when that
 // network is on the Settings list (lib/tvChannelLinks.ts), else the web link.
-export function watchLinkProps(network: string, webHref: string) {
-  const tv = tvChannelLink(network);
-  if (tv) return { href: tv, title: `Watch ${network} on your TV`, onClick: handleAppSchemeClick(tv) };
+// `game` fills a per-game (`{game}`) line. The click asks the list again, so a
+// per-game pre-check that came back "no stream" after render opens the site.
+export function watchLinkProps(network: string, webHref: string, game?: GameRef) {
+  const tv = tvChannelLink(network, game);
+  if (tv) {
+    return {
+      href: tv,
+      title: `Watch ${network} on your TV`,
+      onClick: (e: React.MouseEvent) => {
+        const now = tvChannelLink(network, game);
+        if (now) handleAppSchemeClick(now)(e);
+        else handleExternalClick(webHref)(e);
+      },
+    };
+  }
   return {
     href: webHref,
     target: "_blank",
@@ -274,11 +290,12 @@ export function watchLinkProps(network: string, webHref: string) {
 // web stream. Used by the card's live clock and the modal's Watch live button,
 // so the two big live entry points follow the Settings TV channel list the
 // same way the small network chips do.
-export function liveWatchUrl(
-  game: Pick<Game, "broadcasts" | "streamUrl">
-): { url: string; network: string | null; scheme: boolean } | null {
+type LiveGame = Pick<Game, "broadcasts" | "streamUrl"> & Partial<Pick<Game, "homeTeam" | "awayTeam" | "date">>;
+
+export function liveWatchUrl(game: LiveGame): { url: string; network: string | null; scheme: boolean } | null {
+  const ref = gameRef(game);
   for (const network of game.broadcasts ?? []) {
-    const tv = tvChannelLink(network);
+    const tv = tvChannelLink(network, ref);
     if (tv) return { url: tv, network, scheme: true };
   }
   return game.streamUrl ? { url: game.streamUrl, network: null, scheme: false } : null;
@@ -286,11 +303,19 @@ export function liveWatchUrl(
 
 // Props for the live clock's `<a>`, same shape as watchLinkProps. Null when the
 // game has neither a listed channel nor a web stream.
-export function liveWatchProps(game: Pick<Game, "broadcasts" | "streamUrl">) {
+export function liveWatchProps(game: LiveGame) {
   const live = liveWatchUrl(game);
   if (!live) return null;
   if (live.scheme) {
-    return { href: live.url, title: `Watch ${live.network} on your TV`, onClick: handleAppSchemeClick(live.url) };
+    return {
+      href: live.url,
+      title: `Watch ${live.network} on your TV`,
+      onClick: (e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        openLiveWatch(game);
+      },
+    };
   }
   return {
     href: live.url,
@@ -302,7 +327,7 @@ export function liveWatchProps(game: Pick<Game, "broadcasts" | "streamUrl">) {
 }
 
 // Open the live stream for a button (no `<a>`). False when there is nothing to open.
-export function openLiveWatch(game: Pick<Game, "broadcasts" | "streamUrl">): boolean {
+export function openLiveWatch(game: LiveGame): boolean {
   const live = liveWatchUrl(game);
   if (!live) return false;
   if (live.scheme) openAppScheme(live.url);

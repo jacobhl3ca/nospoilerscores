@@ -85,8 +85,12 @@ for (const p of PAGES) {
   // guarantees the first-run league picker cannot open here.
   ok(`${p.route} board not mounted (no league picker)`, (await page.locator("main#main-content").count()) === 0);
 
+  // Once every seed has clinched the Odds tab is gone and the odds pages open
+  // on Bracket instead (Jacob 9/29).
+  const fieldSet = (await page.locator("#mlb-picture-tab-odds").count()) === 0;
+  const tab = fieldSet ? "bracket" : p.tab;
   const selected = await page.locator('[role="tab"][aria-selected="true"]').getAttribute("id");
-  ok(`${p.route} opens on the ${p.tab} tab`, selected === `mlb-picture-tab-${p.tab}`, selected ?? "none");
+  ok(`${p.route} opens on the ${tab} tab`, selected === `mlb-picture-tab-${tab}`, selected ?? "none");
 
   const body = page.locator("[data-picture-body]");
   const open = await body.evaluate((el) => !getComputedStyle(el).filter.includes("blur") && el.getAttribute("aria-hidden") !== "true");
@@ -95,7 +99,7 @@ for (const p of PAGES) {
   const wroteReveal = await page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith("mlb-playoff-picture-revealed-")));
   ok(`${p.route} leaves the board's cover alone`, !wroteReveal);
 
-  if (p.tab === "bracket") {
+  if (tab === "bracket") {
     const seats = await page.locator("[data-bracket-team]").count();
     ok(`${p.route} bracket shows 12 seeded clubs`, seats === 12, `${seats}`);
     const channels = await page.locator("[data-bracket-channel]").count();
@@ -145,8 +149,13 @@ for (const p of PAGES) {
 }
 {
   const { ctx, page } = await openFresh("/mlb-wild-card-standings", { width: 1440, height: 1000 }, { "mlb-playoff-picture-sort": "playoff:desc" });
-  const caption = (await page.locator("table caption").first().innerText()).toLowerCase();
-  ok("stored sort=playoff still opens /mlb-wild-card-standings by seed", caption.includes("sorted by seed"), caption);
+  if (await page.locator("#mlb-picture-tab-odds").count()) {
+    const caption = (await page.locator("table caption").first().innerText()).toLowerCase();
+    ok("stored sort=playoff still opens /mlb-wild-card-standings by seed", caption.includes("sorted by seed"), caption);
+  } else {
+    const selected = await page.locator('[role="tab"][aria-selected="true"]').getAttribute("id");
+    ok("field set: /mlb-wild-card-standings opens on Bracket with no Odds tab", selected === "mlb-picture-tab-bracket", selected ?? "none");
+  }
   await ctx.close();
 }
 

@@ -34,7 +34,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/?l=rl&s=rl.0.0&dd=t&dv=s");
 });
 
-test("the NRL Grand Final hides its teams until Show teams is tapped, for this visit", async ({ page }) => {
+test("the NRL Grand Final hides its teams until Show teams is tapped, then stays open", async ({ page }) => {
   const mask = page.locator('[data-pairing-mask="604845"]');
   // The other columns load from the live feeds; give the board time to paint.
   await expect(mask).toBeVisible({ timeout: 20_000 });
@@ -46,13 +46,13 @@ test("the NRL Grand Final hides its teams until Show teams is tapped, for this v
   await expect(mask).toHaveCount(0);
   await expect(page.getByRole("button", { name: REVEALED })).toBeVisible();
 
-  // Same visit: stays revealed after a reload.
+  // Stays revealed after a reload (the matchup is remembered).
   await page.reload();
   await expect(page.getByRole("button", { name: REVEALED })).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('[data-pairing-mask="604845"]')).toHaveCount(0);
 });
 
-test("a new visit masks again", async ({ browser }) => {
+test("a new browser masks again", async ({ browser }) => {
   const page = await browser.newPage();
   await page.route("**/rugby-league/3/scoreboard**", (route) => {
     const dates = new URL(route.request().url()).searchParams.get("dates") ?? "";

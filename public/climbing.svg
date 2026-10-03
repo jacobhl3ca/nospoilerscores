@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Climbing">
+  <rect width="64" height="64" rx="14" fill="#111827"/>
+  <path fill="#f8fafc" d="M12 54 30 14l8 16 6-8 8 32Z" opacity=".35"/>
+  <circle cx="35" cy="17" r="4.5" fill="#f8fafc"/>
+  <path fill="none" stroke="#f8fafc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" d="M33 23l-4 11 7 5 1 11M29 34l-8 4M33 25l8-5 3-6M36 39l8 3"/>
+</svg>

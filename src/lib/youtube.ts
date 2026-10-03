@@ -320,6 +320,12 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   //
   // Re-check LCK if it ever switches to a per-series cut; re-check LPL at the
   // start of a domestic split.
+  // Climbing (added 2026-10-03): World Climbing (@worldclimbing), author_name
+  // read off oembed for four 2026 streams. The climbing tile plays the round's
+  // own live stream as its replay (the calendar's stream_url), so this channel
+  // is never searched from the client; the worker's replay search
+  // (climbFindReplay) takes only the house title "Lead finals | Koper 2026".
+  climbing: "World Climbing",
 };
 
 // Leagues where NO trustworthy uploader exists on YouTube, so the unscoped
@@ -618,7 +624,10 @@ export function leadChannelBlocksEmbeds(channels: string[]): boolean {
 // "titles have spoilers"). The `UFC on …` family is matched by PREFIX so a
 // broadcaster change (Paramount+ replaced ESPN+ mid-2026) cannot silently
 // reopen the hole; anything else has to be listed.
-const TITLE_ALWAYS_MASKED_CHANNELS = new Set(["UFC", "ESPN MMA", "DAZN Boxing"]);
+// World Climbing is here for the same reason: next to the full-round streams
+// it posts "X takes gold" clips, and a climbing title that names a winner is
+// the whole result.
+const TITLE_ALWAYS_MASKED_CHANNELS = new Set(["UFC", "ESPN MMA", "DAZN Boxing", "World Climbing"]);
 
 //
 // Soccer club channels and LIGA BBVA MX (the efl / ligamx chains, 2026-09-25)

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import { handleExternalClick } from "@/lib/openExternal";
-import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters, itemIsVideo } from "./NewsColumn";
+import { frontendHref } from "@/lib/frontendLinks";
+import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
 import { isDemoModeActive } from "@/lib/demoMode";
 
 interface Props {
@@ -381,14 +382,14 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
         type="button"
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-            if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
             return;
           }
           onPlay!({ ...newsItemToPlayOpts(item), siblings, index });
         }}
         onAuxClick={(e) => {
           if (e.button === 1 && item.articleUrl) {
-            window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
           }
         }}
         // The button wraps the thumbnail (alt="") + headline, so its accessible
@@ -422,7 +423,7 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
   // non-interactive wrapper instead — the row still shows, sans dead control.
   // Mirrors the href-less-anchor guard NewsFeed already documents.
   return (
-    <div key={item.id} className="block w-full text-left" style={commonStyle}>
+    <a key={item.id} href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle}>
       {body}
     </div>
   );
@@ -473,14 +474,14 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
         type="button"
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-            if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
             return;
           }
           onPlay!({ ...newsItemToPlayOpts(item), siblings, index });
         }}
         onAuxClick={(e) => {
           if (e.button === 1 && item.articleUrl) {
-            window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
           }
         }}
         // The thumb is alt="", so this button's only accessible name is this
@@ -514,7 +515,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
   // there's nothing to activate.
   const staticCls = rowCls.replace(" transition-colors hover:bg-[var(--bg-card-hover)]", "");
   return (
-    <div className={staticCls} style={rowStyle}>
+    <a href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle}>
       {thumb}
       <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
     </div>

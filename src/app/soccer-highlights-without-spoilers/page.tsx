@@ -108,7 +108,10 @@ export default function SoccerHighlightsWithoutSpoilersPage() {
         "Liga MX, NWSL, Championship, Libertadores, and Saudi Pro League columns.",
       ]}
       ctaLabel="Open soccer highlights"
-      ctaHref="/worldcup/highlights"
+      // Was /worldcup/highlights. The World Cup ended July 19, and the new
+      // /worldcup "this week's soccer" line points here, so the old target
+      // sent readers in a loop (2026-09-30).
+      ctaHref="/yesterday"
       links={[
         { href: "/worldcup", label: "World Cup" },
         { href: "/worldcup/tomorrow", label: "Tomorrow" },

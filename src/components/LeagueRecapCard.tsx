@@ -5,6 +5,7 @@ import { getRecapsFor, getRecapsForSync, formatRecapDuration, recapButtonText, r
 import { leadChannelBlocksEmbeds } from "@/lib/youtube";
 import type { PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import type { MlbReviewSection } from "@/lib/mlbReview";
+import { withoutSettledOdds } from "@/lib/playoffPicture";
 
 // The league-wide recap — the NFL's "Week 1", MLB's "Best of the day", NBA's
 // "Top 10 plays of the night", EPL / MLS "Every goal" — as one compact pill on
@@ -39,7 +40,8 @@ import type { MlbReviewSection } from "@/lib/mlbReview";
 // it lines up with a sibling's recap exactly as a recap does, and on a phone it
 // stacks the same way: "Playoff" on top, the three buttons in a row under it.
 // When the day also has a recap, the recap keeps the heading and a bracket
-// icon joins its buttons, last.
+// icon joins its buttons, last. `hidePlayoffOdds`: once the field is set, Odds
+// leaves the pill and only Bracket and Picks remain (Jacob 9/29).
 //
 // `onPlayList`: each button opens its cut with the pill's other cuts as
 // siblings, so the modal pages through them — Shift+←/→ or ↑/↓, or the
@@ -84,6 +86,7 @@ export default function LeagueRecapCard({
   lastPlayedDate,
   reserveSlot = false,
   onShowPlayoffs,
+  hidePlayoffOdds = false,
   onShowReview,
   reviewSeason,
   reviewSections,
@@ -104,6 +107,8 @@ export default function LeagueRecapCard({
   // Opens the playoff picture on the given tab. Set only when the playoffs
   // pill is due (see the header note).
   onShowPlayoffs?: ((tab: PlayoffsTab) => void) | null;
+  // The MLB field is set, so the Odds button would only show 100% and 0%.
+  hidePlayoffOdds?: boolean;
   // Opens the season review at a section. Set only when the review pill is
   // due; outranks onShowPlayoffs. `reviewSections` = the buttons with
   // something behind them, in REVIEW_TABS order.
@@ -298,7 +303,7 @@ export default function LeagueRecapCard({
           Playoff
         </span>
         <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
-          {PLAYOFFS_TABS.map((t) => (
+          {withoutSettledOdds(PLAYOFFS_TABS, hidePlayoffOdds).map((t) => (
             <button
               key={t.key}
               type="button"
@@ -309,6 +314,7 @@ export default function LeagueRecapCard({
               }}
               // Stacked: sized by their words plus an equal share of what is
               // left, since "Bracket" needs ~33px and an even third is 32px.
+              // With Odds gone the two share the row, ~48px each.
               className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? "flex-auto gap-0.5 px-0" : ROW_BTN}`}
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label={`Playoff ${t.label.toLowerCase()}`}

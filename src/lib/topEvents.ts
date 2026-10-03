@@ -211,6 +211,23 @@ export function orderByEspnHeader(
   return picked.sort((a, b) => a.at - b.at).map((p) => p.game);
 }
 
+// The ESPN front page on a past day with no snapshot: every game of the
+// given leagues, the leagues in the order given (today's strip order), and
+// each league's games in the order they came in. Nothing outside the leagues.
+export function orderBySports(games: Game[], sports: readonly Sport[]): Game[] {
+  const seen = new Set<string>();
+  const out: Game[] = [];
+  for (const sport of sports) {
+    for (const game of games) {
+      const key = `${game.sport}:${game.id}`;
+      if (game.sport !== sport || seen.has(key)) continue;
+      seen.add(key);
+      out.push(game);
+    }
+  }
+  return out;
+}
+
 // The `${sport}:${id}` keys of the body games (parseEspnFrontPageFeed) the
 // strip carries — the ones orderByEspnHeader puts first. A body id takes its
 // sport from the strip, the same way orderByEspnHeader matches it.

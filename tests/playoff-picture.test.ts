@@ -435,3 +435,40 @@ test("playing the bracket never touches the unplayed one the Picks tab uses", ()
   assert.equal(base.matchups.find((m) => m.key === "ds-a")!.sides[1].team, null);
   assert.equal("winner" in base.matchups[0], false);
 });
+
+// ── Odds leave once the field is set ────────────────────────────────────────
+
+import { fieldIsSet, settledTab, withoutSettledOdds, type PlayoffPicture } from "../src/lib/playoffPicture.ts";
+
+// The shared fixture with every one of the twelve seeds marked clinched, and
+// the same with one of them still open.
+const clinchAll = (p: PlayoffPicture): PlayoffPicture => ({
+  ...p,
+  leagues: p.leagues.map((l) => ({ ...l, seeded: l.seeded.map((t) => ({ ...t, clinched: true })) })),
+});
+const setField = clinchAll(buildPicture(RECORDS, 2026));
+const openField: PlayoffPicture = {
+  ...setField,
+  leagues: setField.leagues.map((l, i) => i ? l : { ...l, seeded: l.seeded.map((t, j) => j === 5 ? { ...t, clinched: false } : t) }),
+};
+const PANEL_TABS = [{ key: "odds" }, { key: "bracket" }, { key: "picks" }];
+
+test("the field is set only when all twelve seeds have clinched", () => {
+  assert.equal(setField.leagues.every((l) => l.seeded.length === 6), true);
+  assert.equal(fieldIsSet(setField), true);
+  assert.equal(fieldIsSet(openField), false);
+  assert.equal(fieldIsSet(buildPicture(RECORDS, 2026)), false);
+  assert.equal(fieldIsSet(buildPicture([], 2026)), false);
+});
+
+test("a set field drops Odds from the tabs and keeps the rest in order", () => {
+  assert.deepEqual(withoutSettledOdds(PANEL_TABS, fieldIsSet(setField)).map((t) => t.key), ["bracket", "picks"]);
+  assert.deepEqual(withoutSettledOdds(PANEL_TABS, fieldIsSet(openField)).map((t) => t.key), ["odds", "bracket", "picks"]);
+});
+
+test("a stored or requested Odds tab opens on Bracket once the field is set", () => {
+  assert.equal(settledTab("odds", fieldIsSet(setField)), "bracket");
+  assert.equal(settledTab("picks", fieldIsSet(setField)), "picks");
+  assert.equal(settledTab("bracket", fieldIsSet(setField)), "bracket");
+  assert.equal(settledTab("odds", fieldIsSet(openField)), "odds");
+});

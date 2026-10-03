@@ -31,12 +31,16 @@ const BUILD = (process.env.NEXT_PUBLIC_BUILD_SHA || "dev").slice(0, 8);
 // `label` renames the collapsed trigger and `seed` starts the message when that
 // trigger is tapped (2026-09-25: the articles' "Report an error" link seeds the
 // page path, since a submission carries no URL of its own).
+// `hideTrigger` renders no visible link at all: the homepage footer's
+// "Feedback" is now a plain link to /contact (9/28), so the box stays mounted
+// there only for the Settings opens ("Send feedback", "Request a league").
 export default function FeedbackBox({
   openSignal,
   prefill,
   label = "Feedback",
   seed,
-}: { openSignal?: number; prefill?: string; label?: string; seed?: string } = {}) {
+  hideTrigger = false,
+}: { openSignal?: number; prefill?: string; label?: string; seed?: string; hideTrigger?: boolean } = {}) {
   const [text, setText] = useState("");
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
@@ -134,7 +138,8 @@ export default function FeedbackBox({
   // for its opener. Scoped to cancel-closes: submit() sets `sent` (never calls
   // close()), so the effect skips it and doesn't steal focus into the now-hidden
   // trigger while the "Thanks" state renders. autoFocus already handles focus-IN
-  // on open; this closes the round trip.
+  // on open; this closes the round trip. With `hideTrigger` there is no
+  // trigger, so the ref is null and focus stays where the dialog left it.
   useEffect(() => {
     if (wasOpenRef.current && !open && !sent) triggerRef.current?.focus();
     wasOpenRef.current = open;
@@ -175,7 +180,16 @@ export default function FeedbackBox({
     }
   };
 
+  // No trigger: the "Thanks" has no row to sit in, so it shows as a short
+  // toast and clears itself.
+  useEffect(() => {
+    if (!hideTrigger || !sent) return;
+    const t = window.setTimeout(() => setSent(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [hideTrigger, sent]);
+
   if (!open && !sent) {
+    if (hideTrigger) return null;
     return (
       <button
         ref={triggerRef}
@@ -190,6 +204,19 @@ export default function FeedbackBox({
       >
         {label}
       </button>
+    );
+  }
+
+  if (hideTrigger && sent) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="fixed left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom)_+_1.5rem)] z-[70] text-sm px-4 py-2 rounded-full shadow-lg"
+        style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }}
+      >
+        Thanks, feedback sent
+      </div>
     );
   }
 
@@ -228,20 +255,18 @@ export default function FeedbackBox({
               an afterthought. Fixed + centered also means it can never hang
               off-screen on a narrow phone, which the absolute version had to
               work around. */}
-          <button
-            type="button"
-            onClick={close}
-            // Matches the collapsed trigger: this button controls the open
-            // role="dialog" form (aria-controls below), so it carries the same
-            // aria-haspopup="dialog" the app's other dialog-openers do.
-            aria-haspopup="dialog"
-            aria-expanded="true"
-            aria-controls="hs-feedback-form"
-            className="underline underline-offset-2 cursor-pointer hover:opacity-80"
-            style={{ color: "var(--text-muted)" }}
-          >
-            {label}
-          </button>
+          {!hideTrigger && (
+            <button
+              type="button"
+              onClick={close}
+              aria-expanded="true"
+              aria-controls="hs-feedback-form"
+              className="underline underline-offset-2 cursor-pointer hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+            >
+              {label}
+            </button>
+          )}
           <div
             // z-[70] clears Settings (z-[60]), the highest overlay in the app:
             // "Request a league" lives INSIDE Settings, so the form it opens has

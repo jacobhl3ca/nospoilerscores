@@ -5,7 +5,8 @@ import { LeagueEventCard, FightBout } from "@/lib/types";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import CalendarButtons from "@/components/CalendarButtons";
-import { buildEventCalendarEvent } from "@/lib/calendarLink";
+import { buildEventCalendarEvent, buildClimbRoundCalendarEvent } from "@/lib/calendarLink";
+import { CLIMB_LIVE_FALLBACK, climbBlockedNote } from "@/lib/climbing";
 
 // Spoiler-safe detail sheet for the EVENT tiles — races, UFC bouts, boxing,
 // chess and poker. The score cards have had GameDetailModal since day one; the
@@ -164,14 +165,20 @@ export default function EventDetailModal({
     };
   }, []);
 
-  const isLive = (fight?.state ?? event.state) === "in";
-  const isPost = (fight?.state ?? event.state) === "post";
-  const statusLabel = isPost ? "Final" : isLive ? "In progress" : "Upcoming";
+  // Climbing: a tapped round leads the sheet, the way a tapped bout does.
+  // Names the round, never an athlete (see ClimbRoundCard).
+  const climbRound = event.kind === "climbing"
+    ? (event.climbRounds ?? []).find((r) => r.id === event.climbFocus) ?? event.climbRounds?.[0]
+    : undefined;
+  const roundState = climbRound?.state ?? fight?.state ?? event.state;
+  const isLive = roundState === "in";
+  const isPost = roundState === "post";
+  const statusLabel = isPost ? (climbRound ? "Done" : "Final") : isLive ? "In progress" : "Upcoming";
 
   // The headline of the sheet. A tapped bout names the bout; everything else
   // names the event. Always the FULL string — event.title, never a variant.
-  const heading = fight ? `${fight.red.name} vs ${fight.blue.name}` : event.title;
-  const whenIso = fight?.date ?? event.date;
+  const heading = climbRound ? climbRound.label : fight ? `${fight.red.name} vs ${fight.blue.name}` : event.title;
+  const whenIso = climbRound?.startsAt ?? fight?.date ?? event.date;
   // Poker festivals carry a source-backed date WINDOW instead of a kickoff
   // clock (scheduleLabel), because no trustworthy exact start exists — prefer
   // it over inventing a time, the same precedence the tile's status uses.
@@ -193,11 +200,14 @@ export default function EventDetailModal({
   // The tile links out only on a pre/live race, because a finished event's
   // ESPN page prints the finishing order. Keep exactly that rule here: the
   // sheet must not become a back door to the spoiler the tile refuses to open.
-  const showExternal = !!event.eventUrl && !isPost;
+  const showExternal = (!!event.eventUrl || !!climbRound) && !isPost;
+  const externalUrl = climbRound ? (climbRound.streamUrl || CLIMB_LIVE_FALLBACK) : event.eventUrl;
   // Boxing's eventUrl is a www.youtube.com watch URL (boxing.ts points it at the
   // DAZN Boxing fixture/preview clip), not an ESPN page — the fall-through noun
   // was wrong on both counts, and it is the button's whole accessible name.
-  const externalNoun = event.kind === "chess"
+  const externalNoun = climbRound
+    ? "Watch live on YouTube"
+    : event.kind === "chess"
     ? "Follow live on Lichess"
     : event.kind === "poker"
       ? "Official tournament details"
@@ -211,7 +221,7 @@ export default function EventDetailModal({
 
   // "Add to calendar" / "Remind me" — upcoming only, and null for a poker
   // festival that carries a date window instead of a clock (scheduleLabel).
-  const calendarEvent = buildEventCalendarEvent(event, fight);
+  const calendarEvent = climbRound ? buildClimbRoundCalendarEvent(event, climbRound) : buildEventCalendarEvent(event, fight);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -242,7 +252,7 @@ export default function EventDetailModal({
         </h2>
         {/* When a bout is the headline, the EVENT name becomes the subtitle so
             the sheet still says which card this fight is on. */}
-        {fight ? (
+        {fight || climbRound ? (
           <div className="text-xs mb-3 break-words" style={{ color: "var(--text-muted)" }}>{event.title}</div>
         ) : leagueLabel ? (
           <div className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>{leagueLabel}</div>
@@ -270,7 +280,13 @@ export default function EventDetailModal({
           {/* The venue line the tile had to shorten — "Circuit Park Zandvoort ·
               Zandvoort, Netherlands" in full, from event.subtitle rather than
               any rung of subtitleVariants. */}
-          {event.subtitle ? <Row label="Venue">{event.subtitle}</Row> : null}
+          {climbRound?.provisional && !isPost ? <Row label="Schedule">Time not confirmed yet — World Climbing may move it</Row> : null}
+          {event.subtitle ? <Row label={climbRound ? "Day" : "Venue"}>{event.subtitle}</Row> : null}
+          {climbRound && !isPost ? (
+            <Row label="Watch">
+              World Climbing on YouTube{climbBlockedNote(climbRound.blockedRegions) ? ` · ${climbBlockedNote(climbRound.blockedRegions)}` : ""}
+            </Row>
+          ) : null}
           {fight?.weightClass ? <Row label="Division">{fight.weightClass}</Row> : null}
           {/* Career records, not results of this fight — the same call
               GameDetailModal makes for a team's W-L. */}
@@ -290,7 +306,7 @@ export default function EventDetailModal({
           {/* Broadcasts, like GameDetailModal, only while they're still useful:
               once the event is over "where to watch" is noise and the highlight
               button on the tile is the affordance. */}
-          {event.broadcasts.length > 0 && !isPost ? (
+          {event.broadcasts.length > 0 && !isPost && !climbRound ? (
             <Row label="Watch">{event.broadcasts.join(" · ")}</Row>
           ) : null}
         </div>
@@ -311,12 +327,28 @@ export default function EventDetailModal({
           </div>
         ) : null}
 
+        {/* The rest of the day, when a round opened this sheet: names and
+            times only — no state, which would say who is still in it. */}
+        {climbRound && (event.climbRounds?.length ?? 0) > 1 ? (
+          <div className="mt-3">
+            <div className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "var(--text-muted)" }}>Also this day</div>
+            <div className="flex flex-col gap-0.5">
+              {event.climbRounds!.filter((r) => r.id !== climbRound.id).map((r) => (
+                <div key={r.id} className="text-xs break-words" style={{ color: "var(--text-secondary)" }}>
+                  {r.label}
+                  <span style={{ color: "var(--text-muted)" }}> · {isTimePlaceholder(r.startsAt) ? dayOnly(r.startsAt) : longWhen(r.startsAt)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <CalendarButtons event={calendarEvent} reminderTemplate={reminderLinkTemplate} onClose={onClose} />
 
         {showExternal ? (
           <button
             type="button"
-            onClick={() => { openExternal(event.eventUrl!); onClose(); }}
+            onClick={() => { openExternal(externalUrl!); onClose(); }}
             className="mt-4 w-full py-2 rounded-lg text-sm font-medium cursor-pointer"
             style={{ background: "var(--accent)", color: "white" }}
           >
@@ -327,6 +359,16 @@ export default function EventDetailModal({
             live round when it can, but a board already finished within that
             round still shows its result there. Say so rather than promise a
             clean page (A7). */}
+        {climbRound && event.climbWhereToWatch ? (
+          <button
+            type="button"
+            onClick={() => { openExternal(event.climbWhereToWatch!); onClose(); }}
+            className="mt-2 w-full py-2 rounded-lg text-xs cursor-pointer"
+            style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+          >
+            Where to watch in other regions
+          </button>
+        ) : null}
         {showExternal && event.kind === "chess" ? (
           <p className="mt-2 text-[11px] text-center" style={{ color: "var(--text-muted)" }}>
             Lichess shows results of finished boards.

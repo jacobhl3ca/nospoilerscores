@@ -1,8 +1,8 @@
-import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout } from "./types";
+import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout, ClimbRound } from "./types";
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
-import { espnFeaturedKeys, espnFrontPageSports, orderByEspnHeader, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
+import { espnFeaturedKeys, espnFrontPageSports, orderByEspnHeader, orderBySports, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_MIN_GAMES, prevYmd, rankBestYesterday } from "./bestYesterday";
 import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
@@ -10,6 +10,7 @@ import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } fr
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { fetchCuratedBoxingEvent } from "./boxing";
+import { CLIMB_CHANNEL, climbNotStreamedCount, climbRoundLabel, climbSubtitle, climbSubtitleVariants, climbVisibleRounds, type ClimbDiscipline } from "./climbing";
 import { logoForTeam, logoOverride, ncaaSchoolLogo, isPlaceholderTeam } from "./teamLogos";
 import {
   chessEventState,
@@ -74,6 +75,9 @@ const SPORT_PATHS: Record<Sport, string> = {
   chess: "",
   boxing: "",
   poker: "",
+  // Climbing (added 2026-10-03) is the /api/climbing worker route, dispatched
+  // in fetchLeague like chess.
+  climbing: "",
   esports: "",
   // ESPN front page has no scoreboard of its own — fetchTopEvents pulls the real
   // leagues' boards. Present only so the Record stays total. Same for Best of
@@ -756,6 +760,13 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // WSOP/WPT/EPT/Triton only, remains opt-in, and disappears cleanly when the
   // curated official calendar has no nearby confirmed event.
   { sport: "poker", label: "Poker", excludeFromAuto: true },
+  // Competition climbing (added 2026-10-03): the World Climbing Series World
+  // Cups — boulder, lead, speed. Finals run late at night US time and the
+  // official channel's clips name the winner, so it is a spoiler case. Opt-in.
+  // The window is the 2026 World Cup season (Keqiao Apr → Santiago Oct; the
+  // 2027 season opens in Tokyo, Apr 9); verifiedFor marks it for the yearly
+  // season-window check.
+  { sport: "climbing", label: "Climbing", startDate: "04-09", endDate: "10-26", excludeFromAuto: true, verifiedFor: 2026 },
   // Esports (PandaScore). Year-round, opt-in. Worlds and the LCK/LPL play in
   // Asian timezones, so the Western audience watches almost entirely on VOD —
   // the purest spoiler case in the app after cricket.
@@ -966,7 +977,7 @@ const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
   uecl: "⚽", facup: "⚽", copadelrey: "⚽", dfbpokal: "⚽", nations: "⚽",
   cricket: "🏏", cricketintl: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
-  ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", esports: "🎮", top: "⭐",
+  ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", climbing: "🧗", esports: "🎮", top: "⭐",
 };
 
 export function sportGlyph(sport: Sport): string {
@@ -998,11 +1009,13 @@ export function sportGlyph(sport: Sport): string {
 //   pro wrestling when they land).
 export type SportGroup = "us" | "soccer" | "majors" | "other";
 
-export const SPORT_GROUP_ORDER: { key: SportGroup; label: string }[] = [
-  { key: "us", label: "US leagues" },
-  { key: "soccer", label: "Soccer" },
-  { key: "majors", label: "Golf & tennis majors" },
-  { key: "other", label: "Racing, combat & more" },
+// `emoji` leads the heading in the Settings catalog only (Jacob 9/30); the
+// column <optgroup> labels stay text.
+export const SPORT_GROUP_ORDER: { key: SportGroup; label: string; emoji: string }[] = [
+  { key: "us", label: "US leagues", emoji: "🇺🇸" },
+  { key: "soccer", label: "Soccer", emoji: "⚽" },
+  { key: "majors", label: "Golf & tennis majors", emoji: "⛳" },
+  { key: "other", label: "Racing, combat & more", emoji: "🏁" },
 ];
 
 // Partial on purpose: an unlisted sport falls through to "other" rather than
@@ -1020,7 +1033,7 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   nations: "soccer",
   golf: "majors", tennis: "majors",
   f1: "other", nascar: "other", indycar: "other", ufc: "other",
-  boxing: "other", cricket: "other", cricketintl: "other", chess: "other", poker: "other",
+  boxing: "other", cricket: "other", cricketintl: "other", chess: "other", poker: "other", climbing: "other",
   esports: "other",
   sixnations: "other", rugbywc: "other", rugbychamp: "other",
   superrugby: "other", rugbytest: "other", nationschamp: "other",
@@ -1050,10 +1063,41 @@ const CATALOG_TAIL: ReadonlySet<Sport> = new Set<Sport>([
   "nrl", "afl",
 ]);
 
+// Fixed stature order inside each Settings group (Jacob 9/30: "the order
+// seems a bit odd"). With "Hide offseason" on, every visible row is in season,
+// so the old fallback, ALL_LEAGUES = season calendar, was the whole order and
+// read as random: WNBA under NCAA Volleyball, MLS 15th in Soccer, DFB-Pokal
+// apart from the Bundesliga. One numbering serves all groups (groups never
+// mix). Pro before college in US; domestic leagues, then continental, national
+// teams, domestic cups, college in Soccer; racing, combat, cricket, rugby,
+// mind sports in "Racing, combat & more". An unlisted sport sorts to the end
+// of its group.
+const CATALOG_STATURE: Partial<Record<Sport, number>> = Object.fromEntries(
+  ([
+    // US leagues
+    "nfl", "nba", "mlb", "nhl", "wnba", "cfl", "ufl",
+    "ncaaf", "ncaam", "ncaaw", "ncaah", "ncaawh", "ncaavb", "ncaabase", "ncaasoft", "llws",
+    // Soccer
+    "epl", "laliga", "seriea", "bundesliga", "ligue1", "mls", "ligamx", "nwsl", "efl", "saudi",
+    "ucl", "uel", "uecl", "libertadores",
+    "fifa", "euro", "afcon", "nations",
+    "facup", "copadelrey", "dfbpokal",
+    "ncaamsoc", "ncaawsoc",
+    // Golf & tennis majors
+    "golf", "tennis",
+    // Racing, combat & more
+    "f1", "nascar", "indycar", "ufc", "boxing", "cricket", "cricketintl",
+    "sixnations", "rugbywc", "rugbytest", "nationschamp", "rugbychamp", "superrugby", "premrugby", "urc",
+    "top14", "challengecup", "mlr", "nrl", "afl",
+    "climbing", "chess", "poker", "esports",
+  ] as Sport[]).map((sport, i) => [sport, i]),
+);
+
 // Sort rank within a Settings group: minority events last, then in-season
-// before offseason, then the catalog's own (season-calendar) order.
+// before offseason, then CATALOG_STATURE.
 export function catalogSortRank(sport: Sport, offseason: boolean): number {
-  return (CATALOG_TAIL.has(sport) ? 2 : 0) + (offseason ? 1 : 0);
+  const major = (CATALOG_TAIL.has(sport) ? 2 : 0) + (offseason ? 1 : 0);
+  return major * 1000 + (CATALOG_STATURE[sport] ?? 999);
 }
 
 // "8/21" — the compact form used in the league switcher's "EPL · 8/21" tail.
@@ -1301,6 +1345,7 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   boxing: 32,
   chess: 33,
   poker: 34,
+  climbing: 34.5,
   esports: 35,
   cfl: 36,
   nrl: 37,
@@ -1756,6 +1801,9 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   boxing: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
   chess:  { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
   poker:  { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
+  // Climbing finals are rated in the worker (climbFinalRating in
+  // public/_worker.js); this row is inert like the other event tiles.
+  climbing: { multiplier: 1, overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
   // Esports is scored as a SERIES (Bo3/Bo5), not a running total, so the
   // shared scorer does not apply — esportsRating() handles it, the same way
   // cricketRating() branches out before the shared path.
@@ -3336,6 +3384,7 @@ export function espnGameUrl(game: Game): string {
     case "boxing": return `https://www.espn.com/boxing/`;
     case "chess": return `https://lichess.org/broadcast`;
     case "poker": return `https://www.wsop.com/schedule/`;
+    case "climbing": return `https://www.youtube.com/@worldclimbing/live`;
     // PandaScore supplies no public per-match page, so there is no gamecast
     // to link to; this only satisfies the exhaustive switch.
     case "esports": return `https://www.pandascore.co/`;
@@ -3480,6 +3529,9 @@ export function sportStreamFallback(sport: Sport): string {
     // Poker cards carry a per-event official URL. This is only the exhaustive
     // last-resort landing and intentionally avoids a result/standings page.
     case "poker": return "https://www.wsop.com/schedule/";
+    // World Climbing streams every World Cup final free on YouTube (geo-blocked
+    // in Europe, where Eurosport / HBO Max hold the rights).
+    case "climbing": return "https://www.youtube.com/@worldclimbing/live";
     // Every tier-s/a match streams free on Twitch; the channel varies per
     // league, so the directory is the only destination right for all of them.
     case "esports": return "https://www.twitch.tv/directory/category/league-of-legends";
@@ -4184,6 +4236,83 @@ export async function fetchChessEvent(date?: string): Promise<EventFetchResult> 
       }),
     };
     return { card, failed: false };
+  } catch {
+    return EVENT_FETCH_FAILED;
+  }
+}
+
+// ── Climbing: /api/climbing (public/_worker.js) ─────────────────────────────
+// One World Cup day: the event plus its rounds on that ET day. The worker has
+// already reduced every finished final to one rating and sends no athlete
+// names. Two World Cups never share a day, so the first event is the day.
+interface ClimbApiRound {
+  id: string; kind: ClimbRound["kind"]; discipline: ClimbRound["discipline"]; category: ClimbRound["category"];
+  startsAt: string; endsAt: string | null; provisional: boolean; streamUrl: string | null;
+  blockedRegions: string[]; state: ClimbRound["state"]; rating: number | null;
+}
+interface ClimbApiEvent {
+  id: string; name: string; location: string; disciplines: ClimbDiscipline[];
+  dayIndex: number; dayCount: number; whereToWatchUrl: string | null; rounds: ClimbApiRound[];
+}
+
+const CLIMB_KINDS = new Set(["qualification", "semi-final", "final"]);
+const CLIMB_DISCIPLINES = new Set(["boulder", "lead", "speed"]);
+
+export function climbingCardFromApi(ev: ClimbApiEvent): LeagueEventCard {
+  const all: ClimbRound[] = (ev.rounds ?? [])
+    .filter((r) => CLIMB_KINDS.has(r.kind) && CLIMB_DISCIPLINES.has(r.discipline) && (r.category === "men" || r.category === "women"))
+    .map((r) => ({
+      id: r.id,
+      label: climbRoundLabel(r),
+      kind: r.kind,
+      discipline: r.discipline,
+      category: r.category,
+      startsAt: r.startsAt,
+      endsAt: r.endsAt ?? null,
+      provisional: !!r.provisional,
+      streamUrl: r.streamUrl ?? null,
+      blockedRegions: Array.isArray(r.blockedRegions) ? r.blockedRegions : [],
+      state: r.state === "in" || r.state === "post" ? r.state : "pre",
+      // Only a finished final carries a rating; anything else from the wire is
+      // ignored rather than trusted.
+      rating: r.kind === "final" && r.state === "post" && typeof r.rating === "number" ? r.rating : null,
+    }));
+  const rounds = climbVisibleRounds(all);
+  const state: LeagueEventCard["state"] = all.some((r) => r.state === "in")
+    ? "in"
+    : all.length && all.every((r) => r.state === "post")
+      ? "post"
+      : "pre";
+  const lead = rounds[0] ?? all[0];
+  return {
+    kind: "climbing",
+    title: ev.name,
+    subtitle: climbSubtitle(ev.location, ev.disciplines ?? [], ev.dayIndex, ev.dayCount) || undefined,
+    subtitleVariants: climbSubtitleVariants(ev.location, ev.disciplines ?? [], ev.dayIndex, ev.dayCount),
+    state,
+    statusDetail: state === "in" ? "Live" : state === "post" ? "Final" : "Upcoming",
+    date: lead ? new Date(lead.startsAt).toISOString() : new Date().toISOString(),
+    broadcasts: ["YouTube"],
+    officialChannel: CLIMB_CHANNEL,
+    officialLabel: "Replay",
+    climbRounds: rounds,
+    climbNotStreamed: climbNotStreamedCount(all),
+    climbWhereToWatch: ev.whereToWatchUrl || undefined,
+  };
+}
+
+export async function fetchClimbingEvent(date?: string): Promise<EventFetchResult> {
+  try {
+    const ymd = date || toYmd(getEtServiceDate());
+    const res = await fetchWithRetry(`${getApiBase()}/api/climbing?dates=${ymd}`);
+    if (!res.ok) return EVENT_FETCH_FAILED;
+    const body = (await res.json()) as { events?: ClimbApiEvent[]; error?: string };
+    // The worker answers 200 with `error` when the calendar itself broke — a
+    // feed that is down, not a quiet day (see EventFetchResult).
+    if (body.error || !Array.isArray(body.events)) return EVENT_FETCH_FAILED;
+    const ev = body.events[0];
+    if (!ev) return EVENT_FETCH_EMPTY;
+    return { card: climbingCardFromApi(ev), failed: false };
   } catch {
     return EVENT_FETCH_FAILED;
   }
@@ -5929,22 +6058,69 @@ async function fetchEspnFrontPageFeed(): Promise<string[]> {
   }
 }
 
+// The day's snapshot the mini bakes (scripts/lib/espn-front.mjs): the strip
+// and body as espn.com showed them over that day. A past day's file no longer
+// changes, so a hit is kept for the session; a miss is retried after a few
+// minutes, and a network error is not kept at all.
+interface EspnFrontSnapshot { strip: unknown; featured?: unknown }
+const ESPN_FRONT_MISS_TTL_MS = 10 * 60 * 1000;
+const espnFrontSnapshotCache = new Map<string, { at: number; snap: EspnFrontSnapshot | null }>();
+
+async function fetchEspnFrontSnapshot(date: string): Promise<EspnFrontSnapshot | null> {
+  const hit = espnFrontSnapshotCache.get(date);
+  if (hit && (hit.snap || Date.now() - hit.at < ESPN_FRONT_MISS_TTL_MS)) return hit.snap;
+  try {
+    const res = await fetch(`${getApiBase()}/news/espn-front/${date}.json`, { cache: "no-store" });
+    const snap = res.ok ? (await res.json()) as EspnFrontSnapshot : null;
+    const ok = snap && typeof snap === "object" && snap.strip ? snap : null;
+    if (res.ok || res.status === 404) espnFrontSnapshotCache.set(date, { at: Date.now(), snap: ok });
+    return ok;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchTopEvents(
   date: string | undefined,
   // Games the board already fetched for this date, by sport — a league that is
   // also a column costs nothing extra.
   prefetched: Map<Sport, Game[]>,
+  // A day before today: the column reads that day's snapshot instead of the
+  // live strip (Jacob 9/29: "shouldn't the yesterday page have those same
+  // leagues?").
+  isPast = false,
 ): Promise<LeagueData> {
-  const [features, featured] = await Promise.all([fetchEspnHeader(), fetchEspnFrontPageFeed()]);
-  const pools = await Promise.all(espnFrontPageSports(features).map(async (sport) => {
+  const pull = (sports: Sport[]) => Promise.all(sports.map(async (sport) => {
     const pre = prefetched.get(sport);
     if (pre) return pre;
     try {
-      return (await fetchGames(sport, date)).games;
+      const { games } = await fetchGames(sport, date);
+      // A past day's cards want their highlight buttons: the same video
+      // enrichment the /yesterday board's own columns run.
+      if (isPast && date && sport === "nhl") await enrichNhlVideos(games, date);
+      if (isPast && date && sport === "mlb") await enrichMlbVideos(games, date);
+      return games;
     } catch {
       return [] as Game[];
     }
   }));
+  if (isPast && date) {
+    const snap = await fetchEspnFrontSnapshot(date);
+    if (snap) {
+      const features = parseEspnHeader(snap.strip);
+      const featured = Array.isArray(snap.featured) ? snap.featured.filter((id): id is string => typeof id === "string") : [];
+      // Ids from other days match nothing on this date's scoreboards and drop out.
+      const games = orderByEspnHeader((await pull(espnFrontPageSports(features))).flat(), features, featured);
+      return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false, espnFeatured: espnFeaturedKeys(features, featured), espnSnapshot: "day" };
+    }
+    // No snapshot for the day (before the bake began, or the mini missed it):
+    // today's strip leagues, all of that day's games, in strip league order.
+    const sports = espnFrontPageSports(await fetchEspnHeader());
+    const games = orderBySports((await pull(sports)).flat(), sports);
+    return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false, espnFeatured: [], espnSnapshot: "fallback" };
+  }
+  const [features, featured] = await Promise.all([fetchEspnHeader(), fetchEspnFrontPageFeed()]);
+  const pools = await pull(espnFrontPageSports(features));
   const games = orderByEspnHeader(pools.flat(), features, featured);
   return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false, espnFeatured: espnFeaturedKeys(features, featured) };
 }
@@ -6024,6 +6200,19 @@ export function fetchBestYesterday(todayYmd: string, opts: BestYesterdayOptions 
   return data;
 }
 
+// One league's games for one slate day, with the same NHL/MLB video
+// enrichment a board column gets — for the Watch queue strip, whose queued
+// games may sit on a day or a league the board is not showing. Games only:
+// event-tile sports (golf, F1, UFC, chess, boxing, poker) have no game card
+// and so can never be queued.
+export async function fetchSlateGames(sport: Sport, date: string): Promise<Game[]> {
+  if (sport === "esports") return fetchEsportsGames(date);
+  const { games } = await fetchGames(sport, date);
+  if (sport === "nhl") await enrichNhlVideos(games, date);
+  if (sport === "mlb") await enrichMlbVideos(games, date);
+  return games;
+}
+
 export async function fetchAllLeagues(
   date?: string,
   thirdLeagueSport?: Sport | "empty",
@@ -6064,11 +6253,12 @@ export async function fetchAllLeagues(
   const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | "hidden" | null => {
     if (sport === "empty") return "empty";
     if (!sport) return null;
-    // ESPN's strip is today's front page, so a "top" pin is a today-board
-    // column like "best" below: Auto on any other date or while the column is
-    // switched off, and filled like a turned-off league when hidden.
+    // ESPN's strip is today's front page; a past day reads that day's
+    // snapshot instead (fetchTopEvents). Tomorrow and later have no front page
+    // yet, so there and while the column is switched off the slot takes its
+    // Auto league. Filled like a turned-off league when hidden.
     if (sport === "top") {
-      if (!TOP_EVENTS_ENABLED || !isTodayView) return null;
+      if (!TOP_EVENTS_ENABLED || !(isTodayView || isPastView)) return null;
       return hidden.includes("top") ? "hidden" : TOP_EVENTS_CONFIG;
     }
     // "Yesterday" is the day before TODAY, so a "best" pin is a today-board
@@ -6198,12 +6388,14 @@ export async function fetchAllLeagues(
       if (!games.length) return null;
       return { sport: cfg.sport, label, games };
     }
-    if (cfg.sport === "chess" || cfg.sport === "boxing" || cfg.sport === "poker") {
+    if (cfg.sport === "chess" || cfg.sport === "boxing" || cfg.sport === "poker" || cfg.sport === "climbing") {
       const { card, failed } = cfg.sport === "chess"
         ? await fetchChessEvent(date)
         : cfg.sport === "boxing"
           ? await fetchBoxingEvent(date)
-          : await fetchPokerEvent(date);
+          : cfg.sport === "climbing"
+            ? await fetchClimbingEvent(date)
+            : await fetchPokerEvent(date);
       // A day with no card still renders the column. These three are
       // excludeFromAuto, so a column only exists here because the user pinned
       // it or picked it in the switcher — dropping it on a quiet date made the
@@ -6383,7 +6575,7 @@ export async function fetchAllLeagues(
   if (final.some((cfg) => cfg.sport === "top")) {
     const prefetched = new Map<Sport, Game[]>();
     for (const r of results) if (r && r.games.length) prefetched.set(r.sport, r.games);
-    top = await fetchTopEvents(date, prefetched).catch(
+    top = await fetchTopEvents(date, prefetched, isPastView).catch(
       (): LeagueData => ({ sport: "top", label: TOP_EVENTS_CONFIG.label, games: [], fetchFailed: true }),
     );
   }

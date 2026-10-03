@@ -53,7 +53,7 @@ for (const viewport of [
 
     // The switcher catalog starts with offseason rows hidden (9/25), but a
     // pinned one stays listed so it can be un-pinned.
-    await page.locator("summary", { hasText: /leagues in the switcher · Edit/ }).click();
+    await page.getByRole("button", { name: "More leagues", exact: true }).click();
     await expect(page.getByRole("checkbox", { name: /Hide offseason/ })).toBeChecked();
     await expect(page.getByRole("checkbox", { name: "NHL · offseason", exact: true })).toBeVisible();
   });

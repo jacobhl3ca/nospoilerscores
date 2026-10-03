@@ -452,10 +452,11 @@ RECENT + UPCOMING with ranks, 17 logos, 0 broken, 0 console errors. Data-layer r
 39 games (2025 + 2026), records + ranks filled.
 
 **Open:**
-- [ ] **Live strings are unverified.** First live window Fri 2026-09-18 23:30Z (7:30pm ET) MTL@HAM on
-      CBSSN. Capture theScore's raw `progress` at Q1 / halftime / end of Q3 / final into
-      `tests/fixtures/cfl-live-capture.json` and pin them in `live-progress.test.ts` (the worker maps
-      `clock_label` defensively: contains "half" → Halftime, `^end` → End of Nth, else `clock - Nth`).
+- [x] **Live strings verified 2026-09-28.** The mini logged 421 raw `progress` changes over 4 games
+      (Fri 9/25 TOR@WPG, SSK@BC; Sat 9/26 CGY@OTT, HAM@EDM). Only two shapes: `"8:32 2nd"` and
+      `"End 2nd"`. Halftime is `"End 2nd"` (never "Halftime") and already reads Halftime on the card.
+      Pinned in `tests/fixtures/cfl-live-capture.json` + `cfl-worker.test.mjs` + `live-progress.test.ts`.
+      Not yet seen live: overtime, a weather delay, the in_progress→final flip.
 - [ ] Prebake: after the 9/18–19 games, confirm `/news/thescore-cfl.json` + `reddit-cfl.json` bake and
       `hl-*` entries land for cfl; `check-staleness` green. Mobile news then shows r/CFL + theScore CFL.
 - [ ] Production read-back only after Jacob authorizes deploy: repeat the 9/12 column on hidescore.com

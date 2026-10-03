@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { createJiti } from "jiti";
 import { formatGameProgress } from "../src/lib/liveProgress.ts";
 
@@ -46,9 +47,8 @@ test("running clocks are unchanged", () => {
 });
 
 // CFL (added 2026-09-13) shares the gridiron branch. The worker maps
-// theScore's live strings onto these ESPN shapes; the real live strings are
-// unverified until the first live window (Fri 2026-09-18, MTL@HAM) — replace
-// the assumed inputs below with the captured payload then.
+// theScore's live strings onto these ESPN shapes. The halftime and OT inputs
+// here are assumed; the captured ones are pinned in the next test.
 test("cfl reads like the NFL: quarters, halftime, end of quarter, OT", () => {
   assert.equal(full(g("cfl", 2, "8:32", "8:32 - 2nd")), "Q2 - 8:32");
   assert.equal(short(g("cfl", 2, "8:32", "8:32 - 2nd")), "Q2");
@@ -57,6 +57,30 @@ test("cfl reads like the NFL: quarters, halftime, end of quarter, OT", () => {
   assert.equal(full(g("cfl", 3, "0:00", "End of 3rd")), "End of Q3");
   assert.equal(full(g("cfl", 5, "", "OT")), "OT");
   assert.equal(full(g("cfl", 6, "", "2OT")), "2OT");
+});
+
+test("cfl live strings captured 2026-09-25/26 render as NFL-style cards", () => {
+  // `hidescore` = what /api/cfl served next to each raw theScore string.
+  const { captures } = JSON.parse(
+    readFileSync(new URL("./fixtures/cfl-live-capture.json", import.meta.url), "utf8"),
+  ) as { captures: { progress: { string: string }; hidescore: { shortDetail: string; displayClock: string; period: number } | null }[] };
+  const card = Object.fromEntries(
+    captures
+      .filter((c) => c.hidescore)
+      .map((c) => {
+        const h = c.hidescore!;
+        const x = g("cfl", h.period, h.displayClock, h.shortDetail);
+        return [c.progress.string, `${full(x)} | ${short(x)}`];
+      }),
+  );
+  assert.deepEqual(card, {
+    "15:00 1st": "Q1 - 15:00 | Q1",
+    "End 1st": "End of Q1 | End Q1",
+    // theScore never says "Halftime"; its "End 2nd" still reads as one.
+    "End 2nd": "Halftime | HT",
+    "End 3rd": "End of Q3 | End Q3",
+    "End 4th": "End of Q4 | End Q4",
+  });
 });
 
 test("college-football OT has no clock, so its 0:00 is live play", () => {

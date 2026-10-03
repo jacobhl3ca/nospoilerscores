@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import { TEAM_PAGE_LEAGUES, teamPagePath, teamsInLeague } from "@/lib/teamPageLeagues";
 
@@ -86,11 +87,7 @@ export default function TeamsHubPage() {
         </section>
       ))}
 
-      <div className="mt-10 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-        <Link href="/" className="underline underline-offset-2" style={muted}>Back to HideScore</Link>
-        <Link href="/spoiler-free-sports" className="underline underline-offset-2" style={muted}>Spoiler-free sports guide</Link>
-        <Link href="/faq" className="underline underline-offset-2" style={muted}>FAQ</Link>
-      </div>
+      <DocFooter route="teams" />
 
       <script
         type="application/ld+json"

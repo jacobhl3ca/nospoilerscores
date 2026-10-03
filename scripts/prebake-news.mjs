@@ -22,8 +22,10 @@ import {
 } from "./lib/fotmob.mjs";
 import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
-import { pickEspnGameClip } from "./lib/espn-clip.mjs";
+import { pickEspnGameClip, attachEspnVideoClips } from "./lib/espn-clip.mjs";
+import { isRealEspnClip, mergeVideos, orderVideos } from "./lib/video-order.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
+import { etServiceYmd, mergeEspnFrontSnapshot, parseFrontPageFeedIds, trimEspnHeader } from "./lib/espn-front.mjs";
 
 const OUT_DIR = "public/news";
 
@@ -947,6 +949,7 @@ async function fetchESPNICYMI() {
   const descM = block.match(/<p[^>]*>([\s\S]{5,500}?)<\/p>/);
   const title = titleM ? decodeEntities(titleM[1].replace(/<[^>]+>/g, "")) : "";
   if (!title) return null;
+  if (!isRealEspnClip({ id: vid, headline: title })) return null;
   return {
     id: vid,
     headline: `ICYMI: ${title}`,
@@ -1312,7 +1315,48 @@ async function fetchESPNTopVideos() {
       }
     }
   }
-  return await persistVideos("espn-videos", scraped, icymi?.id);
+  let prior = null;
+  try { prior = JSON.parse(await readFile(`${OUT_DIR}/espn-videos.json`, "utf8")); } catch { /* first run */ }
+  const merged = await persistVideos("espn-videos", scraped, icymi?.id);
+  return await espnVideoClips(merged, prior?.items);
+}
+
+// ── ESPN Videos: a direct mp4 per item, so the modal plays it ────────────
+// See attachEspnVideoClips in scripts/lib/espn-clip.mjs. Mini bake only (off
+// under GitHub Actions, which still carries clips the prior file has);
+// ESPN_VIDEO_PLAY=0 turns it off and drops every carried videoUrl. ≤8 clip
+// requests per bake, 1 per second; an answered id is never asked again.
+const ESPN_VIDEO_PLAY_OFF = process.env.ESPN_VIDEO_PLAY === "0";
+const ESPN_VIDEO_PLAY_ON = !ESPN_VIDEO_PLAY_OFF && process.env.GITHUB_ACTIONS !== "true";
+// Outside public/news for the same reason as HL_FOTMOB_STATE_PATH.
+const ESPN_VIDEO_STATE_PATH = ".bake-state/espn-video-clip.json";
+const ESPN_VIDEO_STATE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+
+async function espnVideoClips(items, priorItems) {
+  let saved = null;
+  try { saved = JSON.parse(await readFile(ESPN_VIDEO_STATE_PATH, "utf8")); } catch { /* first run */ }
+  const state = { clips: saved?.clips && typeof saved.clips === "object" ? saved.clips : {} };
+  const prior = new Map((Array.isArray(priorItems) ? priorItems : []).map((i) => [i.id, i]));
+  const { items: out, requests } = await attachEspnVideoClips(items, {
+    on: ESPN_VIDEO_PLAY_ON,
+    off: ESPN_VIDEO_PLAY_OFF,
+    prior,
+    state,
+    fetchClip: async (id) => {
+      const res = await fetch(`https://api-app.espn.com/v1/video/clips/${encodeURIComponent(id)}`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+      return res.ok ? await res.json() : null;
+    },
+  });
+  console.log(`ESPN-VIDEO-CLIP-REQUESTS n=${requests} playable=${out.filter((i) => i.videoUrl).length}/${out.length}${ESPN_VIDEO_PLAY_OFF ? " (off)" : ""}`);
+  const cutoff = Date.now() - ESPN_VIDEO_STATE_TTL_MS;
+  for (const [k, v] of Object.entries(state.clips)) if (!(v?.at > cutoff)) delete state.clips[k];
+  try {
+    await mkdir(dirname(ESPN_VIDEO_STATE_PATH), { recursive: true });
+    await writeFile(ESPN_VIDEO_STATE_PATH, JSON.stringify(state));
+  } catch (e) {
+    console.warn(`ESPN-VIDEO-CLIP state not saved: ${e?.message || e}`);
+  }
+  return out;
 }
 
 function scrapeESPNTopVideosFromHtml(html, icymi) {
@@ -1348,6 +1392,8 @@ function scrapeESPNTopVideosFromHtml(html, icymi) {
     if (!titleM) continue;
     const title = decodeEntities(titleM[1].replace(/<[^>]+>/g, ""));
     if (!title) continue;
+    // Live-stream placeholder (id "1", "Watch live: ...") — not a clip.
+    if (!isRealEspnClip({ id: vid, headline: title })) continue;
     const descM = block.match(/<p[^>]*class="[^"]*contentItem__subhead[^"]*"[^>]*>([\s\S]{5,500}?)<\/p>/);
     const description = descM ? decodeEntities(descM[1].replace(/<[^>]+>/g, "")) : "";
     // The first <a href> in a video block is often a sibling-story link (a
@@ -1398,22 +1444,14 @@ async function persistVideos(name, fresh, pinnedId) {
   // Purge carried-forward ESPN analyst takes so a pundit clip that slipped in
   // earlier today (e.g. before this filter shipped) doesn't linger in the
   // carry until the ET-midnight rollover. ICYMI is safe — its all-caps
-  // "ICYMI:" prefix doesn't match the name-pattern regex.
+  // "ICYMI:" prefix doesn't match the name-pattern regex. Live-stream
+  // placeholders (id "1") carried from an earlier bake are purged too.
   const carry =
     name === "espn-videos"
-      ? carryRaw.filter((i) => !isEspnAnalystTake(i.headline || ""))
+      ? carryRaw.filter((i) => isRealEspnClip(i) && !isEspnAnalystTake(i.headline || ""))
       : carryRaw;
-  const byId = new Map();
-  // Seed with carry so unseen items survive the merge; fresh items overwrite
-  // (so headline/description/imageUrl edits propagate) while preserving the
-  // earliest firstSeenAt we've ever recorded for that id.
-  for (const item of carry) {
-    byId.set(item.id, { ...item, firstSeenAt: item.firstSeenAt || nowMs });
-  }
-  for (const item of fresh) {
-    const prior = byId.get(item.id);
-    byId.set(item.id, { ...item, firstSeenAt: prior?.firstSeenAt || item.firstSeenAt || nowMs });
-  }
+  // Seed with carry so unseen items survive the merge.
+  const byId = mergeVideos(carry, fresh, nowMs);
   // Repair carry-forward items written before commit ce??? — earlier scrapes
   // captured a sibling-story href as articleUrl on some videos (SGA, Rocky).
   // The id is the canonical clip id, so rebuild articleUrl from it for the
@@ -1425,15 +1463,8 @@ async function persistVideos(name, fresh, pinnedId) {
       }
     }
   }
-  // Order: newest big-format video first, ICYMI second, then the rest by
-  // firstSeenAt ascending so morning videos anchor the body of the list.
-  const all = [...byId.values()];
-  const pinned = pinnedId ? all.filter((i) => i.id === pinnedId) : [];
-  const rest = all
-    .filter((i) => i.id !== pinnedId)
-    .sort((a, b) => (a.firstSeenAt || 0) - (b.firstSeenAt || 0));
-  const ordered = rest.length > 0 ? [rest[0], ...pinned, ...rest.slice(1)] : pinned;
-  return ordered.slice(0, 10);
+  // Order: newest first, ICYMI second, rest newest-first.
+  return orderVideos([...byId.values()], pinnedId);
 }
 
 // ── Reddit top posts (per-league + general /r/sports) ────────────
@@ -1516,15 +1547,16 @@ const REDLIB_INSTANCES = [
   "https://redlib.kittywit.ch",
   "https://safereddit.com",
 ];
+// A private Redlib the bake host runs itself (the mini: REDLIB_BASE in the job's
+// env). Tried before every public mirror. Never a public URL in the repo.
+const LOCAL_REDLIB = (process.env.REDLIB_BASE || "").trim().replace(/\/+$/, "") || null;
 
 async function fetchRedditVideoMap(subreddit) {
   // Desync + spread the burst: all reddit jobs fire in parallel, so stagger the
   // start and rotate which mirror each sub tries first rather than dog-piling
   // one volunteer instance. First non-empty result wins; failures fall through.
   await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 1200)));
-  const offset = [...subreddit].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
-  for (let k = 0; k < REDLIB_INSTANCES.length; k++) {
-    const base = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
+  for (const base of redlibOrder(subreddit, { sticky: false })) {
     // Go through redlibGet, not a raw fetch: safereddit.com (the only mirror
     // still answering as of 2026-09-18) serves an Anubis challenge page —
     // HTTP 200, zero posts — to anything sending a browser User-Agent, and the
@@ -1595,9 +1627,12 @@ async function fetchRedlibHTML(subreddit) {
 
 // Mirror-order for any redlib page: last winner first, then hash-rotated so
 // different subs don't dog-pile the same volunteer host.
-function redlibOrder(seed) {
+// The private LOCAL_REDLIB always leads. `sticky: false` (the video-id map)
+// skips the last-winner hop so the public mirrors keep their spread.
+function redlibOrder(seed, { sticky = true } = {}) {
   const order = [];
-  if (_redlibWinner && !_redlibStale.has(_redlibWinner)) order.push(_redlibWinner);
+  if (LOCAL_REDLIB && !_redlibStale.has(LOCAL_REDLIB)) order.push(LOCAL_REDLIB);
+  if (sticky && _redlibWinner && !_redlibStale.has(_redlibWinner) && !order.includes(_redlibWinner)) order.push(_redlibWinner);
   const offset = [...seed].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
   for (let k = 0; k < REDLIB_INSTANCES.length; k++) {
     const inst = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
@@ -1616,7 +1651,11 @@ function redlibOrder(seed) {
 // whenever perennialte blipped. `mustContain` is what a REAL page has, so a
 // 200-with-a-challenge is treated as a miss, not as success.
 async function redlibGet(base, path, mustContain) {
-  for (const headers of [{ "User-Agent": UA }, {}]) {
+  // use_hls=on: without it a current redlib build renders every v.redd.it post
+  // as <video src="" poster=""> with no video id anywhere in the card, so video
+  // posts baked blank. With it the card carries /hls/<id> (9/30, mini redlib).
+  const hls = { Cookie: "use_hls=on" };
+  for (const headers of [{ "User-Agent": UA, ...hls }, hls]) {
     try {
       const res = await fetch(`${base}${path}`, { headers, signal: AbortSignal.timeout(9000) });
       if (!res.ok) continue;
@@ -1780,7 +1819,10 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
       // miss it and EVERY i.redd.it/preview image post renders image-less (the
       // RSS image fix never runs because redlib "succeeds" first). Grab the
       // <img src> after the post_media_image anchor, attribute-order-agnostic.
-      (block.match(/post_media_image[^>]*>\s*<img[^>]+\bsrc="([^"]+)"/) || [])[1];
+      // The mini's own redlib (9/29 build) also puts an HTML comment between the
+      // anchor and the <img> ("<!-- i.redd.it images speical case -->"), so skip
+      // any comments there too — without it r/soccer baked 0 image thumbnails.
+      (block.match(/post_media_image[^>]*>\s*(?:<!--[\s\S]*?-->\s*)*<img[^>]+\bsrc="([^"]+)"/) || [])[1];
     if (imgPath) {
       imageUrl = redlibMediaToReddit(imgPath);
       imageFullUrl = imageUrl;
@@ -2922,6 +2964,17 @@ async function hlOembedMeta(id) {
   }
 }
 
+// Mirrors NOT_HIGHLIGHT_RX in public/_worker.js (hand copy, same reason as
+// HL_WEEK_WORDS). The worker refuses these titles for new lookups, but an id
+// baked before that fix is CARRIED, not re-resolved, so the carried-slot
+// revalidation must refuse it too: 8 WNBA playoff cards carried a postgame
+// press conference as their 1st button (2026-10-01).
+const HL_NOT_HIGHLIGHT_RX = /\b(?:press conferences?|pressers?|media availability)\b/i;
+async function hlVideoIsNotHighlight(id) {
+  const meta = await hlOembedMeta(id);
+  return !!meta?.title && HL_NOT_HIGHLIGHT_RX.test(meta.title);
+}
+
 async function hlVideoMatchesTeams(id, away, home) {
   const meta = await hlOembedMeta(id);
   return !!meta?.title && hlTitleHasTeam(meta.title, away) && hlTitleHasTeam(meta.title, home);
@@ -3781,7 +3834,7 @@ async function bakeGameHighlights() {
 
         // Revalidate every carried slot against both its uploader and matchup.
         // A channel marker proves provenance, not that the clip is for this game.
-        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
+        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || (await hlVideoIsNotHighlight(prevOfficial)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
         }
@@ -3790,7 +3843,7 @@ async function bakeGameHighlights() {
           prevOfficial = null;
           ageRejected++;
         }
-        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
+        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || (await hlVideoIsNotHighlight(prevExtended)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevExtended = null;
         }
@@ -3862,6 +3915,10 @@ async function bakeGameHighlights() {
             officialFotmob = fotmob;
           }
         }
+        // A rejected carried official can re-resolve to the carried 2nd-button
+        // clip (the WNBA press-conference cleanup: the full-game cut moves up).
+        // Drop it from slot 2 so both buttons never play the same video.
+        if (prevExtended && prevExtended === official) prevExtended = null;
         let extended = prevExtended ?? null;
         if (!extended) {
           extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, week, compTokens);
@@ -5342,6 +5399,58 @@ if (runCricketSeries) {
   }
 }
 
+// ESPN front page day snapshot (see scripts/lib/espn-front.mjs). The client's
+// ESPN front page column reads it on a past date, since espn.com itself keeps
+// no history. Token "espn-front" for --only / --skip. Written to a SUBDIR so
+// the plain `public/news/*.json` upload loops never carry it; the mini's
+// 15-min espn cron owns the file and uploads it on its own. The same two URLs
+// the client fetches (src/lib/espn.ts), minus the client's per-origin `hs=`.
+const ESPN_FRONT_HEADER_URL = "https://site.web.api.espn.com/apis/v2/scoreboard/header?region=us&lang=en&contentorigin=espn&tz=America%2FNew_York";
+const ESPN_FRONT_FEED_URL = "https://onefeed.fan.api.espn.com/apis/v3/cached/contentEngine/oneFeed/frontpage?source=ESPN.com+-+FAM&showfc=true&region=us&lang=en&editionKey=espn-en&isPremium=true&offset=0&limit=10";
+async function bakeEspnFrontSnapshot() {
+  const date = etServiceYmd();
+  const path = `${OUT_DIR}/espn-front/${date}.json`;
+  const res = await fetch(ESPN_FRONT_HEADER_URL, { headers: { "User-Agent": UA } });
+  if (!res.ok) throw new Error(`espn header HTTP ${res.status}`);
+  const strip = trimEspnHeader(await res.json());
+  // An empty strip is a failed read, not an empty front page: keep the file.
+  if (!strip.sports.length) throw new Error("espn header returned 0 leagues with events");
+  let featured = [];
+  try {
+    const feed = await fetch(ESPN_FRONT_FEED_URL, { headers: { "User-Agent": UA } });
+    if (feed.ok) featured = parseFrontPageFeedIds(await feed.json());
+  } catch (e) {
+    console.warn("espn-front body feed skipped:", e?.message || e);
+  }
+  // The day so far: this machine's file, else the live copy (a fresh checkout
+  // or a second machine must not restart the day at one sample).
+  let prev = null;
+  try { prev = JSON.parse(await readFile(path, "utf8")); } catch { /* not local */ }
+  if (!prev) {
+    try {
+      const live = await fetch(`https://hidescore.com/news/espn-front/${date}.json?ts=${Date.now()}`, { headers: { "User-Agent": UA } });
+      if (live.ok) prev = await live.json();
+    } catch { /* first sample of the day */ }
+  }
+  const snap = mergeEspnFrontSnapshot(prev, { date, fetchedAt: new Date().toISOString(), strip, featured });
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify(snap));
+  const ids = snap.strip.sports.reduce((n, s) => n + s.leagues.reduce((m, l) => m + l.events.length, 0), 0);
+  console.log(`ESPN-FRONT ${date} samples=${snap.samples} leagues=${snap.strip.sports.reduce((n, s) => n + s.leagues.length, 0)} ids=${ids} featured=${snap.featured.length}`);
+}
+const runEspnFront = !ONLY_REDDIT
+  && (ONLY_LIST.length === 0 || ONLY_LIST.includes("espn-front"))
+  && !tokenSkipped("espn-front");
+let espnFrontFailed = false;
+if (runEspnFront) {
+  try {
+    await bakeEspnFrontSnapshot();
+  } catch (e) {
+    console.error("espn-front bake FAILED:", e?.message || e);
+    espnFrontFailed = true;
+  }
+}
+
 // Persist the watch-page reads both bakes above made, then say how many were
 // served from disk vs fetched live, so a new YouTube block shows up in the log.
 try {
@@ -5367,3 +5476,4 @@ if (highlightsFailed && ONLY_LIST.includes("highlights")) process.exit(1);
 if (recapsFailed && ONLY_LIST.includes("recaps")) process.exit(1);
 if (mlbReviewFailed && ONLY_LIST.includes("mlb-review")) process.exit(1);
 if (cricketSeriesFailed && ONLY_LIST.includes("cricket-series")) process.exit(1);
+if (espnFrontFailed && ONLY_LIST.includes("espn-front")) process.exit(1);

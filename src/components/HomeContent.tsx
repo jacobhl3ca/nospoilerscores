@@ -4,23 +4,27 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, PREFS_STORAGE_KEY } from "@/lib/preferences";
+import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
+import { LeaguePickerModal } from "./LeaguePickerModal";
 import type { BestYesterdayOptions } from "@/lib/espn";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
-import { fromYmd } from "@/lib/etDay";
+import { fromYmd, etSlateYmd, nextYmd } from "@/lib/etDay";
+import { WATCH_QUEUE_ENABLED, toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
+import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
+import GameCard from "@/components/GameCard";
 import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
-import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { fetchAllLeagues, fetchSlateGames, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
-import LeagueColumn, { playoffPictureInWindow } from "@/components/LeagueColumn";
+import LeagueColumn, { mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
 import EventDetailModal from "@/components/EventDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
@@ -32,7 +36,8 @@ import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
+import AddLeaguePopover from "@/components/AddLeaguePopover";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
@@ -40,9 +45,14 @@ import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
+import { fetchPlayoffPicture, fieldIsSet } from "@/lib/playoffPicture";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
+import { formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
 import Link from "next/link";
+import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
+import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
+import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -96,6 +106,9 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
     // See lib/dismissals.ts.
     kickoffBannersDismissed: mergeDismissedKeys(local.kickoffBannersDismissed, remote.kickoffBannersDismissed),
     wcBannerDismissed: local.wcBannerDismissed || remote.wcBannerDismissed || undefined,
+    // The account copy wins, but pruned like a local load (3 days, cap 20),
+    // so a stale queue is not written back and re-pushed to every device.
+    watchQueue: pruneWatchQueue(remote.watchQueue, getDateString(0)),
   };
   // The remote copy is canonical for a signed-in account. Its missing marker,
   // not the new device's local marker, decides whether the account is legacy.
@@ -119,7 +132,7 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
 function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): BestYesterdayOptions {
   const yesterday = fromYmd(prevYmd(date));
   const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && isLeagueActive(l, yesterday));
-  const auto = pickAndAssignLeagues(fromYmd(date), slotCount, p.hiddenLeagues).map((l) => l.sport);
+  const auto = pickAndAssignLeagues(fromYmd(date), slotCount, boardHiddenLeagues(p)).map((l) => l.sport);
   const board = [p.firstLeague, p.secondLeague, p.thirdLeague, p.fourthLeague, p.fifthLeague]
     .slice(0, slotCount)
     .map((pref, i) => (pref === undefined ? auto[i] : pref))
@@ -131,7 +144,7 @@ function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): 
     ...[...firstPref, ...rest].map((cfg) => cfg.sport),
     ...(p.shownLeagues ?? []),
   ];
-  return { sources: bestYesterdaySourceSports(ordered.filter(inSeason), p.hiddenLeagues ?? []) };
+  return { sources: bestYesterdaySourceSports(ordered.filter(inSeason), boardHiddenLeagues(p) ?? []) };
 }
 
 function getSmartDefaultOffset(cutoffHour = 13): number {
@@ -461,18 +474,6 @@ function kickoffMessage(k: LeagueKickoff): string {
 // was nothing in it to file against.
 const FEEDBACK_LEAGUE_PREFILL = "League request: ";
 
-// Build day (YYYY-MM-DD, New York), set in next.config.ts. Unset in tests.
-const BUILT_ON = process.env.NEXT_PUBLIC_BUILT_ON;
-// "September 25, 2026". Noon UTC is the same calendar day in New York, and a
-// fixed timeZone keeps the server and client strings identical.
-const formatBuiltOn = (day: string) =>
-  new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", {
-    timeZone: "America/New_York",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
   typeof window !== "undefined" && window.matchMedia(WIDE_BOARD_QUERY).matches;
@@ -581,6 +582,10 @@ export default function HomeContent({
   const [leagues, setLeagues] = useState<LeagueData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Set while the board has no connection. savedAt = when the copy on screen
+  // was pulled (the "Offline · updated 6:10 PM" line), null = no copy for this
+  // day, so the error state says "offline" instead of "Failed to load".
+  const [offline, setOffline] = useState<{ savedAt: number | null } | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
 
   // Compute smart default date client-side only to avoid SSG hydration mismatch.
@@ -713,22 +718,33 @@ export default function HomeContent({
     });
   }, []);
   const namesCompact = Object.values(colAbbrev).some(Boolean);
-  // Dialog container for the first-run league picker — see its Escape/scroll-lock/
-  // focus effect. The ratings/news explainers used to need the same treatment;
-  // as of 2026-08-04 they're non-modal inline bars, so they need none of it.
-  const leaguePickerRef = useRef<HTMLDivElement>(null);
   // First-run league picker (shown once, only on a brand-new install — see the
   // mount effect). pickerSel is the ordered set of chosen leagues (max 3, mapped
   // to slots 1/2/3 on confirm); firstRunRef captures "no stored prefs" at mount
   // so a later savePreferences() can't retroactively hide the picker.
   const [showLeaguePicker, setShowLeaguePicker] = useState(false);
   const [pickerSel, setPickerSel] = useState<Sport[]>([]);
+  // The column whose switcher opened "Add more…" (Jacob 9/29), or null. Data
+  // only — the pick is resolved against the prefs of the moment it lands, so
+  // flipping the sheet's offseason toggle first cannot be undone by it.
+  // `autoId` is what news column 3's Auto lands on (see setNewsThirdLeague).
+  const [addMoreFor, setAddMoreFor] = useState<{
+    kind: "scores" | "news";
+    slotIdx: number;
+    current?: Sport;
+    shownElsewhere: { sport: Sport; col: number }[];
+    autoId?: Sport | "espn";
+  } | null>(null);
   const firstRunRef = useRef(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   // Px the scroll-to-top button is pushed up so it clears the footer instead of
   // overlapping its text once you reach the bottom of the page.
   const [scrollTopLift, setScrollTopLift] = useState(0);
   const footerRef = useRef<HTMLElement>(null);
+  // Native shells only: drives the footer's ♥ Rate link, which also hides
+  // after a tap and rests when ignored (rules in rateApp.ts).
+  const appStore = useAppStore();
+  const rateLinkVisible = useRateLinkVisible();
   // sortByMatchups removed — monkey toggle now controls both ratings visibility AND sort order
   const [prefs, setPrefs] = useState<Preferences>({
     favoriteLeagues: [],
@@ -804,10 +820,7 @@ export default function HomeContent({
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const sharedVideoId = params.get("v");
-      if (
-        params.has("f") || params.has("l") || params.has("fl") || params.has("t") ||
-        params.has("th") || params.has("dd") || params.has("dv") || params.has("dr") || params.has("n")
-      ) {
+      if (SHARE_PARAM_KEYS.some((k) => params.has(k))) {
         // Support new compact format (f=m1.n15&l=m.n) and old format (f=mlb-1,mlb-2&fl=mlb,nba)
         const fParam = params.get("f");
         const oldTeams = fParam?.includes("-") ? fParam.split(",").filter(Boolean) : null;
@@ -833,6 +846,7 @@ export default function HomeContent({
         if (decoded.defaultLandingView) loaded.defaultLandingView = decoded.defaultLandingView;
         if (decoded.defaultRatings) loaded.defaultRatings = decoded.defaultRatings;
         if (decoded.newsThirdLeague) loaded.newsThirdLeague = decoded.newsThirdLeague;
+        Object.assign(loaded, sharedExtrasPatch(decoded));
         noStored = false; // shared setup = explicit league choices, skip the picker
         savePreferences(loaded);
         const keep = new URLSearchParams();
@@ -1093,6 +1107,10 @@ export default function HomeContent({
     };
     const check = async () => {
       if (document.visibilityState !== "visible" || pageIsBusy(document)) return;
+      // Offline: don't start the 10-min gap on a fetch that cannot land. The
+      // "online" listener checks as soon as the connection is back, so a tab
+      // that sat offline on an old build still picks up the new one.
+      if (navigator.onLine === false) return;
       const now = Date.now();
       const last = read(LAST_CHECK_KEY);
       if (!checkIsDue(now, last === null ? null : Number(last))) return;
@@ -1115,7 +1133,8 @@ export default function HomeContent({
     };
     const onVis = () => { void check(); };
     document.addEventListener("visibilitychange", onVis);
-    return () => { alive = false; document.removeEventListener("visibilitychange", onVis); };
+    window.addEventListener("online", onVis);
+    return () => { alive = false; document.removeEventListener("visibilitychange", onVis); window.removeEventListener("online", onVis); };
   }, []);
 
   // Track the OS color scheme in state so `resolvedTheme` re-derives live when
@@ -1402,6 +1421,32 @@ export default function HomeContent({
   // "Yesterday" nav. Each call claims the next id and only applies its result
   // if it's still the latest.
   const reqSeqRef = useRef(0);
+  // The first pull of this page load. Only it may jump the board to another
+  // saved day when offline (a cold open the morning after); a tap on a day
+  // with no copy must stay on that day.
+  const firstPullRef = useRef(true);
+  // Paint the device copy of `date` (lib/offlineBoard.ts). With `allowJump`
+  // and no copy for that day, move to the newest saved day instead; its own
+  // pull then paints it. False = nothing to show.
+  const showSavedBoard = useCallback((date: string, allowJump: boolean): boolean => {
+    let snap = null;
+    try { snap = loadBoardSnapshot(localStorage, date); } catch { /* storage blocked */ }
+    if (snap) {
+      setLeagues(snap.leagues);
+      setError(false);
+      setOffline({ savedAt: snap.savedAt });
+      return true;
+    }
+    if (allowJump) {
+      let latest = null;
+      try { latest = latestBoardSnapshot(localStorage); } catch { /* storage blocked */ }
+      if (latest && latest.date !== date) {
+        setSelectedDate(latest.date);
+        return true;
+      }
+    }
+    return false;
+  }, []);
   const fetchData = useCallback(async (
     date: string,
     thirdLeague?: Sport | "empty",
@@ -1415,30 +1460,40 @@ export default function HomeContent({
     if (!silent) setLoading(true);
     setError(false);
     // Watchdog lifecycle across fetchData's five concurrent callers, all sharing
-    // one watchdogRef slot. Capture THIS call's timer locally so the finally can
-    // tell whether the shared ref still points at our timer or a newer call's.
-    // Only a non-silent call owns a watchdog: clear the previous one and install
-    // ours here, guarded by !silent so a silent poll can't clear a visible load's
-    // watchdog and then install no replacement (that left the skeleton with no
-    // safety net).
-    let myWatchdog: ReturnType<typeof setTimeout> | null = null;
+    // one watchdogRef slot. Only a non-silent call owns a watchdog: clear the
+    // previous one and install ours here, guarded by !silent so a silent poll
+    // can't clear a visible load's watchdog and then install no replacement
+    // (that left the skeleton with no safety net). The newest call clears it
+    // in the finally below.
     if (!silent) {
       if (watchdogRef.current) clearTimeout(watchdogRef.current);
-      myWatchdog = setTimeout(() => {
+      watchdogRef.current = setTimeout(() => {
         watchdogRef.current = null;
         setLoading(false);
         setError(true);
       }, 40_000);
-      watchdogRef.current = myWatchdog;
     }
+    const firstPull = firstPullRef.current;
+    firstPullRef.current = false;
     try {
+      // No connection: the saved copy, not a round of ESPN calls that cannot
+      // land. No copy → the offline error state; the "online" listener below
+      // pulls again the moment the connection is back.
+      if (navigator.onLine === false) {
+        if (!showSavedBoard(date, firstPull)) {
+          setLeagues([]);
+          setError(true);
+          setOffline({ savedAt: null });
+        }
+        return;
+      }
       // Slot count reads the live viewport so the initial desktop load fetches
       // all 5 leagues in one pass (isWide state hasn't flipped yet on mount).
       let [data] = await Promise.all([
         fetchAllLeagues(
           date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3,
           bestYesterdayOptions(prefsRef.current, date, isWideViewport() ? 5 : 3),
-          prefsRef.current.hiddenLeagues,
+          boardHiddenLeagues(prefsRef.current),
         ),
         loadBakedHighlights(),
         // Recaps too (plus the archive month for a day older than
@@ -1454,27 +1509,41 @@ export default function HomeContent({
       // A newer fetch started while we awaited — discard this now-stale result
       // rather than paint the wrong day's board over the current one.
       if (myReq !== reqSeqRef.current) return;
+      // The connection dropped mid-pull (every column failed): keep showing
+      // the saved copy rather than a board of "unavailable" columns.
+      if (pullLooksOffline(navigator.onLine, data) && showSavedBoard(date, false)) return;
+      const demo = isDemoModeActive() || isNoHitAlertDemoActive();
       if (isDemoModeActive()) data = applyDemoMode(data);
       if (isNoHitAlertDemoActive()) data = applyNoHitAlertDemo(data);
       setLeagues(data);
+      setOffline(null);
       // Real data won — clear any error the watchdog may have raised so a
       // slow-but-successful load still shows the board instead of the retry UI.
       setError(false);
+      if (!demo) { try { saveBoardSnapshot(localStorage, date, data, Date.now()); } catch { /* storage blocked */ } }
     } catch {
       // Ignore a superseded request's failure so it can't flip the current,
       // successfully-loaded board into the retry state.
       if (myReq !== reqSeqRef.current) return;
+      if (navigator.onLine === false && showSavedBoard(date, false)) return;
       setLeagues([]);
       setError(true);
     } finally {
-      // Clear the shared watchdog only if it's still OURS. A newer non-silent
-      // fetch may have replaced it while we awaited; cancelling that call's timer
-      // (the old bug) would defeat the very safety net it just installed, so an
-      // earlier call resolving must leave the latest call's watchdog running.
-      if (myWatchdog && watchdogRef.current === myWatchdog) { clearTimeout(myWatchdog); watchdogRef.current = null; }
-      if (!silent) setLoading(false);
+      // Only the newest pull ends the load, silent or not. A superseded call
+      // must leave the watchdog and skeleton alone: cancelling a newer call's
+      // timer (the old bug) defeats its safety net, and dropping the skeleton
+      // while the newest pull is still out painted an empty board. On first
+      // load the isWide flip fires a silent pull that supersedes the visible
+      // one, so the news view painted Top news, then jumped to the league
+      // columns when the silent pull landed (Jacob 10/2). The newest call
+      // clears whichever watchdog is set; a stale visible call's watchdog
+      // keeps running until then, so a hung newest pull still hits it.
+      if (myReq === reqSeqRef.current) {
+        if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [showSavedBoard]);
 
   // Two-effect split so slot/league pref changes don't flash the global
   // skeleton: the date-driven effect shows loading (initial mount + day swap
@@ -1497,7 +1566,14 @@ export default function HomeContent({
   // isWide is a dep so resizing across the 5-column breakpoint silently
   // fetches (or drops) the extra two leagues. hiddenKey is one too: turning a
   // league off in Settings moves its column to the next league at once.
-  const hiddenKey = (prefs.hiddenLeagues ?? []).join(",");
+  // What the board and switchers skip: switcher hides + catalog strikes.
+  const prefsHiddenLeagues = prefs.hiddenLeagues;
+  const prefsCatalogHidden = prefs.catalogHiddenLeagues;
+  const boardHidden = useMemo(
+    () => boardHiddenLeagues({ hiddenLeagues: prefsHiddenLeagues, catalogHiddenLeagues: prefsCatalogHidden }),
+    [prefsHiddenLeagues, prefsCatalogHidden],
+  );
+  const hiddenKey = (boardHidden ?? []).join(",");
   useEffect(() => {
     if (!mountedRef.current || !selectedDate) return;
     fetchData(selectedDate, prefs.thirdLeague, {
@@ -1547,7 +1623,8 @@ export default function HomeContent({
   useEffect(() => {
     if (!hasLiveGames || !selectedDate) return;
     const id = window.setInterval(() => {
-      if (document.hidden) return;
+      // Offline: the saved board's live games would re-poll into nothing.
+      if (document.hidden || navigator.onLine === false) return;
       fetchData(selectedDate, prefs.thirdLeague, {
         first: prefs.firstLeague,
         second: prefs.secondLeague,
@@ -1559,6 +1636,25 @@ export default function HomeContent({
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasLiveGames, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague]);
+
+  // Back online after showing the saved board: one silent pull, which clears
+  // the "Offline" line when it lands. Same request as a normal load.
+  const isOffline = offline !== null;
+  useEffect(() => {
+    if (!isOffline || !selectedDate) return;
+    const onOnline = () => {
+      fetchData(selectedDate, prefs.thirdLeague, {
+        first: prefs.firstLeague,
+        second: prefs.secondLeague,
+        third: prefs.thirdLeague,
+        fourth: prefs.fourthLeague,
+        fifth: prefs.fifthLeague,
+      }, true);
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOffline, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague]);
 
   const updatePrefs = useCallback((update: Partial<Preferences>) => {
     const next = { ...prefs, ...update };
@@ -1600,13 +1696,30 @@ export default function HomeContent({
     if (!prefs.skipNewsExplainer) setNewsNotice(true);
   };
 
+  // The native iOS tab bar (see lib/nativeTabBar.ts): a tap there runs the
+  // same handler as the web tabs, and the selected tab follows viewMode.
+  const handleViewModeClickRef = useRef(handleViewModeClick);
+  handleViewModeClickRef.current = handleViewModeClick;
+  const nativeTabBarRef = useRef<NativeTabBar | null>(null);
+  useEffect(() => {
+    const bar = connectNativeTabBar((v) => {
+      if (v === "scores-plain" || v === "scores-rated" || v === "news") handleViewModeClickRef.current(v);
+    });
+    nativeTabBarRef.current = bar;
+    return () => { bar?.disconnect(); nativeTabBarRef.current = null; };
+  }, []);
+  useEffect(() => { nativeTabBarRef.current?.setView(viewMode); }, [viewMode]);
+
   // A pick in news column 3's own switcher. A league overrides the column;
   // undefined (Auto) hands it back to scores column 3. `autoId` is the column
   // Auto lands on, so a one-column Focus view can follow it.
-  const setNewsThirdLeague = (sport: Sport | undefined, autoId: Sport | "espn" = "espn") => {
+  const setNewsThirdLeague = (sport: Sport | undefined, autoId: Sport | "espn" = "espn", extra: Partial<Preferences> = {}) => {
     updatePrefs({
+      ...extra,
       newsThirdLeague: sport,
       newsTopNews: false,
+      // Drop an old "Top news" pull-left too, so Auto puts col 3 back third.
+      newsGenericSlot: undefined,
       newsGenericHidden: false,
       // Keep a one-column Focus view pointed at the replacement column.
       newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
@@ -1658,13 +1771,7 @@ export default function HomeContent({
       prefs.favoriteLeagues,
       prefs.thirdLeague,
       [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague],
-      {
-        theme: prefs.theme,
-        defaultDateMode: prefs.defaultDateMode,
-        defaultLandingView: prefs.defaultLandingView,
-        defaultRatings: prefs.defaultRatings,
-        newsThirdLeague: prefs.newsThirdLeague,
-      },
+      shareExtrasFromPrefs(prefs),
     );
     return `${window.location.origin}?${params.toString()}`;
   };
@@ -1728,6 +1835,93 @@ export default function HomeContent({
   };
 
   const isToday = selectedDate === getDateString(0);
+
+  // ── Watch queue (Jacob 9/27) ──────────────────────────────────────────
+  // The card's "Later" pill adds a game here; the strip above the board shows
+  // each one as a normal spoiler-free card until it is marked Done. Pruned on
+  // read too, so an account copy pulled from another device never shows a
+  // game older than the 3-day window. Off under ?demo=1: the strip fetches its
+  // own games, and those would skip the demo anonymizer. Off everywhere while
+  // WATCH_QUEUE_ENABLED is false (lib/watchQueue.ts).
+  const boardDemo = useMemo(() => isDemoModeActive(), []);
+  const todayYmd = getDateString(0);
+  const watchQueueEntries = useMemo(
+    () => (!WATCH_QUEUE_ENABLED || boardDemo ? [] : pruneWatchQueue(prefs.watchQueue, todayYmd) ?? []),
+    [boardDemo, prefs.watchQueue, todayYmd],
+  );
+  const toggleWatchLater = useCallback((game: Game) => {
+    const entry: WatchQueueEntry = {
+      id: game.id,
+      league: game.sport,
+      // The game's own slate day, not the board's: a "Tomorrow" lookahead
+      // card on today's board belongs to tomorrow's scoreboard.
+      date: etSlateYmd(game.date) || selectedDate,
+      addedAt: Date.now(),
+      title: game.shortName || game.name,
+    };
+    updatePrefs({ watchQueue: toggleWatchQueue(prefs.watchQueue, entry) });
+  }, [prefs.watchQueue, selectedDate, updatePrefs]);
+  const markWatchDone = (entry: { id: string; league: string }) =>
+    updatePrefs({ watchQueue: removeFromWatchQueue(prefs.watchQueue, entry) });
+  const clearWatchQueue = () => updatePrefs({ watchQueue: undefined });
+  const watchQueueApi = useMemo<WatchQueueApi | null>(
+    () => (!WATCH_QUEUE_ENABLED || boardDemo || prefs.hideWatchLaterPill ? null : {
+      isQueued: (g: Game) => isGameQueued(prefs.watchQueue, g.id, g.sport),
+      toggle: toggleWatchLater,
+    }),
+    [boardDemo, prefs.hideWatchLaterPill, prefs.watchQueue, toggleWatchLater],
+  );
+  // Queued games the loaded board does not hold (another day, a league not on
+  // a column) are fetched after first paint, one scoreboard per league + day.
+  // null = looked and not found. Refetched after 5 min so a game queued before
+  // it started does not stay "upcoming" in the strip all night.
+  const [queueFetched, setQueueFetched] = useState<Record<string, { game: Game | null; at: number }>>({});
+  const queueInFlight = useRef(new Set<string>());
+  const boardGameFor = useCallback((entry: WatchQueueEntry): Game | undefined => {
+    for (const l of leagues) {
+      for (const list of [l.games, l.nextGameDay?.games, l.previousGameDay?.games]) {
+        const hit = list?.find((g) => g.id === entry.id && g.sport === entry.league);
+        if (hit) return hit;
+      }
+    }
+    return undefined;
+  }, [leagues]);
+  useEffect(() => {
+    const stale = watchQueueEntries.filter((e) => {
+      const key = `${e.league}|${e.id}`;
+      const had = queueFetched[key];
+      return !boardGameFor(e) && !queueInFlight.current.has(key) && (!had || Date.now() - had.at > 5 * 60_000);
+    });
+    if (!stale.length) return;
+    const slates = new Map<string, WatchQueueEntry[]>();
+    for (const e of stale) {
+      queueInFlight.current.add(`${e.league}|${e.id}`);
+      const k = `${e.league}|${e.date}`;
+      slates.set(k, [...(slates.get(k) ?? []), e]);
+    }
+    for (const entries of slates.values()) {
+      const { league, date } = entries[0];
+      const sport = league as Sport;
+      (async () => {
+        const found: Record<string, Game | null> = {};
+        let games = await fetchSlateGames(sport, date).catch(() => [] as Game[]);
+        // The device zone and ESPN's day can differ by one around midnight,
+        // so a miss looks one day either side before giving up.
+        if (entries.some((e) => !games.some((g) => g.id === e.id))) {
+          const around = await Promise.all([prevYmd(date), nextYmd(date)].map((d) => fetchSlateGames(sport, d).catch(() => [] as Game[])));
+          games = [...games, ...around.flat()];
+        }
+        for (const e of entries) found[`${e.league}|${e.id}`] = games.find((g) => g.id === e.id) ?? null;
+        const at = Date.now();
+        for (const key of Object.keys(found)) queueInFlight.current.delete(key);
+        setQueueFetched((prev) => {
+          const next = { ...prev };
+          for (const [key, game] of Object.entries(found)) next[key] = { game, at };
+          return next;
+        });
+      })();
+    }
+  }, [watchQueueEntries, boardGameFor, queueFetched]);
   // After the 2026 final the hub stops pointing at today's board (which has no
   // World Cup column) and sends readers to the matches themselves: the final,
   // or a team's last match, via /worldcup?d=YYYYMMDD. Keyed off today's date,
@@ -1805,8 +1999,10 @@ export default function HomeContent({
     // A league unticked in Settings never takes the banner (two of the four
     // accounts that dismissed the UCL banner had hidden UCL first); the next
     // opener does.
-    return getLeagueKickoff(today, prefs.hiddenLeagues ?? []);
-  }, [selectedDate, prefs.hiddenLeagues]);
+    return { kickoff: getLeagueKickoff(today, boardHidden ?? []), todayYmd };
+  }, [selectedDate, boardHidden]);
+  const kickoff = kickoffInfo.kickoff;
+  const kickoffTodayYmd = kickoffInfo.todayYmd;
 
   // Compute which leagues are available for manual selection. Most seasonal
   // leagues disappear outside their season; NBA deliberately remains as a
@@ -1869,11 +2065,12 @@ export default function HomeContent({
     if (BEST_YESTERDAY_ENABLED && selectedDate === getDateString(0)) {
       options.set("best", { sport: "best", label: BEST_YESTERDAY_LABEL, defaultInSwitcher: true });
     }
-    // ESPN front page: ESPN's strip is today's, so the same today-only rule
-    // and the same place in the map (Jacob 9/26). Opt-in while it is tested:
-    // off in every switcher until Settings turns it on or a column pins it
-    // (Jacob 9/26: "default off for all but on for me").
-    if (TOP_EVENTS_ENABLED && selectedDate === getDateString(0)) {
+    // ESPN front page: today and past days; past days read the day's
+    // snapshot (Jacob 9/29). Tomorrow has no front page yet. Same place in the
+    // map as Best (Jacob 9/26). Opt-in while it is tested: off in every
+    // switcher until Settings turns it on or a column pins it (Jacob 9/26:
+    // "default off for all but on for me").
+    if (TOP_EVENTS_ENABLED && selectedDate <= getDateString(0)) {
       options.set("top", { sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: false });
     }
     return [...options.values()];
@@ -1893,7 +2090,7 @@ export default function HomeContent({
     "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw", "ncaah", "cfl", "ncaawh", "ncaavb", "ufl", "ncaabase", "ncaasoft",
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricketintl", "cricket", "nrl", "afl",
     "urc", "premrugby", "top14", "challengecup", "mlr",
-    "chess", "poker", "esports",
+    "climbing", "chess", "poker", "esports",
     // ── soccer block, bottom ──
     "epl", "ucl", "uel", "uecl", "nations", "laliga", "seriea", "bundesliga", "ligue1",
     "mls", "ligamx", "nwsl", "efl", "libertadores", "saudi",
@@ -1901,20 +2098,20 @@ export default function HomeContent({
     "facup", "copadelrey", "dfbpokal",
     "fifa", "euro", "afcon",
   ];
+  const pickerRank = (s: Sport) => {
+    const i = PICKER_RANK.indexOf(s);
+    // A league missing from the ranking sorts just before the soccer block
+    // rather than vanishing or jumping to the front — adding a new league to
+    // ALL_LEAGUES must never silently reorder the top of this screen.
+    return i === -1 ? PICKER_RANK.indexOf("epl") - 0.5 : i;
+  };
   const pickerOptions = useMemo(() => {
-    const rank = (s: Sport) => {
-      const i = PICKER_RANK.indexOf(s);
-      // A league missing from the ranking sorts just before the soccer block
-      // rather than vanishing or jumping to the front — adding a new league to
-      // ALL_LEAGUES must never silently reorder the top of this screen.
-      return i === -1 ? PICKER_RANK.indexOf("epl") - 0.5 : i;
-    };
     // The first-run picker chooses leagues for every day's board; Best of
     // yesterday and ESPN front page are today-only columns.
     return thirdLeagueOptions
       .filter((o) => o.sport !== "best" && o.sport !== "top")
-      .sort((a, b) => rank(a.sport) - rank(b.sport));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- PICKER_RANK is a literal constant
+      .sort((a, b) => pickerRank(a.sport) - pickerRank(b.sport));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pickerRank reads only the literal PICKER_RANK
   }, [thirdLeagueOptions]);
 
   // Display-only anonymization for the ?demo=1&picker=1 sheet — see
@@ -1970,6 +2167,17 @@ export default function HomeContent({
     }
     return [...options.values()];
   }, [selectedDate]);
+
+  // The "Add more…" sheet (Jacob 9/29): every league HideScore carries, the
+  // way Settings' catalog judges it (against today), in the first-run
+  // picker's popularity order. The sheet itself hides the offseason pills
+  // until its toggle is on. Settings-style, a turned-off league is listed
+  // too, and picking it turns it back on (see pickAddMore).
+  const addMoreOptions = useMemo(
+    () => [...settingsLeagueOptions].sort((a, b) => pickerRank(a.sport) - pickerRank(b.sport)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pickerRank reads only the literal PICKER_RANK
+    [settingsLeagueOptions],
+  );
 
   // One Set per real change, so the cards don't see a new object every render.
   const recordLeagues = useMemo(
@@ -2052,73 +2260,8 @@ export default function HomeContent({
     setShowLeaguePicker(false);
   }, [updatePrefs]);
 
-  // Escape closes the first-run league picker too — same as tapping its
-  // backdrop (both fall back to default leagues). Brings it in line with the
-  // ratings/news explainers and every other modal in the app, which all
-  // dismiss on Escape. This effect also locks body scroll and seats focus into
-  // the dialog while it's open — the same treatment the ratings/news explainers
-  // (and every other modal) already get, which this first-run picker was the
-  // last overlay still missing (it had role="dialog"/aria-modal + Escape but
-  // never pinned the feed behind it or moved focus off the trigger).
-  useEffect(() => {
-    if (!showLeaguePicker) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { skipLeaguePicker(); return; }
-      // Trap Tab within the dialog (WCAG 2.4.3) — same wrap-at-first/last pattern
-      // as the ratings/news explainers and GameDetailModal. Without it a keyboard
-      // user could Tab off the last league pill into the inert feed behind the
-      // overlay. Focusables queried live so the disabled (3-picked) pills and any
-      // hidden control are excluded (offsetParent drops display:none).
-      if (e.key !== "Tab") return;
-      const dialog = leaguePickerRef.current;
-      if (!dialog) return;
-      const focusable = Array.from(
-        dialog.querySelectorAll<HTMLElement>(
-          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-        )
-      ).filter((el) => el.offsetParent !== null);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-      if (e.shiftKey) {
-        if (active === first || active === dialog) { e.preventDefault(); last.focus(); }
-      } else if (active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    // Lock body scroll (position:fixed + negative top pins iOS WebKit too, where
-    // plain overflow:hidden leaks the feed behind the overlay); restore returns
-    // you exactly where you were.
-    const scrollY = window.scrollY;
-    const body = document.body;
-    const prevBody = {
-      overflow: body.style.overflow,
-      position: body.style.position,
-      top: body.style.top,
-      width: body.style.width,
-    };
-    body.style.overflow = "hidden";
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.width = "100%";
-    // Focus management (WCAG 2.4.3): move focus into the dialog (the tabIndex=-1
-    // container, so no ring shows for mouse users) and restore it to the opener
-    // on close.
-    const opener = document.activeElement as HTMLElement | null;
-    leaguePickerRef.current?.focus();
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      body.style.overflow = prevBody.overflow;
-      body.style.position = prevBody.position;
-      body.style.top = prevBody.top;
-      body.style.width = prevBody.width;
-      window.scrollTo(0, scrollY);
-      opener?.focus?.();
-    };
-  }, [showLeaguePicker, skipLeaguePicker]);
+  // Escape, the Tab trap, the body-scroll lock and the focus seat for the
+  // picker live in LeaguePickerModal, shared with the switcher's Add more….
 
   // Homepage switcher options = core auto-rotation leagues by default, plus
   // opt-in leagues the user explicitly enabled, minus explicit hides. This
@@ -2127,7 +2270,7 @@ export default function HomeContent({
   // league can still be pinned or enabled deliberately.
   const switcherOptions = useMemo(
     () => thirdLeagueOptions.filter((o) => {
-      if (prefs.hiddenLeagues?.includes(o.sport)) return false;
+      if (boardHidden?.includes(o.sport)) return false;
       if (prefs.shownLeagues?.includes(o.sport)) return true;
       const pinned = [
         prefs.firstLeague,
@@ -2138,7 +2281,7 @@ export default function HomeContent({
       ].includes(o.sport);
       return o.defaultInSwitcher || pinned || prefs.favoriteLeagues.includes(o.sport);
     }),
-    [thirdLeagueOptions, prefs],
+    [thirdLeagueOptions, prefs, boardHidden],
   );
   // Best of yesterday has no news feed, so the news switchers skip it. ESPN
   // front page does (espn.com's headlines + clips), so it is a league row
@@ -2147,6 +2290,34 @@ export default function HomeContent({
     const leagues = switcherOptions.filter((o) => o.sport !== "best");
     return [...leagues.filter((o) => o.sport === "top"), ...leagues.filter((o) => o.sport !== "top")];
   }, [switcherOptions]);
+
+  // A tap in the Add more… sheet does what the dropdown row for that column
+  // does. Like pinning in Settings, picking a turned-off league turns it back
+  // on — otherwise the column would show the next league instead. News
+  // column 3 only keeps a pick that is in the news switcher, so a league from
+  // outside it (an opt-in or offseason one) is added to shownLeagues too.
+  const pickAddMore = (sport: Sport) => {
+    const target = addMoreFor;
+    setAddMoreFor(null);
+    if (!target) return;
+    const hidden = prefs.hiddenLeagues ?? [];
+    const struck = prefs.catalogHiddenLeagues ?? [];
+    const unhide: Partial<Preferences> = {
+      ...(hidden.includes(sport) ? { hiddenLeagues: hidden.length > 1 ? hidden.filter((s) => s !== sport) : undefined } : {}),
+      ...(struck.includes(sport) ? { catalogHiddenLeagues: struck.length > 1 ? struck.filter((s) => s !== sport) : undefined } : {}),
+    };
+    if (target.kind === "news" && target.slotIdx === 2) {
+      const shown = prefs.shownLeagues ?? [];
+      const inSwitcher = newsSwitcherOptions.some((o) => o.sport === sport) || shown.includes(sport);
+      setNewsThirdLeague(sport, target.autoId ?? "espn", inSwitcher ? unhide : { ...unhide, shownLeagues: [...shown, sport] });
+      return;
+    }
+    setSlotLeague(target.slotIdx, sport, unhide);
+  };
+  const leagueLabelFor = (sport: Sport) =>
+    thirdLeagueOptions.find((o) => o.sport === sport)?.label
+    ?? settingsLeagueOptions.find((o) => o.sport === sport)?.label
+    ?? sport.toUpperCase();
 
   // Switcher sports in RELEVANCE order — the auto-picker's own ranking
   // (firstPref pins like the World Cup first, then LEAGUE_PRIORITY). Drives
@@ -2175,8 +2346,8 @@ export default function HomeContent({
   const autoSlotSports = useMemo(() => {
     if (!selectedDate) return [] as Sport[];
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
-    return pickAndAssignLeagues(viewDate, slotCount, prefs.hiddenLeagues).map((l) => l.sport);
-  }, [selectedDate, slotCount, prefs.hiddenLeagues]);
+    return pickAndAssignLeagues(viewDate, slotCount, boardHidden).map((l) => l.sport);
+  }, [selectedDate, slotCount, boardHidden]);
 
   // ‹ › cycling cursor, per slot. Lives up here (in a ref) because the column
   // component remounts whenever its league changes — per-column state would
@@ -2193,7 +2364,14 @@ export default function HomeContent({
   // for the others and can bump NHL out of slot 3 — see lib/espn.ts fetchAllLeagues.
   // Duplicates are allowed; "empty" hides the slot; Auto (undefined) only unsets
   // that one slot, so consecutive Auto clicks across all three drop back to default.
-  const setSlotLeague = (slotIdx: number, sport: Sport | "empty" | undefined) => {
+  // `extra` rides the same save: updatePrefs spreads the render's prefs, so a
+  // second call in one handler would drop the first one's change.
+  const setSlotLeague = (slotIdx: number, sport: Sport | "empty" | undefined, extra: Partial<Preferences> = {}) => {
+    updatePrefs({ ...extra, ...slotPatch(slotIdx, sport) });
+  };
+
+  // The five slot prefs after one column changes — see setSlotLeague.
+  const slotPatch = (slotIdx: number, sport: Sport | "empty" | undefined): Partial<Preferences> => {
     let resolved: (Sport | "empty" | undefined)[];
     if (sport === undefined) {
       resolved = SLOT_INDICES.map((i) => selectedSlotLeagues[i]);
@@ -2204,12 +2382,44 @@ export default function HomeContent({
       resolved = lockSlotsToBoard(SLOT_INDICES.map((i) => selectedSlotLeagues[i]), sortedLeagues.map((l) => l.sport));
       resolved[slotIdx] = sport;
     }
-    updatePrefs({
+    return {
       firstLeague: resolved[0],
       secondLeague: resolved[1],
       thirdLeague: resolved[2],
       fourthLeague: resolved[3],
       fifthLeague: resolved[4],
+    };
+  };
+
+  // The ESPN front page's "Add {league}" popover (Jacob 9/28). Adding pins the
+  // league to the chosen column and puts it in the switcher: in shownLeagues,
+  // and off both hide lists.
+  const [addLeague, setAddLeague] = useState<{ sport: Sport; anchor: DOMRect } | null>(null);
+  const closeAddLeague = useCallback(() => setAddLeague(null), []);
+  const addLeagueToSlot = (sport: Sport, slotIdx: number) => {
+    const shown = new Set(prefs.shownLeagues ?? []);
+    shown.add(sport);
+    const hidden = (prefs.hiddenLeagues ?? []).filter((s) => s !== sport);
+    const struck = (prefs.catalogHiddenLeagues ?? []).filter((s) => s !== sport);
+    updatePrefs({
+      ...slotPatch(slotIdx, sport),
+      shownLeagues: [...shown],
+      hiddenLeagues: hidden.length ? hidden : undefined,
+      catalogHiddenLeagues: struck.length ? struck : undefined,
+    });
+    setAddLeague(null);
+  };
+  // What each visible column shows now, for the popover's list, and the column
+  // "New column" fills: the first emptied one, else the first Auto one that is
+  // not the ESPN front page itself.
+  const addLeagueSlots = () => {
+    const queue = [...sortedLeagues];
+    return SLOT_INDICES.slice(0, slotCount).map((slotIdx) => {
+      const pref = selectedSlotLeagues[slotIdx];
+      if (pref === "empty") return { slotIdx, label: "empty", sport: null as Sport | null, auto: false };
+      const shownSport = queue.shift()?.sport ?? null;
+      const name = shownSport ? (thirdLeagueOptions.find((o) => o.sport === shownSport)?.label ?? shownSport.toUpperCase()) : "—";
+      return { slotIdx, label: pref === undefined ? `Auto · ${name}` : name, sport: shownSport, auto: pref === undefined };
     });
   };
 
@@ -2283,7 +2493,7 @@ export default function HomeContent({
     { value: "topvideos", label: "Top videos" },
     { value: "reddit", label: "Reddit" },
     { value: "espn", label: "ESPN" },
-    { value: "homepage", label: "Homepage" },
+    { value: "homepage", label: "League sites" },
   ];
   const orderedNewsFilterOptions = applyOrder(
     NEWS_FILTER_OPTIONS.map((o) => ({ ...o, label: o.value })),
@@ -2691,6 +2901,22 @@ export default function HomeContent({
     .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
     .some((l) => l.sport === "mlb");
   const bracketPillShown = bracketPillDue && mlbColumnShown;
+  // Odds leave the pill once the field is set (Jacob 9/29). From the
+  // postseason's first day that is a given; in the last week before it the
+  // standings say so, fetched only then since no earlier day can have all
+  // twelve seeds clinched.
+  const mlbPostDay = mlbPostseasonDay(selectedDate);
+  const fieldCheckDue = bracketPillShown && mlbPostDay != null && mlbPostDay < 0 && mlbPostDay >= -7;
+  const [mlbFieldSet, setMlbFieldSet] = useState(false);
+  useEffect(() => {
+    if (!fieldCheckDue) return;
+    const ctrl = new AbortController();
+    fetchPlayoffPicture(ctrl.signal)
+      .then((p) => { if (!ctrl.signal.aborted) setMlbFieldSet(!!p && fieldIsSet(p)); })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [fieldCheckDue]);
+  const hidePlayoffOdds = (mlbPostDay != null && mlbPostDay >= 0) || (fieldCheckDue && mlbFieldSet);
   const reviewPillShown = reviewPillDue && mlbColumnShown;
   // Nov 2 on the MLB column is off the board (ALL_LEAGUES endDate), so the
   // pill gets its own strip above the columns while no MLB column shows. Only
@@ -2720,6 +2946,7 @@ export default function HomeContent({
     : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown;
 
   return (
+    <WatchQueueContext.Provider value={watchQueueApi}>
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Keyboard skip link (WCAG 2.4.1) — visually hidden until focused, then
           jumps a Tab user past the sticky header / date nav straight to the
@@ -3037,36 +3264,6 @@ export default function HomeContent({
               </div>
             )}
 
-            {/* Standalone theme toggle (sits where the calendar button used to;
-                the calendar moved to a bare icon at the end of the DateNav row).
-                Shown in every view. */}
-            <button
-              type="button"
-              onClick={() => {
-                const next = resolvedTheme === "dark" ? "light" : "dark";
-                updatePrefs({ theme: next });
-                document.documentElement.setAttribute("data-theme", next);
-              }}
-              className="monkey-toggle w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
-              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
-              title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {resolvedTheme === "dark" ? (
-                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="5" />
-                  <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                  <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                </svg>
-              ) : (
-                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                </svg>
-              )}
-            </button>
-
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
@@ -3230,6 +3427,14 @@ export default function HomeContent({
           the extra leagues load; the layout swaps once, when they arrive
           (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
       <main id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none${!showNews ? " board-noselect" : ""}`}>
+        {/* No connection: the board below is the device copy (lib/offlineBoard.ts).
+            One quiet line says so and when it was pulled. It goes away when the
+            "online" pull lands. */}
+        {offline?.savedAt != null && (
+          <p role="status" data-testid="offline-line" className="text-center text-xs pt-2 -mb-1" style={{ color: "var(--text-muted)" }}>
+            Offline · updated {formatOfflineUpdated(offline.savedAt, Date.now())}
+          </p>
+        )}
         {/* First-run explanations for the Ratings and News tabs. These replaced
             blocking confirm dialogs on 2026-08-04 (see handleViewModeClick):
             the tab now applies instantly and the reason arrives here, in flow,
@@ -3298,6 +3503,21 @@ export default function HomeContent({
               borderLeft: "3px solid var(--accent)",
             }}
           >
+            {/* Added 2026-09-30: after the final, 44 of 50 /worldcup visits in
+                30 days left without a click. This gives them the soccer that is
+                on now. */}
+            {worldCupEnded && (
+              <p className="mb-2 text-sm font-semibold">
+                <Link
+                  href="/soccer-highlights-without-spoilers"
+                  data-umami-event="wc-hub-soccer-now"
+                  className="underline underline-offset-2"
+                  style={{ color: "var(--accent)" }}
+                >
+                  The World Cup is over. This week&apos;s soccer, no spoilers →
+                </Link>
+              </p>
+            )}
             <h1 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--text)" }}>
               <span aria-hidden="true">⚽</span>
               <span>{worldCupHubCopy.title}</span>
@@ -3438,7 +3658,13 @@ export default function HomeContent({
             </p>
           </section>
         )}
-        {showNews ? (() => {
+        {/* News columns derive from the board's leagues, which start empty.
+            Until the first board load lands, show the skeleton instead: with
+            no leagues every mirror is empty and column 3 paints Top news, then
+            the layout jumps to league columns ~1.5 s later (Jacob 10/2). Both
+            conditions: a refresh poll keeps the news up, and an offline or
+            failed load (loading false, no leagues) still falls through to it. */}
+        {showNews && !(loading && leagues.length === 0) ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
               label: c.label,
@@ -3495,7 +3721,9 @@ export default function HomeContent({
             // cross-league pick, not a league). The board keeps its other
             // mirrors plus the News column rather than an empty column.
             if (sport === "best") return null;
-            const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
+            // Settings' catalog as a fallback: an offseason league pinned
+            // from Add more… is not in the in-season list.
+            const label = leagueLabelFor(sport);
             const orderedCascade = leagueSourceCascade(sport);
             return { slotIdx, sport, id: sport as string, label, orderedCascade };
           };
@@ -3507,25 +3735,35 @@ export default function HomeContent({
           // Top news (Jacob 5/30); now they get it only where the column board
           // does: a Top news pick, or a scores col 3 with no league news.
           const thirdMirrorEntry = mirrorEntryFor(2);
+          // Scores column 3 set to Empty: news column 3 stays empty too
+          // unless the user picks something for it (Jacob 9/29).
+          const thirdSlotEmpty = selectedSlotLeagues[2] === "empty";
           // A col 3 pick only counts while that league is still in the user's
           // switcher. A stored pick of a league they never added or later
           // turned off (a CFL pick the old sync bug kept bringing back, Jacob
           // 9/26: "still see cfl ... when its not my league") falls back to Auto.
+          // A league added from Add more… (shownLeagues) counts too, even
+          // offseason, since that pick was made on purpose (Jacob 9/29).
           const newsThirdPick = prefs.newsThirdLeague
-            && newsSwitcherOptions.some((o) => o.sport === prefs.newsThirdLeague)
+            && (newsSwitcherOptions.some((o) => o.sport === prefs.newsThirdLeague)
+              || (prefs.shownLeagues?.includes(prefs.newsThirdLeague) && !prefs.hiddenLeagues?.includes(prefs.newsThirdLeague)))
             ? prefs.newsThirdLeague
             : undefined;
           const thirdLeagueEntry = newsThirdPick === "top" ? frontPageEntryFor(2) : newsThirdPick ? (() => {
             const sport = newsThirdPick;
-            const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
+            const label = leagueLabelFor(sport);
             return { slotIdx: 2, sport, id: sport as string, label, orderedCascade: leagueSourceCascade(sport) };
           })() : null;
           // Default column order matches the scores board 1 for 1: news cols
           // 1-3 follow scores cols 1-3 (Jacob 9/25: "shouldn't it match 1 for 1
           // with my leagues on homepage unless manually set there"). Col 3
-          // falls back to the ESPN/general feed when scores col 3 has no league
-          // with news (Empty, Best of yesterday). Before 9/25, col 3
-          // was always that feed unless a 3rd news league was picked.
+          // falls back to the ESPN/general feed only when scores col 3 is Best
+          // of yesterday (a cross-league pick, so Top news fits). An Empty
+          // scores col 3 gives no news col 3 (Jacob 9/29: "not if empty");
+          // before 9/29 it fell back to Top news too, so r/sports showed with
+          // no league of the user's behind it. An explicit col 3 pick (a
+          // league or Top news) still shows. Before 9/25, col 3 was always
+          // that feed unless a 3rd news league was picked.
           const firstTwoEntries = leagueEntries.filter((e) => e.slotIdx === 0 || e.slotIdx === 1);
           // A pick in col 3's own switcher overrides the mirror: a league, or
           // Top news. Old blobs have no newsTopNews; a set newsGenericSlot
@@ -3535,7 +3773,7 @@ export default function HomeContent({
           // fall back to it takes the most relevant league not already in
           // cols 1-2, the way a scores column skips a turned-off league.
           const topNewsOff = !!prefs.topNewsHidden;
-          const nextNewsSport = topNewsOff
+          const nextNewsSport = topNewsOff && !thirdSlotEmpty
             ? switcherSportsByRelevance.find((s) => s !== "top" && s !== "best"
                 && s !== scoreSlotSports[0] && s !== scoreSlotSports[1])
             : undefined;
@@ -3546,34 +3784,31 @@ export default function HomeContent({
             label: thirdLeagueOptions.find((o) => o.sport === nextNewsSport)?.label ?? nextNewsSport.toUpperCase(),
             orderedCascade: leagueSourceCascade(nextNewsSport),
           } : null;
-          const topNewsFallback = topNewsOff ? nextNewsEntry : espnEntry;
+          const topNewsFallback = thirdSlotEmpty ? null : (topNewsOff ? nextNewsEntry : espnEntry);
           const thirdColEntry = prefs.newsGenericHidden
             ? null
             : thirdLeagueEntry ?? (topNewsPicked && !topNewsOff ? espnEntry : thirdMirrorEntry ?? topNewsFallback);
-          // What Auto gives col 3: the mirror, else the fallback above.
+          // What Auto gives col 3: the mirror, else the fallback above
+          // (nothing under an Empty scores col 3).
           const thirdAutoSport = thirdMirrorEntry?.sport ?? nextNewsEntry?.sport;
-          const thirdAutoIsEspn = !thirdMirrorEntry && !topNewsOff;
-          // The league that stands in for a turned-off Top news stays last too.
-          const thirdColMirrors = thirdColEntry !== null && (thirdColEntry === thirdMirrorEntry || thirdColEntry === nextNewsEntry);
-          // Mobile (single stacked column): a Top news / ESPN front page col 3
-          // leads, then the two score leagues (Jacob 5/30 — "news, then mlb,
-          // then nba"). A league col 3 takes the desktop order below.
-          // Desktop keeps the 3-across order: the two leagues, then the
-          // News/3rd-league column.
-          // Desktop position of the generic column: last by default, but the
-          // user can pull it left by picking "Top news" from any
-          // column's switcher (newsGenericSlot). The league columns shift
-          // right around it — nothing is dropped.
-          // A mirrored col 3 stays last, in its scores position.
-          const genericPos = thirdColMirrors
-            ? firstTwoEntries.length
-            : Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length);
-          const thirdIsNewsFeed = thirdColEntry?.id === "espn" || thirdColEntry?.id === "top";
-          const visibleNewsEntries = isMobile && thirdIsNewsFeed
-            ? [...(thirdColEntry ? [thirdColEntry] : []), ...firstTwoEntries]
-            : thirdColEntry
-              ? [...firstTwoEntries.slice(0, genericPos), thirdColEntry, ...firstTwoEntries.slice(genericPos)]
-              : [...firstTwoEntries];
+          const thirdAutoIsEspn = !thirdSlotEmpty && !thirdMirrorEntry && !topNewsOff;
+          // Column 3's entry sits third, phone and desktop alike (Jacob 9/28:
+          // "it shouldn't be ordered first if it's the 3rd column"). That
+          // covers a league mirror, the ESPN front page mirror, the Auto
+          // fallback to Top news and the league standing in for a turned-off
+          // Top news. Before 9/28 phones led with a Top news / ESPN front
+          // page col 3 (Jacob 5/30 — "news, then mlb, then nba").
+          // The one exception: an explicit "Top news" pick from a column's
+          // switcher (newsGenericSlot) pulls it left, and the league columns
+          // shift right around it — nothing is dropped. A stale slot with no
+          // Top news pick behind it is ignored.
+          const topNewsPulledLeft = topNewsPicked && !topNewsOff && thirdColEntry === espnEntry;
+          const genericPos = topNewsPulledLeft
+            ? Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length)
+            : firstTwoEntries.length;
+          const visibleNewsEntries = thirdColEntry
+            ? [...firstTwoEntries.slice(0, genericPos), thirdColEntry, ...firstTwoEntries.slice(genericPos)]
+            : [...firstTwoEntries];
 
           // Apply Focus league (drops other entries) then per-entry filter by
           // the independently checked source types + hidden labels. Hidden
@@ -3637,6 +3872,15 @@ export default function HomeContent({
               }
               setSlotLeague(slotIdx, s);
             };
+          // Add more… from a news column: same slot rules as newsSwapFor.
+          const newsAddMoreFor = (entry: { slotIdx: number; sport?: Sport }, otherSports: { sport: Sport; col: number }[]) =>
+            () => setAddMoreFor({
+              kind: "news",
+              slotIdx: entry.slotIdx,
+              current: entry.sport,
+              shownElsewhere: otherSports,
+              autoId: thirdAutoSport ?? "espn",
+            });
           // Force the ESPN "Top news" feed back as a column: clear any 3rd-league
           // override and explicitly show the independent generic column.
           // When called from a column's switcher, `position` is that column's
@@ -3704,10 +3948,14 @@ export default function HomeContent({
           // scores columns are arranged. Per-source granular reordering (via the
           // filter button) is backlogged. Unknown combos fall to the tail in
           // cascade order. Keep each column together in its natural order:
-          // News, then higher-priority league A, then league B. This replaces
-          // the old interleaving that put B Reddit before B video.
+          // higher-priority league A, league B, then the News column (News led
+          // until 9/28). This replaces the old interleaving that put B Reddit
+          // before B video.
+          // A Top news / ESPN front page entry in column 3 goes after the
+          // leagues (Jacob 9/28), so its ranks below shift past role C. Only
+          // an explicit Top news pick into column 1 or 2 keeps it in front.
           const MOBILE_SOURCE_RANK: Record<string, number> = {
-            // ESPN front page leads the phone feed: headlines, then clips.
+            // ESPN front page: headlines, then clips.
             "front:espn": 0,
             "front:topvideos": 0.5,
             "news:topvideos": 1,
@@ -3747,11 +3995,11 @@ export default function HomeContent({
                 : entry.id === "top"
                   ? "front"
                   : leagueIdx === 0 ? "A" : leagueIdx === 1 ? "B" : "C";
-              return orderedColumnSourcesFor(entry).map((cs, subIdx) => ({
-                cs,
-                rank: MOBILE_SOURCE_RANK[`${role}:${classifySource(cs)}`] ?? 900 + subIdx,
-                subIdx,
-              }));
+              const trails = (role === "news" || role === "front") && genericPos >= firstTwoEntries.length;
+              return orderedColumnSourcesFor(entry).map((cs, subIdx) => {
+                const rank = MOBILE_SOURCE_RANK[`${role}:${classifySource(cs)}`];
+                return { cs, rank: rank === undefined ? 900 + subIdx : trails ? rank + 100 : rank, subIdx };
+              });
             });
             ranked.sort((a, b) => a.rank - b.rank || a.subIdx - b.subIdx);
             return cascadeToSources(ranked.map((r) => r.cs));
@@ -3761,15 +4009,28 @@ export default function HomeContent({
           const narrowCol = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
           // News + button restores column 3 first when removed (with whatever
           // it showed: the mirror, a picked league, or Top news); otherwise it
-          // refills one of the two score-linked league columns.
+          // refills one of the two score-linked league columns; otherwise,
+          // under an Empty scores col 3, it picks a league for news col 3
+          // only (the scores board stays as it is).
           const newsFirstEmptySlot = [0, 1].find((i) => selectedSlotLeagues[i] === "empty");
           const newsAddEligibleSport = switcherOptions.find(
             (o) => !visibleNewsEntries.some((e) => e.sport === o.sport),
           )?.sport;
-          const newsOnAddColumn = visibleNewsEntries.length < 3 && (prefs.newsGenericHidden || newsFirstEmptySlot !== undefined)
+          // Col 3 with nothing to show even when un-hidden: Empty scores col 3
+          // and no col 3 pick of its own.
+          const thirdHasNothing = thirdSlotEmpty && !thirdLeagueEntry && !(topNewsPicked && !topNewsOff);
+          const newsThirdAddSport = thirdHasNothing
+            ? switcherSportsByRelevance.find((s) => s !== "top" && s !== "best"
+                && newsSwitcherOptions.some((o) => o.sport === s)
+                && !visibleNewsEntries.some((e) => e.sport === s))
+            : undefined;
+          const newsUnhideThird = !!prefs.newsGenericHidden && !thirdHasNothing;
+          const newsOnAddColumn = visibleNewsEntries.length < 3
+            && (newsUnhideThird || newsFirstEmptySlot !== undefined || newsThirdAddSport !== undefined)
             ? () => {
-                if (prefs.newsGenericHidden) updatePrefs({ newsGenericHidden: false });
+                if (newsUnhideThird) updatePrefs({ newsGenericHidden: false });
                 else if (newsFirstEmptySlot !== undefined && newsAddEligibleSport) setSlotLeague(newsFirstEmptySlot, newsAddEligibleSport);
+                else if (newsThirdAddSport) setNewsThirdLeague(newsThirdAddSport, "espn");
               }
             : undefined;
           const containerCls = effectiveColCount === 1
@@ -3826,6 +4087,7 @@ export default function HomeContent({
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
+                            onAddMore={newsAddMoreFor(entry, otherSports)}
                             onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                             espnActive={isEspn}
                             autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
@@ -3888,6 +4150,7 @@ export default function HomeContent({
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
+                      onAddMore={newsAddMoreFor(entry, otherSports)}
                       onPickEspn={topNewsOff ? undefined : () => pickEspn(idx)}
                       espnActive={isEspn}
                       autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
@@ -3928,7 +4191,7 @@ export default function HomeContent({
           // they're aria-hidden and only the sr-only text is voiced (WCAG 4.1.3,
           // matching the role=status pattern in FeedbackBox / SettingsPanel).
           <div role="status" aria-live="polite" className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-            <span className="sr-only">Loading games…</span>
+            <span className="sr-only">{showNews ? "Loading news…" : "Loading games…"}</span>
             {Array.from({ length: slotCount }, (_, i) => i + 1).map((i) => (
               <div key={i} aria-hidden="true" className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>
@@ -3959,7 +4222,7 @@ export default function HomeContent({
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <p style={{ color: "var(--text-muted)" }}>Failed to load games</p>
+            <p style={{ color: "var(--text-muted)" }}>{offline ? "Offline. The board loads when you reconnect." : "Failed to load games"}</p>
             <button
               type="button"
               // Retry with the user's configured columns (thirdLeague + slot
@@ -4000,6 +4263,7 @@ export default function HomeContent({
               onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
+              onAddLeague: (sport: Sport, anchor: DOMRect) => setAddLeague({ sport, anchor }),
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
@@ -4045,6 +4309,7 @@ export default function HomeContent({
                   onShowPlayoffs={bracketPillDue && league.sport === "mlb"
                     ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
                     : null}
+                  hidePlayoffOdds={hidePlayoffOdds}
                   onShowReview={reviewPillDue && league.sport === "mlb"
                     ? (section) => { setReviewSection(section); setReviewOpen(true); }
                     : null}
@@ -4096,6 +4361,15 @@ export default function HomeContent({
                 .filter((e) => e.slotIdx !== idx)
                 .map(({ sport, col }) => ({ sport, col })),
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
+              onAddMore: () => setAddMoreFor({
+                kind: "scores",
+                slotIdx: idx,
+                current: slotEntries.find((e) => e.slotIdx === idx)?.league.sport,
+                shownElsewhere: slotEntries
+                  .map((e, i) => ({ sport: e.league.sport, col: i + 1, slotIdx: e.slotIdx }))
+                  .filter((e) => e.slotIdx !== idx)
+                  .map(({ sport, col }) => ({ sport, col })),
+              }),
               // An Auto column that Best of yesterday took over: Auto IS that
               // column today, so it carries the "· default" mark.
               autoSport: selectedSlotLeagues[idx] === undefined
@@ -4375,6 +4649,86 @@ export default function HomeContent({
             // At most one banner occupies the strip above the board.
             const topBanner = wcBanner ?? kickoffBanner;
 
+            // Watch queue strip (Jacob 9/27): the games queued with a card's
+            // "Later" pill, above everything else on every date so they are
+            // the first thing on screen the next morning. A queued game the
+            // board already holds uses that copy (it live-updates with the
+            // board); the rest come from queueFetched above.
+            const watchQueueStrip = watchQueueEntries.length ? (
+              <section data-watch-queue aria-label="Watch queue" className="mb-3 sm:mb-4">
+                <div className="flex items-baseline justify-between gap-2 mb-1.5 px-1">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                    Watch queue <span className="tabular-nums font-normal">· {watchQueueEntries.length}</span>
+                  </h2>
+                  <button
+                    type="button"
+                    data-watch-queue-clear
+                    onClick={clearWatchQueue}
+                    className="text-[11px] cursor-pointer hover:underline"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Clear all
+                  </button>
+                </div>
+                <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {watchQueueEntries.map((entry) => {
+                    const key = `${entry.league}|${entry.id}`;
+                    const game = boardGameFor(entry) ?? queueFetched[key]?.game;
+                    const sport = entry.league as Sport;
+                    const label = sportDisplayLabel(sport, fromYmd(entry.date));
+                    const dayLabel = entry.date === todayYmd ? "Today"
+                      : entry.date === getDateString(-1) ? "Yesterday"
+                        : entry.date === getDateString(1) ? "Tomorrow"
+                          : fromYmd(entry.date).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" });
+                    return (
+                      <div key={key} data-watch-queue-item={entry.id} className="min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1 px-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                          <span className="truncate">{label} · {dayLabel}</span>
+                          <button
+                            type="button"
+                            data-watch-queue-done
+                            onClick={() => markWatchDone(entry)}
+                            className="shrink-0 rounded-full px-2 py-0.5 leading-none cursor-pointer transition-colors"
+                            style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                            aria-label={`Done: remove ${entry.title ?? "this game"} from the Watch queue`}
+                          >
+                            Done
+                          </button>
+                        </div>
+                        {game ? (
+                          <GameCard
+                            game={game}
+                            favoriteTeams={prefs.favoriteTeams}
+                            onToggleFavoriteTeam={toggleFavoriteTeam}
+                            showRatings={prefs.showRatings}
+                            isPastDate={entry.date < todayYmd}
+                            isToday={entry.date === todayYmd}
+                            onPlayHighlight={openVideoModal}
+                            onPlayEmbed={openEmbedModal}
+                            leagueLabel={label}
+                            onShowDetails={(g: Game) => setDetailGame(g)}
+                            upcomingRecordLeagues={recordLeagues}
+                            hideWatchLater
+                          />
+                        ) : (
+                          <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 text-xs flex items-center justify-between gap-2" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+                            <span className="truncate" style={{ color: "var(--text)" }}>{entry.title ?? "Queued game"}</span>
+                            {queueFetched[key] ? (
+                              <button type="button" onClick={() => setSelectedDate(entry.date)} className="shrink-0 cursor-pointer hover:underline">
+                                Open {dayLabel}
+                              </button>
+                            ) : (
+                              <span className="shrink-0">Loading…</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null;
+
             // Single-column board (Settings → Board layout): stack every league
             // in one centered, wider column with bigger cards. The .ns-cards-lg
             // class scales up logos + team names (see globals.css); colWidthClass
@@ -4421,6 +4775,7 @@ export default function HomeContent({
             if (showFinalSplit) {
               return (
                 <>
+                {watchQueueStrip}
                 {topBanner}
                 {reviewStrip}
                 <div className={boardRowCls}>
@@ -4454,6 +4809,7 @@ export default function HomeContent({
 
             return (
               <>
+              {watchQueueStrip}
               {topBanner}
               {reviewStrip}
               <div className={boardRowCls}>
@@ -4495,126 +4851,46 @@ export default function HomeContent({
           return <Heading className="sr-only">Catch up on games without spoilers. Spoiler-free sports scores and highlights.</Heading>;
         })()}
 
-        {/* ONE footer row (Jacob 7/14; reordered 9/25): About · FAQ · Contact ·
-            Feedback · Settings · Privacy · Guides. The row is ~340px wide, so on
-            a 320px phone it wraps to two lines rather than dropping an item.
-            `relative` anchors the Guides panel, which opens ABOVE the row
-            (absolute) so opening it never wraps the row. */}
-        <div className="relative flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+        {/* ONE footer row (Jacob 7/14; reordered 9/25; 9/28: page links only,
+            one style): About · FAQ · Guides · Contact · Feedback · Privacy
+            (+ ♥ Rate in the native shells, 9/29).
+            Settings came out (the header gear is the one way in), Guides is a
+            real page (/guides) rather than a popup, and Feedback goes to
+            /contact, which hosts the same form. Plain <a href> (not next/link)
+            so crawlers follow them. On a 320px phone the row wraps to two lines
+            rather than dropping an item. The "App Store" and "Google Play" text
+            links that used to sit here are gone (Jacob 8/24): the badges below
+            say the same thing better. */}
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
           <a href="/about" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</a>
           <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
+          <a href="/guides" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</a>
           <a href="/contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
-          <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} />
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="underline underline-offset-2 cursor-pointer hover:opacity-80"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Settings
-          </button>
+          <a href="/contact#feedback" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</a>
           <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
-          {/* Guides = the SEO copy + internal-link graph, rolled up behind a
-              disclosure. Google renders and indexes content inside collapsed
-              <details>, and plain <a href> (not next/link) is what the crawler
-              needs to follow the routes. */}
-          <details>
-            <summary className="cursor-pointer select-none underline underline-offset-2 marker:content-none [&::-webkit-details-marker]:hidden" style={{ color: "var(--text-muted)" }}>
-              Guides
-            </summary>
-            {/* Opaque --bg, not --bg-card: in dark mode --bg-card is
-                rgba(255,255,255,0.05), so this panel was 95% see-through and
-                the game cards it opens over showed straight through the copy
-                (unreadable — Jacob 8/22). z-50 matches the app's other
-                popovers (news source filter, league swap menu); at z-20 the
-                sticky league rows (z-30) painted over the panel as well. */}
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(42rem,90vw)] max-h-[60vh] overflow-y-auto text-left text-xs leading-relaxed space-y-2 z-50 rounded-lg p-3 shadow-lg" style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}>
-            {/* Headings, sections, a list and a dated <time> (2026-09-25): the
-                usegrowhero scan reads only /, /today, /tomorrow and /yesterday,
-                all this same shell with the games still loading, and found no
-                H2/H3, no <section>, no FAQ, no list and no date on any of them.
-                They all live inside this collapsed panel, so the board itself
-                looks the same. The answers match /faq. */}
-            <section aria-labelledby="about-hidescore" className="space-y-2">
-            <h2 id="about-hidescore" className="font-semibold" style={{ color: "var(--text)" }}>What is HideScore?</h2>
-            <p>
-              HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
-              MLB, MLS, the Premier League, La Liga, Serie A, the Bundesliga, Ligue 1, the Champions
-              League, the 2026 World Cup and golf without ever seeing who won — no score or result
-              is written on the board at all.
-            </p>
-            <p>
-              Before you commit to a replay, switch on our competitiveness rating and it tells you
-              whether a game was a blowout or an instant classic, so you can watch the best sports
-              highlights without spoilers and skip the duds — all without learning the final score.
-            </p>
-            </section>
-            <section id="faq" aria-labelledby="about-faq" className="space-y-2">
-            <h2 id="about-faq" className="font-semibold" style={{ color: "var(--text)" }}>Frequently asked questions</h2>
-            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Is HideScore free?</h3>
-            <p>
-              Yes. It is free, with no ads, and you do not need an account. It works in any browser and
-              as an iPhone or Android app.
-            </p>
-            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Which sports does HideScore cover?</h3>
-            <ul className="list-disc pl-4 space-y-0.5">
-              <li>NBA, WNBA, NFL, MLB, NHL, and college football and basketball</li>
-              <li>Soccer: the Premier League, Champions League, La Liga, Serie A, Bundesliga, Ligue 1, MLS and Liga MX</li>
-              <li>Golf, tennis, F1, UFC, cricket, chess and poker</li>
-            </ul>
-            <h3 className="font-semibold" style={{ color: "var(--text)" }}>Can I tell if a game is worth watching?</h3>
-            <p>
-              Yes. Turn on game ratings in Settings. They show how close or exciting a finished game
-              was, without naming the score or the winner.
-            </p>
-            </section>
-            <p>
-              It&apos;s free, has no tracking cookies, and works in any browser or as an iPhone or Android app. Jump to{" "}
-              <a href="/today" style={{ textDecoration: "underline" }}>today&apos;s games</a>,{" "}
-              <a href="/tomorrow" style={{ textDecoration: "underline" }}>tomorrow&apos;s schedule</a>,{" "}
-              <a href="/yesterday" style={{ textDecoration: "underline" }}>yesterday&apos;s results</a>, the{" "}
-              <a href="/worldcup" style={{ textDecoration: "underline" }}>2026 World Cup hub</a>, or the{" "}
-              <a href="/spoiler-free-sports" style={{ textDecoration: "underline" }}>spoiler-free sports guide</a>,{" "}
-              <a href="/no-spoiler-scores" style={{ textDecoration: "underline" }}>no-spoiler scores</a>,{" "}
-              <a href="/how-to-watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>how to watch sports highlights without spoilers</a>,{" "}
-              <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
-              <a href="/watch" style={{ textDecoration: "underline" }}>watch any YouTube link without spoilers</a>,{" "}
-              <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
-              <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>,{" "}
-              <a href="/nhl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NHL highlights</a>,{" "}
-              <a href="/nba-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NBA highlights</a>,{" "}
-              <a href="/college-football-highlights-without-spoilers" style={{ textDecoration: "underline" }}>college football highlights</a>, or{" "}
-              <a href="/soccer-highlights-without-spoilers" style={{ textDecoration: "underline" }}>soccer highlights</a> — including the{" "}
-              <a href="/premier-league-without-spoilers" style={{ textDecoration: "underline" }}>Premier League</a>,{" "}
-              <a href="/champions-league-without-spoilers" style={{ textDecoration: "underline" }}>Champions League</a>,{" "}
-              <a href="/europa-league-without-spoilers" style={{ textDecoration: "underline" }}>Europa League</a>,{" "}
-              <a href="/conference-league-without-spoilers" style={{ textDecoration: "underline" }}>Conference League</a>,{" "}
-              <a href="/nations-league-without-spoilers" style={{ textDecoration: "underline" }}>Nations League</a>,{" "}
-              <a href="/la-liga-without-spoilers" style={{ textDecoration: "underline" }}>La Liga</a>,{" "}
-              <a href="/mls-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLS</a>,{" "}
-              <a href="/liga-mx-scores-without-spoilers" style={{ textDecoration: "underline" }}>Liga MX</a> and{" "}
-              <a href="/cricket-highlights-without-spoilers" style={{ textDecoration: "underline" }}>cricket</a> — plus spoiler-free{" "}
-              <a href="/nba-scores-without-spoilers" style={{ textDecoration: "underline" }}>NBA scores</a>,{" "}
-              <a href="/nhl-scores-without-spoilers" style={{ textDecoration: "underline" }}>NHL scores</a>,{" "}
-              <a href="/f1-without-spoilers" style={{ textDecoration: "underline" }}>F1</a>,{" "}
-              <a href="/nrl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NRL</a> and{" "}
-              <a href="/ufc-results-without-spoilers" style={{ textDecoration: "underline" }}>UFC</a>, or the{" "}
-              <a href="/redzone-for-every-sport" style={{ textDecoration: "underline" }}>RedZone-style view for every sport</a>. Compare us with the other{" "}
-              <a href="/best-spoiler-free-sports-sites" style={{ textDecoration: "underline" }}>spoiler-free sports apps</a>, or see the{" "}
-              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Read our{" "}
-              <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
-            </p>
-            {BUILT_ON && (
-              <p>
-                Updated <time dateTime={BUILT_ON}>{formatBuiltOn(BUILT_ON)}</time>
-              </p>
-            )}
-          </div>
-          </details>
-          {/* The "App Store" and "Google Play" text links used to sit here.
-              Both are gone (Jacob 8/24): each said exactly what the badge below
-              already says, and of the two the badge is the better surface. */}
+          {/* Native shells only (9/29): the web has no store to rate on. A plain
+              <a> with no target, like Settings' "Rate this app", so the store
+              app opens on the review sheet. A link is all the store rules
+              allow: no pre-question, no reward. */}
+          {appStore && rateLinkVisible && (
+            <a
+              href={storeReviewHref(appStore)}
+              onClick={noteRateTapped}
+              data-umami-event="footer-rate"
+              aria-label={appStore === "ios" ? "Rate HideScore on the App Store" : "Rate HideScore on Google Play"}
+              className="inline-flex items-center gap-1 underline underline-offset-2 hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z" />
+              </svg>
+              Rate
+            </a>
+          )}
         </div>
+        {/* No visible trigger: kept mounted only so Settings' "Send feedback"
+            and "Request a league" can open the form in place. */}
+        <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} hideTrigger />
 
         {/* Compact custom Apple-logo pill — superseded by the real App Store
                 badge below. Kept commented in case we want a smaller text-and-
@@ -4781,138 +5057,37 @@ export default function HomeContent({
       )}
 
       {showLeaguePicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={skipLeaguePicker}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div
-            ref={leaguePickerRef}
-            // tabIndex=-1 makes the container programmatically focusable (see the
-            // focus-management effect) without joining the tab order; outline
-            // none suppresses the ring since it's focused only to seat SR focus.
-            tabIndex={-1}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="league-picker-title"
-            // Capped to the viewport (the backdrop's p-4 is the 2rem) and laid
-            // out as a column so the league grid — not the dialog — absorbs the
-            // overflow. Without this the modal simply grew past a short window
-            // and, because the backdrop is a non-scrolling fixed layer, the
-            // "Use defaults" / confirm row below was unreachable: Escape or a
-            // backdrop click were the only ways out (Jacob 8/23, small Firefox
-            // window). Worse on desktop than phone, since pickerMax = slotCount
-            // offers five slots and a longer list on a wide viewport.
-            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl flex flex-col max-h-[calc(100dvh-2rem)]"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-center mb-2 shrink-0">
-              <svg className="w-9 h-9" viewBox="0 0 32 32" fill="none" aria-hidden>
-                <rect width="32" height="32" rx="6" className="header-logo-bg" />
-                <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
-              </svg>
-            </div>
-            <h3 id="league-picker-title" className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>Pick your leagues</h3>
-            <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
-              Choose up to <strong>{pickerMax} leagues</strong> for your score columns.<br />You can change these anytime in Settings.
-            </p>
-            {/* Popularity-ordered, soccer grouped at the bottom (pickerOptions).
-                Two rules keep this list STILL while you tap through it, which is
-                the whole complaint (Jacob 8/9): nothing re-sorts on selection,
-                and the order badge lives in a fixed-width slot that is present
-                (blank) on every pill — the old `1. ` prefix grew the pill on
-                click, which reflowed the wrap and made unrelated pills jump. */}
-            {/* The only scrolling part: min-h-0 lets this flex child shrink
-                below its content height (without it the grid keeps its natural
-                size and the cap above does nothing), and the negative-margin /
-                padding pair keeps the pills' focus rings from being clipped by
-                the new overflow box. */}
-            <div className="flex flex-wrap justify-center gap-2 mb-4 overflow-y-auto min-h-0 -mx-1 px-1">
-              {pickerOptions.map((o) => {
-                const idx = pickerSel.indexOf(o.sport);
-                const on = idx >= 0;
-                const full = pickerSel.length >= pickerMax && !on;
-                const demoOption = demoPickerLabels?.get(o.sport);
-                return (
-                  <button
-                    key={o.sport}
-                    type="button"
-                    disabled={full}
-                    onClick={() => togglePick(o.sport)}
-                    // Multi-select toggle: expose the picked state to assistive
-                    // tech, since it's otherwise conveyed only by the accent
-                    // background (and a "1. " number prefix). Matches the
-                    // aria-pressed pattern every other toggle pill in the app
-                    // already uses (view tabs, the news reveal/text-post pills,
-                    // the World Cup groups band/day pills) — this picker was the
-                    // lone group missing it.
-                    aria-pressed={on}
-                    className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={on
-                      ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
-                      : { background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
-                  >
-                    {/* Fixed 1rem slot, reserved whether or not this pill is
-                        picked, so selecting one never changes any pill's width. */}
-                    <span aria-hidden className="inline-block w-4 shrink-0 text-center text-xs font-bold tabular-nums">
-                      {on ? idx + 1 : ""}
-                    </span>
-                    {/* The mark always sits on a white chip. Most of these are
-                        dark-on-transparent, so on the accent-blue selected fill
-                        they'd disappear; knocking them to solid white instead
-                        turned filled marks (MLB) into a featureless blob. The
-                        chip keeps every logo legible and identical in both
-                        states, so selecting a pill changes only its background. */}
-                    <span className="inline-flex items-center justify-center w-[20px] h-[20px] rounded-full shrink-0 bg-white">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={demoOption?.logo ?? LEAGUE_LOGO[o.sport]}
-                        alt=""
-                        width={16}
-                        height={16}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-[16px] h-[16px] object-contain"
-                        draggable={false}
-                        // Remote ESPN/Wikimedia mark: a blocked hotlink would leave
-                        // the browser's broken-image glyph. Collapse it and let the
-                        // pill read as text, matching every other logo in the app.
-                        onError={(e) => { e.currentTarget.style.display = "none"; }}
-                      />
-                    </span>
-                    <span>{demoOption?.label ?? o.label}</span>
-                    {/* Start dates dropped here on purpose (Jacob 8/9): six
-                        "· starts Aug 21" tails made the grid unreadable and are
-                        noise at signup. The kickoff banner still announces them
-                        and the column switcher still shows them. "offseason"
-                        stays — that one changes whether the column has games. */}
-                    {o.offseason && <em className="font-normal text-xs" style={{ color: on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={skipLeaguePicker}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-              >
-                Use defaults
-              </button>
-              <button
-                type="button"
-                onClick={confirmLeaguePicker}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                style={{ background: "var(--accent)", color: "white" }}
-                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
-              >
-                {pickerSel.length ? `Show ${pickerSel.length} league${pickerSel.length > 1 ? "s" : ""}` : "Done"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <LeaguePickerModal
+          title="Pick your leagues"
+          subtitle={<>Choose up to <strong>{pickerMax} leagues</strong> for your score columns.<br />You can change these anytime in Settings.</>}
+          options={pickerOptions}
+          mode="multi"
+          selected={pickerSel}
+          max={pickerMax}
+          onPick={togglePick}
+          onConfirm={confirmLeaguePicker}
+          onClose={skipLeaguePicker}
+          demoLabels={demoPickerLabels}
+          // First-run drop-off counts (2026-10-01). Off for ?demo=1 screenshot
+          // sessions so they never land in Umami.
+          trackPrefix={demoPickerLabels ? undefined : "league-picker"}
+        />
+      )}
+
+      {/* A column switcher's Add more… (Jacob 9/29): the same sheet, one tap
+          switches the column. */}
+      {addMoreFor && (
+        <LeaguePickerModal
+          title="More leagues"
+          options={addMoreOptions}
+          mode="single"
+          selected={addMoreFor.current ? [addMoreFor.current] : []}
+          onPick={pickAddMore}
+          onClose={() => setAddMoreFor(null)}
+          showOffseason={!!prefs.showOffseasonInPicker}
+          onToggleOffseason={() => updatePrefs({ showOffseasonInPicker: prefs.showOffseasonInPicker ? undefined : true })}
+          shownElsewhere={addMoreFor.shownElsewhere}
+        />
       )}
 
       {/* Undo-close pill. Deliberately says nothing about WHAT was closed — a
@@ -4988,8 +5163,10 @@ export default function HomeContent({
           published={videoModal.published}
           body={videoModal.body}
           shareCard={videoModal.shareCard}
-          maskVideoTitle={(prefs.maskVideoTitle ?? false) || !!videoModal.forceTitleMask}
+          maskVideoTitle={prefs.maskVideoTitle ?? false}
+          forceTitleMask={!!videoModal.forceTitleMask}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
+          keysButton={!prefs.hideControlsHint}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
           allowEnd={prefs.videoAllowEnd ?? false}
@@ -5060,6 +5237,21 @@ export default function HomeContent({
 
       {/* Bottom-right keyboard guide. Sits outside every modal so it can say
           what the post-modal keys are WHILE that modal is open (Jacob 9/8). */}
+      {addLeague && (() => {
+        const slots = addLeagueSlots();
+        const free = slots.find((s) => s.label === "empty") ?? slots.find((s) => s.auto && s.sport !== "top");
+        return (
+          <AddLeaguePopover
+            leagueLabel={thirdLeagueOptions.find((o) => o.sport === addLeague.sport)?.label ?? addLeague.sport.toUpperCase()}
+            anchor={addLeague.anchor}
+            slots={slots.map(({ slotIdx, label }) => ({ slotIdx, label }))}
+            freeSlotIdx={free?.slotIdx}
+            onAdd={(slotIdx) => addLeagueToSlot(addLeague.sport, slotIdx)}
+            onClose={closeAddLeague}
+          />
+        );
+      })()}
+
       <ControlsHint
         enabled={!prefs.hideControlsHint}
         onDismiss={() => updatePrefs({ hideControlsHint: true })}
@@ -5117,9 +5309,12 @@ export default function HomeContent({
         </svg>
       </button>
 
-      <div className="sm:hidden">
+      {/* web-tab-bar: stands down when the iOS shell draws its native bar
+          (html[data-native-tabbar], see lib/nativeTabBar.ts). */}
+      <div className="sm:hidden web-tab-bar">
         <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} />
       </div>
     </div>
+    </WatchQueueContext.Provider>
   );
 }

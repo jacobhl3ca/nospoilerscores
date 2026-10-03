@@ -2,7 +2,7 @@
 
 **Is this game worth watching? Find out without finding out who won.**
 
-[hidescore.com](https://hidescore.com) · [iOS](https://apps.apple.com/app/id6766885311) · Apple TV
+[hidescore.com](https://hidescore.com) · [iOS](https://apps.apple.com/app/id6766885311) · [Android](https://play.google.com/store/apps/details?id=com.jacobhl.hidescore) · [Apple TV](https://apps.apple.com/app/id6766885311?platform=tv)
 
 HideScore is a spoiler-free sports scoreboard. Scores, records and standings are hidden
 by default. Every game instead carries a **1-5 watchability rating** derived from its live
@@ -21,7 +21,8 @@ spoiler-safe highlight links, and a sensitive-news filter.
 - Watchability rating — scored from game state only; nothing that reveals a winner is
   ever sent to the client for a game you have not chosen to reveal.
 - Cloudflare Worker — proxies highlight lookups so a video title cannot leak a score.
-- GitHub Actions — refreshes data on a schedule and runs an hourly improvement bot.
+- GitHub Actions — refresh data feeds on a schedule (TV listings, news, highlight links), run unit tests
+  and content guards, and deploy to Cloudflare Pages on every push to `main`.
 
 ## Run it yourself
 

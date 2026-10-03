@@ -71,6 +71,11 @@ async function openPicks(page: Page, revealed = false) {
   await page.getByRole("button", { name: "Today", exact: true }).click({ timeout: 20_000 });
   await page.locator('[data-recap-playoffs-tab="picks"], [data-recap-bracket]').first().click({ timeout: 20_000 });
   const dialog = page.getByRole("dialog", { name: "MLB playoff picture" });
+  // Every seed in the stub has clinched, so the field is set: no Odds tab, and
+  // no Odds button on the pill that opened it.
+  await expect(dialog.getByRole("tab", { name: "Picks" })).toBeVisible();
+  await expect(dialog.getByRole("tab")).toHaveCount(2);
+  await expect(page.locator('[data-recap-playoffs-tab="odds"]')).toHaveCount(0);
   await dialog.getByRole("tab", { name: "Picks" }).click();
   if (!revealed) {
     // The Picks tab sits behind the picture's own cover, like the other two.
@@ -100,7 +105,7 @@ for (const vp of [
     await expect(dialog.getByText(/Wild Card 1 · Division Series 2 · LCS 4 · World Series 8 \(max 28\)/)).toBeVisible();
     await expect(dialog.locator("[data-lock-line]")).toContainText("Tue, Sep 29");
     // The lock date is the bold part of the line.
-    await expect(dialog.locator("[data-lock-date]")).toHaveText(/^Tue, Sep 29, /);
+    await expect(dialog.locator("[data-lock-date]")).toHaveText(/^Tue, Sep 29(,| at) /);
     await expect(dialog.locator("[data-lock-date]")).toHaveCSS("font-weight", "700");
 
     const submit = dialog.getByRole("button", { name: "Submit picks" });
