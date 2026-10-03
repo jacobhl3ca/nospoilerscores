@@ -65,6 +65,14 @@ const CARD_REV = 4;
 // Keep this narrow. An unscoped result-bearing upload must still be rejected.
 const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"]);
 
+// College chain channels whose game cuts name the winner or print the score
+// ("Colorado State at UTSA: Rams See 500 YDS of Offense, Fall 59-45 | FULL
+// Game Highlights (9/26/2026)", Pac-12, 2026-09-26). The client keeps their
+// title bar masked (`maskTitle` in src/lib/collegeHighlightChannels.json), so
+// a strict lookup on the channel itself may return such a title. Unscoped
+// results are still refused. Lowercased author names.
+const MASKED_CHAIN_CHANNELS = new Set(["pac-12"]);
+
 // Atlantic Hockey America (NCAA women's hockey chain, lit 2026-09-26) titles
 // every per-game cut as a bare scoreline with the date and nothing else:
 // "Ohio State 2, Penn State 1 OT - Sept. 24, 2026". No "highlights", and the
@@ -2545,9 +2553,12 @@ export default {
           const isOfficialWorldCupUpload = isWorldCupQuery && WC_OFFICIAL_CHANNELS.includes(channel.toLowerCase());
           const isMaskedOfficialCombatUpload =
             strictChannelParam && isFromChannel && MASKED_COMBAT_CHANNELS.has(preferChannelLower);
+          const isMaskedChainUpload =
+            strictChannelParam && isFromChannel && MASKED_CHAIN_CHANNELS.has(preferChannelLower);
           if (
             !isOfficialWorldCupUpload &&
             !isMaskedOfficialCombatUpload &&
+            !isMaskedChainUpload &&
             !isStrictAhaScoreline &&
             (SCORE_RX.test(title) || SPOILER_RX.test(title) || isTeamScoreSpoiler(title))
           )

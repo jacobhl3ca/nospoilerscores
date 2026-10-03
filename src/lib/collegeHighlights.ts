@@ -99,6 +99,13 @@
 //     cuts ("MAC MBB: …") off a football date. Last season's titles printed
 //     the score ("Condensed Game: Ohio 31, Buffalo 26"), so it is in
 //     `maskTitle`.
+//   Pac-12 (conference 9, added 2026-10-03): "Pac-12" cut 7 of its 8 week-5
+//     games ("Oregon State vs. UTEP: Beavers Shine in Wire-to-Wire Victory |
+//     FULL Game Highlights (9/26/2026)", "GAME RECAP: …"), 0 wrong. Its
+//     titles name the winner or print the score, so it is in `maskTitle`, and
+//     the worker takes such a title on a strict lookup of this channel only
+//     (MASKED_CHAIN_CHANNELS in public/_worker.js). No "football" in its
+//     titles, so it carries its own tokens ("game highlights", "game recap").
 //   `teamChannels` (ESPN team id → the school's own channel) is the last
 //     link, after the networks, for a school whose conference channel skips
 //     its non-conference games. Marshall (Sun Belt posted nothing for

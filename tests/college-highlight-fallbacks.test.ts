@@ -148,6 +148,16 @@ test("ncaaf: a MAC home game reaches the MAC channel, title-masked with its own 
   assert.ok(NCAAF.maskTitle?.includes("Get Some MACtion"));
 });
 
+test("ncaaf: a Pac-12 game reaches the Pac-12 channel last, title-masked, on its own game tokens", () => {
+  // Arizona (12, Big 12) at Washington State (265, Pac-12) on CBS, 2026-09-26.
+  // Pac-12 titles name the winner ("Cougs Battle in Loss") and carry no
+  // "football" ("… | FULL Game Highlights (9/26/2026)", "GAME RECAP: …").
+  const chain = buildCollegeFallbackChain(NCAAF, PRIMARY, { id: "ncaaf-265", conferenceId: "9" }, { id: "ncaaf-12", conferenceId: "4" }, ["CBS"]);
+  assert.deepEqual(chain.map((f) => f.channel), ["Big 12 Conference", "CBS Sports College Football", "Pac-12"]);
+  assert.deepEqual(chain[2], { channel: "Pac-12", titleTokens: ["game highlights", "game recap"], ownTokens: true });
+  assert.ok(NCAAF.maskTitle?.includes("Pac-12"));
+});
+
 test("ncaaf: a school channel is the last link, after conference and network", () => {
   // Gardner-Webb (2241, Big South-OVC) at Marshall (276, Sun Belt), ESPN+ only.
   const espnPlus = buildCollegeFallbackChain(NCAAF, PRIMARY, { id: "ncaaf-276", conferenceId: "37" }, { id: "ncaaf-2241", conferenceId: "179" }, ["ESPN+"]);

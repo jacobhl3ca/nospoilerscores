@@ -178,6 +178,10 @@ export const CHANNEL_FEED_IDS = {
   "Big 12 Conference": "UCLnfOCTbfqMy_3ah8OmTHEQ",
   "SEC": "UC60q_WUDde_NK-ze3frvtiA",
   "TOP 14 - Officiel": "UCWrD2VhZdO-_W8QDBxiXmeg",
+  // Pac-12 (the ncaaf chain, added 2026-10-03): feed only. Its 15 uploads
+  // reach back about 4 days (2026-10-03), so the hourly bake reads each game
+  // cut while it is in the feed.
+  "Pac-12": "UCtxdtF8iCxZw593FSUIPrxg",
 };
 
 export function channelFeedId(channel) {

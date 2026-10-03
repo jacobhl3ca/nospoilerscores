@@ -8,6 +8,7 @@
       "4": "Big 12 Conference",
       "5": "Big Ten Football",
       "8": "SEC",
+      "9": "Pac-12",
       "12": "Conference USA",
       "15": "Get Some MACtion",
       "37": "Sun Belt Conference",
@@ -52,10 +53,15 @@
         "football",
         "regular season week"
       ],
-      "Get Some MACtion": []
+      "Get Some MACtion": [],
+      "Pac-12": [
+        "game highlights",
+        "game recap"
+      ]
     },
     "maskTitle": [
-      "Get Some MACtion"
+      "Get Some MACtion",
+      "Pac-12"
     ]
   },
   "ncaavb": {
