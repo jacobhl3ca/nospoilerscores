@@ -1992,8 +1992,8 @@ export default function HomeContent({
   // "kicks off Wednesday, Aug 21" on a 2024 page — one account's dismissal
   // list carries an `epl-2024-08-21` key from exactly that. selectedDate stays
   // the dependency only so it re-evaluates whenever the user moves around.
-  const kickoff = useMemo(() => {
-    if (!selectedDate) return null;
+  const kickoffInfo = useMemo(() => {
+    if (!selectedDate) return { kickoff: null, todayYmd: "" };
     const todayYmd = getDateString(0);
     const today = new Date(`${todayYmd.slice(0, 4)}-${todayYmd.slice(4, 6)}-${todayYmd.slice(6, 8)}T12:00:00`);
     // A league unticked in Settings never takes the banner (two of the four

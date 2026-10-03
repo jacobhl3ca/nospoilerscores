@@ -1005,16 +1005,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
             // onPlay is absent; both production call sites pass onPlayVideo, so it
             // hardens the latent case rather than changing today's behavior.)
             return (
-              <a
-                key={item.id}
-                href={frontendHref(item.articleUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={handleExternalClick(item.articleUrl)}
-                className={commonCls}
-                style={commonStyle}
-                data-news-key={item.articleUrl || item.id}
-              >
+              <div key={item.id} className="block w-full text-left" style={commonStyle}>
                 {body}
               </div>
             );
