@@ -23,7 +23,7 @@ import {
 import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 import { pickEspnGameClip, attachEspnVideoClips } from "./lib/espn-clip.mjs";
-import { mergeVideos, orderVideos } from "./lib/video-order.mjs";
+import { isRealEspnClip, mergeVideos, orderVideos } from "./lib/video-order.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
 import { etServiceYmd, mergeEspnFrontSnapshot, parseFrontPageFeedIds, trimEspnHeader } from "./lib/espn-front.mjs";
 
@@ -949,6 +949,7 @@ async function fetchESPNICYMI() {
   const descM = block.match(/<p[^>]*>([\s\S]{5,500}?)<\/p>/);
   const title = titleM ? decodeEntities(titleM[1].replace(/<[^>]+>/g, "")) : "";
   if (!title) return null;
+  if (!isRealEspnClip({ id: vid, headline: title })) return null;
   return {
     id: vid,
     headline: `ICYMI: ${title}`,
@@ -1391,6 +1392,8 @@ function scrapeESPNTopVideosFromHtml(html, icymi) {
     if (!titleM) continue;
     const title = decodeEntities(titleM[1].replace(/<[^>]+>/g, ""));
     if (!title) continue;
+    // Live-stream placeholder (id "1", "Watch live: ...") — not a clip.
+    if (!isRealEspnClip({ id: vid, headline: title })) continue;
     const descM = block.match(/<p[^>]*class="[^"]*contentItem__subhead[^"]*"[^>]*>([\s\S]{5,500}?)<\/p>/);
     const description = descM ? decodeEntities(descM[1].replace(/<[^>]+>/g, "")) : "";
     // The first <a href> in a video block is often a sibling-story link (a
@@ -1441,10 +1444,11 @@ async function persistVideos(name, fresh, pinnedId) {
   // Purge carried-forward ESPN analyst takes so a pundit clip that slipped in
   // earlier today (e.g. before this filter shipped) doesn't linger in the
   // carry until the ET-midnight rollover. ICYMI is safe — its all-caps
-  // "ICYMI:" prefix doesn't match the name-pattern regex.
+  // "ICYMI:" prefix doesn't match the name-pattern regex. Live-stream
+  // placeholders (id "1") carried from an earlier bake are purged too.
   const carry =
     name === "espn-videos"
-      ? carryRaw.filter((i) => !isEspnAnalystTake(i.headline || ""))
+      ? carryRaw.filter((i) => isRealEspnClip(i) && !isEspnAnalystTake(i.headline || ""))
       : carryRaw;
   // Seed with carry so unseen items survive the merge.
   const byId = mergeVideos(carry, fresh, nowMs);

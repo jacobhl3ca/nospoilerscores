@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { mergeVideos, orderVideos } from "../scripts/lib/video-order.mjs";
+import { isRealEspnClip, mergeVideos, orderVideos } from "../scripts/lib/video-order.mjs";
 
 const v = (id, firstSeenAt) => ({ id: String(id), headline: `clip ${id}`, firstSeenAt });
 
@@ -42,4 +42,21 @@ test("mergeVideos: carry-forward keeps the earliest firstSeenAt, fresh fields wi
   assert.equal(byId.get("1").headline, "new");
   assert.equal(byId.get("2").firstSeenAt, 999);
   assert.equal(byId.get("3").firstSeenAt, 999);
+});
+
+test("isRealEspnClip: live-stream placeholder id \"1\" is not a clip", () => {
+  assert.equal(isRealEspnClip({ id: "1", headline: "College GameDay" }), false);
+});
+
+test("isRealEspnClip: a 5-digit id is not a clip", () => {
+  assert.equal(isRealEspnClip({ id: "12345", headline: "Some highlight" }), false);
+});
+
+test("isRealEspnClip: a \"Watch live:\" headline is not a clip, any case", () => {
+  assert.equal(isRealEspnClip({ id: "47112233", headline: "Watch live: College GameDay from Iowa City" }), false);
+  assert.equal(isRealEspnClip({ id: "47112233", headline: "WATCH LIVE: Big Ten" }), false);
+});
+
+test("isRealEspnClip: a real 8-digit clip passes", () => {
+  assert.equal(isRealEspnClip({ id: "47112233", headline: "Ohtani homers twice" }), true);
 });

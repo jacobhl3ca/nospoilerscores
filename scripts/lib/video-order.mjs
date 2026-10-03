@@ -1,6 +1,13 @@
 // Pure helpers for persistVideos in prebake-news.mjs, split out so the
 // merge and the order can be unit-tested without running the bake.
 
+// A real ESPN clip has a long numeric id (6+ digits). The homepage's
+// live-stream module carries placeholder id "1" with a "Watch live:" headline,
+// no still, and a clip URL that 404s, so it must never reach the card.
+export function isRealEspnClip(item) {
+  return /^\d{6,}$/.test(String(item?.id ?? "")) && !/^\s*watch live/i.test(item?.headline || "");
+}
+
 // Merge today's carried-forward items with a fresh scrape. Fresh items
 // overwrite (so headline/description/imageUrl edits propagate) while the
 // earliest firstSeenAt we've ever recorded for that id is kept.
