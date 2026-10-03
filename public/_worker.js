@@ -1035,6 +1035,20 @@ export default {
       // title carries, so it has to be the gate.
       const weekParam = parseInt(url.searchParams.get("week") || "", 10);
       const queryWeek = Number.isFinite(weekParam) && weekParam >= 1 && weekParam <= 25 ? weekParam : null;
+      // order=home → HOME-FIRST ORDER GATE (UEFA Nations League, 2026-10-03).
+      // Each pair meets twice, the return leg 10–12 days after the first, and
+      // neither FOX Sports nor TUDN USA puts a date in the title. Both put the
+      // HOME team first (99/99 TUDN titles and every FOX title checked), so the
+      // title's team order is the only thing that tells the two legs apart.
+      // The query is "Away vs Home highlights …", so the home team is the
+      // second parsed team and must appear first in the title.
+      const homeFirst = url.searchParams.get("order") === "home";
+      // minsec=<n> → DURATION FLOOR. TUDN USA posts 1–2 min goal clips beside
+      // each match cut ("PORTUGAL GOAL! Denmark vs Portugal", 111 s) under the
+      // same two names and competition. A clip whose search card shows a
+      // shorter running time is skipped; an unknown length is let through.
+      const minSecParam = parseInt(url.searchParams.get("minsec") || "", 10);
+      const minSec = Number.isFinite(minSecParam) && minSecParam > 0 ? minSecParam : null;
       const excludeParam = url.searchParams.get("exclude"); // comma-separated videoIds to skip (used by VideoModal fallback retries)
       const excludeSet = new Set(
         (excludeParam || "").split(",").map((s) => s.trim()).filter(Boolean)
@@ -1251,13 +1265,13 @@ export default {
           // Paraguay" failed hasTeams while a re-upload's "USA vs Paraguay" won.
           // Keys are the lowercased ESPN short names the client sends.
           "usa": ["usa", "united states", "usmnt"],
-          "bosnia-herz": ["bosnia-herz", "bosnia-herzegovina", "bosnia and herzegovina", "bosnia & herzegovina", "bosnia", "herzegovina"],
+          "bosnia-herz": ["bosnia-herz", "bosnia-herzegovina", "bosnia and herzegovina", "bosnia & herzegovina", "bosnia", "herzegovina", "bosnia y herzegovina"],
           "south korea": ["south korea", "korea republic", "korea"],
           "ivory coast": ["ivory coast", "côte d'ivoire", "cote d'ivoire", "cote d ivoire"],
-          "türkiye": ["türkiye", "turkiye", "turkey"],
+          "türkiye": ["türkiye", "turkiye", "turkey", "turquía"],
           "congo dr": ["congo dr", "dr congo", "dr. congo", "democratic republic of congo"],
           "curaçao": ["curaçao", "curacao"],
-          "czechia": ["czechia", "czech republic"],
+          "czechia": ["czechia", "czech republic", "chequia", "república checa"],
           "iran": ["iran", "ir iran"],
           "cape verde": ["cape verde", "cabo verde"],
           "saudi arabia": ["saudi arabia", "saudi", "ksa"],
@@ -1265,7 +1279,7 @@ export default {
           "france": ["france", "francia"],
           "germany": ["germany", "alemania"],
           "morocco": ["morocco", "marruecos"],
-          "netherlands": ["netherlands", "holland", "paises bajos", "países bajos"],
+          "netherlands": ["netherlands", "holland", "paises bajos", "países bajos", "holanda"],
           "senegal": ["senegal", "senegal"],
           "belgium": ["belgium", "belgica", "bélgica"],
           "switzerland": ["switzerland", "swiss", "suiza"],
@@ -1274,7 +1288,49 @@ export default {
           "colombia": ["colombia", "colombia"],
           "argentina": ["argentina", "argentina"],
           "spain": ["spain", "españa", "espana"],
+          // UEFA Nations League (2026-10-03): the rest of the 54 nations whose
+          // English or Spanish title form differs from ESPN's short name. TUDN
+          // USA's original titles are Spanish ("Países Bajos vs Alemania"), and
+          // its search cards show an English translation for most uploads
+          // ("Czech Republic vs England"). Accents fold away before matching.
+          // ⚠️ "ireland" / "irlanda" stay ONLY on Rep Ireland, and
+          // CONTAINING_TEAM_NAMES below masks "northern ireland" out of the
+          // title before a Rep Ireland lookup, so one can never match the other.
+          "rep ireland": ["rep ireland", "republic of ireland", "ireland", "irlanda", "república de irlanda"],
+          "n ireland": ["n ireland", "northern ireland", "irlanda del norte"],
+          "england": ["england", "inglaterra"],
+          "scotland": ["scotland", "escocia"],
+          "wales": ["wales", "gales"],
+          "italy": ["italy", "italia"],
+          "croatia": ["croatia", "croacia"],
+          "denmark": ["denmark", "dinamarca"],
+          "norway": ["norway", "noruega"],
+          "sweden": ["sweden", "suecia"],
+          "finland": ["finland", "finlandia"],
+          "iceland": ["iceland", "islandia"],
+          "faroe islands": ["faroe islands", "faroes", "islas feroe"],
+          "poland": ["poland", "polonia"],
+          "hungary": ["hungary", "hungría"],
+          "romania": ["romania", "rumania", "rumanía"],
+          "ukraine": ["ukraine", "ucrania"],
+          "greece": ["greece", "grecia"],
+          "cyprus": ["cyprus", "chipre"],
+          "slovakia": ["slovakia", "eslovaquia"],
+          "slovenia": ["slovenia", "eslovenia"],
+          "north macedonia": ["north macedonia", "macedonia del norte"],
+          "lithuania": ["lithuania", "lituania"],
+          "latvia": ["latvia", "letonia"],
+          "luxembourg": ["luxembourg", "luxemburgo"],
+          "moldova": ["moldova", "moldavia"],
+          "belarus": ["belarus", "bielorrusia"],
+          "kazakhstan": ["kazakhstan", "kazajistán", "kazajstán"],
+          "azerbaijan": ["azerbaijan", "azerbaiyán"],
         };
+        // Team names that CONTAIN another team's name: "Northern Ireland" holds
+        // "Ireland", "Irlanda del Norte" holds "Irlanda". When the team being
+        // looked up does not own one of these, it is blanked out of the title
+        // first, so a Rep Ireland lookup cannot match a Northern Ireland title.
+        const CONTAINING_TEAM_NAMES = ["northern ireland", "irlanda del norte"];
 
         // Extract team names from query: "Away vs Home highlights ..."
         const teamsMatch = query.match(/^(.+?)\s+vs\s+(.+?)\s+(?:highlights|resumen)\b/i);
@@ -1312,9 +1368,35 @@ export default {
           return TEAM_VARIANT_INDEX[lower] || TEAM_ALIASES[lower] || [lower];
         }
 
+        // The title as matched for one team: normalized, with every
+        // CONTAINING_TEAM_NAMES entry the team does not own blanked to spaces
+        // (same length, so the order gate's positions stay true).
+        function titleForTeam(titleLower, variants) {
+          let t = normalizeTeamMatch(titleLower);
+          const own = new Set(variants.map(normalizeTeamMatch));
+          for (const name of CONTAINING_TEAM_NAMES) {
+            if (!own.has(name)) t = t.split(name).join(" ".repeat(name.length));
+          }
+          return t;
+        }
+
+        // Where a team first appears in the title (any variant), or -1. Feeds
+        // the home-first order gate; plain substring positions only, so a team
+        // found only through the tolerances below reads -1 and fails closed.
+        function teamTitleIndex(titleLower, teamName) {
+          const variants = getTeamVariants(teamName);
+          const t = titleForTeam(titleLower, variants);
+          let best = -1;
+          for (const v of variants) {
+            const i = t.indexOf(normalizeTeamMatch(v));
+            if (i >= 0 && (best < 0 || i < best)) best = i;
+          }
+          return best;
+        }
+
         function titleHasTeam(titleLower, teamName) {
           const variants = getTeamVariants(teamName);
-          const normalizedTitle = normalizeTeamMatch(titleLower);
+          const normalizedTitle = titleForTeam(titleLower, variants);
           if (variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)))) return true;
           // Singular-nickname tolerance. Not hypothetical: the OFFICIAL NFL
           // channel's Week 15 recap of Dec 14 2025 is titled "Washington
@@ -1614,6 +1696,21 @@ export default {
           const hasTeams =
             queryTeams.length === 2 &&
             queryTeams.every((team) => titleHasTeam(titleLower, team));
+
+          // Home-first order gate (order=home, see homeFirst above). A title
+          // that names the away side first is the OTHER leg of the pair, so it
+          // is dropped from every tier, not just ranked lower.
+          if (homeFirst && queryHasSpecificTeams) {
+            if (!hasTeams) continue;
+            const homeAt = teamTitleIndex(titleLower, queryTeams[1]);
+            const awayAt = teamTitleIndex(titleLower, queryTeams[0]);
+            if (homeAt < 0 || awayAt < 0 || homeAt >= awayAt) continue;
+          }
+          // Duration floor (minsec=, see minSec above): a goal clip, not the match.
+          if (minSec !== null) {
+            const len = lengthById.get(videoId);
+            if (Number.isFinite(len) && len < minSec) continue;
+          }
 
           // Date match — strict when both the title carries an
           // explicit date (short form "(5/22/26)" or long form "May

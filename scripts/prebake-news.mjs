@@ -2600,7 +2600,11 @@ const HL_LEAGUES = [
   // 9/24–9/26 league phase, 0 wrong, behind the "nations league" token below —
   // FOX also cuts World Cup / Euro qualifier / Gold Cup meetings of the same
   // nations. ⛔ Not the "UEFA" channel (old "Classic" re-uploads).
-  { sport: "nations",    path: "/soccer/uefa.nations/scoreboard",             channel: "FOX Sports" },
+  // TUDN USA (2026-10-03) is the 2nd slot: FOX cuts only the games it airs
+  // (8/70), TUDN nearly all (60/70, Spanish commentary). With FOX missing, the
+  // TUDN cut stands alone and the card draws it as the main button. Both are
+  // behind HL_MATCH_GATES below. See SECONDARY_CHANNELS in src/lib/youtube.ts.
+  { sport: "nations",    path: "/soccer/uefa.nations/scoreboard",             channel: "FOX Sports", secondaryChannel: "TUDN USA" },
   // Little League World Series (added 2026-08-21). ESPN cuts a per-game
   // "Full Game Highlights" for the Williamsport rounds. The names it titles
   // with are the state/country, not ESPN's own city-based team name — see
@@ -2683,6 +2687,15 @@ function hlCflPlayoffTokens(playoffLabel) {
 // regular season under the same names and year with no week to tell them
 // apart (Game.weekNumber is null for the exhibitions).
 const HL_NFL_PRESEASON_TOKENS = ["preseason", "hall of fame"];
+// Home-first order gate + duration floor. Mirrors HIGHLIGHT_MATCH_GATES in
+// src/lib/youtube.ts — keep the two in sync. Sent to the worker (`order=home`,
+// `minsec=`) AND re-checked on every carried and new id against its oEmbed
+// title and watch-page length, because a Nations League pair meets twice under
+// undated titles and the home team is the only tell: an id baked before the
+// gate existed must not survive as the other leg.
+const HL_MATCH_GATES = {
+  nations: { homeFirst: true, minSec: 300 },
+};
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };
 
@@ -2821,9 +2834,10 @@ function hlTelemundoWorldCupQuery(away, home, dateStr, series) {
 
 // One /api/youtube call mirroring youtube.ts fetchFirstVideoId (q, channel,
 // exclude, prefer=extended). Returns a raw video id or null.
-async function hlFetchId(query, { channel, exclude, preferExtended, strict, week, compTokens } = {}) {
+async function hlFetchId(query, { channel, exclude, preferExtended, strict, week, compTokens, gates } = {}) {
   try {
-    let url = `https://hidescore.com/api/youtube?q=${encodeURIComponent(query)}`;
+    // HL_WORKER_BASE, not a fixed origin, so a local worker can be baked against.
+    let url = `${HL_WORKER_BASE}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
     // Competition TITLE gate — mirrors the `comp=` param in fetchFirstVideoId
     // (src/lib/youtube.ts) and COMPETITION_TITLE_TOKENS. The bake has to send it
@@ -2839,6 +2853,9 @@ async function hlFetchId(query, { channel, exclude, preferExtended, strict, week
     // + matchup only, and BOTH meetings of a division rival pass that check, so
     // without the week the bake can cache the wrong week's recap indefinitely.
     if (week) url += `&week=${week}`;
+    // Mirrors highlightMatchGateParams in src/lib/youtube.ts.
+    if (gates?.homeFirst) url += "&order=home";
+    if (gates?.minSec) url += `&minsec=${gates.minSec}`;
     const ex = (exclude ?? []).filter(Boolean);
     if (ex.length) url += `&exclude=${encodeURIComponent(ex.join(","))}`;
     if (preferExtended) url += `&prefer=extended`;
@@ -2919,16 +2936,49 @@ const HL_CLUB_DAYS = 3;
 // duration (watch page unreachable) is let through.
 const HL_CLUB_MIN_SEC = 240;
 
-function hlTitleHasTeam(title, team) {
-  const normalizedTitle = hlNormalizeTeam(title);
+// Mirrors CONTAINING_TEAM_NAMES in public/_worker.js: a team name that holds
+// another one. Blanked out of the title before a lookup for a team that does
+// not own it, so Rep Ireland ("Ireland", "Irlanda") never matches a Northern
+// Ireland title.
+const HL_CONTAINING_TEAM_NAMES = ["northern ireland", "irlanda del norte"];
+
+function hlTeamVariants(team) {
   const normalizedTeam = hlNormalizeTeam(team);
-  const variants = new Set([
+  return new Set([
     normalizedTeam,
     hlNormalizeTeam(hlAlias(team)),
     hlNormalizeTeam(hlTelemundoTeam(team)),
     ...(HL_TITLE_TEAM_ALIASES[normalizedTeam] ?? []),
     ...(HL_WORKER_TEAM_VARIANTS[normalizedTeam] ?? []),
   ]);
+}
+
+// The normalized title as matched for one team (see HL_CONTAINING_TEAM_NAMES).
+// Blanked to spaces of the same length so positions stay true.
+function hlTitleForTeam(title, variants) {
+  let t = hlNormalizeTeam(title);
+  for (const name of HL_CONTAINING_TEAM_NAMES) {
+    if (!variants.has(name)) t = t.split(name).join(" ".repeat(name.length));
+  }
+  return t;
+}
+
+// Where a team first appears in the title, or -1 — the home-first order gate's
+// input. Mirrors teamTitleIndex in public/_worker.js.
+function hlTeamTitleIndex(title, team) {
+  const variants = hlTeamVariants(team);
+  const t = hlTitleForTeam(title, variants);
+  let best = -1;
+  for (const v of variants) {
+    const i = v ? t.indexOf(v) : -1;
+    if (i >= 0 && (best < 0 || i < best)) best = i;
+  }
+  return best;
+}
+
+function hlTitleHasTeam(title, team) {
+  const variants = hlTeamVariants(team);
+  const normalizedTitle = hlTitleForTeam(title, variants);
   if ([...variants].some((variant) => variant && normalizedTitle.includes(variant))) return true;
   // Name-order tolerance, mirroring titleHasTeam in public/_worker.js: ESPN
   // names Chinese tennis players family-name-first ("Zheng Qinwen") and the US
@@ -2975,9 +3025,22 @@ async function hlVideoIsNotHighlight(id) {
   return !!meta?.title && HL_NOT_HIGHLIGHT_RX.test(meta.title);
 }
 
-async function hlVideoMatchesTeams(id, away, home) {
+async function hlVideoMatchesTeams(id, away, home, homeFirst = false) {
   const meta = await hlOembedMeta(id);
-  return !!meta?.title && hlTitleHasTeam(meta.title, away) && hlTitleHasTeam(meta.title, home);
+  if (!meta?.title || !hlTitleHasTeam(meta.title, away) || !hlTitleHasTeam(meta.title, home)) return false;
+  if (!homeFirst) return true;
+  // HL_MATCH_GATES: the home team must be named first, else it is the other leg.
+  const homeAt = hlTeamTitleIndex(meta.title, home);
+  const awayAt = hlTeamTitleIndex(meta.title, away);
+  return homeAt >= 0 && awayAt >= 0 && homeAt < awayAt;
+}
+
+// HL_MATCH_GATES duration floor: a goal clip, not the match. An unreadable
+// length passes, like the worker's card check.
+async function hlVideoLongEnough(id, minSec) {
+  if (!minSec) return true;
+  const sec = await fetchYtDurationSec(id);
+  return !Number.isFinite(sec) || sec >= minSec;
 }
 
 // WEEK TOKEN — mirrors parseWeekFromTitle in public/_worker.js (kept as a
@@ -3083,10 +3146,10 @@ async function hlIsTelemundoVideo(id) {
 
 // Mirror resolveHighlightVideo: one dated query, one exact uploader, no
 // unscoped retry tier.
-async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended, week, compTokens) {
+async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended, week, compTokens, gates) {
   const dated = hlQuery(away, home, dateStr, series, competition, true);
   if (!channel) return null;
-  return hlFetchId(dated, { channel, exclude, preferExtended, strict: true, week, compTokens });
+  return hlFetchId(dated, { channel, exclude, preferExtended, strict: true, week, compTokens, gates });
 }
 
 async function hlResolveTelemundoWorldCup(away, home, dateStr, series, exclude, preferExtended) {
@@ -3787,6 +3850,9 @@ async function bakeGameHighlights() {
         // the old "no token = untouched" behavior — their postseason and some
         // per-team-channel cuts genuinely carry no week.
         const cflWeekRequired = lg.sport === "cfl";
+        // Nations League: home-first order + duration floor on every slot.
+        const gates = HL_MATCH_GATES[lg.sport];
+        const teamsOk = async (id) => (await hlVideoMatchesTeams(id, away, home, !!gates?.homeFirst)) && (await hlVideoLongEnough(id, gates?.minSec));
         const matchup = hlMatchupFingerprint(away, home);
         const rawPrev = games[key] ?? {};
         let prev = rawPrev;
@@ -3834,7 +3900,7 @@ async function bakeGameHighlights() {
 
         // Revalidate every carried slot against both its uploader and matchup.
         // A channel marker proves provenance, not that the clip is for this game.
-        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || (await hlVideoIsNotHighlight(prevOfficial)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
+        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || (await hlVideoIsNotHighlight(prevOfficial)) || !(await teamsOk(prevOfficial)) || !(await hlVideoMatchesWeek(prevOfficial, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
         }
@@ -3843,7 +3909,7 @@ async function bakeGameHighlights() {
           prevOfficial = null;
           ageRejected++;
         }
-        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || (await hlVideoIsNotHighlight(prevExtended)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
+        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || (await hlVideoIsNotHighlight(prevExtended)) || !(await teamsOk(prevExtended)) || !(await hlVideoMatchesWeek(prevExtended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevExtended = null;
         }
@@ -3856,8 +3922,8 @@ async function bakeGameHighlights() {
         let official = prevOfficial ?? null;
         if (!official) {
           officialChannel = primaryChannel;
-          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, primaryTokens);
-          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week, cflWeekRequired)) || !(await hlVideoMatchesComp(official, primaryTokens)))) {
+          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, primaryTokens, gates);
+          if (official && (!(await teamsOk(official)) || !(await hlVideoMatchesWeek(official, week, cflWeekRequired)) || !(await hlVideoMatchesComp(official, primaryTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
           }
@@ -3869,9 +3935,9 @@ async function bakeGameHighlights() {
           for (const fb of official ? [] : fallbacks) {
             if (fb.searchOnly) continue;
             const tokens = officialTokensFor(fb);
-            const id = await hlResolve(away, home, dateStr, series, fb.channel, undefined, competition, false, week, tokens);
+            const id = await hlResolve(away, home, dateStr, series, fb.channel, undefined, competition, false, week, tokens, gates);
             if (!id) continue;
-            if (!(await hlVideoMatchesTeams(id, away, home)) || !(await hlVideoMatchesWeek(id, week, cflWeekRequired)) || !(await hlVideoMatchesComp(id, tokens))) {
+            if (!(await teamsOk(id)) || !(await hlVideoMatchesWeek(id, week, cflWeekRequired)) || !(await hlVideoMatchesComp(id, tokens))) {
               console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home})`);
               continue;
             }
@@ -3921,11 +3987,11 @@ async function bakeGameHighlights() {
         if (prevExtended && prevExtended === official) prevExtended = null;
         let extended = prevExtended ?? null;
         if (!extended) {
-          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, week, compTokens);
+          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, week, compTokens, gates);
           if (extended && official && extended === official) {
-            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, week, compTokens);
+            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, week, compTokens, gates);
           }
-          if (extended && (!(await hlVideoMatchesTeams(extended, away, home)) || !(await hlVideoMatchesWeek(extended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(extended, compTokens)))) {
+          if (extended && (!(await teamsOk(extended)) || !(await hlVideoMatchesWeek(extended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(extended, compTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home})`);
             extended = null;
           }

@@ -150,12 +150,19 @@ check(
 // also cuts World Cup / Euro qualifier / Gold Cup meetings of the same two
 // nations, so the "nations league" token is the half that keeps it safe. The
 // "UEFA" channel served old "Classic" re-uploads and must never be the source.
+// TUDN USA joined as the 2nd slot 2026-10-03 (FOX 8/70, TUDN 60/70, 0 wrong),
+// and both sit behind the home-first order gate + 5-minute floor: a pair meets
+// twice under undated titles, and TUDN posts 1–2 min goal clips.
 check(
-  "Nations League resolves only against FOX Sports behind the nations league token",
+  "Nations League resolves against FOX Sports, then TUDN USA, behind the token + match gates",
   youtube.getOfficialChannelName("nations") === "FOX Sports" &&
     !youtube.hasNoTrustedHighlightSource("nations") &&
-    youtube.getSecondaryChannels("nations").length === 0 &&
-    JSON.stringify(youtube.getCompetitionTitleTokens("nations")) === JSON.stringify(["nations league"]),
+    JSON.stringify(youtube.getSecondaryChannels("nations")) === JSON.stringify(["TUDN USA"]) &&
+    JSON.stringify(youtube.getCompetitionTitleTokens("nations")) === JSON.stringify(["nations league"]) &&
+    JSON.stringify(youtube.getHighlightMatchGates("nations")) === JSON.stringify({ homeFirst: true, minSec: 300 }) &&
+    youtube.highlightMatchGateParams(youtube.getHighlightMatchGates("nations")) === "&order=home&minsec=300" &&
+    youtube.getHighlightMatchGates("laliga") === undefined &&
+    youtube.highlightMatchGateParams(undefined) === "",
 );
 // The Europa League's uploader moved to CBS's second European channel. UCL and
 // Serie A did NOT move — asserting that here keeps a well-meaning "fix them all
@@ -400,7 +407,9 @@ check(
     monitor.includes('ligue1:       "/soccer/fra.1/scoreboard"') &&
     monitor.includes('nations:      "/soccer/uefa.nations/scoreboard"') &&
     monitor.includes('nations: "FOX Sports"') &&
-    monitor.includes('nations: ["nations league"]'),
+    monitor.includes('nations: ["nations league"]') &&
+    monitor.includes('nations: "TUDN USA"') &&
+    monitor.includes("nations: { homeFirst: true, minSec: 300 }"),
 );
 check(
   "runtime monitor covers every shipped highlight family",
@@ -464,8 +473,10 @@ check(
     prebake.includes('{ sport: "ligue1",') &&
     prebake.includes('laliga: ["laliga", "la liga"]') &&
     prebake.includes('ligue1: ["ligue 1"]') &&
-    prebake.includes('{ sport: "nations",    path: "/soccer/uefa.nations/scoreboard",             channel: "FOX Sports" }') &&
-    prebake.includes('nations: ["nations league"]'),
+    prebake.includes('{ sport: "nations",    path: "/soccer/uefa.nations/scoreboard",             channel: "FOX Sports", secondaryChannel: "TUDN USA" }') &&
+    prebake.includes('nations: ["nations league"]') &&
+    prebake.includes("nations: { homeFirst: true, minSec: 300 }") &&
+    prebake.includes("gates?.homeFirst") && prebake.includes("hlVideoLongEnough"),
 );
 // FotMob (2026-09-23): a second source for an EMPTY soccer official slot only,
 // mini-only, off with HL_FOTMOB=0, ≤41 requests per bake, tagged src "fotmob".
