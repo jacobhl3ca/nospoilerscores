@@ -156,8 +156,8 @@ test.describe("zone change in the open panel", () => {
     await page.getByRole("button", { name: "Open settings", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Settings" });
     await dialog.locator("summary", { hasText: "More settings" }).click();
-    const zone = dialog.getByLabel("Time zone", { exact: true });
-    await zone.selectOption("Asia/Tokyo");
+    await dialog.getByRole("group", { name: "Time zone", exact: true }).getByRole("button", { name: "Other…" }).click();
+    await dialog.getByLabel("All time zones").selectOption("Asia/Tokyo");
     // The cards behind the panel move with no reload, and the board pulls
     // Tokyo's today.
     await expectCards(page, "Asia/Tokyo");
@@ -169,7 +169,7 @@ test.describe("zone change in the open panel", () => {
 
     await page.getByRole("button", { name: "Open settings", exact: true }).click();
     await dialog.locator("summary", { hasText: "More settings" }).click();
-    await zone.selectOption("");
+    await dialog.getByRole("group", { name: "Time zone", exact: true }).getByRole("button", { name: /^Auto/ }).click();
     await expectCards(page, "America/New_York");
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
     expect("timezone" in saved).toBe(false);
