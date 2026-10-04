@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Sport } from "@/lib/types";
 import { LeagueMark } from "./LeagueMark";
 
@@ -8,6 +8,9 @@ export interface LeaguePickerOption {
   sport: Sport;
   label: string;
   offseason?: boolean;
+  // false = an opt-in league (not in the switcher by default). The first-run
+  // sheet keeps those behind "More leagues".
+  defaultInSwitcher?: boolean;
 }
 
 // The tracker script loads with defer, so on a fast first paint the sheet can
@@ -84,7 +87,17 @@ export function LeaguePickerModal({
   const titleId = multi ? "league-picker-title" : "league-add-more-title";
   // The column's own league stays even when offseason, so the sheet always
   // shows where you are.
-  const shown = multi || showOffseason ? options : options.filter((o) => !o.offseason || selected.includes(o.sport));
+  // The first-run sheet opens on the default leagues only (Jacob 10/4: "a
+  // shorter list"); "More leagues" adds the opt-in rest after them. A stable
+  // split, so the first-screen pills never move, and a picked league stays
+  // after "Fewer". No numeric cap: ~10 pills on 10/4, ~11 at most in a year.
+  const [expanded, setExpanded] = useState(false);
+  const core = options.filter((o) => o.defaultInSwitcher !== false);
+  const rest = options.filter((o) => o.defaultInSwitcher === false);
+  const canCollapse = multi && core.length > 0 && rest.length > 0;
+  const shown = multi
+    ? (!canCollapse || expanded ? [...core, ...rest] : [...core, ...rest.filter((o) => selected.includes(o.sport))])
+    : showOffseason ? options : options.filter((o) => !o.offseason || selected.includes(o.sport));
 
   // Escape closes the sheet too — same as tapping its backdrop. Brings it in
   // line with the ratings/news explainers and every other modal in the app,
@@ -268,6 +281,22 @@ export function LeaguePickerModal({
               </button>
             );
           })}
+          {/* Last in the grid, outline and no mark, like the Settings chip. */}
+          {canCollapse && (
+            <button
+              type="button"
+              data-testid="league-picker-more"
+              aria-expanded={expanded}
+              onClick={() => {
+                if (!expanded) track("more");
+                setExpanded((v) => !v);
+              }}
+              className="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide transition-colors cursor-pointer"
+              style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+            >
+              {expanded ? "Fewer" : "More leagues"}
+            </button>
+          )}
         </div>
         {multi ? (
           <div className="flex gap-2 shrink-0">
@@ -284,7 +313,7 @@ export function LeaguePickerModal({
             <button
               type="button"
               onClick={() => {
-                track("done", { picks: String(selected.length), leagues: selected.join(",").slice(0, 100) });
+                track("done", { picks: String(selected.length), leagues: selected.join(",").slice(0, 100), more: expanded ? "1" : "0" });
                 onConfirm?.();
               }}
               className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"

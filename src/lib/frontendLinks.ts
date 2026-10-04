@@ -1,4 +1,4 @@
-// "Open Reddit / YouTube links through my own frontend" (Settings → Links).
+// "Open Reddit / YouTube links through my own frontend" (Settings → More settings → Links).
 // The user types the address of a Redlib instance (for reddit.com) and/or an
 // Invidious or Piped instance (for youtube.com). Every outbound Reddit / YouTube
 // link then goes to that host instead. HideScore never hosts or names an

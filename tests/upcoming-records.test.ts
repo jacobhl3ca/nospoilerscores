@@ -2,11 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  ALL_RECORD_LEAGUES,
+  recordKeysForLeagues,
   recordLeagueFor,
   recordShowsForState,
   recordTitle,
-  toggleAllRecordLeagues,
   toggleRecordLeague,
   upcomingRecordLeagues,
 } from "../src/lib/upcomingRecords.ts";
@@ -55,9 +54,18 @@ test("one tap adds or removes a league, stored in display order", () => {
   assert.deepEqual(toggleRecordLeague(start, "nfl"), ["ncaaf", "cfl", "ufl"]);
 });
 
-test("All turns everything on, and everything off when all are on", () => {
-  assert.deepEqual(toggleAllRecordLeagues(new Set(["nfl"] as const)), [...ALL_RECORD_LEAGUES]);
-  assert.deepEqual(toggleAllRecordLeagues(new Set(ALL_RECORD_LEAGUES)), []);
+test("Settings offers one Records chip per league in My leagues, soccer folded into one", () => {
+  const lg = (sport: string, isSoccer = false) => ({ sport, isSoccer }) as Parameters<typeof recordKeysForLeagues>[0][number];
+  // Every soccer competition is one "soccer" key, at the first soccer league's place.
+  assert.deepEqual(
+    recordKeysForLeagues([lg("mlb"), lg("epl", true), lg("nfl"), lg("ucl", true), lg("mls", true), lg("nba")]),
+    ["mlb", "soccer", "nfl", "nba"],
+  );
+  // A league with no team record drops; order is kept.
+  assert.deepEqual(recordKeysForLeagues([lg("golf"), lg("nhl"), lg("f1"), lg("wnba")]), ["nhl", "wnba"]);
+  // Duplicates are removed.
+  assert.deepEqual(recordKeysForLeagues([lg("nfl"), lg("nfl"), lg("ncaaf")]), ["nfl", "ncaaf"]);
+  assert.deepEqual(recordKeysForLeagues([]), []);
 });
 
 test("three-number records say what the third number is", () => {

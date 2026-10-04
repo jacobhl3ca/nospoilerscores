@@ -10,7 +10,7 @@ import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
 import { LeagueMark } from "./LeagueMark";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
-import { ALL_RECORD_LEAGUES, FREQUENT_RECORD_LEAGUES, WEEKLY_RECORD_LEAGUES, toggleAllRecordLeagues, toggleRecordLeague, upcomingRecordLeagues, type RecordLeague } from "@/lib/upcomingRecords";
+import { FREQUENT_RECORD_LEAGUES, recordKeysForLeagues, toggleRecordLeague, upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import {
   Preferences,
   Theme,
@@ -258,22 +258,6 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-// Plain-words list of the leagues that show records: the chips' accessible name.
-function recordLeagueSummary(selected: ReadonlySet<RecordLeague>): string {
-  if (selected.size === 0) return "Off";
-  if (ALL_RECORD_LEAGUES.every((k) => selected.has(k))) return "All leagues";
-  return ALL_RECORD_LEAGUES.filter((k) => selected.has(k))
-    .map((k) => (k === "soccer" ? "Soccer" : SPORT_LABEL[k]))
-    .join(", ");
-}
-
-// The same summary as chips: one per league, "All leagues" or "Off".
-function recordSummaryChips(selected: ReadonlySet<RecordLeague>): string[] {
-  if (selected.size === 0) return ["Off"];
-  if (ALL_RECORD_LEAGUES.every((k) => selected.has(k))) return ["All leagues"];
-  return ALL_RECORD_LEAGUES.filter((k) => selected.has(k)).map((k) => (k === "soccer" ? "Soccer" : SPORT_LABEL[k]));
-}
-
 function teamSportFromId(id: string): Sport | null {
   const dash = id.indexOf("-");
   if (dash === -1) return null;
@@ -399,8 +383,13 @@ export default function SettingsPanel({
   // Most people use one of those, so the form waits behind a grey link
   // (Jacob 9/25). Re-collapses each time the panel opens, like showLinkMore.
   const [showEmailForm, setShowEmailForm] = useState(false);
-  // Records chip picker: folded behind a one-line summary. View state only.
-  const [recordsOpen, setRecordsOpen] = useState(false);
+  // A league chip unticked in My leagues stays in place, as an outline, until
+  // the drawer closes (Jacob 10/4: "unticked league vanishes"). View state
+  // only: keys are sports plus "best" / "top" / "topnews". Cleared on open.
+  const [stickyOff, setStickyOff] = useState<Set<string>>(new Set());
+  const keepSeen = (key: string, on: boolean) => {
+    if (!on) setStickyOff((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+  };
   // Columns 4-5 exist only on a wide board, so their slots hide elsewhere.
   const isWideBoard = useMediaQuery(WIDE_BOARD_QUERY);
   // Native shells only — see the Rate link in the legal row below.
@@ -411,6 +400,7 @@ export default function SettingsPanel({
     setCanUseGoogle(!cap?.isNativePlatform?.() || hasNativeGoogleBridge());
     setShowLinkMore(false);
     setShowEmailForm(false);
+    setStickyOff(new Set());
     let alive = true;
     getAuthState().then((a) => { if (alive) setAuthState(a); });
     return () => { alive = false; };
@@ -709,6 +699,14 @@ export default function SettingsPanel({
   const myLeagueSports = new Set(
     visibleLeagueGroups.flatMap((group) => group.options).filter(isSwitcherChecked).map((option) => option.sport),
   );
+  // Records on upcoming games offers only the leagues in My leagues, in the
+  // same order as that row (Jacob 10/4). A stored key for any other league
+  // stays stored.
+  const recordKeys = recordKeysForLeagues(
+    visibleLeagueGroups.flatMap((group) => group.options).filter(isSwitcherChecked)
+      .map((option) => ({ sport: option.sport, isSoccer: sportGroup(option.sport) === "soccer" })),
+  );
+  const recordSelected = upcomingRecordLeagues(prefs);
 
   // What a column pill says: the pinned league, or Auto and what it shows.
   const slotPillText = (value: Sport | "empty" | undefined, fallbackLabel: string | undefined) => {
@@ -743,6 +741,7 @@ export default function SettingsPanel({
         sport={markSport(option.sport)}
         checked={isSwitcherChecked(option)}
         onToggle={(on) => {
+          keepSeen(option.sport, on);
           const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
           const shownLeagues = new Set(prefs.shownLeagues ?? []);
           hiddenLeagues.delete(option.sport);
@@ -946,8 +945,9 @@ export default function SettingsPanel({
   // The catalog's three cross-league rows, as chips with their ticked state.
   const bestOn = !(prefs.hiddenLeagues ?? []).includes("best");
   const topOption: LeagueOption = { sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: false };
-  const acrossChips: { checked: boolean; node: React.ReactNode }[] = [
+  const acrossChips: { key: string; checked: boolean; node: React.ReactNode }[] = [
     ...(BEST_YESTERDAY_ENABLED ? [{
+      key: "best",
       checked: bestOn,
       node: (
         <SwitcherChip
@@ -955,6 +955,7 @@ export default function SettingsPanel({
           label={BEST_YESTERDAY_LABEL}
           checked={bestOn}
           onToggle={(on) => {
+            keepSeen("best", on);
             const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
             if (on) hiddenLeagues.delete("best");
             else hiddenLeagues.add("best");
@@ -965,15 +966,19 @@ export default function SettingsPanel({
     }] : []),
     // ESPN front page starts off (Jacob 9/26), like an opt-in league: on =
     // shownLeagues, and off only needs hiddenLeagues while a column pins it.
-    ...(TOP_EVENTS_ENABLED ? [{ checked: isSwitcherChecked(topOption), node: renderSwitcherChip(topOption, false) }] : []),
+    ...(TOP_EVENTS_ENABLED ? [{ key: "top", checked: isSwitcherChecked(topOption), node: renderSwitcherChip(topOption, false) }] : []),
     {
+      key: "topnews",
       checked: !prefs.topNewsHidden,
       node: (
         <SwitcherChip
           key="topnews"
           label="Top news"
           checked={!prefs.topNewsHidden}
-          onToggle={(on) => updateWithUndo(`Top news ${on ? "on" : "off"}`, { topNewsHidden: on ? undefined : true })}
+          onToggle={(on) => {
+            keepSeen("topnews", on);
+            updateWithUndo(`Top news ${on ? "on" : "off"}`, { topNewsHidden: on ? undefined : true });
+          }}
         />
       ),
     },
@@ -1246,10 +1251,10 @@ export default function SettingsPanel({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
-          {/* Section order (Jacob 9/28, 10/1): Theme, Leagues, Favorite
-              teams, Default view, News, Highlight video, Links, Account,
-              Share, More settings, then the Sign out · Reset · Delete row and
-              the legal row. Signed out (or not yet known), Account goes first
+          {/* Section order (Jacob 9/28, 10/1, 10/4): Theme, Leagues,
+              Favorite teams, Default view, News, Highlight video, Account,
+              Share, More settings (Links sit at its end), then the Sign out ·
+              Reset · Delete row and the legal row. Signed out (or not yet known), Account goes first
               instead, so the cross-device value prop is the first thing seen. */}
           {!signedInKnown && accountSection}
           {/* Theme — first when signed in (Jacob 9/28): one row, three pills. */}
@@ -1331,9 +1336,11 @@ export default function SettingsPanel({
                   </>
                 ) : (
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {acrossChips.filter((c) => c.checked).map((c) => c.node)}
+                    {/* An unticked chip keeps its place until the drawer
+                        closes (stickyOff), so a mis-tap is one tap to undo. */}
+                    {acrossChips.filter((c) => c.checked || stickyOff.has(c.key)).map((c) => c.node)}
                     {visibleLeagueGroups.flatMap((group) => group.options)
-                      .filter(isSwitcherChecked)
+                      .filter((option) => isSwitcherChecked(option) || stickyOff.has(option.sport))
                       .map((option) => renderSwitcherChip(option, editingCatalog))}
                     {allLeaguesChip}
                   </div>
@@ -1540,44 +1547,38 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ hideWatchLaterPill: !v })}
               />
             ) : null}
-            {/* Label, one hint line, then the leagues as chips; a tap opens
-                the picker in place (Jacob 9/28: the old right-aligned hint and
-                "Change" link were not intuitive). */}
+            {/* Label, one hint line, then one on/off chip per league in My
+                leagues (Jacob 10/4: the picker behind a summary was confusing).
+                The first tap retires the old NFL-only switch for good. */}
             <div>
               <div className="text-sm font-medium" style={{ color: "var(--text)" }}>Records on upcoming games</div>
               <div className="text-[11px] mb-1.5" style={{ color: "var(--text-muted)" }}>
                 Each team&apos;s record, in italics, on upcoming and live games
               </div>
-              {recordsOpen ? (
-                <div id="hs-record-leagues">
-                  <RecordLeaguePicker
-                    selected={upcomingRecordLeagues(prefs)}
-                    // The first pick retires the old NFL-only switch for good.
-                    onChange={(next) => updatePrefs({ upcomingRecordLeagues: next, hideUpcomingRecords: undefined })}
-                  />
-                  <button type="button"
-                    onClick={() => setRecordsOpen(false)}
-                    aria-expanded={true}
-                    aria-controls="hs-record-leagues"
-                    className="mt-2 text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Done
-                  </button>
-                </div>
+              {recordKeys.length === 0 ? (
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  No league in My leagues keeps team records.
+                </p>
               ) : (
-                <div className="flex flex-wrap gap-1.5" aria-label={`Records on upcoming games: ${recordLeagueSummary(upcomingRecordLeagues(prefs))}`}>
-                  {recordSummaryChips(upcomingRecordLeagues(prefs)).map((label) => (
+                <div role="group" aria-label="Records on upcoming games" className="flex flex-wrap gap-1.5">
+                  {recordKeys.map((k) => (
                     <LeagueChip
-                      key={label}
-                      label={label}
-                      on={label !== "Off"}
-                      ariaExpanded={false}
-                      onClick={() => setRecordsOpen(true)}
-                      title="Pick the leagues that show records"
+                      key={k}
+                      label={k === "soccer" ? "Soccer" : SPORT_LABEL[k]}
+                      on={recordSelected.has(k)}
+                      ariaPressed={recordSelected.has(k)}
+                      sport={k === "soccer" ? undefined : k}
+                      onClick={() => updatePrefs({ upcomingRecordLeagues: toggleRecordLeague(recordSelected, k), hideUpcomingRecords: undefined })}
                     />
                   ))}
                 </div>
+              )}
+              {/* The spoiler warning, only while a league that plays most days
+                  is on (see lib/upcomingRecords.ts). */}
+              {recordKeys.some((k) => recordSelected.has(k) && FREQUENT_RECORD_LEAGUES.includes(k)) && (
+                <p className="text-[11px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                  Leagues that play most days can show a result you have not watched yet.
+                </p>
               )}
             </div>
           </Section>
@@ -1614,6 +1615,49 @@ export default function SettingsPanel({
                 </select>
               </p>
             )}
+            {/* Time zone (Jacob 10/4): moved up from More settings because a
+                user asked for it; it decides which day counts as today, so it
+                sits with the landing date. */}
+            <Field label="Time zone" hint="Used for game times AND which day counts as today">
+              <div className="space-y-1.5">
+              <RadioGroup
+                label="Time zone"
+                value={zonePill}
+                options={ZONE_PILLS.map((z) => ({ value: z.value, label: z.label, hint: z.zone ? zoneCity(z.zone) : undefined }))}
+                columns={6}
+                onChange={(v) => {
+                  if (v === "other") { setZoneOtherOpen(true); return; }
+                  setZoneOtherOpen(false);
+                  updatePrefs({ timezone: ZONE_PILLS.find((z) => z.value === v)?.zone });
+                }}
+              />
+              {zonePill === "other" && (
+              <select
+                value={prefs.timezone ?? ""}
+                onChange={(e) => {
+                  const tz = e.target.value || undefined;
+                  // Auto or one of the four from the list lights its pill instead.
+                  if (!tz || ZONE_PILLS.some((z) => z.zone === tz)) setZoneOtherOpen(false);
+                  updatePrefs({ timezone: tz });
+                }}
+                aria-label="All time zones"
+                className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                <option value="">Auto — your device{deviceTimeZone ? ` (${deviceTimeZone})` : ""}</option>
+                {/* A saved zone this runtime doesn't list ("UTC", "US/Eastern")
+                    still applies, so show it rather than a false "Auto". */}
+                {prefs.timezone && !TIME_ZONES.includes(prefs.timezone) && (
+                  <option value={prefs.timezone}>{prefs.timezone.replace(/_/g, " ")}</option>
+                )}
+                {TIME_ZONES.map((tz) => (
+                  <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+              )}
+              <p aria-live="polite" className="text-[11px]" style={{ color: "var(--text-muted)" }}>{zoneLine}</p>
+              </div>
+            </Field>
             <Field label="Landing view" hint="Scores, ratings or news on launch">
               <RadioGroup
                 label="Landing view"
@@ -1713,26 +1757,6 @@ export default function SettingsPanel({
             )}
           </Section>
 
-          {/* The user's own front-ends (lib/frontendLinks.ts). Pasted data
-              like the TV channel list, so Reset leaves it alone. Neutral copy
-              (Jacob 10/1): no project names, the rule frontendLinks.ts keeps. */}
-          <Section title="Links">
-            <FrontendLinkField
-              label="Reddit links open at"
-              hint="Your own front-end. Leave empty for reddit.com"
-              placeholder="https://your-server.example"
-              value={prefs.redditFrontend}
-              onSave={(v) => updatePrefs({ redditFrontend: v })}
-            />
-            <FrontendLinkField
-              label="YouTube links open at"
-              hint="Your own front-end. Leave empty for youtube.com"
-              placeholder="https://your-server.example"
-              value={prefs.youtubeFrontend}
-              onSave={(v) => updatePrefs({ youtubeFrontend: v })}
-            />
-          </Section>
-
           {signedInKnown && accountSection}
 
           {/* Share (Jacob 10/1: was "Share & reset"; Reset moved to the
@@ -1809,8 +1833,10 @@ export default function SettingsPanel({
               closed fold so the sections above are what you see. Of 29 synced
               accounts on 9/12: header switcher 1 changed, keys hint 0, reminder
               link 0; the two explainer rows are an undo, not a setting. Time zone
-              left 9/28 (0 of 35 blobs had set it) and came back 10/4 at Jacob's
-              request; its ZIP helper stays out. */}
+              left 9/28 (0 of 35 blobs had set it), came back 10/4, and moved
+              to Default view the same day at Jacob's request; its ZIP helper
+              stays out. Links (Reddit, YouTube, Reminder, TV channels) close
+              the fold since 10/4: pasted personal data, rarely touched. */}
           <details className="group">
             <summary
               className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-semibold cursor-pointer select-none marker:content-none [&::-webkit-details-marker]:hidden"
@@ -1822,46 +1848,6 @@ export default function SettingsPanel({
               More settings
             </summary>
             <div className="space-y-3 mt-3">
-            <Field label="Time zone" hint="Used for game times AND which day counts as today">
-              <div className="space-y-1.5">
-              <RadioGroup
-                label="Time zone"
-                value={zonePill}
-                options={ZONE_PILLS.map((z) => ({ value: z.value, label: z.label, hint: z.zone ? zoneCity(z.zone) : undefined }))}
-                columns={6}
-                onChange={(v) => {
-                  if (v === "other") { setZoneOtherOpen(true); return; }
-                  setZoneOtherOpen(false);
-                  updatePrefs({ timezone: ZONE_PILLS.find((z) => z.value === v)?.zone });
-                }}
-              />
-              {zonePill === "other" && (
-              <select
-                value={prefs.timezone ?? ""}
-                onChange={(e) => {
-                  const tz = e.target.value || undefined;
-                  // Auto or one of the four from the list lights its pill instead.
-                  if (!tz || ZONE_PILLS.some((z) => z.zone === tz)) setZoneOtherOpen(false);
-                  updatePrefs({ timezone: tz });
-                }}
-                aria-label="All time zones"
-                className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-              >
-                <option value="">Auto — your device{deviceTimeZone ? ` (${deviceTimeZone})` : ""}</option>
-                {/* A saved zone this runtime doesn't list ("UTC", "US/Eastern")
-                    still applies, so show it rather than a false "Auto". */}
-                {prefs.timezone && !TIME_ZONES.includes(prefs.timezone) && (
-                  <option value={prefs.timezone}>{prefs.timezone.replace(/_/g, " ")}</option>
-                )}
-                {TIME_ZONES.map((tz) => (
-                  <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
-                ))}
-              </select>
-              )}
-              <p aria-live="polite" className="text-[11px]" style={{ color: "var(--text-muted)" }}>{zoneLine}</p>
-              </div>
-            </Field>
             <Field label="Header league switcher" hint="How tapping a column header behaves">
               <RadioGroup
                 label="Header league switcher"
@@ -1898,84 +1884,109 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ skipNewsExplainer: !v })}
               />
             </div>
-            {/* "Remind me" link template — personal, off by default. A URL with
-                placeholders that an upcoming game's detail sheet opens on tap
-                (lib/reminderLink.ts). Raycast, Shortcuts, Alfred, Things, … —
-                whatever has a URL scheme on THIS device. Blank = no button. */}
-            <div className="pt-3" style={{ borderTop: "1px solid var(--border)" }}>
-              <Field
-                label="Reminder link"
-                hint="Opens this URL from an upcoming game's details. Placeholders: {minutes} {minutes-5} {title} {iso} {time} {date}. Leave blank to hide the button."
-              >
-                <input
-                  type="url"
-                  inputMode="url"
-                  value={prefs.reminderLinkTemplate ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    updatePrefs({ reminderLinkTemplate: v.trim() ? v : undefined });
-                  }}
-                  placeholder="raycast://… or shortcuts://…"
-                  spellCheck={false}
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  autoComplete="off"
-                  className="w-full min-h-11 rounded-lg px-3 text-sm"
-                  style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
-                />
-              </Field>
-              <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-muted)" }}>
-                Mac (Raycast): raycast://script-commands/game-reminder?arguments={"{minutes-5}"}&amp;arguments={"{title}"}
-              </p>
-              <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-muted)" }}>
-                iPhone (Shortcuts): shortcuts://run-shortcut?name=Game%20Reminder&amp;input=text&amp;text={"{minutes-5}"}%20{"{title}"}
-              </p>
-            </div>
-            {/* TV channel links — personal, off by default (lib/tvChannelLinks.ts).
-                A listed network's chip opens the user's own stream in IINA/VLC
-                instead of the network's site. The list syncs; the player is
-                per device. Reset to defaults leaves both alone: the list is
-                pasted data, not a preference. */}
-            <div className="pt-3" style={{ borderTop: "1px solid var(--border)" }}>
-              <Field
-                label="TV channel links"
-                hint="One line per network: ESPN = your stream link. Tapping that network then opens your own player instead of its website. Leave blank to turn off."
-              >
-                <textarea
-                  rows={4}
-                  value={prefs.tvChannelLinks ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    updatePrefs({ tvChannelLinks: v.trim() ? v : undefined });
-                  }}
-                  placeholder={"ESPN = http://…\nFS1, FOX Sports 1 = http://…"}
-                  aria-label="TV channel links"
-                  spellCheck={false}
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  autoComplete="off"
-                  className="w-full rounded-lg px-3 py-2 text-xs font-mono"
-                  style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
-                />
-              </Field>
-              {prefs.tvChannelLinks && (
-                <div className="mt-3">
-                <Field label="Open channels in" hint="This device only">
-                  <select
-                    value={prefs.tvPlayer ?? "auto"}
-                    onChange={(e) => updatePrefs({ tvPlayer: e.target.value === "auto" ? undefined : (e.target.value as TvPlayer) })}
-                    aria-label="Open channels in"
-                    className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
-                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                  >
-                    <option value="auto">Auto — IINA on a Mac, VLC on iPhone/iPad</option>
-                    <option value="iina">IINA</option>
-                    <option value="vlc">VLC</option>
-                    <option value="raw">The link as written</option>
-                  </select>
+            {/* Links (Jacob 10/4: was its own section above Account). The
+                user's own front-ends (lib/frontendLinks.ts), the Reminder link
+                and the TV channel list: pasted data, so Reset leaves them
+                alone. Neutral copy (Jacob 10/1): no project names, the rule
+                frontendLinks.ts keeps. An h4, not a Section h3, so the
+                section-order tests never count it. */}
+            <div className="pt-3 space-y-3" style={{ borderTop: "1px solid var(--border)" }}>
+              <h4 className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
+                Links
+              </h4>
+              <FrontendLinkField
+                label="Reddit links open at"
+                hint="Your own front-end. Leave empty for reddit.com"
+                placeholder="https://your-server.example"
+                value={prefs.redditFrontend}
+                onSave={(v) => updatePrefs({ redditFrontend: v })}
+              />
+              <FrontendLinkField
+                label="YouTube links open at"
+                hint="Your own front-end. Leave empty for youtube.com"
+                placeholder="https://your-server.example"
+                value={prefs.youtubeFrontend}
+                onSave={(v) => updatePrefs({ youtubeFrontend: v })}
+              />
+              {/* "Remind me" link template — personal, off by default. A URL with
+                  placeholders that an upcoming game's detail sheet opens on tap
+                  (lib/reminderLink.ts). Raycast, Shortcuts, Alfred, Things, … —
+                  whatever has a URL scheme on THIS device. Blank = no button. */}
+              <div>
+                <Field
+                  label="Reminder link"
+                  hint="Opens this URL from an upcoming game's details. Placeholders: {minutes} {minutes-5} {title} {iso} {time} {date}. Leave blank to hide the button."
+                >
+                  <input
+                    type="url"
+                    inputMode="url"
+                    value={prefs.reminderLinkTemplate ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      updatePrefs({ reminderLinkTemplate: v.trim() ? v : undefined });
+                    }}
+                    placeholder="raycast://… or shortcuts://…"
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    autoComplete="off"
+                    className="w-full min-h-11 rounded-lg px-3 text-sm"
+                    style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+                  />
                 </Field>
-                </div>
-              )}
+                <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-muted)" }}>
+                  Mac (Raycast): raycast://script-commands/game-reminder?arguments={"{minutes-5}"}&amp;arguments={"{title}"}
+                </p>
+                <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-muted)" }}>
+                  iPhone (Shortcuts): shortcuts://run-shortcut?name=Game%20Reminder&amp;input=text&amp;text={"{minutes-5}"}%20{"{title}"}
+                </p>
+              </div>
+              {/* TV channel links — personal, off by default (lib/tvChannelLinks.ts).
+                  A listed network's chip opens the user's own stream in IINA/VLC
+                  instead of the network's site. The list syncs; the player is
+                  per device. Reset to defaults leaves both alone: the list is
+                  pasted data, not a preference. */}
+              <div>
+                <Field
+                  label="TV channel links"
+                  hint="One line per network: ESPN = your stream link. Tapping that network then opens your own player instead of its website. Leave blank to turn off."
+                >
+                  <textarea
+                    rows={4}
+                    value={prefs.tvChannelLinks ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      updatePrefs({ tvChannelLinks: v.trim() ? v : undefined });
+                    }}
+                    placeholder={"ESPN = http://…\nFS1, FOX Sports 1 = http://…"}
+                    aria-label="TV channel links"
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    autoComplete="off"
+                    className="w-full rounded-lg px-3 py-2 text-xs font-mono"
+                    style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+                  />
+                </Field>
+                {prefs.tvChannelLinks && (
+                  <div className="mt-3">
+                  <Field label="Open channels in" hint="This device only">
+                    <select
+                      value={prefs.tvPlayer ?? "auto"}
+                      onChange={(e) => updatePrefs({ tvPlayer: e.target.value === "auto" ? undefined : (e.target.value as TvPlayer) })}
+                      aria-label="Open channels in"
+                      className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
+                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                    >
+                      <option value="auto">Auto — IINA on a Mac, VLC on iPhone/iPad</option>
+                      <option value="iina">IINA</option>
+                      <option value="vlc">VLC</option>
+                      <option value="raw">The link as written</option>
+                    </select>
+                  </Field>
+                  </div>
+                )}
+              </div>
             </div>
             </div>
           </details>
@@ -2304,7 +2315,7 @@ function RadioGroup<T extends string>({
   );
 }
 
-// The one league chip: TeamPicker's league filter, the records summary and picker.
+// The one league chip: TeamPicker's league filter and the Records toggles.
 // `sport` puts that league's logo left of the name, the same no-plate mark
 // SwitcherChip draws (Jacob 10/1: one chip look everywhere).
 function LeagueChip({
@@ -2694,38 +2705,6 @@ function TeamPicker({
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-// Per-league record picker (Jacob 9/25): tap one league, a few, or All. Two
-// rows, so the spoiler warning sits on exactly the leagues it applies to —
-// see lib/upcomingRecords.ts. Same LeagueChip as the TeamPicker tabs.
-function RecordLeaguePicker({
-  selected,
-  onChange,
-}: {
-  selected: ReadonlySet<RecordLeague>;
-  onChange: (next: RecordLeague[]) => void;
-}) {
-  const chip = (key: string, label: string, on: boolean, onClick: () => void, sport?: Sport) => (
-    <LeagueChip key={key} label={label} on={on} ariaPressed={on} onClick={onClick} sport={sport} />
-  );
-  const row = (title: string, keys: readonly RecordLeague[]) => (
-    <div>
-      <p className="text-[11px] mb-1" style={{ color: "var(--text-muted)" }}>{title}</p>
-      <div className="flex flex-wrap gap-1.5">
-        {keys.map((k) => chip(k, k === "soccer" ? "Soccer" : SPORT_LABEL[k], selected.has(k), () => onChange(toggleRecordLeague(selected, k)), k === "soccer" ? undefined : k))}
-      </div>
-    </div>
-  );
-  return (
-    <div role="group" aria-label="Records on upcoming games" className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {chip("all", "All", ALL_RECORD_LEAGUES.every((k) => selected.has(k)), () => onChange(toggleAllRecordLeagues(selected)))}
-      </div>
-      {row("Once a week", WEEKLY_RECORD_LEAGUES)}
-      {row("Plays more often: the record can show a result you have not watched yet", FREQUENT_RECORD_LEAGUES)}
     </div>
   );
 }

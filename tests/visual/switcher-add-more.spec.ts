@@ -76,6 +76,10 @@ for (const width of [390, 1280]) {
       const toggle = sheet.getByRole("button", { name: "Show offseason leagues" });
       await expect(toggle).toHaveAttribute("aria-pressed", "false");
       await expect(offseasonPills(sheet)).toHaveCount(0);
+      // Single mode lists every league: no "More leagues" button (the sheet
+      // title says it, so match the button role only).
+      await expect(sheet.getByRole("button", { name: "More leagues" })).toHaveCount(0);
+      await expect(sheet.getByTestId("league-picker-more")).toHaveCount(0);
 
       // 3. Toggle on: offseason pills appear, and the choice survives a reload.
       await toggle.click();

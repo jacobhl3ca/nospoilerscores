@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Settings → Links (9/28): with the user's own Redlib / Invidious set, every
+// Settings → More settings → Links (9/28; in the fold since 10/4): with the user's own Redlib / Invidious set, every
 // Reddit / YouTube link on the news board points there — the href (middle-click,
 // copy link) AND the plain click. Feeds are mocked so the check needs no bake.
 
@@ -63,16 +63,33 @@ test("No frontend set: links stay on reddit.com", async ({ page }) => {
   expect(hrefs).toContain("https://www.reddit.com/r/nfl/comments/t1/");
 });
 
-test("Settings → Links saves, rejects a bare host, and clears", async ({ page }) => {
+test("Settings → More settings → Links saves, rejects a bare host, and clears", async ({ page }) => {
   await setup(page, { newsFeedView: undefined, showNews: false, defaultLandingView: "scores" });
   await page.getByRole("button", { name: "Open settings" }).click();
-  const reddit = page.getByLabel("Reddit links open at");
-  const youtube = page.getByLabel("YouTube links open at");
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  // Links moved into the More settings fold (Jacob 10/4): an h4 group at its
+  // end, never a section of its own.
+  await dialog.locator("summary", { hasText: "More settings" }).click();
+  const fold = dialog.locator("details");
+  await expect(fold.locator("h4", { hasText: /^Links$/ })).toBeVisible();
+  await expect(dialog.locator("section > h3", { hasText: /^Links$/ })).toHaveCount(0);
+  const reddit = fold.getByLabel("Reddit links open at");
+  const youtube = fold.getByLabel("YouTube links open at");
   await reddit.scrollIntoViewIfNeeded();
+  const top = (l: ReturnType<Page["locator"]>) => l.evaluate((el) => el.getBoundingClientRect().top);
+  const tops = [
+    await top(fold.getByText("Bring back a warning you dismissed")),
+    await top(reddit),
+    await top(youtube),
+    await top(fold.getByLabel("Reminder link")),
+    await top(fold.getByLabel("TV channel links")),
+  ];
+  expect([...tops].sort((a, b) => a - b)).toEqual(tops);
+  expect(new Set(tops).size).toBe(tops.length);
   // Neutral copy: no project names in the placeholders or hints (Jacob 10/1).
   await expect(reddit).toHaveAttribute("placeholder", "https://your-server.example");
   await expect(youtube).toHaveAttribute("placeholder", "https://your-server.example");
-  const links = page.getByRole("dialog", { name: "Settings" }).locator("section", { has: page.locator("h3", { hasText: /^Links$/ }) });
+  const links = fold.locator("div", { has: page.locator("h4", { hasText: /^Links$/ }) }).last();
   expect(await links.textContent()).not.toMatch(/redlib|invidious|piped/i);
 
   await reddit.fill(`${RED}/`);

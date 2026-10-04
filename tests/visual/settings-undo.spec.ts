@@ -198,3 +198,54 @@ test("every write flashes Saved in the header, gone after 2 s", async ({ page })
   // Not a destructive click: no Undo pill.
   await expect(dialog.getByRole("button", { name: "Undo" })).toHaveCount(0);
 });
+
+// Jacob 10/4: "unticked league vanishes". An unticked chip keeps its place in
+// the collapsed My leagues row, as an outline, until the drawer closes.
+test("unticked league stays until the drawer closes", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-29T15:00:00-04:00"));
+  await seedPrefs(page);
+  const dialog = await openSettings(page);
+  const catalog = dialog.getByRole("group", { name: "Leagues in the header switcher" });
+  const names = () => catalog.getByRole("checkbox").evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")));
+
+  const before = await names();
+  const mlb = catalog.getByRole("checkbox", { name: "MLB", exact: true });
+  await mlb.click();
+  await expect(mlb).toHaveAttribute("aria-checked", "false");
+  await expect(dialog.getByRole("status").filter({ hasText: "MLB off" })).toBeVisible();
+  expect(await names()).toEqual(before);
+  await mlb.click();
+  await expect(mlb).toHaveAttribute("aria-checked", "true");
+  expect((await saved(page)).hiddenLeagues ?? []).not.toContain("mlb");
+
+  // The same for a cross-league chip.
+  const topNews = catalog.getByRole("checkbox", { name: "Top news", exact: true });
+  await topNews.click();
+  await expect(topNews).toHaveAttribute("aria-checked", "false");
+  expect(await names()).toEqual(before);
+  await topNews.click();
+  await expect(topNews).toHaveAttribute("aria-checked", "true");
+
+  // Closing the drawer lets an unticked chip go.
+  await catalog.getByRole("checkbox", { name: "NFL", exact: true }).click();
+  await expect(catalog.getByRole("checkbox", { name: "NFL", exact: true })).toHaveAttribute("aria-checked", "false");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByRole("button", { name: "Open settings", exact: true }).click();
+  await expect(dialog).toBeVisible();
+  await expect(catalog.getByRole("checkbox", { name: "MLB", exact: true })).toBeVisible();
+  await expect(catalog.getByRole("checkbox", { name: "NFL", exact: true })).toHaveCount(0);
+});
+
+test("an unticked league still leaves with Edit list ×", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-29T15:00:00-04:00"));
+  await seedPrefs(page);
+  const dialog = await openSettings(page);
+  const catalog = dialog.getByRole("group", { name: "Leagues in the header switcher" });
+  const wnba = catalog.getByRole("checkbox", { name: "WNBA", exact: true });
+  await wnba.click();
+  await expect(wnba).toHaveAttribute("aria-checked", "false");
+  await dialog.getByRole("button", { name: "Edit list" }).click();
+  await dialog.getByRole("button", { name: "Hide WNBA from this list" }).click();
+  await expect(wnba).toHaveCount(0);
+});
