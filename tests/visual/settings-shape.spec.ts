@@ -93,10 +93,11 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
     .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
   expect(new Set(themeTops).size).toBe(1);
 
-  // Time zone is back inside More settings (10/4); its ZIP helper stays out.
+  // Time zone is back inside More settings (10/4) as a row of pills, the full
+  // list closed behind Other…; its ZIP helper stays out.
   await dialog.locator("summary", { hasText: "More settings" }).click();
-  await expect(dialog.getByLabel("Time zone", { exact: true })).toHaveCount(1);
-  await expect(dialog.getByLabel("Time zone", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("group", { name: "Time zone", exact: true })).toBeVisible();
+  await expect(dialog.getByLabel("All time zones")).toHaveCount(0);
   await expect(dialog.getByLabel("US ZIP code for time zone")).toHaveCount(0);
   await expect(dialog.getByRole("radiogroup").or(dialog.getByRole("group", { name: "Header league switcher" }))).toBeVisible();
   await dialog.locator("summary", { hasText: "More settings" }).click();
@@ -109,21 +110,70 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
   expect(errors).toEqual([]);
 });
 
-test("Time zone: a picked zone is saved, Auto removes the key", async ({ page }) => {
+const ZONE_PILLS = ["Auto", "ET", "CT", "MT", "PT", "Other…"];
+const zoneGroup = (page: Page) => page.getByRole("dialog", { name: "Settings" }).getByRole("group", { name: "Time zone", exact: true });
+const zonePill = (page: Page, label: string) => zoneGroup(page).getByRole("button", { name: new RegExp(`^${label}( —|$)`) });
+
+test("Time zone: CT saves Chicago, Auto removes the key, Other… picks Tokyo", async ({ page }) => {
   await start(page, DESKTOP);
   const dialog = page.getByRole("dialog", { name: "Settings" });
   const read = () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
   await dialog.locator("summary", { hasText: "More settings" }).click();
-  const zone = dialog.getByLabel("Time zone", { exact: true });
-  await expect(zone).toHaveValue("");
-  await expect(zone.locator("option").first()).toHaveText(/^Auto — your device/);
+  await expect(zoneGroup(page).getByRole("button")).toHaveText(ZONE_PILLS);
+  await expect(zonePill(page, "Auto")).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByText(/^Auto · your device \(.+\) · now \d{1,2}:\d{2} [AP]M$/)).toBeVisible();
 
-  await zone.selectOption("America/Chicago");
+  await zonePill(page, "CT").click();
   await expect.poll(async () => (await read()).timezone).toBe("America/Chicago");
+  await expect(zonePill(page, "CT")).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByText(/^Times show in Central · now \d{1,2}:\d{2} [AP]M$/)).toBeVisible();
 
-  await zone.selectOption("");
+  await zonePill(page, "Auto").click();
   await expect.poll(async () => "timezone" in (await read())).toBe(false);
+
+  await expect(dialog.getByLabel("All time zones")).toHaveCount(0);
+  await zonePill(page, "Other…").click();
+  const all = dialog.getByLabel("All time zones");
+  await expect(all).toBeVisible();
+  await expect(all.locator("option").first()).toHaveText(/^Auto — your device/);
+  expect("timezone" in (await read())).toBe(false);
+  await all.selectOption("Asia/Tokyo");
+  await expect.poll(async () => (await read()).timezone).toBe("Asia/Tokyo");
+  await expect(zonePill(page, "Other…")).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByText(/^Times show in Tokyo · now /)).toBeVisible();
 });
+
+test("Time zone: a saved Phoenix opens Other… on load and is not rewritten", async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("seeded")) {
+      localStorage.setItem("nss-preferences", JSON.stringify({ timezone: "America/Phoenix", switcherDefaultsVersion: 2 }));
+      sessionStorage.setItem("seeded", "1");
+    }
+  });
+  await start(page, DESKTOP);
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await dialog.locator("summary", { hasText: "More settings" }).click();
+  await expect(zonePill(page, "Other…")).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByLabel("All time zones")).toHaveValue("America/Phoenix");
+  await expect(dialog.getByText(/^Times show in Phoenix · now /)).toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+  expect(saved.timezone).toBe("America/Phoenix");
+});
+
+for (const viewport of [PHONE, DESKTOP]) {
+  test(`Time zone ${viewport.width}: all 6 pills on one row`, async ({ page }) => {
+    await start(page, viewport);
+    const dialog = page.getByRole("dialog", { name: "Settings" });
+    await dialog.locator("summary", { hasText: "More settings" }).click();
+    const boxes = await zoneGroup(page).getByRole("button").evaluateAll((els) => els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), clipped: el.scrollWidth > el.clientWidth };
+    }));
+    expect(boxes).toHaveLength(6);
+    expect(new Set(boxes.map((b) => b.top)).size).toBe(1);
+    expect(boxes.some((b) => b.clipped)).toBe(false);
+  });
+}
 
 for (const viewport of [PHONE, DESKTOP]) {
   test(`signed in ${viewport.width}: order, one Account line with no email, three bottom links`, async ({ page }) => {

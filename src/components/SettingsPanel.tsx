@@ -101,6 +101,28 @@ const TIME_ZONES: string[] = (() => {
   ];
 })();
 
+// The Time zone row (Jacob 10/4): one row of pills for the four US zones,
+// the full list behind "Other…". A saved zone outside the four (Phoenix,
+// London, "US/Eastern") opens Other on load and is never rewritten.
+type ZonePill = "auto" | "et" | "ct" | "mt" | "pt" | "other";
+const ZONE_PILLS: { value: ZonePill; label: string; zone?: string; name?: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "et", label: "ET", zone: "America/New_York", name: "Eastern" },
+  { value: "ct", label: "CT", zone: "America/Chicago", name: "Central" },
+  { value: "mt", label: "MT", zone: "America/Denver", name: "Mountain" },
+  { value: "pt", label: "PT", zone: "America/Los_Angeles", name: "Pacific" },
+  { value: "other", label: "Other…" },
+];
+const zoneCity = (tz: string) => (tz.split("/").pop() || tz).replace(/_/g, " ");
+// "now 9:41 AM" in a zone; a bad zone falls back to the runtime's own.
+function nowIn(tz: string): string {
+  try {
+    return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz || undefined });
+  } catch {
+    return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+}
+
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "system", label: "🖥️ System" },
   { value: "light", label: "☀️ Light" },
@@ -293,6 +315,14 @@ export default function SettingsPanel({
 
   let deviceTimeZone = "";
   try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
+  // Time zone row: which pill is on, and whether the full list is open.
+  const [zoneOtherOpen, setZoneOtherOpen] = useState(false);
+  const savedZonePill = ZONE_PILLS.find((z) => z.zone && z.zone === prefs.timezone);
+  const zoneIsOther = !!prefs.timezone && !savedZonePill;
+  const zonePill: ZonePill = zoneOtherOpen || zoneIsOther ? "other" : savedZonePill?.value ?? "auto";
+  const zoneLine = prefs.timezone
+    ? `Times show in ${savedZonePill?.name ?? zoneCity(prefs.timezone)} · now ${nowIn(prefs.timezone)}`
+    : `Auto · your device${deviceTimeZone ? ` (${zoneCity(deviceTimeZone)})` : ""} · now ${nowIn(deviceTimeZone)}`;
 
   // Account / cross-device sync state (Sign in with Apple). Re-checked each
   // time the panel opens so the signed-in email reflects a just-finished login.
@@ -1643,10 +1673,28 @@ export default function SettingsPanel({
             </summary>
             <div className="space-y-3 mt-3">
             <Field label="Time zone" hint="Used for game times AND which day counts as today">
+              <div className="space-y-1.5">
+              <RadioGroup
+                label="Time zone"
+                value={zonePill}
+                options={ZONE_PILLS.map((z) => ({ value: z.value, label: z.label, hint: z.zone ? zoneCity(z.zone) : undefined }))}
+                columns={6}
+                onChange={(v) => {
+                  if (v === "other") { setZoneOtherOpen(true); return; }
+                  setZoneOtherOpen(false);
+                  updatePrefs({ timezone: ZONE_PILLS.find((z) => z.value === v)?.zone });
+                }}
+              />
+              {zonePill === "other" && (
               <select
                 value={prefs.timezone ?? ""}
-                onChange={(e) => updatePrefs({ timezone: e.target.value || undefined })}
-                aria-label="Time zone"
+                onChange={(e) => {
+                  const tz = e.target.value || undefined;
+                  // Auto or one of the four from the list lights its pill instead.
+                  if (!tz || ZONE_PILLS.some((z) => z.zone === tz)) setZoneOtherOpen(false);
+                  updatePrefs({ timezone: tz });
+                }}
+                aria-label="All time zones"
                 className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
               >
@@ -1660,6 +1708,9 @@ export default function SettingsPanel({
                   <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
                 ))}
               </select>
+              )}
+              <p aria-live="polite" className="text-[11px]" style={{ color: "var(--text-muted)" }}>{zoneLine}</p>
+              </div>
             </Field>
             <Field label="Header league switcher" hint="How tapping a column header behaves">
               <RadioGroup
@@ -2139,9 +2190,10 @@ function RadioGroup<T extends string>({
   options: RadioOption<T>[];
   onChange: (v: T) => void;
   // 4 = one row on sm+, 2×2 on phones, so a fourth option never sits alone.
-  columns?: 2 | 3 | 4;
+  // 6 = one row at every width (the Time zone pills, short labels).
+  columns?: 2 | 3 | 4 | 6;
 }) {
-  const grid = columns === 4 ? "grid-cols-2 sm:grid-cols-4" : columns === 2 ? "grid-cols-2" : "grid-cols-3";
+  const grid = columns === 6 ? "grid-cols-6" : columns === 4 ? "grid-cols-2 sm:grid-cols-4" : columns === 2 ? "grid-cols-2" : "grid-cols-3";
   return (
     <div role="group" aria-label={label} className={`grid gap-1.5 ${grid}`}>
       {options.map((o) => {
@@ -2151,7 +2203,7 @@ function RadioGroup<T extends string>({
             key={o.value}
             onClick={() => onChange(o.value)}
             aria-pressed={active}
-            className="px-2 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors text-center"
+            className={`${columns === 6 ? "px-1 whitespace-nowrap" : "px-2"} py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors text-center`}
             style={{
               background: active ? "var(--accent)" : "var(--bg-card)",
               border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
