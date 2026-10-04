@@ -22,6 +22,7 @@ import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
 import { fetchAllLeagues, fetchSlateGames, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn, { mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
@@ -901,7 +902,7 @@ export default function HomeContent({
     //     auto (default) → keep the morning-safety reset (off before noon ET)
     //     off            → always off on launch
     //     on             → always on on launch
-    //   News view does NOT reset — it's a viewer choice, not a spoiler surface.
+    //   News view: see the landing-view rule below (it can drop to Scores).
     const applyLaunchState = (p: Preferences) => {
       const landing = p.defaultLandingView ?? "remember";
       const ratingsMode = p.defaultRatings ?? "auto";
@@ -929,14 +930,19 @@ export default function HomeContent({
       // once against the hardcoded defaults above — and then vanish a frame
       // later — must wait on this. See prefsHydrated's declaration.
       setPrefsHydrated(true);
-      // Landing view: "remember" restores the last view EXCEPT across a day
-      // boundary — a new calendar day (ET) since the last open drops a remembered
-      // News view to Scores so the user never lands on yesterday's spoilers
-      // (Jacob 6/19). Same-day reopens still restore News.
+      // Landing view: "remember" restores the view THIS tab was on, any day,
+      // and whatever another tab or device saved since (Jacob 10/4). A tab
+      // with no view of its own (a new tab, a restart that lost the tab)
+      // restores the saved view EXCEPT across a day boundary: a new calendar
+      // day (ET) since the last open drops a remembered News view to Scores
+      // so a new tab never lands on yesterday's spoilers (Jacob 6/19).
+      // An explicit landing setting wins over both.
       const newDayPassed = !!p.lastOpenDay && p.lastOpenDay !== getDateString(0);
       const demoNews = isDemoNewsRequested();
+      const tabView = readTabView();
       if (demoNews || landing === "news") setShowNews(true);
       else if (landing === "scores" || landing === "ratings") setShowNews(false);
+      else if (tabView) setShowNews(tabView === "news");
       else if (p.showNews && !newDayPassed) setShowNews(true);
       // ?demo=1&view=news wants the first-time spoiler-warning bar ON SCREEN
       // for the shot, not skipped like every other first-time explainer here.
@@ -1042,6 +1048,14 @@ export default function HomeContent({
     if (!prefsHydrated) return;
     document.documentElement.classList.remove("hs-play-dismissed");
   }, [prefsHydrated]);
+
+  // The one writer of this tab's view memory (lib/tabView): every way in or out
+  // of News (the view tabs, the logo, the native tab bar) lands here. Waits for
+  // prefsHydrated so the initial `false` never overwrites the stored view
+  // before applyLaunchState has read it. A ?view=news demo shot is not a choice.
+  useEffect(() => {
+    if (prefsHydrated && !isDemoNewsRequested()) writeTabView(showNews ? "news" : "scores");
+  }, [showNews, prefsHydrated]);
 
   // Cross-device sync on RESUME. The mount effect above only reconciles with the
   // server on a COLD launch, so a change made on another device — e.g. removing
