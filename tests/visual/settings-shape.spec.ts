@@ -2,7 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 // Settings shape pass (Jacob 9/25, reordered 9/28): search-first teams, 3
 // slots on phones, the switcher catalog folded, the records chips open the
-// picker in place, the email form behind a link, no Time zone. Same prefs
+// picker in place, the email form behind a link, Time zone in More settings
+// (back 10/4) without its ZIP helper. Same prefs
 // throughout — these tests pin the layout and that nothing new is written just
 // by opening the panel.
 
@@ -92,9 +93,10 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
     .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
   expect(new Set(themeTops).size).toBe(1);
 
-  // Time zone and its ZIP helper are gone, folded or not.
+  // Time zone is back inside More settings (10/4); its ZIP helper stays out.
   await dialog.locator("summary", { hasText: "More settings" }).click();
-  await expect(dialog.getByLabel("Time zone", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel("Time zone", { exact: true })).toHaveCount(1);
+  await expect(dialog.getByLabel("Time zone", { exact: true })).toBeVisible();
   await expect(dialog.getByLabel("US ZIP code for time zone")).toHaveCount(0);
   await expect(dialog.getByRole("radiogroup").or(dialog.getByRole("group", { name: "Header league switcher" }))).toBeVisible();
   await dialog.locator("summary", { hasText: "More settings" }).click();
@@ -105,6 +107,22 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
   const height = await dialog.locator(".overflow-y-auto").first().evaluate((el) => el.scrollHeight);
   expect(height).toBeLessThanOrEqual(2323);
   expect(errors).toEqual([]);
+});
+
+test("Time zone: a picked zone is saved, Auto removes the key", async ({ page }) => {
+  await start(page, DESKTOP);
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  const read = () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+  await dialog.locator("summary", { hasText: "More settings" }).click();
+  const zone = dialog.getByLabel("Time zone", { exact: true });
+  await expect(zone).toHaveValue("");
+  await expect(zone.locator("option").first()).toHaveText(/^Auto — your device/);
+
+  await zone.selectOption("America/Chicago");
+  await expect.poll(async () => (await read()).timezone).toBe("America/Chicago");
+
+  await zone.selectOption("");
+  await expect.poll(async () => "timezone" in (await read())).toBe(false);
 });
 
 for (const viewport of [PHONE, DESKTOP]) {

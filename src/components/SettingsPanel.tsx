@@ -85,6 +85,22 @@ const DEFAULT_RATINGS_OPTIONS: { value: DefaultRatings; label: string; hint: str
   { value: "on", label: "On", hint: "Always start with ratings shown" },
 ];
 
+// Full IANA zone list for the Time zone picker, with a graceful fallback for
+// runtimes without Intl.supportedValuesOf.
+const TIME_ZONES: string[] = (() => {
+  try {
+    const I = Intl as typeof Intl & { supportedValuesOf?: (k: string) => string[] };
+    const v = I.supportedValuesOf?.("timeZone");
+    if (Array.isArray(v) && v.length) return v;
+  } catch { /* fall through */ }
+  return [
+    "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+    "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu",
+    "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Tokyo",
+    "Asia/Kolkata", "Australia/Sydney",
+  ];
+})();
+
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "system", label: "🖥️ System" },
   { value: "light", label: "☀️ Light" },
@@ -274,6 +290,9 @@ export default function SettingsPanel({
   useEffect(() => {
     setIsSafari(/^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent));
   }, []);
+
+  let deviceTimeZone = "";
+  try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
 
   // Account / cross-device sync state (Sign in with Apple). Re-checked each
   // time the panel opens so the signed-in email reflects a just-finished login.
@@ -1610,8 +1629,8 @@ export default function SettingsPanel({
               closed fold so the sections above are what you see. Of 29 synced
               accounts on 9/12: header switcher 1 changed, keys hint 0, reminder
               link 0; the two explainer rows are an undo, not a setting. Time zone
-              left 9/28: 0 of 35 blobs had ever set it, and Auto is the device's
-              own zone. A saved zone still applies. */}
+              left 9/28 (0 of 35 blobs had set it) and came back 10/4 at Jacob's
+              request; its ZIP helper stays out. */}
           <details className="group">
             <summary
               className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-semibold cursor-pointer select-none marker:content-none [&::-webkit-details-marker]:hidden"
@@ -1623,6 +1642,25 @@ export default function SettingsPanel({
               More settings
             </summary>
             <div className="space-y-3 mt-3">
+            <Field label="Time zone" hint="Used for game times AND which day counts as today">
+              <select
+                value={prefs.timezone ?? ""}
+                onChange={(e) => updatePrefs({ timezone: e.target.value || undefined })}
+                aria-label="Time zone"
+                className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                <option value="">Auto — your device{deviceTimeZone ? ` (${deviceTimeZone})` : ""}</option>
+                {/* A saved zone this runtime doesn't list ("UTC", "US/Eastern")
+                    still applies, so show it rather than a false "Auto". */}
+                {prefs.timezone && !TIME_ZONES.includes(prefs.timezone) && (
+                  <option value={prefs.timezone}>{prefs.timezone.replace(/_/g, " ")}</option>
+                )}
+                {TIME_ZONES.map((tz) => (
+                  <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </Field>
             <Field label="Header league switcher" hint="How tapping a column header behaves">
               <RadioGroup
                 label="Header league switcher"
