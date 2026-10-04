@@ -555,7 +555,7 @@ export interface Preferences {
   // device with the target app (Raycast, Shortcuts, …). Syncs with the rest of
   // the blob.
   reminderLinkTemplate?: string;
-  // "TV channel links" (Settings → More settings, lib/tvChannelLinks.ts). One
+  // "TV channel links" (Settings → More settings → Links, lib/tvChannelLinks.ts). One
   // line per network, `ESPN = http://…`; that network's chip then opens the
   // link in the device's own player instead of the network's site. Blank = off.
   // Syncs, so the list is pasted once per account.
@@ -563,7 +563,7 @@ export interface Preferences {
   // Which player opens those links. Device-local (lib/devicePrefs.ts): a Mac
   // wants IINA, a phone wants VLC. Undefined = "auto".
   tvPlayer?: TvPlayer;
-  // "Links" (Settings, lib/frontendLinks.ts): the user's own Redlib and
+  // "Links" (Settings → More settings, lib/frontendLinks.ts): the user's own Redlib and
   // Invidious/Piped addresses. Reddit / YouTube links then open there instead.
   // Unset = reddit.com / youtube.com. Syncs, so it is typed once per account.
   redditFrontend?: string;

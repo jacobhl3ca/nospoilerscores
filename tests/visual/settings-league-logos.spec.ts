@@ -163,8 +163,8 @@ for (const width of [390, 1280]) {
 
 // Jacob 9/30 follow-up: ~45 white discs read as dots. The logo now sits on the
 // chip itself: ESPN's dark-theme copy in dark mode and on a ticked (accent)
-// chip, a sport emoji for a league with no mark of its own. The signup
-// picker keeps its white plate.
+// chip, a sport emoji for a league with no mark of its own. Since 10/1 the
+// signup / Add more… picker draws the same chip, with no plate either.
 const imgSrc = (markEl: Locator) => markEl.locator("img").getAttribute("src");
 
 async function setTicked(catalog: Locator, name: string, on: boolean) {
@@ -244,7 +244,7 @@ for (const width of [390, 1280]) {
   });
 }
 
-test("the league picker keeps its white plate", async ({ page }) => {
+test("the league picker draws the Settings chip: no plate, square corners, uppercase", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seedPrefs(page, { theme: "dark", secondLeague: "nfl", thirdLeague: "wnba" });
   await page.goto("/");
@@ -252,7 +252,84 @@ test("the league picker keeps its white plate", async ({ page }) => {
   await page.getByRole("dialog", { name: "Switch league" }).getByRole("button", { name: "Add more…" }).click();
   const sheet = page.locator('[role="dialog"][aria-labelledby="league-add-more-title"]');
   await expect(sheet).toBeVisible();
-  const plates = sheet.locator("[data-league-plate]");
-  expect(await plates.count()).toBeGreaterThan(5);
-  await expect(sheet.locator("[data-league-emoji]")).toHaveCount(0);
+  expect(await sheet.locator("[data-league-mark]").count()).toBeGreaterThan(5);
+  await expect(sheet.locator("[data-league-plate]")).toHaveCount(0);
+  const nfl = sheet.getByRole("button", { name: /^NFL/ });
+  const style = await nfl.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const label = el.querySelector("span.uppercase");
+    return { radius: cs.borderTopLeftRadius, size: cs.fontSize, upper: label ? getComputedStyle(label).textTransform : "" };
+  });
+  expect(style).toEqual({ radius: "6px", size: "11px", upper: "uppercase" });
+  // Dark theme: the dark-set logo, no white disc behind it.
+  await expectLoaded(mark(nfl));
+  expect(await imgSrc(mark(nfl))).toContain("500-dark");
 });
+
+// Jacob 10/4: the sign-up popup lists the default leagues only; "More
+// leagues" adds the opt-in rest after them. No white plate either.
+async function openFirstRun(page: Page, at: string) {
+  await page.clock.setFixedTime(new Date(at));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const sheet = page.getByRole("dialog", { name: "Pick your leagues" });
+  await expect(sheet).toBeVisible({ timeout: 45_000 });
+  return { sheet, pills: sheet.locator("button[aria-pressed]") };
+}
+
+test("sign-up popup: short first screen, More leagues adds the rest, a pick stays after Fewer", async ({ page }) => {
+  const { sheet, pills } = await openFirstRun(page, "2026-10-04T15:00:00-04:00");
+  await expect(sheet.locator("[data-league-plate]")).toHaveCount(0);
+  const count = await pills.count();
+  expect(count).toBeGreaterThanOrEqual(8);
+  expect(count).toBeLessThanOrEqual(12);
+  await expect(pills.filter({ hasText: /^MLB/ })).toHaveCount(1);
+  await expect(pills.filter({ hasText: /^NFL/ })).toHaveCount(1);
+  await expect(pills.filter({ hasText: /La Liga/i })).toHaveCount(0);
+  await expect(pills.filter({ hasText: /NCAAW/ })).toHaveCount(0);
+
+  // Where each first-screen pill sits, relative to the first pill: the sheet
+  // is centred, so it moves as a whole when it grows. The last first-screen
+  // row may take new pills and re-centre; every full row above it holds.
+  const boxes = () => pills.evaluateAll((els, n) => {
+    const o = els[0].getBoundingClientRect();
+    const rows = els.slice(0, n).map((el) => Math.round(el.getBoundingClientRect().top - o.top));
+    const lastRow = Math.max(...rows);
+    return els.slice(0, n).map((el, i) => {
+      const r = el.getBoundingClientRect();
+      return rows[i] === lastRow ? `${el.textContent}` : `${el.textContent}@${Math.round(r.left - o.left)},${rows[i]}`;
+    });
+  }, count);
+  const first = await boxes();
+
+  const more = sheet.getByTestId("league-picker-more");
+  await expect(more).toHaveText("More leagues");
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await more.click();
+  await expect(more).toHaveText("Fewer");
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  await expect(pills.filter({ hasText: /La Liga/i })).toHaveCount(1);
+  expect(await boxes()).toEqual(first);
+
+  // A picked league takes the dark-set logo on the accent fill.
+  const mlb = pills.filter({ hasText: /^\d?MLB/ });
+  await mlb.click();
+  await expect(mlb).toHaveAttribute("aria-pressed", "true");
+  await expectLoaded(mark(mlb));
+  expect(await imgSrc(mark(mlb))).toContain("500-dark");
+
+  const laliga = pills.filter({ hasText: /La Liga/i });
+  await laliga.click();
+  await expect(laliga).toHaveAttribute("aria-pressed", "true");
+  await more.click();
+  await expect(more).toHaveText("More leagues");
+  await expect(laliga).toBeVisible();
+  await expect(pills).toHaveCount(count + 1);
+});
+
+for (const at of ["2026-10-04T15:00:00-04:00", "2026-10-18T15:00:00-04:00", "2027-01-15T15:00:00-05:00"]) {
+  test(`sign-up popup first screen holds at most 12 pills on ${at.slice(0, 10)}`, async ({ page }) => {
+    const { pills } = await openFirstRun(page, at);
+    expect(await pills.count()).toBeLessThanOrEqual(12);
+  });
+}
