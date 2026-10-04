@@ -4913,6 +4913,9 @@ export default function HomeContent({
             </a>
           )}
         </div>
+        {/* Legal line (10/3, ahead of the Product Hunt launch): the About page
+            sentence, so every board visit carries it too. */}
+        <p className="max-w-md">HideScore is not affiliated with, endorsed by, or sponsored by any league, team or broadcaster.</p>
         {/* No visible trigger: kept mounted only so Settings' "Send feedback"
             and "Request a league" can open the form in place. */}
         <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} hideTrigger />
