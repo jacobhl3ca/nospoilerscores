@@ -16,6 +16,7 @@ import {
   classifyMlbReviewTitle, mlbReviewSeason, mlbTeamIdsFromKeywords, mlbToEspnTeamIds, ROUND_ORDER,
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
+import { redlibGifMp4Path } from "./lib/redlib-gif.mjs";
 import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
@@ -1809,6 +1810,12 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
     // 1) Reddit-hosted video (v.redd.it) → the open HLS CDN (audio + CORS:*).
     const vm = block.match(/\/(?:hls|vid)\/([a-z0-9]{8,16})\b/i) || block.match(/v\.redd\.it\/([a-z0-9]{8,16})/i);
     if (vm) videoUrl = `https://v.redd.it/${vm[1]}/HLSPlaylist.m3u8`;
+    // 1b) Reddit-hosted GIF → its looping mp4 (the poster below stays the
+    //     row thumbnail). Without this a GIF post opened as its still frame.
+    if (!videoUrl) {
+      const gif = redlibGifMp4Path(block);
+      if (gif) videoUrl = redlibMediaToReddit(gif);
+    }
 
     // 2) Reddit-hosted image post → lightboxable full-res (imageFullUrl).
     const imgPath = (block.match(/class="post_media_image[^"]*"[^>]*href="([^"]+)"/) || [])[1] ||
