@@ -276,7 +276,7 @@ test("records: the leagues are chips, a tap opens the picker in place, a pick pe
 test("default view: the switch hour sits inline under Automatic; Auto's rule is visible", async ({ page }) => {
   await start(page, PHONE);
   const dialog = page.getByRole("dialog", { name: "Settings" });
-  await expect(dialog.getByText("Auto = off in the morning, last state after noon ET")).toBeVisible();
+  await expect(dialog.getByText("Auto = off in the morning, last state after noon", { exact: true })).toBeVisible();
   await expect(dialog.getByLabel("Automatic switch time")).toHaveCount(0);
   await dialog.getByRole("group", { name: "Landing date" }).getByRole("button", { name: /^Automatic/ }).click();
   const hour = dialog.getByLabel("Automatic switch time");

@@ -1,5 +1,6 @@
 import { EventFetchResult, LeagueEventCard } from "./types";
 import { getApiBase } from "./youtube";
+import { getEtServiceDate, toYmd } from "./etDay";
 
 interface CuratedBoxingEvent {
   id: string;
@@ -70,11 +71,9 @@ export async function fetchCuratedBoxingEvent(date?: string): Promise<EventFetch
     // A schema we don't recognise is a broken deploy, not an empty calendar.
     if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return FAILED;
     const valid = data.events.filter(validRecord);
-    const targetYmd = date && /^\d{8}$/.test(date)
-      ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
-      : new Intl.DateTimeFormat("en-CA", {
-          timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-        }).format(new Date());
+    // No date → the app's service day in the Settings zone (1 AM rollover).
+    const ymd = date && /^\d{8}$/.test(date) ? date : toYmd(getEtServiceDate());
+    const targetYmd = `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
     const target = dateMs(targetYmd);
     const chosen = valid
       .filter((event) => event.startDate <= targetYmd && target - dateMs(event.endDate) <= 7 * DAY_MS)

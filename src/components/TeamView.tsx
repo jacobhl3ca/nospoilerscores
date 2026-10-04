@@ -219,6 +219,8 @@ export default function TeamView({
   // Doubleheaders: ids of finished games that share an Eastern calendar day with
   // another finished game. Their cards show the start time so the two otherwise-
   // identical FINAL rows (hidescore hides the score) are distinguishable.
+  // The zone is a dep: a Settings zone change can move a game across midnight.
+  const tz = getTimeZone();
   const doubleheaderIds = useMemo(() => {
     const byDay = new Map<string, string[]>();
     for (const g of past) {
@@ -230,7 +232,7 @@ export default function TeamView({
       const d = new Date(g.date);
       if (Number.isNaN(d.getTime())) continue;
       const ymd = new Intl.DateTimeFormat("en-CA", {
-        timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
+        timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
       }).format(d);
       const arr = byDay.get(ymd) ?? [];
       arr.push(g.id);
@@ -239,7 +241,7 @@ export default function TeamView({
     const ids = new Set<string>();
     for (const arr of byDay.values()) if (arr.length > 1) arr.forEach((id) => ids.add(id));
     return ids;
-  }, [past]);
+  }, [past, tz]);
 
   // If the full team name would collide with the left-edge back button (the
   // centered group visually crosses under it), swap to the 3-char abbrev. A

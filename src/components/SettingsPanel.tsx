@@ -80,7 +80,7 @@ const LANDING_VIEW_OPTIONS: { value: DefaultLandingView; label: string; hint: st
 ];
 
 const DEFAULT_RATINGS_OPTIONS: { value: DefaultRatings; label: string; hint: string }[] = [
-  { value: "auto", label: "Auto", hint: "Off in morning, last state after noon ET" },
+  { value: "auto", label: "Auto", hint: "Off in morning, last state after noon" },
   { value: "off", label: "Off", hint: "Always start with ratings hidden" },
   { value: "on", label: "On", hint: "Always start with ratings shown" },
 ];
@@ -1515,7 +1515,7 @@ export default function SettingsPanel({
               />
             </Field>
             {/* Auto's rule was only a hover tooltip on the pill. */}
-            <Field label="Ratings on launch" hint="Auto = off in the morning, last state after noon ET">
+            <Field label="Ratings on launch" hint="Auto = off in the morning, last state after noon">
               <RadioGroup
                 label="Ratings on launch"
                 value={prefs.defaultRatings ?? "auto"}
