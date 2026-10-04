@@ -1651,6 +1651,11 @@ export default function SettingsPanel({
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
               >
                 <option value="">Auto — your device{deviceTimeZone ? ` (${deviceTimeZone})` : ""}</option>
+                {/* A saved zone this runtime doesn't list ("UTC", "US/Eastern")
+                    still applies, so show it rather than a false "Auto". */}
+                {prefs.timezone && !TIME_ZONES.includes(prefs.timezone) && (
+                  <option value={prefs.timezone}>{prefs.timezone.replace(/_/g, " ")}</option>
+                )}
                 {TIME_ZONES.map((tz) => (
                   <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
                 ))}
