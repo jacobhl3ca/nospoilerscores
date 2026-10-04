@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { fillReminderLink } from "../src/lib/reminderLink.ts";
+import { setServiceTimeZone } from "../src/lib/etDay.ts";
 import type { CalendarEvent } from "../src/lib/calendarLink.ts";
 
 const ev: CalendarEvent = {
@@ -46,4 +47,18 @@ test("{iso}, {time} and {date} fill and are encoded", () => {
   assert.match(r.url, /text=2026-09-13T19%3A00%3A00Z\|/);
   assert.match(r.url, /\|\d{1,2}%3A\d{2}%20[AP]M\|/);
   assert.match(r.url, /\|Sun%20Sep%2013$|\|Sun%20Sep%2014$/);
+});
+
+test("{time} and {date} follow the Settings zone", () => {
+  const tpl = "x://t?m={minutes}&when={time}|{date}";
+  try {
+    setServiceTimeZone("America/New_York");
+    assert.match(fillReminderLink(tpl, ev, NOW)!.url, /when=3%3A00%20PM\|Sun%20Sep%2013$/);
+    setServiceTimeZone("America/Los_Angeles");
+    assert.match(fillReminderLink(tpl, ev, NOW)!.url, /when=12%3A00%20PM\|Sun%20Sep%2013$/);
+    setServiceTimeZone("Asia/Tokyo");
+    assert.match(fillReminderLink(tpl, ev, NOW)!.url, /when=4%3A00%20AM\|Mon%20Sep%2014$/);
+  } finally {
+    setServiceTimeZone(undefined);
+  }
 });

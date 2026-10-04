@@ -7,6 +7,7 @@
 // unless they typed a template.
 
 import type { CalendarEvent } from "./calendarLink";
+import { getTimeZone } from "./etDay.ts";
 
 // Placeholders: {minutes} (until start, never below 1; {minutes-5} subtracts a
 // 5-minute lead), {title}, {iso}, {time} ("3:00 PM"), {date} ("Sat Sep 13").
@@ -37,8 +38,10 @@ export function fillReminderLink(
   if (isNaN(start.getTime())) return null;
   const rawMinutes = Math.round((start.getTime() - now) / 60_000);
   const minutes = Math.max(1, rawMinutes);
-  const time = start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const date = start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
+  // {time} and {date} in the Settings zone, like every clock on the board.
+  const timeZone = getTimeZone();
+  const time = start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
+  const date = start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone }).replace(",", "");
   const values: Record<string, string> = {
     title: ev.title,
     iso: ev.startIso,

@@ -80,7 +80,7 @@ export type DefaultDateMode = "smart" | "today" | "yesterday";
 // "ratings" is the third segment of the header control (🙉), not a fourth
 // screen: it lands on Scores with ratings already showing.
 export type DefaultLandingView = "remember" | "scores" | "news" | "ratings";
-// auto = current behavior (off in morning, last state after noon ET).
+// auto = current behavior (off in morning, last state after noon in the Settings zone).
 // off / on = explicit override.
 export type DefaultRatings = "auto" | "off" | "on";
 
