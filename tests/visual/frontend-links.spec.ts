@@ -69,10 +69,17 @@ test("Settings → Links saves, rejects a bare host, and clears", async ({ page 
   const reddit = page.getByLabel("Reddit links open at");
   const youtube = page.getByLabel("YouTube links open at");
   await reddit.scrollIntoViewIfNeeded();
+  // Neutral copy: no project names in the placeholders or hints (Jacob 10/1).
+  await expect(reddit).toHaveAttribute("placeholder", "https://your-server.example");
+  await expect(youtube).toHaveAttribute("placeholder", "https://your-server.example");
+  const links = page.getByRole("dialog", { name: "Settings" }).locator("section", { has: page.locator("h3", { hasText: /^Links$/ }) });
+  expect(await links.textContent()).not.toMatch(/redlib|invidious|piped/i);
 
   await reddit.fill(`${RED}/`);
   await reddit.press("Enter");
-  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+  // One "Saved" mark in the Settings header (Jacob 10/1), none under the field.
+  await expect(page.getByTestId("settings-saved")).toHaveText("Saved");
+  await expect(reddit.locator("xpath=../..").getByRole("status")).toHaveCount(0);
   await expect(reddit).toHaveValue(RED);
 
   await youtube.fill("inv.test");

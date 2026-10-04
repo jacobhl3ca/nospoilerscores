@@ -56,6 +56,10 @@ async function dismissLeaguePicker(page: Page) {
   });
 }
 
+// The quiet Sign out · Reset to defaults · Delete account row (Jacob 10/1).
+const bottomRow = (page: Page) => page.getByRole("dialog", { name: "Settings" })
+  .locator("div.text-center", { has: page.getByRole("button", { name: "Reset to defaults" }) });
+
 async function start(page: Page, viewport: { width: number; height: number }, signedIn = false) {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -69,7 +73,7 @@ async function start(page: Page, viewport: { width: number; height: number }, si
 
 const SIGNED_IN_ORDER = [
   "Theme", "Leagues", "Favorite teams", "Default view", "News",
-  "Highlight video player", "Links", "Account", "Share & reset",
+  "Highlight video player", "Links", "Account", "Share",
 ];
 
 test("phone: section order, search first, 3 slots, folds closed, short panel", async ({ page }) => {
@@ -81,6 +85,11 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
     "Account", ...SIGNED_IN_ORDER.filter((t) => t !== "Account"),
   ]);
   await expect(dialog.locator("summary", { hasText: "More settings" })).toBeVisible();
+  // More settings now sits under Share (Jacob 10/1).
+  const shareBottom = await dialog.locator("section", { has: page.locator("h3", { hasText: /^Share$/ }) })
+    .evaluate((el) => el.getBoundingClientRect().bottom);
+  const moreTop = await dialog.locator("summary", { hasText: "More settings" }).evaluate((el) => el.getBoundingClientRect().top);
+  expect(moreTop).toBeGreaterThan(shareBottom);
 
   const teams = dialog.locator("section", { has: page.locator("h3", { hasText: "Favorite teams" }) });
   await expect(teams.locator("input, select, button").first()).toHaveAttribute("type", "search");
@@ -101,9 +110,11 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
 
   // The 9/25 pass left the phone panel at 2,171 px; the 9/28 Links section
   // (two URL rows) adds 120 px, and the 9/30 league logos widen the My leagues
-  // chips into one more row (32 px). Nothing else may grow it.
+  // chips into one more row (32 px): 2,323. The 10/1 cleanup (team picker row
+  // = My leagues only, no helper line, no news hint, Reset in the bottom row)
+  // took it to 2,095, measured 10/1. Nothing else may grow it.
   const height = await dialog.locator(".overflow-y-auto").first().evaluate((el) => el.scrollHeight);
-  expect(height).toBeLessThanOrEqual(2323);
+  expect(height).toBeLessThanOrEqual(2095);
   expect(errors).toEqual([]);
 });
 
@@ -115,17 +126,21 @@ for (const viewport of [PHONE, DESKTOP]) {
 
     const account = dialog.locator("section", { has: page.locator("h3", { hasText: "Account" }) });
     await expect(account.locator("p")).toHaveCount(1);
-    await expect(account).toContainText("🍎Signed in with Apple · synced");
+    // Apple's mark is an svg now, not the 🍎 emoji (Jacob 10/1).
+    await expect(account.locator("p")).toHaveText("Signed in with Apple · synced");
+    await expect(account.locator("p svg")).toHaveCount(1);
+    await expect(account).not.toContainText("🍎");
     expect(await dialog.evaluate((el) => el.textContent ?? "")).not.toContain("privaterelay");
-    await expect(account.getByRole("button")).toHaveCount(0);
+    // Linking sits right under the Account line, not in the bottom row.
+    await expect(account.getByRole("button")).toHaveText(["Link another way to sign in"]);
 
     const links = dialog.locator("div.text-center", { has: page.getByRole("button", { name: "Delete account" }) }).getByRole("button");
-    await expect(links).toHaveText(["Sign out", "Link another way to sign in", "Delete account"]);
+    await expect(links).toHaveText(["Sign out", "Reset to defaults", "Delete account"]);
     await expect(dialog.getByText("Removes your synced data")).toHaveCount(0);
-    // Linking opens in place under the row.
-    await dialog.getByRole("button", { name: "Link another way to sign in" }).click();
-    await expect(dialog.getByRole("button", { name: "Link Google" })).toBeVisible();
-    await expect(dialog.locator('input[type="email"]')).toBeVisible();
+    // Linking opens in place inside Account.
+    await account.getByRole("button", { name: "Link another way to sign in" }).click();
+    await expect(account.getByRole("button", { name: "Link Google" })).toBeVisible();
+    await expect(account.locator('input[type="email"]')).toBeVisible();
     expect(errors).toEqual([]);
   });
 }
@@ -140,6 +155,15 @@ test("desktop: 5 slots and the landing view on one row", async ({ page }) => {
   const tops = await landing.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
   expect(new Set(tops).size).toBe(1);
   expect(errors).toEqual([]);
+});
+
+test("signed out: the bottom row is Reset to defaults alone", async ({ page }) => {
+  await start(page, PHONE);
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  const row = dialog.locator("div.text-center", { has: page.getByRole("button", { name: "Reset to defaults" }) });
+  await expect(row.getByRole("button")).toHaveText(["Reset to defaults"]);
+  await expect(dialog.getByRole("button", { name: "Sign out" })).toHaveCount(0);
+  await expect(dialog.locator("section", { has: page.locator("h3", { hasText: /^Share$/ }) }).getByRole("button", { name: "Reset to defaults" })).toHaveCount(0);
 });
 
 test("signed out: the email form waits behind Use email instead", async ({ page }) => {
@@ -282,7 +306,7 @@ test("reset: confirm, then Settings reset · Undo puts the favorites back", asyn
   const read = () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
   const before = await read();
   page.once("dialog", (d) => d.accept());
-  await dialog.getByRole("button", { name: "Reset to defaults" }).click();
+  await bottomRow(page).getByRole("button", { name: "Reset to defaults" }).click();
   const toast = dialog.getByRole("status").filter({ hasText: "Settings reset" });
   await expect(toast).toBeVisible();
   const cleared = await read();
@@ -303,7 +327,7 @@ test("reset: the undo toast leaves after 15 s", async ({ page }) => {
   await start(page, PHONE);
   const dialog = page.getByRole("dialog", { name: "Settings" });
   page.once("dialog", (d) => d.accept());
-  await dialog.getByRole("button", { name: "Reset to defaults" }).click();
+  await bottomRow(page).getByRole("button", { name: "Reset to defaults" }).click();
   const toast = dialog.getByRole("status").filter({ hasText: "Settings reset" });
   await expect(toast).toBeVisible();
   await page.clock.runFor(14_000);

@@ -126,8 +126,9 @@ const SEEK_FILL_OPTIONS: { value: "off" | "grey" | "white"; label: string; hint:
 ];
 
 const PLAYER_OPTIONS: { value: "safe" | "youtube"; label: string; hint: string }[] = [
-  { value: "safe", label: "Spoiler-safe", hint: "Hide progress and the ending with HideScore controls" },
+  // YouTube first: it is the default (Jacob 10/1).
   { value: "youtube", label: "YouTube", hint: "Use the familiar YouTube controls; progress may reveal how far you are" },
+  { value: "safe", label: "Spoiler-safe", hint: "Hide progress and the ending with HideScore controls" },
 ];
 
 const SPORT_LABEL: Record<Sport, string> = {
@@ -248,7 +249,7 @@ export default function SettingsPanel({
   open,
   onClose,
   prefs,
-  updatePrefs,
+  updatePrefs: savePrefs,
   resolvedTheme,
   leagueOptions,
   onRequestLeague,
@@ -261,6 +262,50 @@ export default function SettingsPanel({
   shareUrl,
 }: SettingsPanelProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
+
+  // One "Saved" mark in the header for every write (Jacob 10/1). It was only
+  // under the two Links fields. "show" for 2 s, then "fade" while the opacity
+  // runs out, then gone. Reduced motion skips the transition.
+  const [savedMark, setSavedMark] = useState<"show" | "fade" | null>(null);
+  const savedTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => { savedTimersRef.current.forEach(clearTimeout); }, []);
+  const updatePrefs = useCallback((update: Partial<Preferences>) => {
+    savePrefs(update);
+    savedTimersRef.current.forEach(clearTimeout);
+    setSavedMark("show");
+    savedTimersRef.current = [
+      setTimeout(() => setSavedMark("fade"), 2_000),
+      setTimeout(() => setSavedMark(null), 2_300),
+    ];
+  }, [savePrefs]);
+
+  // Undo for every destructive click in the panel (Jacob 10/1; Reset had it
+  // since 9/28): a league chip off, a league struck off the list, a column
+  // change, a team removed, Reset. The patch holds the prior value of every key
+  // the click wrote, so Undo puts back exactly what was there, unset keys
+  // included. One level: each new click replaces the last entry. 15 s, then
+  // the pill goes. Cmd-Z / Ctrl-Z does the same (see the keydown effect).
+  const [undo, setUndo] = useState<{ label: string; patch: Partial<Preferences> } | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
+  const updateWithUndo = (label: string, patch: Partial<Preferences>) => {
+    const prior: Partial<Preferences> = {};
+    for (const key of Object.keys(patch) as (keyof Preferences)[]) {
+      (prior as Record<string, unknown>)[key] = prefs[key];
+    }
+    updatePrefs(patch);
+    setUndo({ label, patch: prior });
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setUndo(null), 15_000);
+  };
+  const applyUndo = useCallback(() => {
+    if (!undo) return;
+    updatePrefs(undo.patch);
+    if ("theme" in undo.patch) applyThemeAttr(undo.patch.theme ?? "system");
+    setUndo(null);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+  }, [undo, updatePrefs]);
+
   // Safari ignores the text/x-moz-url + text/html drag overrides below and
   // names a dragged bookmark after the link's visible text instead. So on
   // Safari we make the chip's text read "HideScore" (the desired bookmark
@@ -341,15 +386,24 @@ export default function SettingsPanel({
   const signedInKnown = authKnown && auth.signedIn;
   const signedInProvider = auth.provider ?? auth.linkedProviders?.[0] ?? null;
 
-  // Esc to close
+  // Esc to close. Cmd-Z / Ctrl-Z takes back the last destructive click, but
+  // never while typing: a text field keeps its own undo.
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") { onClose(); return; }
+      if (!undo || e.key.toLowerCase() !== "z" || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      const typing = t instanceof HTMLTextAreaElement
+        || (t instanceof HTMLInputElement && !["checkbox", "radio", "button"].includes(t.type))
+        || !!t?.isContentEditable;
+      if (typing) return;
+      e.preventDefault();
+      applyUndo();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+  }, [open, onClose, undo, applyUndo]);
 
   // Focus management (WCAG 2.4.3) — mirror GameDetailModal / WorldCupGroupsModal,
   // the app's other role="dialog" overlays. On open, move focus into the drawer
@@ -415,9 +469,11 @@ export default function SettingsPanel({
   // immediately even before the user interacts with the picker.
   const [teamsBySportCache, setTeamsBySportCache] = useState<Map<Sport, SportTeam[]>>(new Map());
   const [loadingTeamSports, setLoadingTeamSports] = useState<Set<Sport>>(new Set());
-  const loadTeamSport = useCallback((sport: Sport) => {
+  // retryEmpty: fetch again when the last try came back empty (a failed fetch;
+  // lib/espn does not cache those either).
+  const loadTeamSport = useCallback((sport: Sport, retryEmpty = false) => {
     setTeamsBySportCache((prev) => {
-      if (prev.has(sport)) return prev;
+      if (prev.has(sport) && !(retryEmpty && prev.get(sport)!.length === 0)) return prev;
       setLoadingTeamSports((ls) => {
         if (ls.has(sport)) return ls;
         const next = new Set(ls);
@@ -442,7 +498,9 @@ export default function SettingsPanel({
   }, []);
 
   // Eagerly fetch teams for sports the user already has favorites in, so the
-  // favorites list shows friendly names on settings-open instead of "nba-8".
+  // favorites list shows friendly names and logos on settings-open instead of
+  // "nba-8" — also for a league not on today's board. A sport whose last fetch
+  // failed tries again on each open (Jacob 10/1: chips with no logo).
   // Skip when the picker drawer isn't open (no point fetching ahead of view).
   useEffect(() => {
     if (!open) return;
@@ -451,7 +509,7 @@ export default function SettingsPanel({
       const sport = teamSportFromId(id);
       if (sport) sportsToLoad.add(sport);
     }
-    for (const sport of sportsToLoad) loadTeamSport(sport);
+    for (const sport of sportsToLoad) loadTeamSport(sport, true);
   }, [open, prefs.favoriteTeams, loadTeamSport]);
 
   const displayedSports = useMemo(
@@ -480,7 +538,7 @@ export default function SettingsPanel({
     // of a turned-off one, so the pin would otherwise do nothing.
     const hiddenLeagues = (prefs.hiddenLeagues ?? []).filter((s) => s !== sport);
     const catalogHiddenLeagues = (prefs.catalogHiddenLeagues ?? []).filter((s) => s !== sport);
-    updatePrefs({
+    updateWithUndo(`Column ${slotIdx + 1} changed`, {
       firstLeague: resolved[0],
       secondLeague: resolved[1],
       thirdLeague: resolved[2],
@@ -592,11 +650,11 @@ export default function SettingsPanel({
         return options.length ? [{ ...group, options }] : [];
       })
     : groupedLeagueOptions;
-  // Team-picker chips show in-season leagues first; the catalog options carry
-  // the season flag (the team list itself does not).
-  const inSeasonSports = useMemo(
-    () => new Set(leagueOptions.filter((option) => !option.offseason).map((option) => option.sport)),
-    [leagueOptions],
+  // The team picker's league row shows the same leagues as the My leagues
+  // chips (Jacob 10/1: 30+ text pills was "a lot to look at"); "More
+  // leagues" opens the rest.
+  const myLeagueSports = new Set(
+    visibleLeagueGroups.flatMap((group) => group.options).filter(isSwitcherChecked).map((option) => option.sport),
   );
 
   // What a column pill says: the pinned league, or Auto and what it shows.
@@ -641,12 +699,12 @@ export default function SettingsPanel({
           } else if (!on && preferred) {
             hiddenLeagues.add(option.sport);
           }
-          updatePrefs({
+          updateWithUndo(`${label} ${on ? "on" : "off"}`, {
             hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined,
             shownLeagues: shownLeagues.size ? [...shownLeagues] : undefined,
           });
         }}
-        onRemove={editing ? () => updatePrefs({ catalogHiddenLeagues: [...catalogHidden, option.sport] }) : undefined}
+        onRemove={editing ? () => updateWithUndo(`${label} hidden`, { catalogHiddenLeagues: [...catalogHidden, option.sport] }) : undefined}
       />
     );
   };
@@ -661,10 +719,15 @@ export default function SettingsPanel({
     const teamLookup = new Map<string, { id: string; displayName: string; logo?: string }>();
     for (const t of knownTeams) teamLookup.set(t.id, t);
     // Picker cache wins as a backup since it's the canonical full team list.
+    // It also fills a logo today's games did not carry (Jacob 10/1: favorite
+    // chips showed no logo when their league was not on the board).
     for (const [, list] of teamsBySportCache) {
       for (const t of list) {
-        if (!teamLookup.has(t.id)) {
+        const known = teamLookup.get(t.id);
+        if (!known) {
           teamLookup.set(t.id, { id: t.id, displayName: t.displayName, logo: t.logo });
+        } else if (!known.logo && t.logo) {
+          teamLookup.set(t.id, { ...known, logo: t.logo });
         }
       }
     }
@@ -697,19 +760,19 @@ export default function SettingsPanel({
     return ordered;
   }, [prefs.favoriteTeams, knownTeams, teamsBySportCache, displayedSports]);
 
-  const removeTeam = (id: string) => {
-    updatePrefs({ favoriteTeams: prefs.favoriteTeams.filter((t) => t !== id) });
+  const removeTeam = (id: string, name: string) => {
+    updateWithUndo(`${name} removed`, { favoriteTeams: prefs.favoriteTeams.filter((t) => t !== id) });
   };
 
   const clearTeamsForSport = (sport: Sport) => {
-    updatePrefs({
+    updateWithUndo(`${SPORT_LABEL[sport] ?? sport} teams cleared`, {
       favoriteTeams: prefs.favoriteTeams.filter((id) => teamSportFromId(id) !== sport),
     });
   };
 
   const clearAllTeams = () => {
     if (prefs.favoriteTeams.length === 0) return;
-    updatePrefs({ favoriteTeams: [] });
+    updateWithUndo("Teams cleared", { favoriteTeams: [] });
   };
 
   const toggleTeamFavorite = (teamId: string) => {
@@ -720,31 +783,11 @@ export default function SettingsPanel({
     }
   };
 
-  // Reset shows "Settings reset · Undo" for 15 s (Jacob 9/28). The undo patch
-  // holds the prior value of every key the reset wrote, so Undo puts back
-  // exactly what was there, unset keys included.
-  const [resetUndo, setResetUndo] = useState<Partial<Preferences> | null>(null);
-  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); }, []);
-  const undoReset = () => {
-    if (!resetUndo) return;
-    updatePrefs(resetUndo);
-    applyThemeAttr(resetUndo.theme ?? "system");
-    setResetUndo(null);
-    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-  };
-
+  // Reset shows "Settings reset · Undo" for 15 s (Jacob 9/28), through the
+  // same undo as every other destructive click.
   const resetAll = () => {
-    const patch = resetPatch();
-    const undo: Partial<Preferences> = {};
-    for (const key of Object.keys(patch) as (keyof Preferences)[]) {
-      (undo as Record<string, unknown>)[key] = prefs[key];
-    }
-    updatePrefs(patch);
+    updateWithUndo("Settings reset", resetPatch());
     applyThemeAttr("system");
-    setResetUndo(undo);
-    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    resetTimerRef.current = setTimeout(() => setResetUndo(null), 15_000);
   };
 
   const resetPatch = (): Partial<Preferences> => ({
@@ -859,7 +902,7 @@ export default function SettingsPanel({
             const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
             if (on) hiddenLeagues.delete("best");
             else hiddenLeagues.add("best");
-            updatePrefs({ hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined });
+            updateWithUndo(`${BEST_YESTERDAY_LABEL} ${on ? "on" : "off"}`, { hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined });
           }}
         />
       ),
@@ -874,7 +917,7 @@ export default function SettingsPanel({
           key="topnews"
           label="Top news"
           checked={!prefs.topNewsHidden}
-          onToggle={(on) => updatePrefs({ topNewsHidden: on ? undefined : true })}
+          onToggle={(on) => updateWithUndo(`Top news ${on ? "on" : "off"}`, { topNewsHidden: on ? undefined : true })}
         />
       ),
     },
@@ -891,7 +934,7 @@ export default function SettingsPanel({
   );
 
   // The email form: signed out it sits under the sign-in buttons; signed in it
-  // is the "Link another way" disclosure in the bottom row.
+  // is the "Link another way" disclosure under the Account line.
   const emailForm = canLinkEmail && (auth.signedIn ? showLinkMore : signedOutEmailOpen) ? (
     <form
       id="hs-link-more"
@@ -1000,15 +1043,43 @@ export default function SettingsPanel({
         </div>
       ) : auth.signedIn ? (
         // One line (Jacob 9/28). The address is only a tooltip: for
-        // Apple it is a private relay address, which is noise. Sign out,
-        // linking and delete sit in the quiet row at the bottom.
-        <p className="flex items-center gap-1.5 text-sm" style={{ color: "var(--text)" }} title={auth.email ?? undefined}>
-          <ProviderMark provider={signedInProvider} />
-          <span>
-            Signed in{signedInProvider ? ` with ${PROVIDER_LABEL[signedInProvider] ?? signedInProvider}` : ""}
-            <span style={{ color: "var(--text-muted)" }}> · synced</span>
-          </span>
-        </p>
+        // Apple it is a private relay address, which is noise. Linking a
+        // second sign-in sits right under it (Jacob 10/1: it was down in the
+        // bottom row, far from the account it changes). Sign out and Delete
+        // stay in the quiet row at the bottom.
+        <div>
+          <p className="flex items-center gap-1.5 text-sm" style={{ color: "var(--text)" }} title={auth.email ?? undefined}>
+            <ProviderMark provider={signedInProvider} />
+            <span>
+              Signed in{signedInProvider ? ` with ${PROVIDER_LABEL[signedInProvider] ?? signedInProvider}` : ""}
+              <span style={{ color: "var(--text-muted)" }}> · synced</span>
+            </span>
+          </p>
+          {(linkableProviders.length > 0 || canLinkEmail) && (
+            <button type="button"
+              onClick={() => setShowLinkMore((v) => !v)}
+              aria-expanded={showLinkMore}
+              aria-controls={showLinkMore ? "hs-link-more" : undefined}
+              className="mt-1 text-[11px] underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Link another way to sign in
+            </button>
+          )}
+          {showLinkMore && linkableProviders.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {linkableProviders.map((l) => (
+                <button key={l.key} type="button"
+                  onClick={l.onClick}
+                  className="flex-1 min-w-[120px] py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                  style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+                >
+                  Link {l.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
         <div className="space-y-2">
           {auth.providers?.apple !== false && (
@@ -1020,9 +1091,7 @@ export default function SettingsPanel({
               color: resolvedTheme === "dark" ? "#000" : "#fff",
             }}
           >
-            <svg width="15" height="15" viewBox="0 0 17 17" fill="currentColor" aria-hidden="true">
-              <path d="M13.79 9.06c-.02-1.86 1.52-2.75 1.59-2.79-.87-1.27-2.22-1.44-2.7-1.46-1.15-.12-2.24.68-2.82.68-.58 0-1.48-.66-2.43-.64-1.25.02-2.4.73-3.04 1.85-1.3 2.25-.33 5.58.93 7.41.62.9 1.35 1.9 2.31 1.86.93-.04 1.28-.6 2.4-.6 1.12 0 1.43.6 2.41.58 1-.02 1.63-.91 2.24-1.81.71-1.04 1-2.05 1.01-2.1-.02-.01-1.94-.74-1.96-2.95l.01-.34zM11.9 3.38c.51-.62.86-1.48.76-2.34-.74.03-1.64.49-2.17 1.11-.47.55-.89 1.43-.78 2.27.83.07 1.67-.42 2.19-1.04z"/>
-            </svg>
+            <AppleLogo size={15} />
             Sign in with Apple
           </button>
           )}
@@ -1051,7 +1120,7 @@ export default function SettingsPanel({
           )}
         </div>
       )}
-      {!auth.signedIn && emailForm}
+      {emailForm}
     </Section>
   );
 
@@ -1086,6 +1155,23 @@ export default function SettingsPanel({
           style={{ borderBottom: "1px solid var(--border)" }}
         >
           <h2 className="text-base font-bold" style={{ color: "var(--text)" }}>Settings</h2>
+          <div className="flex items-center gap-2">
+          {/* The live region stays mounted so a screen reader hears each
+              write; only its text comes and goes. */}
+          <span
+            role="status"
+            aria-live="polite"
+            data-testid="settings-saved"
+            className={`flex items-center gap-1 text-[11px] transition-opacity duration-300 motion-reduce:transition-none ${savedMark === "show" ? "opacity-100 animate-fade-in" : "opacity-0"}`}
+            style={{ color: "var(--text-muted)" }}
+          >
+            {savedMark && (
+              <>
+                <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                {signedInKnown ? "Saved · synced" : "Saved"}
+              </>
+            )}
+          </span>
           <button type="button"
             onClick={onClose}
             aria-label="Close settings"
@@ -1099,15 +1185,16 @@ export default function SettingsPanel({
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
+          </div>
         </div>
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
-          {/* Section order (Jacob 9/28): Theme, Leagues, Favorite teams,
-              Default view, News, Highlight video, Account, More settings,
-              Share & reset, then the account links and the legal row. Signed
-              out (or not yet known), Account goes first instead, so the
-              cross-device value prop is the first thing seen. */}
+          {/* Section order (Jacob 9/28, 10/1): Theme, Leagues, Favorite
+              teams, Default view, News, Highlight video, Links, Account,
+              Share, More settings, then the Sign out · Reset · Delete row and
+              the legal row. Signed out (or not yet known), Account goes first
+              instead, so the cross-device value prop is the first thing seen. */}
           {!signedInKnown && accountSection}
           {/* Theme — first when signed in (Jacob 9/28): one row, three pills. */}
           <Section title="Theme">
@@ -1317,7 +1404,7 @@ export default function SettingsPanel({
           <Section title="Favorite teams">
             <TeamPicker
               sports={teamLeagueOptions}
-              inSeasonSports={inSeasonSports}
+              mySports={myLeagueSports}
               favorites={prefs.favoriteTeams}
               onToggle={toggleTeamFavorite}
               teamsBySport={teamsBySportCache}
@@ -1350,21 +1437,15 @@ export default function SettingsPanel({
                       {teams.map((t) => (
                         <button type="button"
                           key={t.id}
-                          onClick={() => removeTeam(t.id)}
+                          onClick={() => removeTeam(t.id, t.displayName)}
                           className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-opacity hover:opacity-80"
                           style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                           title="Remove from favorites"
                           aria-label={`Remove ${t.displayName} from favorites`}
                         >
-                          {t.logo && (
-                            // onError hides a 404'd/blocked ESPN logo so the chip
-                            // degrades to the team name instead of the browser's
-                            // broken-image glyph — matches the onError guard on
-                            // every other remote team logo (GameCard, GameDetailModal,
-                            // WorldCupGroupsModal, …).
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={t.logo} alt="" loading="lazy" decoding="async" width={14} height={14} className="w-3.5 h-3.5" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                          )}
+                          {/* The picker grid's logo: a one-letter tile when there
+                              is none, or it 404s, so every chip keeps a mark. */}
+                          <PickerTeamLogo logo={t.logo} name={t.displayName} />
                           <span>{t.displayName}</span>
                           <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
                             <line x1="18" y1="6" x2="6" y2="18" />
@@ -1510,7 +1591,6 @@ export default function SettingsPanel({
           <Section title="News">
             <ToggleRow
               label="Hide upsetting news"
-              hint="Hides news about deaths, injuries and other upsetting events. You can show them in one tap."
               checked={!!(prefs.hideSensitiveNews || prefs.hideCrashNews)}
               onChange={(v) => updatePrefs({ hideSensitiveNews: v, hideCrashNews: v })}
             />
@@ -1526,6 +1606,7 @@ export default function SettingsPanel({
                 label="Highlight video player"
                 value={(prefs.youtubeNativeControls ?? true) ? "youtube" : "safe"}
                 options={PLAYER_OPTIONS}
+                columns={2}
                 onChange={(v) => updatePrefs({ youtubeNativeControls: v === "youtube" })}
               />
             </Field>
@@ -1576,26 +1657,97 @@ export default function SettingsPanel({
             )}
           </Section>
 
-          {/* The user's own Redlib / Invidious (lib/frontendLinks.ts). Pasted
-              data like the TV channel list, so Reset leaves it alone. */}
+          {/* The user's own front-ends (lib/frontendLinks.ts). Pasted data
+              like the TV channel list, so Reset leaves it alone. Neutral copy
+              (Jacob 10/1): no project names, the rule frontendLinks.ts keeps. */}
           <Section title="Links">
             <FrontendLinkField
               label="Reddit links open at"
-              hint="Leave empty for reddit.com"
-              placeholder="https://redlib.example.com"
+              hint="Your own front-end. Leave empty for reddit.com"
+              placeholder="https://your-server.example"
               value={prefs.redditFrontend}
               onSave={(v) => updatePrefs({ redditFrontend: v })}
             />
             <FrontendLinkField
               label="YouTube links open at"
-              hint="Invidious or Piped. Leave empty for youtube.com"
-              placeholder="https://invidious.example.com"
+              hint="Your own front-end. Leave empty for youtube.com"
+              placeholder="https://your-server.example"
               value={prefs.youtubeFrontend}
               onSave={(v) => updatePrefs({ youtubeFrontend: v })}
             />
           </Section>
 
           {signedInKnown && accountSection}
+
+          {/* Share (Jacob 10/1: was "Share & reset"; Reset moved to the
+              quiet bottom row). */}
+          <Section title="Share">
+            <div className="flex flex-col gap-2">
+              {(() => {
+                const nothingToShare = prefs.favoriteTeams.length === 0 && prefs.favoriteLeagues.length === 0 && !prefs.firstLeague && !prefs.secondLeague && !prefs.thirdLeague && !prefs.fourthLeague && !prefs.fifthLeague;
+                return (
+                  <>
+                    <button type="button"
+                      onClick={onShareFavorites}
+                      disabled={nothingToShare}
+                      className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ background: "var(--accent)", color: "white" }}
+                    >
+                      {shareCopied ? "Copied!" : "Copy settings link"}
+                    </button>
+                    {nothingToShare && (
+                      <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
+                        Pick a favorite team or league first — then this saves a link that restores your setup.
+                      </p>
+                    )}
+                    {/* Real <a> so the browser treats it as a draggable link —
+                        drag it onto the bookmarks/favorites bar and the saved
+                        bookmark restores this exact setup (Jacob 6/11 —
+                        bookmarking a copied URL is fiddly). The label is the
+                        affordance ("Drag to Bookmarks Bar"); dragstart
+                        overrides the drag payload so the bookmark itself gets
+                        NAMED "HideScore" where the browser honors it (Firefox
+                        x-moz-url title, Chromium text/html) instead of the
+                        instructional label. Click copies, like the button. */}
+                    {!nothingToShare && shareUrl && (
+                      <a
+                        href={shareUrl}
+                        onClick={(e) => { e.preventDefault(); onShareFavorites(); }}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/uri-list", shareUrl);
+                          e.dataTransfer.setData("text/plain", shareUrl);
+                          e.dataTransfer.setData("text/x-moz-url", `${shareUrl}\nHideScore`);
+                          e.dataTransfer.setData("text/html", `<a href="${shareUrl}">HideScore</a>`);
+                        }}
+                        className="hidden w-full py-2 rounded-lg text-sm cursor-grab transition-colors sm:flex items-center justify-center gap-1.5"
+                        style={{ background: "var(--bg-card)", border: "1px dashed var(--border)", color: "var(--text)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        title="Drop on your bookmarks bar to save this setup as 'HideScore'"
+                      >
+                        {/* draggable={false} so grabbing the chip by the monkey
+                            still drags the LINK (the bookmark), not the image. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/monkey-see-no-evil.svg" alt="" width={14} height={14} className="inline-block" draggable={false} />
+                        {/* Safari names the bookmark after this visible text,
+                            so it must read "HideScore" there. Other browsers
+                            take the name from the dragstart overrides above, so
+                            they keep the instructional label. */}
+                        {isSafari ? "HideScore" : "Drag to Bookmarks Bar"}
+                      </a>
+                    )}
+                    {!nothingToShare && (
+                      <p className="hidden text-[11px] -mt-1 sm:block" style={{ color: "var(--text-muted)" }}>
+                        {isSafari
+                          ? "Drag this onto your bookmarks bar to save this setup. Clicking copies the link instead."
+                          : "The bookmark restores this exact setup. Clicking copies the link instead."}
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </Section>
 
           {/* More settings (Jacob 9/25): rows almost nobody changes, behind one
               closed fold so the sections above are what you see. Of 29 synced
@@ -1732,150 +1884,60 @@ export default function SettingsPanel({
             </div>
           </details>
 
-          {/* Share & Reset */}
-          <Section title="Share & reset">
-            <div className="flex flex-col gap-2">
-              {(() => {
-                const nothingToShare = prefs.favoriteTeams.length === 0 && prefs.favoriteLeagues.length === 0 && !prefs.firstLeague && !prefs.secondLeague && !prefs.thirdLeague && !prefs.fourthLeague && !prefs.fifthLeague;
-                return (
-                  <>
-                    <button type="button"
-                      onClick={onShareFavorites}
-                      disabled={nothingToShare}
-                      className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ background: "var(--accent)", color: "white" }}
-                    >
-                      {shareCopied ? "Copied!" : "Copy settings link"}
-                    </button>
-                    {nothingToShare && (
-                      <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
-                        Pick a favorite team or league first — then this saves a link that restores your setup.
-                      </p>
-                    )}
-                    {/* Real <a> so the browser treats it as a draggable link —
-                        drag it onto the bookmarks/favorites bar and the saved
-                        bookmark restores this exact setup (Jacob 6/11 —
-                        bookmarking a copied URL is fiddly). The label is the
-                        affordance ("Drag to Bookmarks Bar"); dragstart
-                        overrides the drag payload so the bookmark itself gets
-                        NAMED "HideScore" where the browser honors it (Firefox
-                        x-moz-url title, Chromium text/html) instead of the
-                        instructional label. Click copies, like the button. */}
-                    {!nothingToShare && shareUrl && (
-                      <a
-                        href={shareUrl}
-                        onClick={(e) => { e.preventDefault(); onShareFavorites(); }}
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData("text/uri-list", shareUrl);
-                          e.dataTransfer.setData("text/plain", shareUrl);
-                          e.dataTransfer.setData("text/x-moz-url", `${shareUrl}\nHideScore`);
-                          e.dataTransfer.setData("text/html", `<a href="${shareUrl}">HideScore</a>`);
-                        }}
-                        className="hidden w-full py-2 rounded-lg text-sm cursor-grab transition-colors sm:flex items-center justify-center gap-1.5"
-                        style={{ background: "var(--bg-card)", border: "1px dashed var(--border)", color: "var(--text)" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-                        title="Drop on your bookmarks bar to save this setup as 'HideScore'"
-                      >
-                        {/* draggable={false} so grabbing the chip by the monkey
-                            still drags the LINK (the bookmark), not the image. */}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/monkey-see-no-evil.svg" alt="" width={14} height={14} className="inline-block" draggable={false} />
-                        {/* Safari names the bookmark after this visible text,
-                            so it must read "HideScore" there. Other browsers
-                            take the name from the dragstart overrides above, so
-                            they keep the instructional label. */}
-                        {isSafari ? "HideScore" : "Drag to Bookmarks Bar"}
-                      </a>
-                    )}
-                    {!nothingToShare && (
-                      <p className="hidden text-[11px] -mt-1 sm:block" style={{ color: "var(--text-muted)" }}>
-                        {isSafari
-                          ? "Drag this onto your bookmarks bar to save this setup. Clicking copies the link instead."
-                          : "The bookmark restores this exact setup. Clicking copies the link instead."}
-                      </p>
-                    )}
-                  </>
-                );
-              })()}
-              <button type="button"
-                onClick={() => {
-                  if (confirm("Reset all settings to defaults? Favorites will be cleared.")) resetAll();
-                }}
-                className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-              >
-                Reset to defaults
-              </button>
-            </div>
-          </Section>
-
-          {/* Bottom row, signed in only (Jacob 9/28): three quiet links. Delete
-              keeps both steps (a confirm, then typing DELETE); the "cannot be
-              undone" caveat lives in the first confirm. Linking a second
-              sign-in is a once-ever chore (2 of 33 accounts, both Jacob's), so
-              it opens in place under this row. */}
-          {auth.signedIn && (
-            <div className="pt-3 text-center text-[11px]" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
-              <button type="button"
-                onClick={() => signOut()}
-                className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Sign out
-              </button>
-              {(linkableProviders.length > 0 || canLinkEmail) && (
-                <>
-                  <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
-                  <button type="button"
-                    onClick={() => setShowLinkMore((v) => !v)}
-                    aria-expanded={showLinkMore}
-                    aria-controls={showLinkMore ? "hs-link-more" : undefined}
-                    className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Link another way to sign in
-                  </button>
-                </>
-              )}
-              <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
-              <button type="button"
-                onClick={async () => {
-                  if (!confirm("Permanently delete your account? This removes your synced teams, layout, and settings from our servers and signs you out. It cannot be undone.")) return;
-                  // Second, deliberate step: typing the word is enough friction that an
-                  // accidental or half-sure tap can't wipe an account, while still being
-                  // a plain in-app flow (Apple 5.1.1(v) wants it easy to FIND, not frictionless).
-                  const typed = prompt("Last check — this permanently erases your synced data and cannot be undone.\n\nType DELETE to confirm.");
-                  if (typed === null) return;
-                  if (typed.trim().toUpperCase() !== "DELETE") {
-                    alert("Account not deleted — you didn't type DELETE.");
-                    return;
-                  }
-                  const ok = await deleteAccount();
-                  if (ok) window.location.href = "/";
-                  else alert("Couldn't delete your account. Please try again in a moment.");
-                }}
-                className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Delete account
-              </button>
-              {showLinkMore && linkableProviders.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {linkableProviders.map((l) => (
-                    <button key={l.key} type="button"
-                      onClick={l.onClick}
-                      className="flex-1 min-w-[120px] py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
-                      style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
-                    >
-                      Link {l.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {emailForm}
-            </div>
-          )}
+          {/* Bottom row (Jacob 10/1): Sign out · Reset to defaults · Delete
+              account, all quiet links; signed out it is Reset alone. Reset
+              keeps its confirm and the Undo pill. Delete keeps both steps (a
+              confirm, then typing DELETE); the "cannot be undone" caveat lives
+              in the first confirm. */}
+          <div className="pt-3 text-center text-[11px]" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
+            {auth.signedIn && (
+              <>
+                <button type="button"
+                  onClick={() => signOut()}
+                  className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Sign out
+                </button>
+                <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
+              </>
+            )}
+            <button type="button"
+              onClick={() => {
+                if (confirm("Reset all settings to defaults? Favorites will be cleared.")) resetAll();
+              }}
+              className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Reset to defaults
+            </button>
+            {auth.signedIn && (
+              <>
+                <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
+                <button type="button"
+                  onClick={async () => {
+                    if (!confirm("Permanently delete your account? This removes your synced teams, layout, and settings from our servers and signs you out. It cannot be undone.")) return;
+                    // Second, deliberate step: typing the word is enough friction that an
+                    // accidental or half-sure tap can't wipe an account, while still being
+                    // a plain in-app flow (Apple 5.1.1(v) wants it easy to FIND, not frictionless).
+                    const typed = prompt("Last check — this permanently erases your synced data and cannot be undone.\n\nType DELETE to confirm.");
+                    if (typed === null) return;
+                    if (typed.trim().toUpperCase() !== "DELETE") {
+                      alert("Account not deleted — you didn't type DELETE.");
+                      return;
+                    }
+                    const ok = await deleteAccount();
+                    if (ok) window.location.href = "/";
+                    else alert("Couldn't delete your account. Please try again in a moment.");
+                  }}
+                  className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Delete account
+                </button>
+              </>
+            )}
+          </div>
 
           {/* Legal row — last, and deliberately quiet: muted, small, underlined
               text, never a button. Privacy previously lived ONLY in the page
@@ -1929,16 +1991,19 @@ export default function SettingsPanel({
             )}
           </div>
         </div>
-        {/* The Reset undo, pinned to the bottom of the drawer for 15 s. */}
-        {resetUndo && (
+        {/* The undo pill, pinned to the bottom of the drawer for 15 s. With
+            a mouse it sits higher: the Keys tag (ControlsHint, z 10000) owns
+            the bottom-right corner and covered a long pill's Undo. */}
+        {undo && (
           <div
             role="status"
-            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-2 rounded-full text-sm shadow-lg"
-            style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)", background: "var(--text)", color: "var(--bg)" }}
+            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm shadow-lg whitespace-nowrap max-w-[calc(100%-2rem)] bottom-[calc(env(safe-area-inset-bottom)+1rem)] [@media(hover:hover)_and_(pointer:fine)]:bottom-[calc(env(safe-area-inset-bottom)+3.25rem)]"
+            style={{ background: "var(--text)", color: "var(--bg)" }}
           >
-            <span>Settings reset</span>
+            <span className="truncate">{undo.label}</span>
+            <span aria-hidden="true">·</span>
             <button type="button"
-              onClick={undoReset}
+              onClick={applyUndo}
               className="font-semibold underline underline-offset-2 cursor-pointer"
             >
               Undo
@@ -1952,12 +2017,22 @@ export default function SettingsPanel({
 
 // The provider mark in the signed-in Account line.
 function ProviderMark({ provider }: { provider: string | null }) {
-  if (provider === "apple") return <span aria-hidden="true">🍎</span>;
+  if (provider === "apple") return <AppleLogo size={14} />;
   if (provider === "email") return <span aria-hidden="true">✉️</span>;
   if (provider === "google") {
     return <GoogleG size={14} />;
   }
   return null;
+}
+
+// Apple's mark in the text colour: the Account line and the sign-in button.
+// The 🍎 emoji read as a fruit, not the company (Jacob 10/1).
+function AppleLogo({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 17 17" fill="currentColor" aria-hidden="true">
+      <path d="M13.79 9.06c-.02-1.86 1.52-2.75 1.59-2.79-.87-1.27-2.22-1.44-2.7-1.46-1.15-.12-2.24.68-2.82.68-.58 0-1.48-.66-2.43-.64-1.25.02-2.4.73-3.04 1.85-1.3 2.25-.33 5.58.93 7.41.62.9 1.35 1.9 2.31 1.86.93-.04 1.28-.6 2.4-.6 1.12 0 1.43.6 2.41.58 1-.02 1.63-.91 2.24-1.81.71-1.04 1-2.05 1.01-2.1-.02-.01-1.94-.74-1.96-2.95l.01-.34zM11.9 3.38c.51-.62.86-1.48.76-2.34-.74.03-1.64.49-2.17 1.11-.47.55-.89 1.43-.78 2.27.83.07 1.67-.42 2.19-1.04z"/>
+    </svg>
+  );
 }
 
 function GoogleG({ size }: { size: number }) {
@@ -1988,7 +2063,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 // One "Links" row: saves on blur or Enter. Empty clears it; anything that is
-// not an http(s) address stays in the box with a hint and is not saved.
+// not an http(s) address stays in the box with a hint and is not saved. The
+// header's "Saved" mark confirms a save (Jacob 10/1); only the error shows here.
 function FrontendLinkField({ label, hint, placeholder, value, onSave }: {
   label: string;
   hint: string;
@@ -1997,22 +2073,21 @@ function FrontendLinkField({ label, hint, placeholder, value, onSave }: {
   onSave: (value: string | undefined) => void;
 }) {
   const [draft, setDraft] = useState(value ?? "");
-  const [msg, setMsg] = useState<{ text: string; err: boolean } | null>(null);
+  const [error, setError] = useState(false);
   // A pull from another device changed the saved value: show it.
   const [shown, setShown] = useState(value);
   if (shown !== value) { setShown(value); setDraft(value ?? ""); }
   const commit = () => {
     const typed = draft.trim();
     if (!typed) {
-      if (value) { onSave(undefined); setMsg({ text: "Saved", err: false }); }
+      if (value) onSave(undefined);
       setDraft("");
       return;
     }
     const clean = normalizeFrontend(typed);
-    if (!clean) { setMsg({ text: "Needs https://…", err: true }); return; }
+    if (!clean) { setError(true); return; }
     setDraft(clean);
     if (clean !== value) onSave(clean);
-    setMsg({ text: "Saved", err: false });
   };
   return (
     <div>
@@ -2021,7 +2096,7 @@ function FrontendLinkField({ label, hint, placeholder, value, onSave }: {
           type="url"
           inputMode="url"
           value={draft}
-          onChange={(e) => { setDraft(e.target.value); setMsg(null); }}
+          onChange={(e) => { setDraft(e.target.value); setError(false); }}
           onBlur={commit}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } }}
           placeholder={placeholder}
@@ -2030,12 +2105,12 @@ function FrontendLinkField({ label, hint, placeholder, value, onSave }: {
           autoCorrect="off"
           autoComplete="off"
           className="w-full px-3 py-2 rounded-lg text-sm"
-          style={{ background: "var(--bg-card)", color: "var(--text)", border: `1px solid ${msg?.err ? "rgb(239,68,68)" : "var(--border)"}` }}
+          style={{ background: "var(--bg-card)", color: "var(--text)", border: `1px solid ${error ? "rgb(239,68,68)" : "var(--border)"}` }}
         />
       </Field>
-      {msg && (
-        <p role="status" aria-live="polite" className="text-[11px] mt-1" style={{ color: msg.err ? "rgb(239,68,68)" : "var(--text-muted)" }}>
-          {msg.text}
+      {error && (
+        <p role="status" aria-live="polite" className="text-[11px] mt-1" style={{ color: "rgb(239,68,68)" }}>
+          Needs https://…
         </p>
       )}
     </div>
@@ -2133,10 +2208,14 @@ function RadioGroup<T extends string>({
 }
 
 // The one league chip: TeamPicker's league filter, the records summary and picker.
+// `sport` puts that league's logo left of the name, the same no-plate mark
+// SwitcherChip draws (Jacob 10/1: one chip look everywhere).
 function LeagueChip({
   label,
   on,
   onClick,
+  sport,
+  ariaLabel,
   ariaPressed,
   ariaExpanded,
   title,
@@ -2144,6 +2223,8 @@ function LeagueChip({
   label: string;
   on: boolean;
   onClick: () => void;
+  sport?: Sport;
+  ariaLabel?: string;
   ariaPressed?: boolean;
   ariaExpanded?: boolean;
   title?: string;
@@ -2151,9 +2232,10 @@ function LeagueChip({
   return (
     <button type="button"
       onClick={onClick}
+      aria-label={ariaLabel}
       aria-pressed={ariaPressed}
       aria-expanded={ariaExpanded}
-      className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
+      className={`${sport ? "inline-flex items-center gap-1.5 pl-1.5 pr-2" : "px-2"} py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors`}
       style={{
         background: on ? "var(--accent)" : "var(--bg-card)",
         border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
@@ -2161,6 +2243,8 @@ function LeagueChip({
       }}
       title={title}
     >
+      {/* The negative margin keeps the chip as tall as its text-only neighbours. */}
+      {sport && <LeagueMark sport={sport} tone={on ? "dark" : "auto"} className="-my-0.5" />}
       {label}
     </button>
   );
@@ -2254,7 +2338,7 @@ function PickerTeamLogo({ logo, name }: { logo?: string; name: string }) {
 }
 function TeamPicker({
   sports,
-  inSeasonSports,
+  mySports,
   favorites,
   onToggle,
   teamsBySport,
@@ -2263,8 +2347,9 @@ function TeamPicker({
   knownTeams,
 }: {
   sports: LeagueOption[];
-  // Leagues playing now. Only these show as chips until "All leagues" is on.
-  inSeasonSports: ReadonlySet<Sport>;
+  // The leagues ticked in My leagues. Only these show as chips until "More
+  // leagues" is on.
+  mySports: ReadonlySet<Sport>;
   favorites: string[];
   onToggle: (teamId: string) => void;
   teamsBySport: Map<Sport, SportTeam[]>;
@@ -2360,12 +2445,12 @@ function TeamPicker({
     ? loadingSports.has(activeSport) && !teamsBySport.has(activeSport)
     : !!trimmedQuery && !anySportLoaded && loadingSports.size > 0;
 
-  // In-season chips only, plus an "All leagues" chip for the rest. The picked
-  // league always keeps its chip so it can be tapped off. With no season data
-  // (or nothing hidden) every chip shows and the toggle is not needed.
-  const inSeasonTabs = tabSports.filter((s) => inSeasonSports.has(s.sport) || s.sport === activeSport);
-  const hasHiddenTabs = inSeasonTabs.length > 0 && inSeasonTabs.length < tabSports.length;
-  const visibleTabs = showAllLeagues || !hasHiddenTabs ? tabSports : inSeasonTabs;
+  // My-leagues chips only, plus a "More leagues" chip for the rest. The picked
+  // league always keeps its chip so it can be tapped off. With no league
+  // ticked (or nothing hidden) every chip shows and the toggle is not needed.
+  const myTabs = tabSports.filter((s) => mySports.has(s.sport) || s.sport === activeSport);
+  const hasHiddenTabs = myTabs.length > 0 && myTabs.length < tabSports.length;
+  const visibleTabs = showAllLeagues || !hasHiddenTabs ? tabSports : myTabs;
 
   if (tabSports.length === 0) return null;
 
@@ -2408,6 +2493,7 @@ function TeamPicker({
             <LeagueChip
               key={s.sport}
               label={s.label}
+              sport={s.sport}
               on={active}
               ariaPressed={active}
               onClick={() => setSelectedSport(active ? null : s.sport)}
@@ -2415,13 +2501,16 @@ function TeamPicker({
             />
           );
         })}
+        {/* Same chip as the My leagues "More leagues", off-fill either way.
+            Its own name so the two never collide for assistive tech. */}
         {hasHiddenTabs && (
           <LeagueChip
-            label="All leagues"
-            on={showAllLeagues}
-            ariaPressed={showAllLeagues}
+            label={showAllLeagues ? "Fewer" : "More leagues"}
+            ariaLabel={showAllLeagues ? "Fewer leagues for teams" : "More leagues for teams"}
+            on={false}
+            ariaExpanded={showAllLeagues}
             onClick={() => setShowAllLeagues((v) => !v)}
-            title={showAllLeagues ? "Show only leagues playing now" : "Show every league, including offseason"}
+            title={showAllLeagues ? "Show only the leagues in My leagues" : "Show every league with teams"}
           />
         )}
       </div>
@@ -2461,11 +2550,7 @@ function TeamPicker({
               />
             ))}
           </div>
-        ) : !activeSport && !trimmedQuery ? (
-          <p className="text-xs py-3 text-center" style={{ color: "var(--text-muted)" }}>
-            Type to search across all leagues, or pick a league above.
-          </p>
-        ) : filtered.length === 0 ? (
+        ) : !activeSport && !trimmedQuery ? null : filtered.length === 0 ? (
           <p className="text-xs py-3 text-center" style={{ color: "var(--text-muted)" }}>
             {trimmedQuery
               ? loadingSports.size > 0
@@ -2526,14 +2611,14 @@ function RecordLeaguePicker({
   selected: ReadonlySet<RecordLeague>;
   onChange: (next: RecordLeague[]) => void;
 }) {
-  const chip = (key: string, label: string, on: boolean, onClick: () => void) => (
-    <LeagueChip key={key} label={label} on={on} ariaPressed={on} onClick={onClick} />
+  const chip = (key: string, label: string, on: boolean, onClick: () => void, sport?: Sport) => (
+    <LeagueChip key={key} label={label} on={on} ariaPressed={on} onClick={onClick} sport={sport} />
   );
   const row = (title: string, keys: readonly RecordLeague[]) => (
     <div>
       <p className="text-[11px] mb-1" style={{ color: "var(--text-muted)" }}>{title}</p>
       <div className="flex flex-wrap gap-1.5">
-        {keys.map((k) => chip(k, k === "soccer" ? "Soccer" : SPORT_LABEL[k], selected.has(k), () => onChange(toggleRecordLeague(selected, k))))}
+        {keys.map((k) => chip(k, k === "soccer" ? "Soccer" : SPORT_LABEL[k], selected.has(k), () => onChange(toggleRecordLeague(selected, k)), k === "soccer" ? undefined : k))}
       </div>
     </div>
   );

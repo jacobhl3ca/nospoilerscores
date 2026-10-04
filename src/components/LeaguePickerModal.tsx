@@ -235,7 +235,9 @@ export function LeaguePickerModal({
                 // lone group missing it.
                 aria-pressed={multi ? on : undefined}
                 aria-current={current ? "true" : undefined}
-                className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                // The Settings league chip's look (Jacob 10/1: one chip
+                // everywhere): rounded-md, 11px, uppercase name.
+                className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 style={multi && on
                   ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
                   : {
@@ -246,24 +248,23 @@ export function LeaguePickerModal({
               >
                 {/* Fixed 1rem slot, reserved whether or not this pill is
                     picked, so selecting one never changes any pill's width. */}
-                <span aria-hidden className="inline-block w-4 shrink-0 text-center text-xs font-bold tabular-nums">
-                  {multi && on ? idx + 1 : ""}
-                </span>
-                {/* The mark always sits on a white chip. Most of these are
-                    dark-on-transparent, so on the accent-blue selected fill
-                    they'd disappear; knocking them to solid white instead
-                    turned filled marks (MLB) into a featureless blob. The
-                    chip keeps every logo legible and identical in both
-                    states, so selecting a pill changes only its background. */}
-                <LeagueMark sport={o.sport} size={16} src={demoOption?.logo} plate />
-                <span>{demoOption?.label ?? o.label}</span>
+                {multi && (
+                  <span aria-hidden className="inline-block w-3 shrink-0 text-center text-[11px] font-bold tabular-nums">
+                    {on ? idx + 1 : ""}
+                  </span>
+                )}
+                {/* No white plate (Jacob 10/1), the same mark as the
+                    Settings chips: ESPN's dark-theme copy in dark mode and on
+                    the accent fill, a sport emoji for a league with none. */}
+                <LeagueMark sport={o.sport} src={demoOption?.logo} tone={multi && on ? "dark" : "auto"} className="-my-0.5" />
+                <span className="uppercase tracking-wide">{demoOption?.label ?? o.label}</span>
                 {/* Start dates dropped here on purpose (Jacob 8/9): six
                     "· starts Aug 21" tails made the grid unreadable and are
                     noise at signup. The kickoff banner still announces them
                     and the column switcher still shows them. "offseason"
                     stays — that one changes whether the column has games. */}
-                {o.offseason && <em className="font-normal text-xs" style={{ color: multi && on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
-                {elsewhere && <em className="font-normal text-xs" style={{ color: "var(--text-muted)" }}>· col {elsewhere.col}</em>}
+                {o.offseason && <em className="font-normal text-[11px]" style={{ color: multi && on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
+                {elsewhere && <em className="font-normal text-[11px]" style={{ color: "var(--text-muted)" }}>· col {elsewhere.col}</em>}
               </button>
             );
           })}

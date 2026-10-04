@@ -163,8 +163,8 @@ for (const width of [390, 1280]) {
 
 // Jacob 9/30 follow-up: ~45 white discs read as dots. The logo now sits on the
 // chip itself: ESPN's dark-theme copy in dark mode and on a ticked (accent)
-// chip, a sport emoji for a league with no mark of its own. The signup
-// picker keeps its white plate.
+// chip, a sport emoji for a league with no mark of its own. Since 10/1 the
+// signup / Add more… picker draws the same chip, with no plate either.
 const imgSrc = (markEl: Locator) => markEl.locator("img").getAttribute("src");
 
 async function setTicked(catalog: Locator, name: string, on: boolean) {
@@ -244,7 +244,7 @@ for (const width of [390, 1280]) {
   });
 }
 
-test("the league picker keeps its white plate", async ({ page }) => {
+test("the league picker draws the Settings chip: no plate, square corners, uppercase", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seedPrefs(page, { theme: "dark", secondLeague: "nfl", thirdLeague: "wnba" });
   await page.goto("/");
@@ -252,7 +252,16 @@ test("the league picker keeps its white plate", async ({ page }) => {
   await page.getByRole("dialog", { name: "Switch league" }).getByRole("button", { name: "Add more…" }).click();
   const sheet = page.locator('[role="dialog"][aria-labelledby="league-add-more-title"]');
   await expect(sheet).toBeVisible();
-  const plates = sheet.locator("[data-league-plate]");
-  expect(await plates.count()).toBeGreaterThan(5);
-  await expect(sheet.locator("[data-league-emoji]")).toHaveCount(0);
+  expect(await sheet.locator("[data-league-mark]").count()).toBeGreaterThan(5);
+  await expect(sheet.locator("[data-league-plate]")).toHaveCount(0);
+  const nfl = sheet.getByRole("button", { name: /^NFL/ });
+  const style = await nfl.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const label = el.querySelector("span.uppercase");
+    return { radius: cs.borderTopLeftRadius, size: cs.fontSize, upper: label ? getComputedStyle(label).textTransform : "" };
+  });
+  expect(style).toEqual({ radius: "6px", size: "11px", upper: "uppercase" });
+  // Dark theme: the dark-set logo, no white disc behind it.
+  await expectLoaded(mark(nfl));
+  expect(await imgSrc(mark(nfl))).toContain("500-dark");
 });
