@@ -121,6 +121,8 @@ export interface NewsItem {
   // v.redd.it CMAF fallback URL — single muxed MP4 that plays in <video>
   // without hls.js. Set on Reddit posts where Reddit hosts the clip directly.
   videoUrl?: string | null;
+  // Clip length in seconds, when the source gives one (ESPN Videos).
+  durationSec?: number | null;
   // Brightcove default-player iframe URL — set on NHL.com videos, which are
   // Brightcove-hosted rather than YouTube/raw-HLS. The modal renders it in a
   // plain <iframe> (embedMode), letting Brightcove handle policy key/geo/DRM.
@@ -276,13 +278,23 @@ export async function fetchPrebaked(name: string): Promise<NewsItem[]> {
         return [];
       }
       const data = await res.json();
-      return (data.items ?? []) as NewsItem[];
+      const items = (data.items ?? []) as NewsItem[];
+      return name === "espn-videos" ? items.map(gateEspnVideoUrl) : items;
     } catch {
       if (attempt === 0) { await new Promise((r) => setTimeout(r, 400)); continue; }
       return [];
     }
   }
   return [];
+}
+
+// An ESPN Videos item plays in the modal only from a direct mp4 on ESPN's
+// akamaized CDN (the bake's own rule, scripts/lib/espn-clip.mjs). Anything
+// else falls back to the image + "Open on ESPN".
+const ESPN_MP4_RX = /^https:\/\/[a-z0-9.-]+\.akamaized\.net\/.+\.mp4(\?|$)/i;
+export function gateEspnVideoUrl(item: NewsItem): NewsItem {
+  if (!item.videoUrl || ESPN_MP4_RX.test(item.videoUrl)) return item;
+  return { ...item, videoUrl: null };
 }
 
 // Leagues that have a prebaked official-site feed. Add here as new scrapers land.
@@ -412,6 +424,9 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   boxing: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-boxing.png",
   chess: "/chess.svg",
   poker: "/poker.svg",
+  // World Climbing's mark is a wordmark that does not read at 16px, so a
+  // local glyph in the chess/poker style.
+  climbing: "/climbing.svg",
   esports: "/esports.svg",
   // ESPN front page: the ESPN mark (same file as ESPN_BRAND_LOGO below), since
   // the column is ESPN's own picks.
@@ -483,6 +498,7 @@ export const LEAGUE_EMOJI: Partial<Record<Sport, string>> = {
   cricketintl: "🏏",
   chess: "♟️",
   poker: "♠️",
+  climbing: "🧗",
   esports: "🎮",
   boxing: "🥊",
   nascar: "🏁",
@@ -641,6 +657,9 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   // ESPN has no poker desk/league feed. Do not manufacture an "ESPN POKER"
   // card that can only return empty; the score/event view remains complete.
   if (sport === "poker") return [];
+  // Climbing has no ESPN desk either, and r/climbing is mostly outdoor photos,
+  // not World Cup news. No feed in v1, like poker.
+  if (sport === "climbing") return [];
   const logoUrl = LEAGUE_LOGO[sport];
   // ESPN has no CFL feed any more (its CFL endpoints froze in 2023), so an
   // "ESPN CFL" card could only ever be empty. r/CFL leads and theScore's CFL
@@ -702,7 +721,7 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "cricketintl", "cricket", "nrl", "afl",
   "sixnations", "rugbywc", "nationschamp", "rugbytest", "superrugby", "rugbychamp",
   "urc", "premrugby", "top14", "challengecup", "mlr",
-  "ufc", "boxing", "f1", "nascar", "indycar", "poker",
+  "ufc", "boxing", "f1", "nascar", "indycar", "poker", "climbing",
 ];
 
 // Col 3's default (no league picked): Reddit-first (Jacob 7/16) — r/sports leads,

@@ -16,7 +16,7 @@ const BASE = "https://site.web.api.espn.com/apis/site/v2/sports";
 // Event-tile leagues (single card, no per-game rating/broadcast columns).
 // cfl is a worker route (/api/cfl, theScore-backed), not an ESPN path — the
 // BASE + path probe below would 404 against ESPN.
-const SKIP = new Set(["chess", "boxing", "poker", "esports", "f1", "nascar", "indycar", "ufc", "golf", "tennis", "cfl"]);
+const SKIP = new Set(["chess", "boxing", "poker", "climbing", "esports", "f1", "nascar", "indycar", "ufc", "golf", "tennis", "cfl"]);
 const DAYS = Number((process.argv.find((a) => a.startsWith("--days=")) || "").split("=")[1]) || 45;
 const SAMPLE_DAYS = 3; // how many recent finished-game days to pool per league
 

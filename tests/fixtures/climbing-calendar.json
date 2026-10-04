@@ -1,0 +1,1007 @@
+{
+ "events": [
+  {
+   "id": 1477,
+   "league_name": "IFSC Paraclimbing",
+   "season": 2026,
+   "name": "World Climbing Para Series Salt Lake City 2026",
+   "slug": "world-climbing-para-series-salt-lake-city-2026",
+   "country": "USA",
+   "country_name": "United States",
+   "location": "Salt Lake City",
+   "site_url": "https://ifsc.stream/season/2026/event/world-climbing-para-series-salt-lake-city-2026-1477/",
+   "infosheet_url": "https://ifsc.results.info/events/1477/infosheet",
+   "event_url": "https://www.worldclimbing.com/events/world-climbing-para-series-salt-lake-city-2026",
+   "tickets": {
+    "summary": "Tickets are required for Lead Qualification and Lead Final and are available via USA Climbing Eventbrite. Registered World Climbing athletes and team officials do not need to purchase tickets but accreditation is required for all rounds.",
+    "purchase_url": ""
+   },
+   "disciplines": [
+    "lead"
+   ],
+   "starts_at": "2026-05-15T09:00:00-06:00",
+   "ends_at": "2026-05-16T12:00:00-06:00",
+   "timezone": "America/Denver",
+   "rounds": [
+    {
+     "name": "Men's & Women's Lead Qualification",
+     "categories": [
+      "women",
+      "men"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-05-15T09:00:00-06:00",
+     "ends_at": "2026-05-15T10:30:00-06:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's & Women's Lead Final",
+     "categories": [
+      "women",
+      "men"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "final",
+     "starts_at": "2026-05-16T12:00:00-06:00",
+     "ends_at": "2026-05-16T17:18:00-06:00",
+     "schedule_status": "confirmed",
+     "stream_url": "https://youtu.be/XcfIOm4i_GE",
+     "stream_blocked_regions": []
+    }
+   ],
+   "start_list": [
+    {
+     "athlete_id": 1349,
+     "first_name": "Angelino",
+     "last_name": "Zeller",
+     "category": "men",
+     "country": "AUT",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/bc1behouxump42vbfx0bu863dych",
+     "instagram": "angelinozeller",
+     "disciplines": [
+      "lead"
+     ]
+    },
+    {
+     "athlete_id": 542,
+     "first_name": "Lucie",
+     "last_name": "Jarrige",
+     "category": "women",
+     "country": "FRA",
+     "photo_url": null,
+     "instagram": null,
+     "disciplines": [
+      "lead"
+     ]
+    },
+    {
+     "athlete_id": 2284,
+     "first_name": "Sho",
+     "last_name": "Aita",
+     "category": "men",
+     "country": "JPN",
+     "photo_url": null,
+     "instagram": null,
+     "disciplines": [
+      "lead"
+     ]
+    }
+   ],
+   "start_list_total": 168
+  },
+  {
+   "id": 1484,
+   "league_name": "World Cups and World Championships",
+   "season": 2026,
+   "name": "World Climbing Series Chamonix 2026",
+   "slug": "world-climbing-series-chamonix-2026",
+   "country": "FRA",
+   "country_name": "France",
+   "location": "Chamonix",
+   "site_url": "https://ifsc.stream/season/2026/event/world-climbing-series-chamonix-2026-1484/",
+   "infosheet_url": "https://ifsc.results.info/events/1484/infosheet",
+   "event_url": "https://www.worldclimbing.com/events/world-climbing-series-chamonix-2026",
+   "tickets": {
+    "summary": "Free entrance No tickets required",
+    "purchase_url": ""
+   },
+   "disciplines": [
+    "speed",
+    "lead"
+   ],
+   "starts_at": "2026-07-10T17:10:00+02:00",
+   "ends_at": "2026-07-12T20:30:00+02:00",
+   "timezone": "Europe/Paris",
+   "rounds": [
+    {
+     "name": "Women's Speed Qualification",
+     "categories": [
+      "women"
+     ],
+     "disciplines": [
+      "speed"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-07-10T17:10:00+02:00",
+     "ends_at": "2026-07-10T18:12:00+02:00",
+     "schedule_status": "confirmed",
+     "stream_url": "https://youtu.be/2e0fr3uiDJU",
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's Speed Qualification",
+     "categories": [
+      "men"
+     ],
+     "disciplines": [
+      "speed"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-07-10T19:40:00+02:00",
+     "ends_at": "2026-07-10T21:05:00+02:00",
+     "schedule_status": "confirmed",
+     "stream_url": "https://youtu.be/bpwRn00a-4Y",
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's & Women's Lead Qualification",
+     "categories": [
+      "women",
+      "men"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-07-11T08:00:00+02:00",
+     "ends_at": "2026-07-11T14:30:00+02:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's & Women's Speed Final",
+     "categories": [
+      "women",
+      "men"
+     ],
+     "disciplines": [
+      "speed"
+     ],
+     "kind": "final",
+     "starts_at": "2026-07-11T21:00:00+02:00",
+     "ends_at": "2026-07-11T22:38:00+02:00",
+     "schedule_status": "confirmed",
+     "stream_url": "https://youtu.be/RvZXoTVxGBs",
+     "stream_blocked_regions": [
+      "AD",
+      "AL",
+      "AM",
+      "AT",
+      "AZ",
+      "BA",
+      "BE",
+      "BG",
+      "BR",
+      "BY",
+      "CH",
+      "CY",
+      "CZ",
+      "DE",
+      "DK",
+      "EE",
+      "ES",
+      "FI",
+      "FR",
+      "GB",
+      "GE",
+      "GR",
+      "HR",
+      "HU",
+      "IE",
+      "IL",
+      "IS",
+      "IT",
+      "KG",
+      "KZ",
+      "LI",
+      "LT",
+      "LU",
+      "LV",
+      "MC",
+      "MD",
+      "ME",
+      "MK",
+      "MT",
+      "MX",
+      "NL",
+      "NO",
+      "PL",
+      "PT",
+      "RO",
+      "RS",
+      "RU",
+      "SE",
+      "SI",
+      "SK",
+      "SM",
+      "TJ",
+      "TM",
+      "TR",
+      "TW",
+      "UA",
+      "UZ",
+      "VA"
+     ]
+    },
+    {
+     "name": "Men's & Women's Lead Semi-Final",
+     "categories": [
+      "women",
+      "men"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "semi-final",
+     "starts_at": "2026-07-12T10:00:00+02:00",
+     "ends_at": "2026-07-12T13:02:00+02:00",
+     "schedule_status": "confirmed",
+     "stream_url": "https://youtu.be/u5-efO9A-Q8",
+     "stream_blocked_regions": [
+      "AD",
+      "AL",
+      "AM",
+      "AT",
+      "AZ",
+      "BA",
+      "BE",
+      "BG",
+      "BY",
+      "CH",
+      "CY",
+      "CZ",
+      "DE",
+      "DK",
+      "EE",
+      "ES",
+      "FI",
+      "FR",
+      "GB",
+      "GE",
+      "GR",
+      "HR",
+      "HU",
+      "IE",
+      "IL",
+      "IS",
+      "IT",
+      "KG",
+      "KZ",
+      "LI",
+      "LT",
+      "LU",
+      "LV",
+      "MC",
+      "MD",
+      "ME",
+      "MK",
+      "MT",
+      "NL",
+      "NO",
+      "PL",
+      "PT",
+      "RO",
+      "RS",
+      "RU",
+      "SE",
+      "SI",
+      "SK",
+      "SM",
+      "TJ",
+      "TM",
+      "TR",
+      "TW",
+      "UA",
+      "UZ",
+      "VA"
+     ]
+    },
+    {
+     "name": "Men's & Women's Lead Final",
+     "categories": [
+      "men",
+      "women"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "final",
+     "starts_at": "2026-07-12T20:30:00+02:00",
+     "ends_at": "2026-07-12T23:08:00+02:00",
+     "schedule_status": "confirmed",
+     "stream_url": "https://youtu.be/ksX7UnZobnk",
+     "stream_blocked_regions": [
+      "AD",
+      "AL",
+      "AM",
+      "AT",
+      "AZ",
+      "BA",
+      "BE",
+      "BG",
+      "BR",
+      "BY",
+      "CH",
+      "CY",
+      "CZ",
+      "DE",
+      "DK",
+      "EE",
+      "ES",
+      "FI",
+      "FR",
+      "GB",
+      "GE",
+      "GR",
+      "HR",
+      "HU",
+      "IE",
+      "IL",
+      "IS",
+      "IT",
+      "KG",
+      "KZ",
+      "LI",
+      "LT",
+      "LU",
+      "LV",
+      "MC",
+      "MD",
+      "ME",
+      "MK",
+      "MT",
+      "MX",
+      "NL",
+      "NO",
+      "PL",
+      "PT",
+      "RO",
+      "RS",
+      "RU",
+      "SE",
+      "SI",
+      "SK",
+      "SM",
+      "TJ",
+      "TM",
+      "TR",
+      "TW",
+      "UA",
+      "UZ",
+      "VA"
+     ]
+    }
+   ],
+   "start_list": [
+    {
+     "athlete_id": 13040,
+     "first_name": "Sorato",
+     "last_name": "Anraku",
+     "category": "men",
+     "country": "JPN",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/bk9ifljhby050h6lc4uccx4kzhnf",
+     "instagram": "anraku_sorato",
+     "disciplines": [
+      "lead"
+     ]
+    },
+    {
+     "athlete_id": 2035,
+     "first_name": "Ja In",
+     "last_name": "Kim",
+     "category": "women",
+     "country": "KOR",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/qzqj0stmqfwlnbzyh8bik85844hs",
+     "instagram": null,
+     "disciplines": [
+      "lead"
+     ]
+    },
+    {
+     "athlete_id": 1214,
+     "first_name": "Jakob",
+     "last_name": "Schubert",
+     "category": "men",
+     "country": "AUT",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/9h9a8ojxu0bo0iyl8dve0voxo3dw",
+     "instagram": "jakob.schubert",
+     "disciplines": [
+      "lead"
+     ]
+    }
+   ],
+   "start_list_total": 284
+  },
+  {
+   "id": 1487,
+   "league_name": "World Cups and World Championships",
+   "season": 2026,
+   "name": "World Climbing Series Koper 2026",
+   "slug": "world-climbing-series-koper-2026",
+   "country": "SLO",
+   "country_name": "Slovenia",
+   "location": "Koper",
+   "site_url": "https://ifsc.stream/season/2026/event/world-climbing-series-koper-2026-1487/",
+   "infosheet_url": "https://ifsc.results.info/events/1487/infosheet",
+   "event_url": "https://www.worldclimbing.com/events/world-climbing-series-koper-2026",
+   "tickets": {
+    "summary": "Tickets are available from the event organizer. Registered World Climbing athletes and team officials do not need to purchase tickets. Accreditation is required for all indoor rounds.",
+    "purchase_url": "https://worldcupslo.com/tickets.php"
+   },
+   "disciplines": [
+    "lead"
+   ],
+   "starts_at": "2026-09-04T09:00:00+02:00",
+   "ends_at": "2026-09-05T20:00:00+02:00",
+   "timezone": "Europe/Ljubljana",
+   "rounds": [
+    {
+     "name": "Men's & Women's Lead Qualification",
+     "categories": [
+      "women",
+      "men"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-09-04T09:00:00+02:00",
+     "ends_at": "2026-09-04T13:45:00+02:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's & Women's Lead Semi-Final",
+     "categories": [
+      "women",
+      "men"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "semi-final",
+     "starts_at": "2026-09-04T20:00:00+02:00",
+     "ends_at": "2026-09-04T22:51:00+02:00",
+     "schedule_status": "confirmed",
+     "stream_url": "https://youtu.be/odEZAUSxM30",
+     "stream_blocked_regions": [
+      "AD",
+      "AL",
+      "AM",
+      "AT",
+      "AZ",
+      "BA",
+      "BE",
+      "BG",
+      "BY",
+      "CH",
+      "CY",
+      "CZ",
+      "DE",
+      "DK",
+      "EE",
+      "ES",
+      "FI",
+      "FR",
+      "GB",
+      "GE",
+      "GR",
+      "HR",
+      "HU",
+      "IE",
+      "IL",
+      "IS",
+      "IT",
+      "KG",
+      "KZ",
+      "LI",
+      "LT",
+      "LU",
+      "LV",
+      "MC",
+      "MD",
+      "ME",
+      "MK",
+      "MT",
+      "NL",
+      "NO",
+      "PL",
+      "PT",
+      "RO",
+      "RS",
+      "RU",
+      "SE",
+      "SI",
+      "SK",
+      "SM",
+      "TJ",
+      "TM",
+      "TR",
+      "TW",
+      "UA",
+      "UZ",
+      "VA"
+     ]
+    },
+    {
+     "name": "Men's & Women's Lead Final",
+     "categories": [
+      "men",
+      "women"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "final",
+     "starts_at": "2026-09-05T20:00:00+02:00",
+     "ends_at": "2026-09-05T22:42:00+02:00",
+     "schedule_status": "confirmed",
+     "stream_url": "https://youtu.be/ZvdCCugSDkg",
+     "stream_blocked_regions": [
+      "AD",
+      "AL",
+      "AM",
+      "AT",
+      "AZ",
+      "BA",
+      "BE",
+      "BG",
+      "BR",
+      "BY",
+      "CH",
+      "CY",
+      "CZ",
+      "DE",
+      "DK",
+      "EE",
+      "ES",
+      "FI",
+      "FR",
+      "GB",
+      "GE",
+      "GR",
+      "HR",
+      "HU",
+      "IE",
+      "IL",
+      "IS",
+      "IT",
+      "KG",
+      "KZ",
+      "LI",
+      "LT",
+      "LU",
+      "LV",
+      "MC",
+      "MD",
+      "ME",
+      "MK",
+      "MT",
+      "MX",
+      "NL",
+      "NO",
+      "PL",
+      "PT",
+      "RO",
+      "RS",
+      "RU",
+      "SE",
+      "SI",
+      "SK",
+      "SM",
+      "TJ",
+      "TM",
+      "TR",
+      "TW",
+      "UA",
+      "UZ",
+      "VA"
+     ]
+    }
+   ],
+   "start_list": [
+    {
+     "athlete_id": 1147,
+     "first_name": "Janja",
+     "last_name": "Garnbret",
+     "category": "women",
+     "country": "SLO",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/7te9giijls89kp0ga6m55c724rpo",
+     "instagram": "janja_garnbret",
+     "disciplines": [
+      "lead"
+     ]
+    },
+    {
+     "athlete_id": 13040,
+     "first_name": "Sorato",
+     "last_name": "Anraku",
+     "category": "men",
+     "country": "JPN",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/bk9ifljhby050h6lc4uccx4kzhnf",
+     "instagram": "anraku_sorato",
+     "disciplines": [
+      "lead"
+     ]
+    },
+    {
+     "athlete_id": 2035,
+     "first_name": "Ja In",
+     "last_name": "Kim",
+     "category": "women",
+     "country": "KOR",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/qzqj0stmqfwlnbzyh8bik85844hs",
+     "instagram": null,
+     "disciplines": [
+      "lead"
+     ]
+    }
+   ],
+   "start_list_total": 139
+  },
+  {
+   "id": 1488,
+   "league_name": "World Cups and World Championships",
+   "season": 2026,
+   "name": "World Climbing Series Salt Lake City 2026",
+   "slug": "world-climbing-series-salt-lake-city-2026",
+   "country": "USA",
+   "country_name": "United States",
+   "location": "Salt Lake City",
+   "site_url": "https://ifsc.stream/season/2026/event/world-climbing-series-salt-lake-city-2026-1488/",
+   "infosheet_url": "https://ifsc.results.info/events/1488/infosheet",
+   "event_url": "https://www.worldclimbing.com/events/world-climbing-series-salt-lake-city-2026",
+   "tickets": {
+    "summary": "Tickets were scheduled for release on Monday 3 August 2026 Tickets are required for all competition rounds including Men's and Women's Boulder Qualification Semi-Final and Final Registered World Climbing athletes and team officials do not need to purchase tickets but accreditation is required for venue access Spectators are subject to random bag checks No outside food or drink is allowed Sealed water bottles or empty insulated Nalgene style water bottles are permitted with public water refill stations available Please refer to the Smiths Ballpark seating map when purchasing tickets",
+    "purchase_url": ""
+   },
+   "disciplines": [
+    "boulder"
+   ],
+   "starts_at": "2026-10-16T09:00:00-06:00",
+   "ends_at": "2026-10-18T19:00:00-06:00",
+   "timezone": "America/Denver",
+   "rounds": [
+    {
+     "name": "Men's Boulder Qualification",
+     "categories": [
+      "men"
+     ],
+     "disciplines": [
+      "boulder"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-10-16T09:00:00-06:00",
+     "ends_at": "2026-10-16T14:00:00-06:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Women's Boulder Qualification",
+     "categories": [
+      "women"
+     ],
+     "disciplines": [
+      "boulder"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-10-16T16:00:00-06:00",
+     "ends_at": "2026-10-16T21:00:00-06:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's Boulder Semi-Final",
+     "categories": [
+      "men"
+     ],
+     "disciplines": [
+      "boulder"
+     ],
+     "kind": "semi-final",
+     "starts_at": "2026-10-17T10:00:00-06:00",
+     "ends_at": "2026-10-17T12:50:00-06:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's Boulder Final",
+     "categories": [
+      "men"
+     ],
+     "disciplines": [
+      "boulder"
+     ],
+     "kind": "final",
+     "starts_at": "2026-10-17T19:00:00-06:00",
+     "ends_at": "2026-10-17T20:30:00-06:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Women's Boulder Semi-Final",
+     "categories": [
+      "women"
+     ],
+     "disciplines": [
+      "boulder"
+     ],
+     "kind": "semi-final",
+     "starts_at": "2026-10-18T10:00:00-06:00",
+     "ends_at": "2026-10-18T12:50:00-06:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Women's Boulder Final",
+     "categories": [
+      "women"
+     ],
+     "disciplines": [
+      "boulder"
+     ],
+     "kind": "final",
+     "starts_at": "2026-10-18T19:00:00-06:00",
+     "ends_at": "2026-10-18T20:30:00-06:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    }
+   ],
+   "start_list": [
+    {
+     "athlete_id": 13040,
+     "first_name": "Sorato",
+     "last_name": "Anraku",
+     "category": "men",
+     "country": "JPN",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/bk9ifljhby050h6lc4uccx4kzhnf",
+     "instagram": "anraku_sorato",
+     "disciplines": [
+      "boulder"
+     ]
+    },
+    {
+     "athlete_id": 11490,
+     "first_name": "Toby",
+     "last_name": "Roberts",
+     "category": "men",
+     "country": "GBR",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/vjk7dlrn2exkr89wbcbcir56hld4",
+     "instagram": "toby_climbing",
+     "disciplines": [
+      "boulder"
+     ]
+    },
+    {
+     "athlete_id": 13021,
+     "first_name": "Annie",
+     "last_name": "Sanders",
+     "category": "women",
+     "country": "USA",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/sska199sbg7z3dmwnn47op0thwvo",
+     "instagram": "annie.sanderss",
+     "disciplines": [
+      "boulder"
+     ]
+    }
+   ],
+   "start_list_total": 144
+  },
+  {
+   "id": 1489,
+   "league_name": "World Cups and World Championships",
+   "season": 2026,
+   "name": "World Climbing Series Santiago 2026",
+   "slug": "world-climbing-series-santiago-2026",
+   "country": "CHI",
+   "country_name": "Chile",
+   "location": "Santiago",
+   "site_url": "https://ifsc.stream/season/2026/event/world-climbing-series-santiago-2026-1489/",
+   "infosheet_url": "https://ifsc.results.info/events/1489/infosheet",
+   "event_url": "https://www.worldclimbing.com/events/world-climbing-series-santiago-2026",
+   "tickets": {
+    "summary": "Tickets are available through the official ticketing partner Passline. Price information and any ticket conditions are to be confirmed by the organiser.",
+    "purchase_url": "https://www.passline.com/sitio/world-climbing-series-santiago-2026"
+   },
+   "disciplines": [
+    "speed",
+    "lead"
+   ],
+   "starts_at": "2026-10-23T09:00:00-03:00",
+   "ends_at": "2026-10-25T19:00:00-03:00",
+   "timezone": "America/Santiago",
+   "rounds": [
+    {
+     "name": "Women's Lead Qualification",
+     "categories": [
+      "women"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-10-23T09:00:00-03:00",
+     "ends_at": "2026-10-23T15:30:00-03:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's Speed Qualification",
+     "categories": [
+      "men"
+     ],
+     "disciplines": [
+      "speed"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-10-23T18:30:00-03:00",
+     "ends_at": "2026-10-23T20:00:00-03:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Women's Speed Qualification",
+     "categories": [
+      "women"
+     ],
+     "disciplines": [
+      "speed"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-10-23T21:00:00-03:00",
+     "ends_at": "2026-10-23T22:10:00-03:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's Lead Qualification",
+     "categories": [
+      "men"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "qualification",
+     "starts_at": "2026-10-24T09:00:00-03:00",
+     "ends_at": "2026-10-24T15:30:00-03:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's & Women's Speed Final",
+     "categories": [
+      "women",
+      "men"
+     ],
+     "disciplines": [
+      "speed"
+     ],
+     "kind": "final",
+     "starts_at": "2026-10-24T18:00:00-03:00",
+     "ends_at": "2026-10-24T19:15:00-03:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's & Women's Lead Semi-Final",
+     "categories": [
+      "women",
+      "men"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "semi-final",
+     "starts_at": "2026-10-25T09:00:00-03:00",
+     "ends_at": "2026-10-25T11:30:00-03:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Women's Lead Final",
+     "categories": [
+      "women"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "final",
+     "starts_at": "2026-10-25T18:00:00-03:00",
+     "ends_at": "2026-10-25T20:15:00-03:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    },
+    {
+     "name": "Men's Lead Final",
+     "categories": [
+      "men"
+     ],
+     "disciplines": [
+      "lead"
+     ],
+     "kind": "final",
+     "starts_at": "2026-10-25T19:00:00-03:00",
+     "ends_at": "2026-10-25T20:30:00-03:00",
+     "schedule_status": "provisional",
+     "stream_url": null,
+     "stream_blocked_regions": []
+    }
+   ],
+   "start_list": [
+    {
+     "athlete_id": 1147,
+     "first_name": "Janja",
+     "last_name": "Garnbret",
+     "category": "women",
+     "country": "SLO",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/7te9giijls89kp0ga6m55c724rpo",
+     "instagram": "janja_garnbret",
+     "disciplines": [
+      "lead"
+     ]
+    },
+    {
+     "athlete_id": 13040,
+     "first_name": "Sorato",
+     "last_name": "Anraku",
+     "category": "men",
+     "country": "JPN",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/bk9ifljhby050h6lc4uccx4kzhnf",
+     "instagram": "anraku_sorato",
+     "disciplines": [
+      "lead"
+     ]
+    },
+    {
+     "athlete_id": 3014,
+     "first_name": "Lijuan",
+     "last_name": "Deng",
+     "category": "women",
+     "country": "CHN",
+     "photo_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/jytz6ssqd8xbcfbjdgwc25er2b2v",
+     "instagram": "denglijuan512",
+     "disciplines": [
+      "speed"
+     ]
+    }
+   ],
+   "start_list_total": 162
+  }
+ ],
+ "metadata": {
+  "updated_at": "2026-10-03T10:15:33+00:00",
+  "generated_by": "https://github.com/sportclimbing/ifsc-calendar"
+ }
+}

@@ -45,7 +45,8 @@ export const PREFS_STORAGE_KEY = STORAGE_KEY;
 // Added 2026-09-26: nations→nl (UEFA Nations League), collision-free ("nc" is
 // the rugby Nations Championship, "n" nba).
 // Added 2026-09-26: ncaawsoc→ws, ncaamsoc→ms (college soccer), collision-free.
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", ncaah: "hc", cfl: "ca", ncaawh: "hw", ncaavb: "vb", ncaawsoc: "ws", ncaamsoc: "ms", nfl: "f", ufl: "uf", llws: "lw", ncaabase: "cb", ncaasoft: "cs", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", uecl: "cl", facup: "fa", copadelrey: "cr", dfbpokal: "dp", nations: "nl", cricket: "ck", cricketintl: "ci", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", premrugby: "pr", urc: "ur", top14: "tf", challengecup: "cc", mlr: "ml", nrl: "rl", afl: "au", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es", top: "tp", best: "by" };
+// Added 2026-10-03: climbing→cm, collision-free ("cl" is uecl, "c" ncaam).
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", ncaah: "hc", cfl: "ca", ncaawh: "hw", ncaavb: "vb", ncaawsoc: "ws", ncaamsoc: "ms", nfl: "f", ufl: "uf", llws: "lw", ncaabase: "cb", ncaasoft: "cs", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", uecl: "cl", facup: "fa", copadelrey: "cr", dfbpokal: "dp", nations: "nl", cricket: "ck", cricketintl: "ci", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", premrugby: "pr", urc: "ur", top14: "tf", challengecup: "cc", mlr: "ml", nrl: "rl", afl: "au", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", climbing: "cm", esports: "es", top: "tp", best: "by" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;
@@ -79,7 +80,7 @@ export type DefaultDateMode = "smart" | "today" | "yesterday";
 // "ratings" is the third segment of the header control (🙉), not a fourth
 // screen: it lands on Scores with ratings already showing.
 export type DefaultLandingView = "remember" | "scores" | "news" | "ratings";
-// auto = current behavior (off in morning, last state after noon ET).
+// auto = current behavior (off in morning, last state after noon in the Settings zone).
 // off / on = explicit override.
 export type DefaultRatings = "auto" | "off" | "on";
 

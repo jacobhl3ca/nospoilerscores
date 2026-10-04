@@ -1540,7 +1540,7 @@ export default function LeagueColumn({
   // slate wording ("No games", "Upcoming Schedule TBD") is wrong for them on a
   // date their feed has nothing for. They keep rendering the column either way
   // — see the eventCard branch of fetchLeague.
-  const isEventTileSport = league.sport === "chess" || league.sport === "boxing" || league.sport === "poker";
+  const isEventTileSport = league.sport === "chess" || league.sport === "boxing" || league.sport === "poker" || league.sport === "climbing";
   // A pinned Best of yesterday column can come up empty (no clips posted yet),
   // and ESPN's strip can carry nothing we render (golf only, early morning).
   const emptyLabel = isEventTileSport
@@ -1591,6 +1591,7 @@ export default function LeagueColumn({
         return (
           <div key={group.sport} className="flex flex-col gap-1.5 sm:gap-2" data-espn-league={group.sport}>
             {!isDemoModeActive() && !(i === 0 && leadLabelSlot) && espnLabelRow(espnGroupLabel(group), group.sport)}
+            <PairingRevealAll games={group.games} />
             {group.games.map((game) => (
               <GameCard
                 key={game.id}
@@ -1871,9 +1872,10 @@ export default function LeagueColumn({
   // Every game the body below renders as a full GameCard, for the one "Show all
   // teams" control over the first card (Jacob 9/30). Mirrors the body's
   // branches; team view lists its own (TeamView), and a covered game is never
-  // a compact row (renderUpcomingSlate).
+  // a compact row (renderUpcomingSlate). The ESPN front page column has none:
+  // each league block holds its own, over that block's cards (Jacob 10/3).
   const cardGames: Game[] = (() => {
-    if (teamViewTeam || league.golfTournament || league.eventCard) return [];
+    if (espnGroups || teamViewTeam || league.golfTournament || league.eventCard) return [];
     if (sorted.length === 0) {
       if (!renderUpcoming || league.fetchFailed) return [];
       if (isPastDate) {
@@ -1883,7 +1885,7 @@ export default function LeagueColumn({
       return league.nextGameDay?.games ?? league.previousGameDay?.games ?? [];
     }
     if (condense) return sorted.length > 5 && !condenseExpanded ? sorted.slice(0, CONDENSE_LIMIT) : sorted;
-    if (espnGroups || isPastDate) return sorted;
+    if (isPastDate) return sorted;
     return [
       ...(renderUpcoming ? [...liveGames, ...preGames, ...(league.nextGameDay?.games ?? [])] : []),
       ...(renderFinished ? postGames : []),
@@ -2133,6 +2135,16 @@ export default function LeagueColumn({
           ) : null}
           {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
+          ) : league.eventCard?.kind === "climbing" && league.eventCard.subtitle ? (
+            // Climbing: the day's place in the World Cup, in the italic slot the
+            // golf round wording uses — "Salt Lake City · Boulder · Day 2 of 3".
+            // The round cards below then say only which round each one is.
+            <span data-climb-subtitle className="text-[9px] sm:text-[10px] italic mt-0.5 block max-w-full text-center leading-tight whitespace-nowrap overflow-hidden text-ellipsis" style={{ color: "var(--text-muted)" }} title={league.eventCard.subtitle}>
+              {/* A phone column fits "Salt Lake City · Day 2/3", not the
+                  discipline as well; the full line comes back at sm. */}
+              <span className="sm:hidden">{league.eventCard.subtitleVariants?.[Math.min(2, league.eventCard.subtitleVariants.length - 1)] ?? league.eventCard.subtitle}</span>
+              <span className="hidden sm:inline">{league.eventCard.subtitle}</span>
+            </span>
           ) : league.eventCard ? (
             // Reserve the one-line subtitle slot the game columns use (e.g. MLB's
             // Big Inning line) so the F1/UFC card tops line up with neighbours
@@ -2178,7 +2190,7 @@ export default function LeagueColumn({
           onPlayHighlight={onPlayHighlight}
         />
       ) : league.eventCard && section !== "finished" ? (
-        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} />
+        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} showRatings={showRatings} />
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
           league.fetchFailed ? (

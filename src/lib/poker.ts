@@ -1,5 +1,6 @@
 import { EventFetchResult, LeagueEventCard } from "./types";
 import { getApiBase } from "./youtube";
+import { getEtServiceDate, toYmd } from "./etDay";
 
 // See EventFetchResult: the curated file being unreachable is not the same
 // thing as it having no major on this date.
@@ -208,9 +209,9 @@ export async function fetchPokerEvent(date?: string): Promise<EventFetchResult> 
     const data = (await res.json()) as PokerEventsFile;
     // A schema we don't recognise is a broken deploy, not an empty calendar.
     if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return FAILED;
-    const todayYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(new Date());
+    // "Today" = the app's service day in the Settings zone (1 AM rollover).
+    const today = toYmd(getEtServiceDate());
+    const todayYmd = `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}`;
     const targetYmd = date && /^\d{8}$/.test(date)
       ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
       : todayYmd;

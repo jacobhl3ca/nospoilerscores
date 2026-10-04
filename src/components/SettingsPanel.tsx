@@ -19,6 +19,7 @@ import {
   DefaultRatings,
 } from "@/lib/preferences";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
+import { clearRememberedPairings, restoreRememberedPairings } from "@/lib/pairingMask";
 import { getAuthState, cachedAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
 interface LeagueOption {
@@ -79,10 +80,48 @@ const LANDING_VIEW_OPTIONS: { value: DefaultLandingView; label: string; hint: st
 ];
 
 const DEFAULT_RATINGS_OPTIONS: { value: DefaultRatings; label: string; hint: string }[] = [
-  { value: "auto", label: "Auto", hint: "Off in morning, last state after noon ET" },
+  { value: "auto", label: "Auto", hint: "Off in morning, last state after noon" },
   { value: "off", label: "Off", hint: "Always start with ratings hidden" },
   { value: "on", label: "On", hint: "Always start with ratings shown" },
 ];
+
+// Full IANA zone list for the Time zone picker, with a graceful fallback for
+// runtimes without Intl.supportedValuesOf.
+const TIME_ZONES: string[] = (() => {
+  try {
+    const I = Intl as typeof Intl & { supportedValuesOf?: (k: string) => string[] };
+    const v = I.supportedValuesOf?.("timeZone");
+    if (Array.isArray(v) && v.length) return v;
+  } catch { /* fall through */ }
+  return [
+    "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+    "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu",
+    "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Tokyo",
+    "Asia/Kolkata", "Australia/Sydney",
+  ];
+})();
+
+// The Time zone row (Jacob 10/4): one row of pills for the four US zones,
+// the full list behind "Other…". A saved zone outside the four (Phoenix,
+// London, "US/Eastern") opens Other on load and is never rewritten.
+type ZonePill = "auto" | "et" | "ct" | "mt" | "pt" | "other";
+const ZONE_PILLS: { value: ZonePill; label: string; zone?: string; name?: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "et", label: "ET", zone: "America/New_York", name: "Eastern" },
+  { value: "ct", label: "CT", zone: "America/Chicago", name: "Central" },
+  { value: "mt", label: "MT", zone: "America/Denver", name: "Mountain" },
+  { value: "pt", label: "PT", zone: "America/Los_Angeles", name: "Pacific" },
+  { value: "other", label: "Other…" },
+];
+const zoneCity = (tz: string) => (tz.split("/").pop() || tz).replace(/_/g, " ");
+// "now 9:41 AM" in a zone; a bad zone falls back to the runtime's own.
+function nowIn(tz: string): string {
+  try {
+    return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz || undefined });
+  } catch {
+    return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+}
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "system", label: "🖥️ System" },
@@ -195,6 +234,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   boxing: "Boxing",
   chess: "Chess",
   poker: "Poker",
+  climbing: "Climbing",
   esports: "Esports",
   top: "ESPN front page",
   best: "Best of yesterday",
@@ -285,22 +325,23 @@ export default function SettingsPanel({
   // the click wrote, so Undo puts back exactly what was there, unset keys
   // included. One level: each new click replaces the last entry. 15 s, then
   // the pill goes. Cmd-Z / Ctrl-Z does the same (see the keydown effect).
-  const [undo, setUndo] = useState<{ label: string; patch: Partial<Preferences> } | null>(null);
+  const [undo, setUndo] = useState<{ label: string; patch: Partial<Preferences>; pairings?: string } | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current); }, []);
-  const updateWithUndo = (label: string, patch: Partial<Preferences>) => {
+  const updateWithUndo = (label: string, patch: Partial<Preferences>, extra?: { pairings?: string }) => {
     const prior: Partial<Preferences> = {};
     for (const key of Object.keys(patch) as (keyof Preferences)[]) {
       (prior as Record<string, unknown>)[key] = prefs[key];
     }
     updatePrefs(patch);
-    setUndo({ label, patch: prior });
+    setUndo({ label, patch: prior, pairings: extra?.pairings });
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     undoTimerRef.current = setTimeout(() => setUndo(null), 15_000);
   };
   const applyUndo = useCallback(() => {
     if (!undo) return;
     updatePrefs(undo.patch);
+    if (undo.pairings) restoreRememberedPairings(undo.pairings);
     if ("theme" in undo.patch) applyThemeAttr(undo.patch.theme ?? "system");
     setUndo(null);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -317,6 +358,17 @@ export default function SettingsPanel({
   useEffect(() => {
     setIsSafari(/^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent));
   }, []);
+
+  let deviceTimeZone = "";
+  try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
+  // Time zone row: which pill is on, and whether the full list is open.
+  const [zoneOtherOpen, setZoneOtherOpen] = useState(false);
+  const savedZonePill = ZONE_PILLS.find((z) => z.zone && z.zone === prefs.timezone);
+  const zoneIsOther = !!prefs.timezone && !savedZonePill;
+  const zonePill: ZonePill = zoneOtherOpen || zoneIsOther ? "other" : savedZonePill?.value ?? "auto";
+  const zoneLine = prefs.timezone
+    ? `Times show in ${savedZonePill?.name ?? zoneCity(prefs.timezone)} · now ${nowIn(prefs.timezone)}`
+    : `Auto · your device${deviceTimeZone ? ` (${zoneCity(deviceTimeZone)})` : ""} · now ${nowIn(deviceTimeZone)}`;
 
   // Account / cross-device sync state (Sign in with Apple). Re-checked each
   // time the panel opens so the signed-in email reflects a just-finished login.
@@ -591,12 +643,13 @@ export default function SettingsPanel({
     return SPORT_GROUP_ORDER.flatMap(({ key, label, emoji }) => {
       const options = byGroup.get(key);
       if (!options?.length) return [];
-      // Stable within a group: in-season first, then the catalog's own order
-      // (ALL_LEAGUES, which is arranged by season calendar) — except that the
-      // short-window minority events sort to the tail regardless of season, so
-      // Little League cannot outrank the NBA for three weeks in August. See
-      // catalogSortRank / CATALOG_TAIL. Array.prototype.sort is stable in every
-      // engine we ship to, so equal keys keep the catalog order.
+      // Within a group: in-season first, then a fixed stature order
+      // (CATALOG_STATURE, 9/30; it replaced the season-calendar ALL_LEAGUES
+      // order) — except that the short-window minority events sort to the tail
+      // regardless of season, so Little League cannot outrank the NBA for three
+      // weeks in August. See catalogSortRank / CATALOG_TAIL. A sport missing
+      // from CATALOG_STATURE ties at the end, and the stable sort keeps those
+      // in catalog order.
       const sorted = [...options].sort(
         (a, b) => catalogSortRank(a.sport, !!a.offseason) - catalogSortRank(b.sport, !!b.offseason),
       );
@@ -784,9 +837,12 @@ export default function SettingsPanel({
   };
 
   // Reset shows "Settings reset · Undo" for 15 s (Jacob 9/28), through the
-  // same undo as every other destructive click.
+  // same undo as every other destructive click. The remembered "Show teams"
+  // taps live outside prefs (lib/pairingMask), so they ride in the undo entry.
   const resetAll = () => {
-    updateWithUndo("Settings reset", resetPatch());
+    // A second Reset inside the window keeps the first one's list too.
+    const pairings = [undo?.pairings, clearRememberedPairings()].filter(Boolean).join(",") || undefined;
+    updateWithUndo("Settings reset", resetPatch(), { pairings });
     applyThemeAttr("system");
   };
 
@@ -1568,7 +1624,7 @@ export default function SettingsPanel({
               />
             </Field>
             {/* Auto's rule was only a hover tooltip on the pill. */}
-            <Field label="Ratings on launch" hint="Auto = off in the morning, last state after noon ET">
+            <Field label="Ratings on launch" hint="Auto = off in the morning, last state after noon">
               <RadioGroup
                 label="Ratings on launch"
                 value={prefs.defaultRatings ?? "auto"}
@@ -1753,8 +1809,8 @@ export default function SettingsPanel({
               closed fold so the sections above are what you see. Of 29 synced
               accounts on 9/12: header switcher 1 changed, keys hint 0, reminder
               link 0; the two explainer rows are an undo, not a setting. Time zone
-              left 9/28: 0 of 35 blobs had ever set it, and Auto is the device's
-              own zone. A saved zone still applies. */}
+              left 9/28 (0 of 35 blobs had set it) and came back 10/4 at Jacob's
+              request; its ZIP helper stays out. */}
           <details className="group">
             <summary
               className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-semibold cursor-pointer select-none marker:content-none [&::-webkit-details-marker]:hidden"
@@ -1766,6 +1822,46 @@ export default function SettingsPanel({
               More settings
             </summary>
             <div className="space-y-3 mt-3">
+            <Field label="Time zone" hint="Used for game times AND which day counts as today">
+              <div className="space-y-1.5">
+              <RadioGroup
+                label="Time zone"
+                value={zonePill}
+                options={ZONE_PILLS.map((z) => ({ value: z.value, label: z.label, hint: z.zone ? zoneCity(z.zone) : undefined }))}
+                columns={6}
+                onChange={(v) => {
+                  if (v === "other") { setZoneOtherOpen(true); return; }
+                  setZoneOtherOpen(false);
+                  updatePrefs({ timezone: ZONE_PILLS.find((z) => z.value === v)?.zone });
+                }}
+              />
+              {zonePill === "other" && (
+              <select
+                value={prefs.timezone ?? ""}
+                onChange={(e) => {
+                  const tz = e.target.value || undefined;
+                  // Auto or one of the four from the list lights its pill instead.
+                  if (!tz || ZONE_PILLS.some((z) => z.zone === tz)) setZoneOtherOpen(false);
+                  updatePrefs({ timezone: tz });
+                }}
+                aria-label="All time zones"
+                className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                <option value="">Auto — your device{deviceTimeZone ? ` (${deviceTimeZone})` : ""}</option>
+                {/* A saved zone this runtime doesn't list ("UTC", "US/Eastern")
+                    still applies, so show it rather than a false "Auto". */}
+                {prefs.timezone && !TIME_ZONES.includes(prefs.timezone) && (
+                  <option value={prefs.timezone}>{prefs.timezone.replace(/_/g, " ")}</option>
+                )}
+                {TIME_ZONES.map((tz) => (
+                  <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+              )}
+              <p aria-live="polite" className="text-[11px]" style={{ color: "var(--text-muted)" }}>{zoneLine}</p>
+              </div>
+            </Field>
             <Field label="Header league switcher" hint="How tapping a column header behaves">
               <RadioGroup
                 label="Header league switcher"
@@ -2167,9 +2263,10 @@ function RadioGroup<T extends string>({
   options: RadioOption<T>[];
   onChange: (v: T) => void;
   // 4 = one row on sm+, 2×2 on phones, so a fourth option never sits alone.
-  columns?: 2 | 3 | 4;
+  // 6 = one row at every width (the Time zone pills, short labels).
+  columns?: 2 | 3 | 4 | 6;
 }) {
-  const grid = columns === 4 ? "grid-cols-2 sm:grid-cols-4" : columns === 2 ? "grid-cols-2" : "grid-cols-3";
+  const grid = columns === 6 ? "grid-cols-6" : columns === 4 ? "grid-cols-2 sm:grid-cols-4" : columns === 2 ? "grid-cols-2" : "grid-cols-3";
   return (
     <div role="group" aria-label={label} className={`grid gap-1.5 ${grid}`}>
       {options.map((o) => {
@@ -2179,7 +2276,7 @@ function RadioGroup<T extends string>({
             key={o.value}
             onClick={() => onChange(o.value)}
             aria-pressed={active}
-            className="px-2 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors text-center"
+            className={`${columns === 6 ? "px-1 whitespace-nowrap" : "px-2"} py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors text-center`}
             style={{
               background: active ? "var(--accent)" : "var(--bg-card)",
               border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,

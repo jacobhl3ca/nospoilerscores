@@ -14,7 +14,7 @@ import { LeaguePickerModal } from "./LeaguePickerModal";
 import type { BestYesterdayOptions } from "@/lib/espn";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
-import { fromYmd, etSlateYmd, nextYmd } from "@/lib/etDay";
+import { fromYmd, etSlateYmd, nextYmd, getTimeZone } from "@/lib/etDay";
 import { WATCH_QUEUE_ENABLED, toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
 import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
 import GameCard from "@/components/GameCard";
@@ -48,7 +48,7 @@ import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard"
 import { fetchPlayoffPicture, fieldIsSet } from "@/lib/playoffPicture";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
-import { formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
+import { OFFLINE_BOARD_KEY, formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
 import Link from "next/link";
 import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
@@ -1455,21 +1455,18 @@ export default function HomeContent({
     if (!silent) setLoading(true);
     setError(false);
     // Watchdog lifecycle across fetchData's five concurrent callers, all sharing
-    // one watchdogRef slot. Capture THIS call's timer locally so the finally can
-    // tell whether the shared ref still points at our timer or a newer call's.
-    // Only a non-silent call owns a watchdog: clear the previous one and install
-    // ours here, guarded by !silent so a silent poll can't clear a visible load's
-    // watchdog and then install no replacement (that left the skeleton with no
-    // safety net).
-    let myWatchdog: ReturnType<typeof setTimeout> | null = null;
+    // one watchdogRef slot. Only a non-silent call owns a watchdog: clear the
+    // previous one and install ours here, guarded by !silent so a silent poll
+    // can't clear a visible load's watchdog and then install no replacement
+    // (that left the skeleton with no safety net). The newest call clears it
+    // in the finally below.
     if (!silent) {
       if (watchdogRef.current) clearTimeout(watchdogRef.current);
-      myWatchdog = setTimeout(() => {
+      watchdogRef.current = setTimeout(() => {
         watchdogRef.current = null;
         setLoading(false);
         setError(true);
       }, 40_000);
-      watchdogRef.current = myWatchdog;
     }
     const firstPull = firstPullRef.current;
     firstPullRef.current = false;
@@ -1527,12 +1524,19 @@ export default function HomeContent({
       setLeagues([]);
       setError(true);
     } finally {
-      // Clear the shared watchdog only if it's still OURS. A newer non-silent
-      // fetch may have replaced it while we awaited; cancelling that call's timer
-      // (the old bug) would defeat the very safety net it just installed, so an
-      // earlier call resolving must leave the latest call's watchdog running.
-      if (myWatchdog && watchdogRef.current === myWatchdog) { clearTimeout(myWatchdog); watchdogRef.current = null; }
-      if (!silent) setLoading(false);
+      // Only the newest pull ends the load, silent or not. A superseded call
+      // must leave the watchdog and skeleton alone: cancelling a newer call's
+      // timer (the old bug) defeats its safety net, and dropping the skeleton
+      // while the newest pull is still out painted an empty board. On first
+      // load the isWide flip fires a silent pull that supersedes the visible
+      // one, so the news view painted Top news, then jumped to the league
+      // columns when the silent pull landed (Jacob 10/2). The newest call
+      // clears whichever watchdog is set; a stale visible call's watchdog
+      // keeps running until then, so a hung newest pull still hits it.
+      if (myReq === reqSeqRef.current) {
+        if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+        setLoading(false);
+      }
     }
   }, [showSavedBoard]);
 
@@ -1576,6 +1580,38 @@ export default function HomeContent({
     }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide, hiddenKey]);
+
+  // A Settings zone change applies at once (Jacob 10/4). The zone moves
+  // "today" (1 AM rollover), the next-game day, the soccer/tennis day filters
+  // and the past/future boundary — all read in fetchData — so the board pulls
+  // again. A board on today moves to the new zone's today; another day stays.
+  // The saved offline copy was bucketed in the old zone, so it is dropped.
+  // Keyed on the EFFECTIVE zone, not the pref: hydrating saved prefs on load
+  // re-sets the same zone and must not pull twice or drop the offline copy.
+  const prefsTimezone = prefs.timezone;
+  const zoneRef = useRef<{ zone: string; today: string } | null>(null);
+  useEffect(() => {
+    if (!prefsHydrated) return;
+    const zone = getTimeZone();
+    const today = getDateString(0);
+    const prev = zoneRef.current;
+    zoneRef.current = { zone, today };
+    if (!prev || prev.zone === zone || !mountedRef.current || !selectedDate) return;
+    const prevToday = prev.today;
+    try { localStorage.removeItem(OFFLINE_BOARD_KEY); } catch { /* storage blocked */ }
+    if (selectedDate === prevToday && today !== prevToday) {
+      setSelectedDate(today);
+      return;
+    }
+    fetchData(selectedDate, prefs.thirdLeague, {
+      first: prefs.firstLeague,
+      second: prefs.secondLeague,
+      third: prefs.thirdLeague,
+      fourth: prefs.fourthLeague,
+      fifth: prefs.fifthLeague,
+    }, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefsTimezone, prefsHydrated]);
 
   // Best of yesterday is the one column whose CONTENTS depend on prefs other
   // than its slot: its pool is the user's leagues, so starring or
@@ -2079,7 +2115,7 @@ export default function HomeContent({
     "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw", "ncaah", "cfl", "ncaawh", "ncaavb", "ufl", "ncaabase", "ncaasoft",
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricketintl", "cricket", "nrl", "afl",
     "urc", "premrugby", "top14", "challengecup", "mlr",
-    "chess", "poker", "esports",
+    "climbing", "chess", "poker", "esports",
     // ── soccer block, bottom ──
     "epl", "ucl", "uel", "uecl", "nations", "laliga", "seriea", "bundesliga", "ligue1",
     "mls", "ligamx", "nwsl", "efl", "libertadores", "saudi",
@@ -2482,7 +2518,7 @@ export default function HomeContent({
     { value: "topvideos", label: "Top videos" },
     { value: "reddit", label: "Reddit" },
     { value: "espn", label: "ESPN" },
-    { value: "homepage", label: "Homepage" },
+    { value: "homepage", label: "League sites" },
   ];
   const orderedNewsFilterOptions = applyOrder(
     NEWS_FILTER_OPTIONS.map((o) => ({ ...o, label: o.value })),
@@ -3421,7 +3457,7 @@ export default function HomeContent({
             "online" pull lands. */}
         {offline?.savedAt != null && (
           <p role="status" data-testid="offline-line" className="text-center text-xs pt-2 -mb-1" style={{ color: "var(--text-muted)" }}>
-            Offline · updated {formatOfflineUpdated(offline.savedAt, Date.now())}
+            Offline · updated {formatOfflineUpdated(offline.savedAt, Date.now(), getTimeZone())}
           </p>
         )}
         {/* First-run explanations for the Ratings and News tabs. These replaced
@@ -3647,7 +3683,13 @@ export default function HomeContent({
             </p>
           </section>
         )}
-        {showNews ? (() => {
+        {/* News columns derive from the board's leagues, which start empty.
+            Until the first board load lands, show the skeleton instead: with
+            no leagues every mirror is empty and column 3 paints Top news, then
+            the layout jumps to league columns ~1.5 s later (Jacob 10/2). Both
+            conditions: a refresh poll keeps the news up, and an offline or
+            failed load (loading false, no leagues) still falls through to it. */}
+        {showNews && !(loading && leagues.length === 0) ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
               label: c.label,
@@ -4174,7 +4216,7 @@ export default function HomeContent({
           // they're aria-hidden and only the sr-only text is voiced (WCAG 4.1.3,
           // matching the role=status pattern in FeedbackBox / SettingsPanel).
           <div role="status" aria-live="polite" className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-            <span className="sr-only">Loading games…</span>
+            <span className="sr-only">{showNews ? "Loading news…" : "Loading games…"}</span>
             {Array.from({ length: slotCount }, (_, i) => i + 1).map((i) => (
               <div key={i} aria-hidden="true" className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>
@@ -4871,6 +4913,9 @@ export default function HomeContent({
             </a>
           )}
         </div>
+        {/* Legal line (10/3, ahead of the Product Hunt launch): the About page
+            sentence, so every board visit carries it too. */}
+        <p className="max-w-md">HideScore is not affiliated with, endorsed by, or sponsored by any league, team or broadcaster.</p>
         {/* No visible trigger: kept mounted only so Settings' "Send feedback"
             and "Request a league" can open the form in place. */}
         <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} hideTrigger />

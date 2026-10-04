@@ -69,6 +69,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // since 2026-09-13, no page until now).
     "/afl-without-spoilers",
     "/cfl-without-spoilers",
+    // Added 2026-10-03 with the Climbing column, two weeks before the Salt
+    // Lake City and Santiago World Cups.
+    "/climbing-replays-without-spoilers",
     "/best-spoiler-free-sports-sites",
     "/redzone-for-every-sport",
     "/faq",
@@ -159,6 +162,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // date, the crossover rule as the standings spoiler).
     "/afl-without-spoilers",
     "/cfl-without-spoilers",
+    // Added 2026-10-03 with the Climbing column, two weeks before the Salt
+    // Lake City and Santiago World Cups.
+    "/climbing-replays-without-spoilers",
   ]);
 
   // Build timestamp, for the boards whose rendered content really does change

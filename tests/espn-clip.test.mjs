@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { pickEspnGameClip, espnVideoMp4 } from "../scripts/lib/espn-clip.mjs";
+import { pickEspnGameClip, espnVideoMp4, pickEspnVideoClip, attachEspnVideoClips } from "../scripts/lib/espn-clip.mjs";
 import { isScoreSpoiler } from "../src/lib/spoilers.ts";
 
 // Shape trimmed from the live esp.1 summary for Racing Santander at Celta Vigo
@@ -42,4 +42,78 @@ test("only a direct mp4 on ESPN's CDN counts, HD first", () => {
   assert.equal(espnVideoMp4({ links: { source: { HLS: { href: "https://cmp-espn.media.dssott.com/p/playlist.m3u8" } } } }), null);
   const noMp4 = { ...GAME, links: { source: {} } };
   assert.deepEqual(pickEspnGameClip([noMp4], isScoreSpoiler), { clip: null, reason: "none" });
+});
+
+// ESPN Videos feed: api-app.espn.com/v1/video/clips/<id>, shape trimmed from
+// clip 50074034 (2026-10-01).
+const apiPayload = (id, extra = {}) => ({
+  videos: [{ id: Number(id), duration: 61, premium: false, links: { source: { href: mp4(`c${id}`), HD: { href: mp4(`c${id}`) }, HLS: { href: "https://cmp-espn.media.dssott.com/x/playlist.m3u8" } } }, ...extra }],
+});
+
+test("clip API: a normal payload gives the akamaized mp4 and its length", () => {
+  assert.deepEqual(pickEspnVideoClip(apiPayload("50074034"), "50074034"), { url: mp4("c50074034"), sec: 61 });
+});
+
+test("clip API: premium, a non-akamaized URL, a wrong id, or an empty payload gives null", () => {
+  assert.equal(pickEspnVideoClip(apiPayload("1", { premium: true }), "1"), null);
+  assert.equal(pickEspnVideoClip({ videos: [{ id: 1, links: { source: { href: "https://cdn.example.com/a.mp4", HLS: { href: "https://x.akamaized.net/a.m3u8" } } } }] }, "1"), null);
+  assert.equal(pickEspnVideoClip(apiPayload("2"), "1"), null);
+  assert.equal(pickEspnVideoClip({}, "1"), null);
+  assert.equal(pickEspnVideoClip(null, "1"), null);
+  assert.equal(pickEspnVideoClip({ videos: [] }, "1"), null);
+});
+
+const feedItem = (id) => ({ id, headline: `clip ${id}`, articleUrl: `https://www.espn.com/video/clip?id=${id}` });
+const noSleep = async () => {};
+
+test("attach: unknown ids are asked once each, capped, and a premium answer is remembered", async () => {
+  const asked = [];
+  const state = { clips: {} };
+  const fetchClip = async (id) => { asked.push(id); return apiPayload(id, id === "3" ? { premium: true } : {}); };
+  const items = ["1", "2", "3", "4"].map(feedItem);
+  const first = await attachEspnVideoClips(items, { on: true, off: false, prior: new Map(), state, fetchClip, max: 3, sleep: noSleep });
+  assert.equal(first.requests, 3);
+  assert.deepEqual(asked, ["1", "2", "3"]);
+  assert.equal(first.items[0].videoUrl, mp4("c1"));
+  assert.equal(first.items[0].durationSec, 61);
+  assert.equal(first.items[2].videoUrl, undefined, "premium stays image + link");
+  assert.equal(first.items[3].videoUrl, undefined, "over the cap waits for the next bake");
+  assert.ok(state.clips["3"] && !state.clips["3"].url, "the premium miss is recorded");
+  // Second bake: the prior file carries 1 and 2, the state knows 3, only 4 is new.
+  const prior = new Map(first.items.map((i) => [i.id, i]));
+  const second = await attachEspnVideoClips(items, { on: true, off: false, prior, state, fetchClip, max: 3, sleep: noSleep });
+  assert.equal(second.requests, 1);
+  assert.deepEqual(asked, ["1", "2", "3", "4"]);
+  // Third bake: everything is known, so 0 requests.
+  const third = await attachEspnVideoClips(items, { on: true, off: false, prior: new Map(second.items.map((i) => [i.id, i])), state, fetchClip, sleep: noSleep });
+  assert.equal(third.requests, 0);
+  assert.deepEqual(third.items.map((i) => !!i.videoUrl), [true, true, false, true]);
+});
+
+test("attach: a fresh scrape without videoUrl still gets the carried clip", async () => {
+  const prior = new Map([["9", { ...feedItem("9"), videoUrl: mp4("c9"), durationSec: 40 }]]);
+  const { items, requests } = await attachEspnVideoClips([feedItem("9")], { on: true, off: false, prior, state: { clips: {} }, fetchClip: async () => { throw new Error("must not ask"); }, sleep: noSleep });
+  assert.equal(requests, 0);
+  assert.equal(items[0].videoUrl, mp4("c9"));
+  assert.equal(items[0].durationSec, 40);
+});
+
+test("attach: off drops every carried clip; GitHub Actions (on=false) carries but never asks", async () => {
+  const prior = new Map([["9", { ...feedItem("9"), videoUrl: mp4("c9") }]]);
+  const withUrl = [{ ...feedItem("9"), videoUrl: mp4("c9") }, feedItem("10")];
+  const never = async () => { throw new Error("must not ask"); };
+  const off = await attachEspnVideoClips(withUrl, { on: false, off: true, prior, state: { clips: {} }, fetchClip: never, sleep: noSleep });
+  assert.deepEqual(off.items.map((i) => i.videoUrl), [undefined, undefined]);
+  const gha = await attachEspnVideoClips(withUrl, { on: false, off: false, prior, state: { clips: {} }, fetchClip: never, sleep: noSleep });
+  assert.equal(gha.requests, 0);
+  assert.deepEqual(gha.items.map((i) => i.videoUrl), [mp4("c9"), undefined]);
+});
+
+test("attach: a failed request is not remembered, a carried non-akamaized URL is dropped", async () => {
+  const state = { clips: {} };
+  const prior = new Map([["5", { ...feedItem("5"), videoUrl: "https://evil.example.com/x.mp4" }]]);
+  const { items, requests } = await attachEspnVideoClips([feedItem("5")], { on: true, off: false, prior, state, fetchClip: async () => null, sleep: noSleep });
+  assert.equal(requests, 1);
+  assert.equal(items[0].videoUrl, undefined);
+  assert.deepEqual(state.clips, {});
 });
