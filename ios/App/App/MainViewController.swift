@@ -24,6 +24,8 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
     private let tabBar = UITabBar()
     /// A universal link that arrived before the web view existed (cold start).
     private var pendingURL: URL?
+    /// The web view holds its navigation delegate weakly, so the controller keeps it.
+    private var navigationRetry: NavigationRetryProxy?
 
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(HideScoreGoogleAuthPlugin())
@@ -33,6 +35,11 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
         webView?.allowsBackForwardNavigationGestures = true
+        if let webView, let capacitor = webView.navigationDelegate {
+            let proxy = NavigationRetryProxy(capacitor: capacitor, errorURL: bridge?.config.errorPathURL)
+            navigationRetry = proxy
+            webView.navigationDelegate = proxy
+        }
         setUpTabBar()
         #if DEBUG
         runTabSelfTestIfAsked()
@@ -158,5 +165,104 @@ private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         owner?.handleTabBarMessage(message)
+    }
+}
+
+/**
+ Capacitor loads offline.html on ANY failed page load, with no retry and no
+ offline check (WebViewDelegationHandler didFail / didFailProvisionalNavigation).
+ A page load that reuses an idle connection can fail once while the site is
+ fine, so 1.0.8 showed "No connection" for most footer taps (Jacob, Oct 5).
+ This sits in front of Capacitor's handler and forwards every call, except a
+ failed page load:
+ - a cancelled load (-999, or WebKit 102: a newer navigation or the policy
+   check took over) is not a failure, so it is dropped;
+ - a timeout or "not connected" goes straight to Capacitor (a retry would
+   only make the wait longer);
+ - any other failure of an http(s) page retries the same URL once, 300 ms
+   later, on a new request, unless another navigation started meanwhile;
+ - a second failure for that URL shows offline.html?from=<url>, so its
+   Try again goes back to the page that failed instead of the board.
+ */
+final class NavigationRetryProxy: NSObject, WKNavigationDelegate {
+    private let capacitor: WKNavigationDelegate
+    private let errorURL: URL?
+    /// The URL already retried once; cleared when any page finishes loading.
+    private var retried: URL?
+    /// Bumped by every navigation start and finish, so a pending retry can
+    /// tell that the reader tapped something else in the 300 ms.
+    private var generation = 0
+
+    init(capacitor: WKNavigationDelegate, errorURL: URL?) {
+        self.capacitor = capacitor
+        self.errorURL = errorURL
+    }
+
+    // WebKit asks which delegate methods exist when the delegate is set, so
+    // everything Capacitor answers has to look answered here too.
+    override func responds(to aSelector: Selector!) -> Bool {
+        super.responds(to: aSelector) || capacitor.responds(to: aSelector)
+    }
+
+    override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        capacitor.responds(to: aSelector) ? capacitor : nil
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        generation += 1
+        capacitor.webView?(webView, didStartProvisionalNavigation: navigation)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        generation += 1
+        retried = nil
+        capacitor.webView?(webView, didFinish: navigation)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        if handled(webView, error) { return }
+        capacitor.webView?(webView, didFail: navigation, withError: error)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        if handled(webView, error) { return }
+        capacitor.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)
+    }
+
+    /// true = dealt with here (dropped, retried, or sent to offline.html?from=);
+    /// false = Capacitor's own handler runs.
+    private func handled(_ webView: WKWebView, _ error: Error) -> Bool {
+        let e = error as NSError
+        if (e.domain == NSURLErrorDomain && e.code == NSURLErrorCancelled) || (e.domain == "WebKitErrorDomain" && e.code == 102) {
+            CAPLog.print("⚡️  WebView load cancelled (\(e.domain) \(e.code)), ignored")
+            return true
+        }
+        let noRetry = [NSURLErrorTimedOut, NSURLErrorNotConnectedToInternet,
+                       NSURLErrorInternationalRoamingOff, NSURLErrorDataNotAllowed]
+        guard e.domain != NSURLErrorDomain || !noRetry.contains(e.code),
+              let url = e.userInfo[NSURLErrorFailingURLErrorKey] as? URL,
+              url.scheme == "https" || url.scheme == "http" else { return false }
+        if retried != url {
+            retried = url
+            let at = generation
+            CAPLog.print("⚡️  WebView load failed (\(e.code)), retrying once: \(url.absoluteString)")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self, weak webView] in
+                guard let self, self.generation == at else { return }
+                webView?.load(URLRequest(url: url))
+            }
+            return true
+        }
+        retried = nil
+        // Escaped by hand: URLQueryItem leaves "+" alone, and offline.html's
+        // URLSearchParams would read it as a space.
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "+&=#")
+        guard let errorURL, var parts = URLComponents(url: errorURL, resolvingAgainstBaseURL: false),
+              let from = url.absoluteString.addingPercentEncoding(withAllowedCharacters: allowed) else { return false }
+        parts.percentEncodedQuery = "from=" + from
+        guard let offline = parts.url else { return false }
+        CAPLog.print("⚡️  WebView failed to load twice (\(e.code)): \(url.absoluteString)")
+        webView.load(URLRequest(url: offline))
+        return true
     }
 }
