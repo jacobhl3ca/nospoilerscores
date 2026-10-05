@@ -73,6 +73,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // Lake City and Santiago World Cups.
     "/climbing-replays-without-spoilers",
     "/best-spoiler-free-sports-sites",
+    // Added 2026-10-05: HideScore already ranks 2.7 for "dont tell me the
+    // score" with zero clicks; this is the page those searches should land on.
+    "/dtmts-alternative",
     "/redzone-for-every-sport",
     "/faq",
     // Added 2026-09-24: who runs the site and how to reach it, for the
@@ -94,6 +97,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // referrer to the site), so it sits with the hubs at 0.8 rather than with
     // the per-league routes at 0.7.
     "/best-spoiler-free-sports-sites",
+    // Added 2026-10-05 beside the comparison page it splits off from: same
+    // cross-service intent, aimed at "dtmts" and "don't tell me the score".
+    "/dtmts-alternative",
     // Added 2026-09-20. High-intent rather than league-intent: it answers a
     // question ("is there a redzone for <sport>") that currently lands on the
     // homepage, and it is the only page on the site carrying the dated

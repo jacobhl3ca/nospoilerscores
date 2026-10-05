@@ -193,7 +193,7 @@ export default function BestSpoilerFreeSportsSitesPage() {
       sections={[
         {
           h: "DTMTS — four leagues, done plainly",
-          p: "Don't Tell Me The Score is a free web app with tabs for NBA, NFL, NHL and MLB, and nothing else: no soccer, no motorsport, no college sport. Its real strength is resilience — it attaches more than one video source to a game, so a dead embed does not end the attempt, which is something we do not currently do. If those four leagues are your whole sporting life, it is a good answer and costs nothing.",
+          p: "Don't Tell Me The Score is a free web app with tabs for NBA, NFL, NHL and MLB, and nothing else: no soccer, no motorsport, no college sport. Its real strength is resilience — it attaches more than one video source to a game, so a dead embed does not end the attempt, which is something we do not currently do. If those four leagues are your whole sporting life, it is a good answer and costs nothing. For everything it leaves out, see the DTMTS alternative page linked below.",
         },
         {
           h: "No Spoiler Sports — the same idea, wider",
@@ -231,6 +231,8 @@ export default function BestSpoilerFreeSportsSitesPage() {
       ctaLabel="Try HideScore"
       ctaHref="/today"
       links={[
+        // Added 2026-10-05: the DTMTS entry above has its own page now.
+        { href: "/dtmts-alternative", label: "DTMTS alternative" },
         { href: "/spoiler-free-sports", label: "Spoiler-free sports guide" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },

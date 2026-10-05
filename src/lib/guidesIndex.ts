@@ -89,6 +89,7 @@ export const GUIDE_GROUPS: GuideGroup[] = [
       { href: "/watch-sports-highlights-without-spoilers", label: "Watch sports highlights without spoilers" },
       { href: "/watch", label: "Watch any YouTube link without spoilers" },
       { href: "/best-spoiler-free-sports-sites", label: "The best spoiler-free sports sites and apps" },
+      { href: "/dtmts-alternative", label: "A DTMTS alternative for every other sport" },
       { href: "/redzone-for-every-sport", label: "Is there a RedZone for every sport?" },
       { href: "/no-spoiler-scores", label: "No-spoiler scores" },
       { href: "/teams", label: "Team schedules without spoilers" },
