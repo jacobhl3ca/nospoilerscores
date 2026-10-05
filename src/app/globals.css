@@ -679,15 +679,15 @@ iframe#yt-player {
 
 /* VideoModal mid-clip pause strip over YouTube's "More videos" row.
    % = share of the player height.
-   Phone: a flat 58px. The row is 48px tall and its top sits 54px off the bottom
-   of a phone-size embed (measured 10/5, WebKit iPhone + Chromium, 358/390px,
-   scripts/measure-yt-pause-shelf.mjs);
-   the old 96px minimum covered half of the frame on Mom's iPhone. */
+   Phone: a flat 68px. The row is 48px tall. Its top sits 54px off the bottom of
+   a frame up to ~223px tall and 64px off a taller one (measured 10/5, WebKit
+   iPhone + Chromium, 358-639px wide, scripts/measure-yt-pause-shelf.mjs).
+   68 = 64 + 4. The old 96px minimum covered half of the frame on Mom's iPhone. */
 .hs-yt-pause-strip {
   --hs-yt-strip: clamp(96px, 34%, 210px);
 }
 @media (max-width: 639.98px) {
-  .hs-yt-pause-strip { --hs-yt-strip: 58px; }
+  .hs-yt-pause-strip { --hs-yt-strip: 68px; }
 }
 
 /* News: "Restore to feed" from SensitiveHiddenModal — the row a restored post

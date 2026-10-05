@@ -17,8 +17,10 @@ import { devices, expect, test, type Page } from "@playwright/test";
 const { defaultBrowserType, ...IPHONE } = devices["iPhone 15 Pro"];
 
 // The strip's phone height (globals.css .hs-yt-pause-strip): YouTube's "More
-// videos" row top, measured 54px off the bottom of a phone embed, plus 4.
-const PHONE_STRIP_MAX = 58;
+// videos" row top, measured 54-64px off the bottom of a phone embed, plus 4.
+const PHONE_STRIP_MAX = 68;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const { defaultBrowserType: _pm, ...IPHONE_MAX } = devices["iPhone 15 Pro Max"];
 
 const BASE_PREFS = {
   favoriteLeagues: [],
@@ -111,8 +113,9 @@ test("desktop keeps the autoplay-setting line", async ({ page }) => {
   await expect(pill).toHaveText("Tap to play — enable autoplay for HideScore to skip this");
 });
 
-test.describe("iPhone, real YouTube", () => {
-  test.use(IPHONE);
+for (const [phone, profile] of [["iPhone 15 Pro", IPHONE], ["iPhone 15 Pro Max", IPHONE_MAX]] as const)
+test.describe(`${phone}, real YouTube`, () => {
+  test.use(profile);
   test.skip(!process.env.PLAYWRIGHT_BASE_URL && !process.env.LIVE_YT, "needs the real YouTube embed: set LIVE_YT=1 or PLAYWRIGHT_BASE_URL");
 
   // Both player modes: YouTube's own controls (the default since 8/9, and
@@ -146,7 +149,7 @@ test.describe("iPhone, real YouTube", () => {
     await expect(strip).toBeVisible();
     const s = (await strip.boundingBox())!;
     expect(s.height).toBeLessThanOrEqual(PHONE_STRIP_MAX + 0.5);
-    expect(s.height / f.height).toBeLessThan(0.3);
+    expect(s.height / f.height).toBeLessThan(0.35);
 
     // Every visible "More videos" element inside the embed starts at or below
     // the strip's top edge, so none of it shows above the strip.

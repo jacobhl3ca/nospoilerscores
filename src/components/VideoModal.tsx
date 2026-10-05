@@ -2606,12 +2606,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       click anywhere on the player resumes, which brings the bar
                       straight back.
                       Height lives in .hs-yt-pause-strip (globals.css): the
-                      desktop clamp, and a flat 58px on a phone. On a phone the
+                      desktop clamp, and a flat 68px on a phone. On a phone the
                       96px clamp minimum covered half of a ~205px frame (Mom's
                       iPhone, 10/5). Measured 10/5 with this file's playerVars
-                      (WebKit iPhone 15 Pro + Chromium, 358/390px wide): the
-                      "More videos" button is one 48px row whose top sits 54px
-                      off the bottom of the frame. 58px = that plus 4. */}
+                      (WebKit iPhone + Chromium, 358-639px wide): the "More
+                      videos" button is one 48px row whose top sits 54px off the
+                      bottom of a short frame and 64px off a taller one. 68px =
+                      64 plus 4. */}
                   <div
                     aria-hidden
                     data-testid="yt-pause-strip"
@@ -2621,7 +2622,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   {/* Paused badge — the frame is visible now, so the play glyph
                       needs its own scrim to stay legible over footage. Centred on
                       the whole frame, so it sits on YouTube's own centre play
-                      button. The 58px phone strip no longer reaches it (the 96px
+                      button. The 68px phone strip no longer reaches it (the 96px
                       one cut its lower half); centring it above the strip
                       instead showed two play buttons stacked (10/5). */}
                   <div aria-hidden data-testid="yt-pause-badge" className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
