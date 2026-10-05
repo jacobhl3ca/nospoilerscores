@@ -26,6 +26,11 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
     private var pendingURL: URL?
     /// The web view holds its navigation delegate weakly, so the controller keeps it.
     private var navigationRetry: NavigationRetryProxy?
+    /// Status bar text for the site theme the page last posted: dark text on
+    /// the light theme, light text on the dark one (Mom's phone, Oct 5: the
+    /// light theme drew a white clock on a white page). nil until the page
+    /// says; Info.plist starts at Default, which follows the phone.
+    private var siteStatusBarStyle: UIStatusBarStyle?
 
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(HideScoreGoogleAuthPlugin())
@@ -48,6 +53,20 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
             pendingURL = nil
             webView?.load(URLRequest(url: url))
         }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // StatusBarPlugin puts its config default (.default) back on every
+        // viewDidAppear, e.g. after an in-app browser sheet closes, through an
+        // async hop to main. Queue behind it so the site theme wins.
+        DispatchQueue.main.async { [weak self] in self?.applySiteStatusBarStyle() }
+    }
+
+    /// CAPBridgeViewController's preferredStatusBarStyle returns statusBarStyle.
+    private func applySiteStatusBarStyle() {
+        guard let style = siteStatusBarStyle, statusBarStyle != style else { return }
+        setStatusBarStyle(style)
     }
 
     /// Load a hidescore.com link (universal link, cold or warm start) in the
@@ -146,6 +165,8 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
         }
         if let theme = body["theme"] as? String {
             tabBar.overrideUserInterfaceStyle = theme == "dark" ? .dark : .light
+            siteStatusBarStyle = theme == "dark" ? .lightContent : .darkContent
+            applySiteStatusBarStyle()
         }
         let visible = body["visible"] as? Bool ?? false
         if tabBar.isHidden == visible {
