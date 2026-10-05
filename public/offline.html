@@ -60,9 +60,19 @@
   <p class="note">hidescore.com</p>
 </main>
 <script>
-  document.getElementById('retry').addEventListener('click', function () {
-    location.replace('https://hidescore.com/');
-  });
+  // ?from= = the page that failed to load (the iOS shell adds it from 1.0.9,
+  // MainViewController's NavigationRetryProxy). Only a hidescore.com page goes
+  // back (localhost: simulator builds); anything else opens the board.
+  var target = 'https://hidescore.com/';
+  try {
+    var from = new URL(new URLSearchParams(location.search).get('from'));
+    if ((from.protocol === 'https:' && (from.hostname === 'hidescore.com' || from.hostname === 'www.hidescore.com')) ||
+        from.hostname === 'localhost') target = from.href;
+  } catch (e) {}
+  function retry() { location.replace(target); }
+  document.getElementById('retry').addEventListener('click', retry);
+  // The connection came back by itself (Wi-Fi, tunnel, airplane mode off): go on without a tap.
+  addEventListener('online', retry);
 </script>
 </body>
 </html>
