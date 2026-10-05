@@ -60,7 +60,8 @@ for (const target of PAGES) {
     await link.click();
     await expectArrived(page, target);
     // The doc page marked the tap as arrived (lib/navRecovered).
-    expect(await page.evaluate(() => sessionStorage.getItem("hs-footer-tap"))).toBeNull();
+    // The doc page's effect runs a moment after paint, so poll.
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem("hs-footer-tap"))).toBeNull();
     await page.goBack();
     await expect(page).toHaveURL((u) => u.pathname === "/");
     await expect(footerLink(page, "/about")).toBeAttached();
