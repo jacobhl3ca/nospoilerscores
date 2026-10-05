@@ -55,6 +55,7 @@ import Link from "next/link";
 import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
+import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -643,6 +644,10 @@ export default function HomeContent({
   // Reopen. The ref mirrors the live payload so the popstate handler (Back /
   // Android back gesture) can capture what it is closing without re-subscribing
   // on every modal change.
+  // A footer tap that never reached its page (iOS "No connection", 10/5) is
+  // counted on the next board load: see lib/navRecovered.
+  useEffect(() => { reportNavRecovered(); }, []);
+
   const REOPEN_MS = 8000;
   const videoModalRef = useRef<VideoModalState | null>(null);
   useEffect(() => { videoModalRef.current = videoModal; }, [videoModal]);
@@ -4924,18 +4929,23 @@ export default function HomeContent({
             (+ ♥ Rate in the native shells, 9/29).
             Settings came out (the header gear is the one way in), Guides is a
             real page (/guides) rather than a popup, and Feedback goes to
-            /contact, which hosts the same form. Plain <a href> (not next/link)
-            so crawlers follow them. On a 320px phone the row wraps to two lines
+            /contact, which hosts the same form. next/link with prefetch off
+            (10/5): it still renders a real <a href> that crawlers follow, but a
+            tap is a soft navigation (a fetch), so the iOS shell's "No
+            connection" handler (it fires on any failed page load) can't turn
+            one lost request on an idle connection into the offline screen.
+            Prefetch off: each prefetch is a Pages Worker request.
+            On a 320px phone the row wraps to two lines
             rather than dropping an item. The "App Store" and "Google Play" text
             links that used to sit here are gone (Jacob 8/24): the badges below
             say the same thing better. */}
         <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-          <a href="/about" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</a>
-          <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
-          <a href="/guides" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</a>
-          <a href="/contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
-          <a href="/contact#feedback" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</a>
-          <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
+          <Link href="/about" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</Link>
+          <Link href="/faq" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</Link>
+          <Link href="/guides" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</Link>
+          <Link href="/contact" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</Link>
+          <Link href="/contact#feedback" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</Link>
+          <Link href="/privacy" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</Link>
           {/* Native shells only (9/29): the web has no store to rate on. A plain
               <a> with no target, like Settings' "Rate this app", so the store
               app opens on the review sheet. A link is all the store rules
