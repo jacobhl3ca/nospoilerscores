@@ -930,6 +930,7 @@ export default function SettingsPanel({
     newsTypeFilterOrder: undefined,
     newsHiddenSources: undefined,
     singleColumn: undefined,
+    scrollColumns: undefined,
     newsSingleColumn: undefined,
     hideSensitiveNews: undefined,
     hideCrashNews: undefined,
@@ -1458,6 +1459,17 @@ export default function SettingsPanel({
               checked={prefs.singleColumn ?? false}
               onChange={(v) => updatePrefs({ singleColumn: v })}
             />
+            {/* Opt-in 5 columns on phones and tablets (Android user ask 10/5).
+                Device-only like the row above, and One wide column wins.
+                A wide screen already shows 5, so the row is hidden there. */}
+            {!isWideBoard && (
+              <ToggleRow
+                label="Scroll columns"
+                hint="On phones and tablets, show all 5 columns and scroll sideways. This device only."
+                checked={prefs.scrollColumns ?? false}
+                onChange={(v) => updatePrefs({ scrollColumns: v })}
+              />
+            )}
           </Section>
 
           {/* Favorite teams — right under Leagues (Jacob 9/28; 9/25 it moved
