@@ -3,8 +3,9 @@ import Link from "next/link";
 // Bottom links for every page that renders DocTopBar (2026-09-28). The same
 // row as the homepage footer (About · FAQ · Guides · Contact · Feedback ·
 // Privacy) behind a first "← Back to HideScore", so an article ends the way
-// the board does instead of with its own ad-hoc link list. Plain <a>, like the
-// homepage row; the "/" link is next/link because the lint rule requires it.
+// the board does instead of with its own ad-hoc link list. All next/link with
+// prefetch off, like the homepage row (10/5): a tap is a soft navigation, so a
+// lost request can't land the iOS shell on its "No connection" page.
 // The item that points at the current page is left out.
 // `route` = the canonical path without its leading slash, as in DocTopBar.
 
@@ -37,9 +38,9 @@ export default function DocFooter({ route }: { route: string }) {
           ← Back to HideScore
         </Link>
         {SITE_LINKS.filter((l) => l.href.split("#")[0] !== here).map((l) => (
-          <a key={l.label} href={l.href} className="underline underline-offset-2 hover:opacity-80" style={muted}>
+          <Link key={l.label} href={l.href} prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={muted}>
             {l.label}
-          </a>
+          </Link>
         ))}
       </nav>
       {/* Legal line (10/3): the same sentence the About page carries, left out

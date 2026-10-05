@@ -4924,18 +4924,23 @@ export default function HomeContent({
             (+ ♥ Rate in the native shells, 9/29).
             Settings came out (the header gear is the one way in), Guides is a
             real page (/guides) rather than a popup, and Feedback goes to
-            /contact, which hosts the same form. Plain <a href> (not next/link)
-            so crawlers follow them. On a 320px phone the row wraps to two lines
+            /contact, which hosts the same form. next/link with prefetch off
+            (10/5): it still renders a real <a href> that crawlers follow, but a
+            tap is a soft navigation (a fetch), so the iOS shell's "No
+            connection" handler (it fires on any failed page load) can't turn
+            one lost request on an idle connection into the offline screen.
+            Prefetch off: each prefetch is a Pages Worker request.
+            On a 320px phone the row wraps to two lines
             rather than dropping an item. The "App Store" and "Google Play" text
             links that used to sit here are gone (Jacob 8/24): the badges below
             say the same thing better. */}
         <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-          <a href="/about" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</a>
-          <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
-          <a href="/guides" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</a>
-          <a href="/contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
-          <a href="/contact#feedback" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</a>
-          <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
+          <Link href="/about" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</Link>
+          <Link href="/faq" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</Link>
+          <Link href="/guides" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</Link>
+          <Link href="/contact" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</Link>
+          <Link href="/contact#feedback" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</Link>
+          <Link href="/privacy" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</Link>
           {/* Native shells only (9/29): the web has no store to rate on. A plain
               <a> with no target, like Settings' "Rate this app", so the store
               app opens on the review sheet. A link is all the store rules
