@@ -158,6 +158,12 @@ export default function NhlHighlightsWithoutSpoilersPage() {
           h: "A route to the broadcaster, not to a box score",
           p: "When a full replay is what you want, national coverage runs across TNT and truTV, and ESPN with ESPN+, Hulu, and Disney+, with regional networks on the rest. The watch link sends you toward whoever carried the game rather than onto a results page that spoils it as it loads.",
         },
+        // Added 2026-10-05. Google already shows this page for "dont tell me
+        // the score" (position 2.7, zero clicks) without the page naming it.
+        {
+          h: "If you already use DTMTS",
+          p: "Don't Tell Me The Score (DTMTS) is the site r/hockey has recommended for spoiler-free NHL highlights for years, and it is a good one for the four big North American leagues. HideScore does the same job for hockey and adds soccer, UFC, F1, college sport and more on one board. The DTMTS alternative page linked below compares the two.",
+        },
         {
           h: "Through the Stanley Cup playoffs",
           p: "Postseason highlights are the hardest to reach safely, because the result of one game is a spoiler for the stakes of the next. Everything above holds through the playoffs and the Final.",
@@ -183,6 +189,7 @@ export default function NhlHighlightsWithoutSpoilersPage() {
         { href: "/nba-scores-without-spoilers", label: "NBA scores" },
         { href: "/nfl-highlights-without-spoilers", label: "NFL highlights" },
         { href: "/mlb-highlights-without-spoilers", label: "MLB highlights" },
+        { href: "/dtmts-alternative", label: "DTMTS alternative" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },
       ]}
