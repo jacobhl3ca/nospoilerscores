@@ -19,7 +19,7 @@ import { LOGO_OVERRIDES } from "./teamLogoOverrides.ts";
 // chess have no ESPN feed at all, and F1's list is constructors: a race card
 // never carries a team, so a starred constructor would match nothing.
 export const TEAM_PICKER_SKIP: readonly Sport[] = [
-  "golf", "tennis", "poker", "chess", "boxing", "ufc", "f1", "nascar", "indycar",
+  "golf", "tennis", "poker", "chess", "boxing", "ufc", "f1", "nascar", "indycar", "climbing",
 ];
 
 // The six rugby competitions share ESPN's rugby team ids, so one path serves

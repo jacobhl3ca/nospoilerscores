@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normNetwork, parseChannelLinks, playerUrl, resolvePlayer, setTvChannelLinks, tvChannelLink } from "../src/lib/tvChannelLinks.ts";
+import {
+  fillGameLink, gameCheckState, gameQuery, gameRef, normNetwork, parseChannelLinks, playerUrl, resolvePlayer,
+  setGameCheckFetch, setTvChannelLinks, tvChannelLink,
+} from "../src/lib/tvChannelLinks.ts";
 import { withoutDeviceLocalPrefs } from "../src/lib/devicePrefs.ts";
 
 // TV channel links (9/26): a listed network's chip opens the user's own stream
@@ -70,5 +73,93 @@ test("the RedZone header's show name matches the list line Jacob pastes", () => 
   // whiparound.ts sends the show name, "RedZone"; ESPN's chip says "NFL RedZone".
   assert.equal(tvChannelLink("RedZone"), `iina://weblink?url=${encodeURIComponent(RZ)}`);
   assert.equal(tvChannelLink("NFL RedZone"), `iina://weblink?url=${encodeURIComponent(RZ)}`);
+  setTvChannelLinks("", "auto");
+});
+
+// Per-game links (9/29): Peacock has no fixed channel; a `{game}` line sends the
+// game to the user's own resolver, which finds that game's stream.
+const PEACOCK = "http://tuner.test:9192/game?{game}";
+const CARD = {
+  homeTeam: { displayName: "Houston Astros", shortDisplayName: "Astros", abbreviation: "HOU" },
+  awayTeam: { displayName: "Chicago White Sox", shortDisplayName: "White Sox", abbreviation: "CHW" },
+  date: "2026-09-29T21:00Z",
+};
+
+test("gameRef sends every name the board knows, once each; no teams = no game", () => {
+  assert.deepEqual(gameRef(CARD), {
+    home: ["Houston Astros", "Astros", "HOU"],
+    away: ["Chicago White Sox", "White Sox", "CHW"],
+    start: "2026-09-29T21:00Z",
+  });
+  assert.deepEqual(gameRef({ ...CARD, homeTeam: { displayName: "Brooklyn FC", shortDisplayName: "Brooklyn FC", abbreviation: "" } })?.home, ["Brooklyn FC"]);
+  assert.equal(gameRef({ date: CARD.date }), undefined);
+  assert.equal(gameRef({ ...CARD, date: "" }), undefined);
+});
+
+test("{game} fills with net, home, away and start, URL-encoded", () => {
+  const q = new URLSearchParams(fillGameLink(PEACOCK, "Peacock", gameRef(CARD))!.split("?")[1]);
+  assert.equal(q.get("net"), "Peacock");
+  assert.deepEqual(q.getAll("home"), ["Houston Astros", "Astros", "HOU"]);
+  assert.deepEqual(q.getAll("away"), ["Chicago White Sox", "White Sox", "CHW"]);
+  assert.equal(q.get("start"), "2026-09-29T21:00Z");
+  assert.match(gameQuery("A&B", { home: ["x y"], away: ["z=1"], start: "s" }), /^net=A%26B&home=x\+y&away=z%3D1&start=s$/);
+  assert.equal(fillGameLink(ESPN, "ESPN"), ESPN);
+  assert.equal(fillGameLink(PEACOCK, "Peacock"), null);
+});
+
+test("a {game} line opens the player with the game filled in; a chip with no game keeps the website", () => {
+  setGameCheckFetch(null);
+  setTvChannelLinks(`Peacock = ${PEACOCK}\nESPN = ${ESPN}`, "iina");
+  const link = tvChannelLink("Peacock", gameRef(CARD))!;
+  assert.ok(link.startsWith("iina://weblink?url="));
+  const inner = decodeURIComponent(link.split("url=")[1]);
+  assert.ok(inner.startsWith("http://tuner.test:9192/game?net=Peacock&home=Houston+Astros"));
+  assert.ok(!inner.includes("{game}"));
+  assert.equal(tvChannelLink("Peacock"), null); // golf / RedZone header: no game
+  assert.equal(tvChannelLink("ESPN", gameRef(CARD)), `iina://weblink?url=${encodeURIComponent(ESPN)}`);
+  setTvChannelLinks(`Peacock = ${PEACOCK}`, "vlc");
+  assert.ok(tvChannelLink("Peacock", gameRef(CARD))!.startsWith("vlc-x-callback://x-callback-url/stream?url="));
+  setTvChannelLinks("", "auto");
+  assert.equal(tvChannelLink("Peacock", gameRef(CARD)), null); // blank list
+});
+
+test("{game} lines obey the block list", () => {
+  assert.equal(parseChannelLinks("Peacock = javascript:go('{game}')").size, 0);
+  assert.equal(parseChannelLinks("Peacock = data:text/html,{game}").size, 0);
+});
+
+test("the pre-check: 404 (no stream for this game) sends the chip to the website; other answers keep the player", async () => {
+  const asked: string[] = [];
+  const answer: Record<string, number | "throw"> = { HOU: 200, SD: 404, NYY: 500, ATL: "throw" };
+  setGameCheckFetch(async (u) => {
+    asked.push(u);
+    const a = answer[new URLSearchParams(u.split("?")[1]).getAll("home").at(-1)!];
+    if (a === "throw") throw new Error("offline");
+    return { status: a };
+  });
+  setTvChannelLinks(`Peacock = ${PEACOCK}`, "raw");
+  const card = (abbr: string) => ({ ...CARD, homeTeam: { ...CARD.homeTeam, abbreviation: abbr } });
+  for (const t of ["HOU", "SD", "NYY", "ATL"]) assert.ok(tvChannelLink("Peacock", gameRef(card(t)))); // pending = player
+  await new Promise((r) => setTimeout(r, 0));
+  assert.ok(asked.every((u) => u.endsWith("&check=1")) && asked.length === 4);
+  assert.ok(tvChannelLink("Peacock", gameRef(card("HOU"))), "200 = player");
+  assert.equal(tvChannelLink("Peacock", gameRef(card("SD"))), null, "404 = website");
+  assert.ok(tvChannelLink("Peacock", gameRef(card("NYY"))), "500 = player");
+  assert.ok(tvChannelLink("Peacock", gameRef(card("ATL"))), "no connection = player");
+  assert.equal(asked.length, 4, "answers are cached, not re-asked on every render");
+  const url = fillGameLink(PEACOCK, "Peacock", gameRef(card("SD")))!;
+  assert.equal(gameCheckState(url), "miss");
+  setGameCheckFetch(null);
+  setTvChannelLinks("", "auto");
+});
+
+test("fixed channel links are never pre-checked", async () => {
+  let n = 0;
+  setGameCheckFetch(async () => { n++; return { status: 404 }; });
+  setTvChannelLinks(`ESPN = ${ESPN}`, "raw");
+  assert.equal(tvChannelLink("ESPN", gameRef(CARD)), ESPN);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(n, 0);
+  setGameCheckFetch(null);
   setTvChannelLinks("", "auto");
 });

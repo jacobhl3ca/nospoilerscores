@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/lib/youtube";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
+import { frontendHref } from "@/lib/frontendLinks";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { buildKeyLegend } from "@/lib/modalKeyLegend";
@@ -61,12 +62,21 @@ interface VideoModalProps {
   // Spoiler masks over the YouTube player chrome. Both default ON (covered);
   // user toggles each in Settings. Only affect the YouTube highlight path.
   maskVideoTitle?: boolean;
+  // A /watch link someone pasted: covered like the combat channels, but the
+  // cover still lifts once the title reads clean (the Settings toggle never lifts).
+  forceTitleMask?: boolean;
   maskVideoBottom?: boolean;
   // Opt-in (default OFF): show YouTube's NATIVE control bar (controls:1) instead
   // of our spoiler-safe stripped player. When on, YT's own progress/seek bar +
   // time are visible (a spoiler trade the user accepts — useful in fullscreen),
   // the click-catcher steps aside so YT's controls work.
   youtubeNativeControls?: boolean;
+  // Settings → "Keyboard shortcuts hint" (prefs.hideControlsHint). false drops
+  // the "Keys" button from the ‹ › ✕ cluster, so turning the hint off clears
+  // every key tag on screen, not just the board's corner pill (Jacob 9/29:
+  // "setting to hide keys hints off but its still on screen"). "?" still opens
+  // the legend — it is on demand and draws nothing until pressed.
+  keysButton?: boolean;
   // Which seek control the YouTube player shows: progress bar + jumps ("both",
   // default), bar only, or jumps only.
   seekControl?: "both" | "bar" | "jumps";
@@ -255,6 +265,20 @@ function compFallbackParam(fallbackUrl: string): string {
   }
 }
 
+// Home-first order gate + duration floor carried the same way (`nss_order=`,
+// `nss_minsec=` — see HIGHLIGHT_MATCH_GATES in lib/youtube.ts). A Nations
+// League pair meets twice under undated titles, so a retry without the order
+// gate can serve the other leg.
+function matchGateFallbackParam(fallbackUrl: string): string {
+  try {
+    const sp = new URL(fallbackUrl).searchParams;
+    const minSec = sp.get("nss_minsec");
+    return `${sp.get("nss_order") === "home" ? "&order=home" : ""}${minSec && /^\d{1,4}$/.test(minSec) ? `&minsec=${minSec}` : ""}`;
+  } catch {
+    return "";
+  }
+}
+
 // Minimal Reddit selftext renderer. Reddit selftext is markdown but we only
 // care about the structural bits that matter for readability — paragraphs,
 // line breaks, and autolinked URLs. Full markdown (headings, bold, code
@@ -281,7 +305,7 @@ function renderRedditBody(raw: string): React.ReactNode {
       parts.push(
         <a
           key={`u-${pi}-${match.index}`}
-          href={url}
+          href={frontendHref(url)}
           target="_blank"
           rel="noopener noreferrer"
           className="underline underline-offset-2 hover:opacity-80"
@@ -452,7 +476,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   // The React-owned box the YouTube player lives INSIDE. React renders this and
   // nothing else touches it; the #yt-player node YT destroys is a plain DOM
@@ -714,6 +738,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // wins, and only clips with no YouTube id (e.g. MLB statsapi HLS) fall through
   // to hlsMode/embedMode.
   const hlsMode = !!playbackUrl && !videoId;
+  // A Reddit GIF post plays as Reddit's mp4 of the GIF (preview.redd.it
+  // <id>.gif?format=mp4). It loops like the GIF it is; other clips do not.
+  const loopClip = !!playbackUrl && /\.gif\?[^#]*\bformat=mp4\b/i.test(playbackUrl);
   const embedMode = !!embedUrl && !playbackUrl && !videoId;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
@@ -1739,6 +1766,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       const raceParam = raceFallbackParam(fallbackUrl);
       const weekParam = weekFallbackParam(fallbackUrl);
       const compParam = compFallbackParam(fallbackUrl);
+      const matchGateParam = matchGateFallbackParam(fallbackUrl);
       // Fail closed if a highlight caller ever forgets to carry its channel
       // contract. The old unscoped branch was how NFL (and every other league)
       // could resolve correctly, hit an embed error, then silently swap to a
@@ -1756,7 +1784,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // EventCard's UFC chain is sequential).
         for (const channel of strictChannels) {
           const res = await fetch(
-            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}${weekParam}${compParam}`
+            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}${weekParam}${compParam}${matchGateParam}`
           );
           const data = res.ok ? await res.json() : null;
           if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
@@ -2129,7 +2157,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       style={{ right: "calc(env(safe-area-inset-right) + 1rem)", bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
       onClick={(e) => e.stopPropagation()}
     >
-      {keyHintsAvailable && (
+      {keyHintsAvailable && keysButton && (
         <button type="button" ref={keysBtnRef}
           onClick={(e) => {
             e.stopPropagation();
@@ -2660,8 +2688,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   short list stays covered either way — the app's promise beats a
                   display preference. titleSafe is already forced false for these
                   channels (see the onReady/PLAYING handlers), so the second
-                  condition is belt-and-braces, not the thing doing the work. */}
-              {(maskVideoTitle || titleAlwaysMasked) && !titleSafe && (
+                  condition is belt-and-braces, not the thing doing the work.
+                  The Settings toggle itself covers EVERY title (Jacob 9/28):
+                  it used to lift too once the title read clean, so someone who
+                  turned it on still saw most titles. The clean-title skip is
+                  for the covers the app turns on by itself. */}
+              {(maskVideoTitle || ((titleAlwaysMasked || forceTitleMask) && !titleSafe)) && (
                 <div
                   aria-hidden
                   data-testid="yt-title-mask"
@@ -3000,6 +3032,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
+                loop={loopClip}
                 onPlaying={trackVideoPlay}
                 onEnded={markHighlightWatched}
                 onPlay={() => setPlayerState("playing")}
@@ -3107,7 +3140,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               shareUrl, so only the strictly-broken URL-less case is dropped. */}
           {sourceShareUrl && (
             <a
-              href={sourceShareUrl}
+              href={frontendHref(sourceShareUrl)}
               target="_blank"
               rel="noopener noreferrer"
               // Route through handleExternalClick so a YouTube sourceShareUrl

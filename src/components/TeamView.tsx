@@ -8,7 +8,7 @@ import { type ShareCardMeta } from "@/lib/shareCard";
 import { fetchTeamSchedule, fetchScheduleRatings } from "@/lib/espn";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { SHORT_LEAGUE_LABELS } from "@/lib/leagueLabels";
-import GameCard from "./GameCard";
+import GameCard, { PairingRevealAll } from "./GameCard";
 import { getDateString } from "@/components/DateNav";
 
 interface TeamViewProps {
@@ -219,6 +219,8 @@ export default function TeamView({
   // Doubleheaders: ids of finished games that share an Eastern calendar day with
   // another finished game. Their cards show the start time so the two otherwise-
   // identical FINAL rows (hidescore hides the score) are distinguishable.
+  // The zone is a dep: a Settings zone change can move a game across midnight.
+  const tz = getTimeZone();
   const doubleheaderIds = useMemo(() => {
     const byDay = new Map<string, string[]>();
     for (const g of past) {
@@ -230,7 +232,7 @@ export default function TeamView({
       const d = new Date(g.date);
       if (Number.isNaN(d.getTime())) continue;
       const ymd = new Intl.DateTimeFormat("en-CA", {
-        timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
+        timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
       }).format(d);
       const arr = byDay.get(ymd) ?? [];
       arr.push(g.id);
@@ -239,7 +241,7 @@ export default function TeamView({
     const ids = new Set<string>();
     for (const arr of byDay.values()) if (arr.length > 1) arr.forEach((id) => ids.add(id));
     return ids;
-  }, [past]);
+  }, [past, tz]);
 
   // If the full team name would collide with the left-edge back button (the
   // centered group visually crosses under it), swap to the 3-char abbrev. A
@@ -424,6 +426,8 @@ export default function TeamView({
         <p role="status" aria-live="polite" className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>No games found</p>
       ) : (
         <div className="flex flex-col gap-1.5 sm:gap-2">
+          {/* One tap for every covered playoff card listed (Jacob 9/30). */}
+          <PairingRevealAll games={[...pastShown, ...upcomingShown]} />
           {pastShown.length > 0 && (
             <>
               {/* Recent divider — inline at first-card Y, pins below the team

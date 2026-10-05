@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Fragment } from "react";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 
 const FAQ_TITLE = "FAQ — Spoiler-Free Sports Scores | HideScore";
@@ -56,7 +57,7 @@ const FAQ: { q: string; a: string; links?: FaqLink[] }[] = [
   },
   {
     q: "Which sports and leagues does HideScore cover?",
-    a: "HideScore covers the NBA, WNBA, MLB, NHL, NFL, college basketball and football, golf, tennis, motorsports, combat sports, cricket, rugby union, the NRL, the AFL, the CFL, chess, poker, and soccer. Soccer includes the Premier League, MLS, Champions League, Europa League, Conference League, La Liga, Serie A, Bundesliga, Ligue 1, Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, the UEFA Nations League, and major international tournaments.",
+    a: "HideScore covers the NBA, WNBA, MLB, NHL, NFL, college basketball and football, golf, tennis, motorsports, combat sports, cricket, rugby union, the NRL, the AFL, the CFL, chess, poker, competition climbing, and soccer. Soccer includes the Premier League, MLS, Champions League, Europa League, Conference League, La Liga, Serie A, Bundesliga, Ligue 1, Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, the UEFA Nations League, and major international tournaments.",
   },
   {
     q: "Why don't I see a league on the main screen?",
@@ -77,7 +78,7 @@ const FAQ: { q: string; a: string; links?: FaqLink[] }[] = [
     // and no reward. Keep it that way.
     a: "Yes. HideScore is a free app for iPhone and Android, and it also works in any web browser at hidescore.com. If it helps you, a rating on the store is what helps other fans find it. Get it on",
     links: [
-      { href: "https://apps.apple.com/app/hidescore/id6766885311", text: "the App Store" },
+      { href: "https://apps.apple.com/app/hidescore/id6766885311?action=write-review", text: "the App Store" },
       { href: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore", text: "Google Play" },
     ],
   },
@@ -147,9 +148,7 @@ export default function FaqPage() {
         </Link>.
       </p>
 
-      <div className="mt-10">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-faq">← Back to HideScore</Link>
-      </div>
+      <DocFooter route="faq" />
 
       <script
         type="application/ld+json"

@@ -14,9 +14,8 @@ const switcherRow = (league: string) =>
 
 async function openSwitcherSettings(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Open settings", exact: true }).click();
-  // The catalog sits in a closed fold since 9/25; open it and show every row
-  // (the fold starts with offseason rows hidden).
-  await page.locator("summary", { hasText: /leagues in the switcher · Edit/ }).click();
+  await page.getByRole("button", { name: "More leagues", exact: true }).click();
+  // Show every row (the catalog starts with offseason rows hidden).
   const hide = page.getByRole("checkbox", { name: /Hide offseason/ });
   if (await hide.isChecked()) await hide.uncheck();
 }
@@ -41,7 +40,9 @@ test("core leagues default on and expansion leagues default off", async ({ page 
   await page.getByRole("button", { name: "Close settings" }).click();
   await page.getByRole("button", { name: "MLB", exact: true }).click();
   const switcher = page.getByRole("dialog", { name: "Switch league" });
-  await expect(switcher.getByRole("button", { name: "NBA · offseason", exact: true })).toBeVisible();
+  // Offseason rows moved to the Add more… sheet (Jacob 9/29), so the NBA
+  // stays checked in Settings but is not a dropdown row in August.
+  await expect(switcher.getByRole("button", { name: /^NBA/ })).toHaveCount(0);
   for (const league of CORE_SWITCHER_LEAGUES) {
     await expect(switcher.getByRole("button", { name: switcherRow(league) })).toBeVisible();
   }

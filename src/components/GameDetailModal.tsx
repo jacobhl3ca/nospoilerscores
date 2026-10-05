@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Game } from "@/lib/types";
 import { handleExternalClick, liveWatchUrl, openLiveWatch, watchLinkProps } from "@/lib/openExternal";
+import { gameRef } from "@/lib/tvChannelLinks";
 import { espnGameUrl, networkStreamUrl, sportGroup, sportStreamFallback } from "@/lib/espn";
 import { formatGameProgress } from "@/lib/liveProgress";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
@@ -322,7 +323,7 @@ export default function GameDetailModal({
     return (
       <a
         key={key}
-        {...watchLinkProps(name, href)}
+        {...watchLinkProps(name, href, gameRef(game))}
         className="underline underline-offset-2 hover:opacity-80 transition-opacity"
         style={{ color: "var(--accent)" }}
       >

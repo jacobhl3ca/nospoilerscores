@@ -12,13 +12,16 @@ import { displayShortName, loadBigInningSchedule, getSeasonOpener, sportDisplayL
 import { handleExternalClick, watchLinkProps } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
+import { playoffSubtitleTiers } from "@/lib/playoffSubtitle";
+import { pairingSpoilsEarlierRound } from "@/lib/pairingMask";
 import { etWallToUtc, formatInZone, getWhiparoundShow, parseEtTime, whiparoundStartsLater, whiparoundSubtitle } from "@/lib/whiparound";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { groupEspnFrontPage } from "@/lib/topEvents";
 import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
-import GameCard, { CompactUpcomingCard } from "./GameCard";
+import GameCard, { CompactUpcomingCard, PairingRevealAll } from "./GameCard";
 import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
 import { compareRatedLive } from "@/lib/liveSort";
+import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
@@ -57,6 +60,12 @@ interface LeagueColumnProps {
   // the switcher so Auto isn't an opaque choice (Jacob 8/9).
   autoSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
+  // ESPN front page only: tapping a league block's label opens the "Add
+  // {league}" popover (owned by HomeContent) to give it a column of its own.
+  onAddLeague?: (sport: Sport, anchor: DOMRect) => void;
+  // "Add more…" row above Remove col: opens HomeContent's league sheet for
+  // this column, where the offseason leagues live now (Jacob 9/29).
+  onAddMore?: () => void;
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
   showSwapChevron?: boolean;
@@ -137,27 +146,6 @@ const PLAYOFF_START_DATES: Record<string, { date: string; label: string; singula
   nfl: { date: "2027-01-09", label: "Playoffs" },
   ncaam: { date: "2026-03-17", label: "March Madness", singularLabel: true },
 };
-
-// Strip generic "Stanley Cup Playoffs" / "NBA Playoffs" / "NCAA … Championship"
-// prefix segments so a label like "Stanley Cup Playoffs - First Round" reads
-// "First Round". Real round info (e.g. "East 1st Round" for NBA/NHL playoffs)
-// gets preserved and joined with the game number when both are present.
-const GENERIC_LABEL_SEGMENT = /^(?:stanley cup playoffs?|nba playoffs?|wnba playoffs?|nhl playoffs?|playoffs?|postseason|ncaa (?:men'?s|women'?s)?\s*basketball championship|ncaa basketball championship)$/i;
-
-// Extract round + game info from ESPN's playoff headline.
-// e.g. "East 1st Round - Game 7" → "East 1st Round · Game 7"
-// e.g. "Stanley Cup Playoffs - First Round" → "First Round"
-// e.g. "NCAA Men's Basketball Championship - National Championship" → "National Championship"
-// ESPN sometimes tacks on "Nth Seed Game" as the last segment — strip that.
-function shortenPlayoffLabel(headline: string): string {
-  const parts = headline
-    .split(" - ")
-    .map(p => p.trim())
-    .filter(p => p && !/^\d+(?:st|nd|rd|th)?\s+seed\s+game$/i.test(p))
-    .filter(p => !GENERIC_LABEL_SEGMENT.test(p));
-  if (!parts.length) return headline.trim();
-  return parts.join(" · ");
-}
 
 interface SubtitleResult {
   tiers: string[];
@@ -310,12 +298,18 @@ const PICTURE_TRAIL_DAYS = 35; // the postseason runs about four weeks
 // column.
 export function playoffPictureInWindow(sport: Sport, selectedDate: string): boolean {
   if (sport !== "mlb") return false;
+  const days = mlbPostseasonDay(selectedDate);
+  return days != null && days >= -PICTURE_LEAD_DAYS && days <= PICTURE_TRAIL_DAYS;
+}
+
+// Days from the MLB postseason's first day to `selectedDate`: 0 on that day,
+// negative before it. null when no start date is configured.
+export function mlbPostseasonDay(selectedDate: string): number | null {
   const config = PLAYOFF_START_DATES.mlb;
-  if (!config) return false;
+  if (!config) return null;
   const viewDate = new Date(+selectedDate.slice(0, 4), +selectedDate.slice(4, 6) - 1, +selectedDate.slice(6, 8), 12, 0, 0);
   const start = new Date(config.date + "T12:00:00");
-  const days = (viewDate.getTime() - start.getTime()) / 86400_000;
-  return days >= -PICTURE_LEAD_DAYS && days <= PICTURE_TRAIL_DAYS;
+  return Math.round((viewDate.getTime() - start.getTime()) / 86400_000);
 }
 
 // MLB regular season: nod to MLB Network's nightly Big Inning whip-around
@@ -470,17 +464,12 @@ function getPlayoffSubtitle(
   const playoffDate = new Date(config.date + "T12:00:00");
   const diff = playoffDate.getTime() - viewDate.getTime();
 
-  // Playoffs already started — show round + game number from game data
+  // Playoffs already started — show round + game number from game data, read
+  // across every game on the day (see @/lib/playoffSubtitle).
   if (diff <= 0) {
-    if (!games?.length) return null;
-    const label = games.find(g => g.playoffLabel)?.playoffLabel;
-    if (!label) return null;
-    const text = shortenPlayoffLabel(label);
-    // Compact fallback: "Game 7" → "G7" so a long round + game tag still fits
-    // narrow columns when the full version overflows.
-    const short = text.replace(/Game (\d+)/g, "G$1");
-    const tiers = short !== text ? [text, short] : [text];
-    return { tiers };
+    const labels = (games ?? []).map((g) => g.playoffLabel).filter(Boolean) as string[];
+    const tiers = playoffSubtitleTiers(labels, config.label);
+    return tiers.length ? { tiers } : null;
   }
 
   if (sport === "mlb" && bigInningSchedule) {
@@ -945,6 +934,8 @@ export default function LeagueColumn({
   swappableOptions,
   autoSport,
   onSwapLeague,
+  onAddLeague,
+  onAddMore,
   showSwapChevron,
   switcherMode,
   onCycleLeague,
@@ -1549,7 +1540,7 @@ export default function LeagueColumn({
   // slate wording ("No games", "Upcoming Schedule TBD") is wrong for them on a
   // date their feed has nothing for. They keep rendering the column either way
   // — see the eventCard branch of fetchLeague.
-  const isEventTileSport = league.sport === "chess" || league.sport === "boxing" || league.sport === "poker";
+  const isEventTileSport = league.sport === "chess" || league.sport === "boxing" || league.sport === "poker" || league.sport === "climbing";
   // A pinned Best of yesterday column can come up empty (no clips posted yet),
   // and ESPN's strip can carry nothing we render (golf only, early morning).
   const emptyLabel = isEventTileSport
@@ -1557,7 +1548,7 @@ export default function LeagueColumn({
     : league.sport === "best"
       ? "No highlights from yesterday yet"
       : league.sport === "top"
-        ? "No games on ESPN's front page right now"
+        ? (league.espnSnapshot ? "No games from ESPN's front page that day" : "No games on ESPN's front page right now")
         : "No games";
   const emptyUpcomingLabel = isEventTileSport ? "No event scheduled" : "Upcoming Schedule TBD";
   // Same reason the empty copy differs: an event-tile column has no "schedule"
@@ -1571,9 +1562,26 @@ export default function LeagueColumn({
   // ESPN front page body: a block per league, each under a small league
   // label the way espn.com's strip labels its blocks. The label stands in for
   // the per-card league chip (off since 9/26), so demo mode drops it too.
-  const espnLabelRow = (text: string) => (
+  // The label is also the one-tap way to give that league a column of its own
+  // (Jacob 9/28): "NFL +" opens the Add popover. The cards stay chip-free.
+  const canAddFromLabel = league.sport === "top" && !!onAddLeague && !isDemoModeActive();
+  const espnLabelRow = (text: string, sport: Sport) => (
     <div className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
-      <span className="text-[11px] font-semibold uppercase tracking-wide">{text}</span>
+      {canAddFromLabel ? (
+        <button type="button"
+          onClick={(e) => { e.stopPropagation(); onAddLeague!(sport, e.currentTarget.getBoundingClientRect()); }}
+          aria-label={`Add ${text} to a column`}
+          aria-haspopup="dialog"
+          data-espn-add={sport}
+          className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide cursor-pointer hover:underline underline-offset-2"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <span>{text}</span>
+          <span aria-hidden="true" className="text-[12px] leading-none font-bold">+</span>
+        </button>
+      ) : (
+        <span className="text-[11px] font-semibold uppercase tracking-wide">{text}</span>
+      )}
       <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
     </div>
   );
@@ -1582,7 +1590,8 @@ export default function LeagueColumn({
       {groupEspnFrontPage(games, league.espnFeatured).map((group, i) => {
         return (
           <div key={group.sport} className="flex flex-col gap-1.5 sm:gap-2" data-espn-league={group.sport}>
-            {!isDemoModeActive() && !(i === 0 && leadLabelSlot) && espnLabelRow(espnGroupLabel(group))}
+            {!isDemoModeActive() && !(i === 0 && leadLabelSlot) && espnLabelRow(espnGroupLabel(group), group.sport)}
+            <PairingRevealAll games={group.games} />
             {group.games.map((game) => (
               <GameCard
                 key={game.id}
@@ -1687,7 +1696,9 @@ export default function LeagueColumn({
     const named = compactableMatchups(games, firstFull, alsoShown);
     return games.map((game, i) => {
       const nextGameDate = formatDateCompact(etDayString(game.date) || league.nextGameDay!.date);
-      if (isCompactLeague && named.has(matchupKey(game)) && !(firstFull && i === 0)) {
+      // A masked pairing stays a full card: the compact row prints "@ HOME",
+      // and from Game 3 of a series the home club can be the one that advanced.
+      if (isCompactLeague && named.has(matchupKey(game)) && !(firstFull && i === 0) && !pairingSpoilsEarlierRound(game)) {
         return (
           <CompactUpcomingCard
             key={game.id}
@@ -1858,6 +1869,29 @@ export default function LeagueColumn({
     : null;
   const headerStartsLabel = notStartedDate ?? openerSlateDate;
 
+  // Every game the body below renders as a full GameCard, for the one "Show all
+  // teams" control over the first card (Jacob 9/30). Mirrors the body's
+  // branches; team view lists its own (TeamView), and a covered game is never
+  // a compact row (renderUpcomingSlate). The ESPN front page column has none:
+  // each league block holds its own, over that block's cards (Jacob 10/3).
+  const cardGames: Game[] = (() => {
+    if (espnGroups || teamViewTeam || league.golfTournament || league.eventCard) return [];
+    if (sorted.length === 0) {
+      if (!renderUpcoming || league.fetchFailed) return [];
+      if (isPastDate) {
+        if (league.previousGameDay?.games.length) return league.previousGameDay.games;
+        return notStartedDate && league.nextGameDay ? league.nextGameDay.games : [];
+      }
+      return league.nextGameDay?.games ?? league.previousGameDay?.games ?? [];
+    }
+    if (condense) return sorted.length > 5 && !condenseExpanded ? sorted.slice(0, CONDENSE_LIMIT) : sorted;
+    if (isPastDate) return sorted;
+    return [
+      ...(renderUpcoming ? [...liveGames, ...preGames, ...(league.nextGameDay?.games ?? [])] : []),
+      ...(renderFinished ? postGames : []),
+    ];
+  })();
+
   return (
     <div
       ref={columnRef}
@@ -2007,7 +2041,7 @@ export default function LeagueColumn({
                         maybe show every league here?"). Grey is reserved for
                         offseason, the one state that actually limits what
                         picking it gets you. */}
-                    {[...swappableOptions!].sort((a, b) => {
+                    {inSeasonSwitcherOptions(swappableOptions!, league.sport).sort((a, b) => {
                       // The cross-league pills lead the list wherever they
                       // appear: Best of yesterday first (Jacob 9/26), then
                       // ESPN front page.
@@ -2046,6 +2080,26 @@ export default function LeagueColumn({
                         </button>
                       );
                     })}
+                    {/* Add more… opens the full league sheet (offseason leagues
+                        behind its toggle). It and Remove col share one rule
+                        above them, so the two read as the list's footer. */}
+                    {onAddMore && (
+                      <button
+                        type="button"
+                        data-testid="league-switcher-add-more"
+                        onClick={() => { setSwapOpen(false); onAddMore(); }}
+                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                        style={{
+                          color: "var(--text-muted)",
+                          fontWeight: 400,
+                          borderTop: "1px solid var(--border)",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        Add more…
+                      </button>
+                    )}
                     {/* Remove col — hides the column entirely until switched back. */}
                     <button
                       type="button"
@@ -2054,7 +2108,7 @@ export default function LeagueColumn({
                       style={{
                         color: "var(--text-muted)",
                         fontWeight: 400,
-                        borderTop: "1px solid var(--border)",
+                        borderTop: onAddMore ? undefined : "1px solid var(--border)",
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -2072,15 +2126,32 @@ export default function LeagueColumn({
               </h2>
             )}
           </div>
+          {league.espnSnapshot === "fallback" ? (
+            // No snapshot of espn.com for this day, so today's strip leagues
+            // stand in (fetchTopEvents). Said once, over the first league label.
+            <p data-espn-fallback-note className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap truncate" style={{ color: "var(--text-muted)" }}>
+              {narrowColumn ? "Today's leagues" : "Today's front-page leagues · no snapshot for this day"}
+            </p>
+          ) : null}
           {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
+          ) : league.eventCard?.kind === "climbing" && league.eventCard.subtitle ? (
+            // Climbing: the day's place in the World Cup, in the italic slot the
+            // golf round wording uses — "Salt Lake City · Boulder · Day 2 of 3".
+            // The round cards below then say only which round each one is.
+            <span data-climb-subtitle className="text-[9px] sm:text-[10px] italic mt-0.5 block max-w-full text-center leading-tight whitespace-nowrap overflow-hidden text-ellipsis" style={{ color: "var(--text-muted)" }} title={league.eventCard.subtitle}>
+              {/* A phone column fits "Salt Lake City · Day 2/3", not the
+                  discipline as well; the full line comes back at sm. */}
+              <span className="sm:hidden">{league.eventCard.subtitleVariants?.[Math.min(2, league.eventCard.subtitleVariants.length - 1)] ?? league.eventCard.subtitle}</span>
+              <span className="hidden sm:inline">{league.eventCard.subtitle}</span>
+            </span>
           ) : league.eventCard ? (
             // Reserve the one-line subtitle slot the game columns use (e.g. MLB's
             // Big Inning line) so the F1/UFC card tops line up with neighbours
             // instead of riding ~16px higher.
             <span aria-hidden className="text-[9px] sm:text-[10px] mt-0.5 block whitespace-nowrap">{" "}</span>
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : undefined} fallbackText={lastPlayedLabel ?? (leadLabelSlot === "subtitle" ? leadLabel : undefined)} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : canAddFromLabel && leadLabelSlot === "subtitle" && espnGroups?.length ? () => onAddLeague!(espnGroups[0].sport, columnRef.current!.getBoundingClientRect()) : undefined} fallbackText={lastPlayedLabel ?? (leadLabelSlot === "subtitle" ? leadLabel : undefined)} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
           )}
         </div>
       )}
@@ -2089,9 +2160,10 @@ export default function LeagueColumn({
         // bottom-2 then sits on the spacer's bottom edge, 8px over the card.
         <div className="relative flex flex-col" data-espn-lead-label>
           {topCard}
-          <div className="absolute inset-x-0 bottom-2">{espnLabelRow(leadLabel!)}</div>
+          <div className="absolute inset-x-0 bottom-2">{espnLabelRow(leadLabel!, espnGroups![0].sport)}</div>
         </div>
       ) : topCard}
+      <PairingRevealAll games={cardGames} className="mb-1.5 sm:mb-2" />
       {teamViewTeam && !league.golfTournament ? (
         section === "finished" ? null : (
           <TeamView
@@ -2118,7 +2190,7 @@ export default function LeagueColumn({
           onPlayHighlight={onPlayHighlight}
         />
       ) : league.eventCard && section !== "finished" ? (
-        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} />
+        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} showRatings={showRatings} />
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
           league.fetchFailed ? (

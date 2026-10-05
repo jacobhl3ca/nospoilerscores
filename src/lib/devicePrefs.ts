@@ -13,7 +13,7 @@
 import type { Preferences } from "./preferences";
 
 // tvPlayer: a Mac opens TV channel links in IINA, a phone in VLC (9/26).
-export const DEVICE_LOCAL_PREF_KEYS = ["singleColumn", "newsSingleColumn", "tvPlayer"] as const;
+export const DEVICE_LOCAL_PREF_KEYS = ["singleColumn", "scrollColumns", "newsSingleColumn", "tvPlayer"] as const;
 
 type DeviceLocalKey = (typeof DEVICE_LOCAL_PREF_KEYS)[number];
 

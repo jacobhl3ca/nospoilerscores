@@ -121,6 +121,8 @@ export interface NewsItem {
   // v.redd.it CMAF fallback URL — single muxed MP4 that plays in <video>
   // without hls.js. Set on Reddit posts where Reddit hosts the clip directly.
   videoUrl?: string | null;
+  // Clip length in seconds, when the source gives one (ESPN Videos).
+  durationSec?: number | null;
   // Brightcove default-player iframe URL — set on NHL.com videos, which are
   // Brightcove-hosted rather than YouTube/raw-HLS. The modal renders it in a
   // plain <iframe> (embedMode), letting Brightcove handle policy key/geo/DRM.
@@ -276,13 +278,23 @@ export async function fetchPrebaked(name: string): Promise<NewsItem[]> {
         return [];
       }
       const data = await res.json();
-      return (data.items ?? []) as NewsItem[];
+      const items = (data.items ?? []) as NewsItem[];
+      return name === "espn-videos" ? items.map(gateEspnVideoUrl) : items;
     } catch {
       if (attempt === 0) { await new Promise((r) => setTimeout(r, 400)); continue; }
       return [];
     }
   }
   return [];
+}
+
+// An ESPN Videos item plays in the modal only from a direct mp4 on ESPN's
+// akamaized CDN (the bake's own rule, scripts/lib/espn-clip.mjs). Anything
+// else falls back to the image + "Open on ESPN".
+const ESPN_MP4_RX = /^https:\/\/[a-z0-9.-]+\.akamaized\.net\/.+\.mp4(\?|$)/i;
+export function gateEspnVideoUrl(item: NewsItem): NewsItem {
+  if (!item.videoUrl || ESPN_MP4_RX.test(item.videoUrl)) return item;
+  return { ...item, videoUrl: null };
 }
 
 // Leagues that have a prebaked official-site feed. Add here as new scrapers land.
@@ -412,12 +424,84 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   boxing: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-boxing.png",
   chess: "/chess.svg",
   poker: "/poker.svg",
+  // World Climbing's mark is a wordmark that does not read at 16px, so a
+  // local glyph in the chess/poker style.
+  climbing: "/climbing.svg",
   esports: "/esports.svg",
   // ESPN front page: the ESPN mark (same file as ESPN_BRAND_LOGO below), since
   // the column is ESPN's own picks.
   top: "https://a.espncdn.com/i/espn/misc_logos/500/espn.png",
   // Best of yesterday: an inline play mark, for the same reason.
   best: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f5a524' d='M7 4.5v15l12.5-7.5z'/%3E%3C/svg%3E",
+};
+
+// The same mark at 40×40 for the 14-16px league chips (LeagueMark). The soccer,
+// rugby and sport-icon URLs above are raw 500px PNGs (15-25 KB each); ESPN's
+// combiner returns the same image at about 1-3 KB. Wikimedia and local marks
+// pass through. LEAGUE_LOGO itself stays as is: the news badges read it.
+export function leagueLogoSmall(sport: Sport): string {
+  const url = LEAGUE_LOGO[sport];
+  const raw = url.match(/^https:\/\/a\.espncdn\.com(\/(?:i|redesign)\/[^?]+)$/);
+  if (raw) return `https://a.espncdn.com/combiner/i?img=${raw[1]}&w=40&h=40&transparent=true`;
+  if (/^https:\/\/a\.espncdn\.com\/combiner\/i\?img=[^&]+$/.test(url)) return `${url}&w=40&h=40&transparent=true`;
+  return url;
+}
+
+// ESPN's dark-theme copies: the same path with /500-dark/ for /500/. Every
+// /500/ mark in LEAGUE_LOGO was fetched both ways on 2026-09-30; these three
+// 404 in the dark set. MLS and UFC are coloured marks that read on dark as
+// they are; IPL is dark blue, so it goes white in dark (INVERT_IN_DARK).
+export const NO_DARK_LOGO: ReadonlySet<Sport> = new Set<Sport>(["mls", "ufc", "cricket"]);
+
+// The dark-theme mark at leagueLogoSmall's size, or undefined when ESPN has
+// none (the sport icons, Wikimedia and local marks, NO_DARK_LOGO).
+export function leagueLogoDark(sport: Sport): string | undefined {
+  if (NO_DARK_LOGO.has(sport)) return undefined;
+  const small = leagueLogoSmall(sport);
+  if (!small.startsWith("https://a.espncdn.com/combiner/") || !small.includes("/500/")) return undefined;
+  return small.replace("/500/", "/500-dark/");
+}
+
+// Marks with no dark copy that are one dark colour: turned white on a dark
+// background (checked by eye on #111, 2026-09-30). The rest with no dark copy
+// read as they are: MLS, UFC (coloured), CFL (its own white shield), ITF
+// (green wordmark). Chess and poker are here for their emoji: ♟️ and ♠️ are
+// black and vanish on the dark panel.
+export const INVERT_IN_DARK: ReadonlySet<Sport> = new Set<Sport>(["cricket", "indycar", "chess", "poker"]);
+
+// Leagues with no logo of their own: the Settings chips show the sport's emoji
+// in place of ESPN's generic sport icon or a mark shared by several leagues
+// (the NCAA disc, one rugby ball for every union competition). The signup
+// picker still shows LEAGUE_LOGO.
+export const LEAGUE_EMOJI: Partial<Record<Sport, string>> = {
+  ncaaf: "🏈",
+  ncaam: "🏀",
+  ncaaw: "🏀",
+  ncaah: "🏒",
+  ncaawh: "🏒",
+  ncaavb: "🏐",
+  ncaawsoc: "⚽",
+  ncaamsoc: "⚽",
+  ncaabase: "⚾",
+  llws: "⚾",
+  sixnations: "🏉",
+  rugbywc: "🏉",
+  rugbychamp: "🏉",
+  superrugby: "🏉",
+  rugbytest: "🏉",
+  nationschamp: "🏉",
+  premrugby: "🏉",
+  urc: "🏉",
+  top14: "🏉",
+  challengecup: "🏉",
+  mlr: "🏉",
+  cricketintl: "🏏",
+  chess: "♟️",
+  poker: "♠️",
+  climbing: "🧗",
+  esports: "🎮",
+  boxing: "🥊",
+  nascar: "🏁",
 };
 
 // ESPN brand mark — used as the source-card logo for ESPN-branded feeds
@@ -573,6 +657,9 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   // ESPN has no poker desk/league feed. Do not manufacture an "ESPN POKER"
   // card that can only return empty; the score/event view remains complete.
   if (sport === "poker") return [];
+  // Climbing has no ESPN desk either, and r/climbing is mostly outdoor photos,
+  // not World Cup news. No feed in v1, like poker.
+  if (sport === "climbing") return [];
   const logoUrl = LEAGUE_LOGO[sport];
   // ESPN has no CFL feed any more (its CFL endpoints froze in 2023), so an
   // "ESPN CFL" card could only ever be empty. r/CFL leads and theScore's CFL
@@ -634,7 +721,7 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "cricketintl", "cricket", "nrl", "afl",
   "sixnations", "rugbywc", "nationschamp", "rugbytest", "superrugby", "rugbychamp",
   "urc", "premrugby", "top14", "challengecup", "mlr",
-  "ufc", "boxing", "f1", "nascar", "indycar", "poker",
+  "ufc", "boxing", "f1", "nascar", "indycar", "poker", "climbing",
 ];
 
 // Col 3's default (no league picked): Reddit-first (Jacob 7/16) — r/sports leads,

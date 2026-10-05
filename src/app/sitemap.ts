@@ -26,6 +26,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // routes when the 2030 cycle starts drawing searches again.
   const worldCupTeams = ["/worldcup/teams"];
   const evergreen = [
+    // Added 2026-09-28: every guide on one page (src/lib/guidesIndex.ts),
+    // replacing the homepage footer's Guides popup.
+    "/guides",
     "/spoiler-free-sports",
     "/how-to-watch-sports-highlights-without-spoilers",
     "/watch-sports-highlights-without-spoilers",
@@ -66,6 +69,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // since 2026-09-13, no page until now).
     "/afl-without-spoilers",
     "/cfl-without-spoilers",
+    // Added 2026-10-03 with the Climbing column, two weeks before the Salt
+    // Lake City and Santiago World Cups.
+    "/climbing-replays-without-spoilers",
     "/best-spoiler-free-sports-sites",
     "/redzone-for-every-sport",
     "/faq",
@@ -76,6 +82,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/privacy",
   ];
   const highIntent = new Set([
+    "/guides",
     "/spoiler-free-sports",
     "/watch",
     "/how-to-watch-sports-highlights-without-spoilers",
@@ -155,6 +162,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // date, the crossover rule as the standings spoiler).
     "/afl-without-spoilers",
     "/cfl-without-spoilers",
+    // Added 2026-10-03 with the Climbing column, two weeks before the Salt
+    // Lake City and Santiago World Cups.
+    "/climbing-replays-without-spoilers",
   ]);
 
   // Build timestamp, for the boards whose rendered content really does change

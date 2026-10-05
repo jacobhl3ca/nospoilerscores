@@ -72,7 +72,8 @@ async function open(theme, width, height) {
     await page.waitForTimeout(700);
   }
   // Today's MLB "Playoffs" pill (the "Playoff picture" subtitle link is gone).
-  await page.locator('[data-recap-playoffs-tab="odds"], [data-recap-bracket]').first().click();
+  // Odds leaves the pill once the field is set, so open it from Bracket.
+  await page.locator('[data-recap-playoffs-tab="bracket"], [data-recap-bracket]').first().click();
   await page.locator(DIALOG).waitFor({ timeout: 15000 });
   await page.waitForTimeout(5500); // statsapi + espn
   return { ctx, page };
@@ -89,15 +90,22 @@ try {
   for (const theme of ["light", "dark"]) {
     for (const [label, w, h] of [["desktop", 1440, 1000], ["phone", 390, 844]]) {
       const { ctx, page } = await open(theme, w, h);
-      await shoot(page, `${theme}-${label}-odds`);
-      await page.locator(`${DIALOG} [role="tab"]`).nth(1).click();
+      // No Odds tab once the field is set: the bracket is the only shot.
+      const oddsTab = page.locator(`${DIALOG} #mlb-picture-tab-odds`);
+      const hasOdds = (await oddsTab.count()) > 0;
+      if (hasOdds) {
+        await oddsTab.click();
+        await page.waitForTimeout(400);
+        await shoot(page, `${theme}-${label}-odds`);
+      }
+      await page.locator(`${DIALOG} #mlb-picture-tab-bracket`).click();
       await page.waitForTimeout(500);
       await shoot(page, `${theme}-${label}-bracket`);
 
       // Acceptance read-back, once, on the widest light run (all six columns
       // are rendered there).
-      if (theme === "light" && label === "desktop") {
-        await page.locator(`${DIALOG} [role="tab"]`).nth(0).click();
+      if (hasOdds && theme === "light" && label === "desktop") {
+        await oddsTab.click();
         await page.waitForTimeout(400);
         const rows = await page.evaluate((sel) => {
           const out = [];
@@ -144,7 +152,7 @@ try {
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #666; margin: 0 0 8px; }
   img { max-width: 100%; border: 1px solid #ddd; border-radius: 10px; background: #fff; display: block; }
 </style>
-<h1>MLB playoff picture — Odds tab and Bracket tab</h1>
+<h1>MLB playoff picture — Odds tab (until the field is set) and Bracket tab</h1>
 <p class="sub">Both themes, desktop (1440px) and phone (390px). Captured ${new Date().toLocaleString("en-US")}.</p>
 ${shots.map((s) => `<section><h2>${s.name.replace(/-/g, " · ")}</h2><img src="${s.file}" alt="${s.name}"></section>`).join("\n")}
 `;

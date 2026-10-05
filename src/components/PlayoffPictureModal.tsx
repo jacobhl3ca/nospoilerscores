@@ -8,11 +8,14 @@ import {
   contendersBySeed,
   fetchPlayoffOdds,
   fetchPlayoffPicture,
+  fieldIsSet,
   playBracket,
   roundLabel,
+  settledTab,
   shadeFor,
   sortTeams,
   teamLogo,
+  withoutSettledOdds,
   worldSeriesOf,
   type BracketMatchup,
   type BracketRound,
@@ -32,6 +35,7 @@ import {
 } from "@/lib/playoffPicture";
 import { fetchMlbPostseason, mlbPickBracket, mlbRoundHeading, type MlbPostseason } from "@/lib/mlbPicks";
 import BracketPicks from "@/components/BracketPicks";
+import { getTimeZone } from "@/lib/etDay";
 
 // The MLB playoff picture, behind one reveal.
 //
@@ -588,9 +592,10 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
 // panel is already behind its own cover, and results show once that is lifted.
 const NO_RESULTS: BracketResult[] = [];
 
-function BracketView({ picture, odds, results, coverResults, onShowResults }: {
+function BracketView({ picture, odds, fieldSet, results, coverResults, onShowResults }: {
   picture: PlayoffPicture;
   odds: PlayoffOdds | null;
+  fieldSet: boolean;
   results: BracketResult[];
   coverResults: boolean;
   onShowResults: () => void;
@@ -603,8 +608,6 @@ function BracketView({ picture, odds, results, coverResults, onShowResults }: {
   const nlB = useMemo(() => (nl ? playBracket(buildBracket(nl), played) : null), [nl, played]);
   if (!al || !nl || !alB || !nlB) return null;
   const ws = worldSeriesOf(alB, nlB, played);
-  // Every seed clinched = the regular season is over and the field is final.
-  const fieldSet = picture.leagues.every((l) => l.seeded.length === 6 && l.seeded.every((t) => t.clinched));
   return (
     <div>
       {hideResults ? (
@@ -779,7 +782,9 @@ export default function PlayoffPictureModal({
   // Same direction a first click on that column picks: seeds up, odds down.
   const pageSort: Sort | null = initialSort ? { key: initialSort, dir: initialSort === "seed" ? "asc" : "desc" } : null;
   const sort = sortOverride ?? pageSort ?? storedSort ?? DEFAULT_SORT;
-  const tab = tabOverride ?? initialTab ?? storedTab ?? "odds";
+  const fieldSet = useMemo(() => (picture ? fieldIsSet(picture) : false), [picture]);
+  const tabs = withoutSettledOdds(TABS, fieldSet);
+  const tab = settledTab(tabOverride ?? initialTab ?? storedTab ?? "odds", fieldSet);
 
   const onSort = useCallback((k: SortKey) => {
     // A second click on the live column flips it. A first click on a new one
@@ -800,11 +805,11 @@ export default function PlayoffPictureModal({
   const onTabKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" && e.key !== "Home" && e.key !== "End") return;
     e.preventDefault();
-    const i = TABS.findIndex((t) => t.key === tab);
+    const i = tabs.findIndex((t) => t.key === tab);
     const next = e.key === "Home" ? 0
-      : e.key === "End" ? TABS.length - 1
-      : (i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length;
-    pickTab(TABS[next].key);
+      : e.key === "End" ? tabs.length - 1
+      : (i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+    pickTab(tabs[next].key);
     // Roving focus: the tab a user arrowed to is the one that should be focused.
     const btns = tablistRef.current?.querySelectorAll<HTMLElement>('[role="tab"]');
     btns?.[next]?.focus();
@@ -900,7 +905,7 @@ export default function PlayoffPictureModal({
   const updatedLabel = picture?.updated
     ? (() => {
         const d = new Date(picture.updated);
-        return isNaN(d.getTime()) ? null : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+        return isNaN(d.getTime()) ? null : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
       })()
     : null;
 
@@ -963,7 +968,7 @@ export default function PlayoffPictureModal({
           className="flex items-center gap-1 mb-3"
           onKeyDown={onTabKeyDown}
         >
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const active = tab === t.key;
             return (
               <button
@@ -1022,6 +1027,7 @@ export default function PlayoffPictureModal({
                   <BracketView
                     picture={picture}
                     odds={odds}
+                    fieldSet={fieldSet}
                     results={post?.results ?? NO_RESULTS}
                     coverResults={inline && !resultsShown}
                     onShowResults={() => setResultsShown(true)}

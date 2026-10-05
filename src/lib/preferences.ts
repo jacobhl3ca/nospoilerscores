@@ -1,8 +1,10 @@
 import { Sport } from "./types";
-import type { RecordLeague } from "./upcomingRecords";
+import { ALL_RECORD_LEAGUES, type RecordLeague } from "./upcomingRecords";
 import { setServiceTimeZone, getEtServiceDate, toYmd } from "./etDay";
 import { pruneWatchQueue, type WatchQueueEntry } from "./watchQueue";
 import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
+import { setFrontendLinks } from "./frontendLinks";
+import { pushWidgetPrefs } from "./widgetBridge";
 
 const STORAGE_KEY = "nss-preferences";
 // For the cross-tab storage listener in HomeContent.
@@ -44,7 +46,8 @@ export const PREFS_STORAGE_KEY = STORAGE_KEY;
 // Added 2026-09-26: nations→nl (UEFA Nations League), collision-free ("nc" is
 // the rugby Nations Championship, "n" nba).
 // Added 2026-09-26: ncaawsoc→ws, ncaamsoc→ms (college soccer), collision-free.
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", ncaah: "hc", cfl: "ca", ncaawh: "hw", ncaavb: "vb", ncaawsoc: "ws", ncaamsoc: "ms", nfl: "f", ufl: "uf", llws: "lw", ncaabase: "cb", ncaasoft: "cs", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", uecl: "cl", facup: "fa", copadelrey: "cr", dfbpokal: "dp", nations: "nl", cricket: "ck", cricketintl: "ci", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", premrugby: "pr", urc: "ur", top14: "tf", challengecup: "cc", mlr: "ml", nrl: "rl", afl: "au", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es", top: "tp", best: "by" };
+// Added 2026-10-03: climbing→cm, collision-free ("cl" is uecl, "c" ncaam).
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", ncaah: "hc", cfl: "ca", ncaawh: "hw", ncaavb: "vb", ncaawsoc: "ws", ncaamsoc: "ms", nfl: "f", ufl: "uf", llws: "lw", ncaabase: "cb", ncaasoft: "cs", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", uecl: "cl", facup: "fa", copadelrey: "cr", dfbpokal: "dp", nations: "nl", cricket: "ck", cricketintl: "ci", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", premrugby: "pr", urc: "ur", top14: "tf", challengecup: "cc", mlr: "ml", nrl: "rl", afl: "au", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", climbing: "cm", esports: "es", top: "tp", best: "by" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;
@@ -78,7 +81,7 @@ export type DefaultDateMode = "smart" | "today" | "yesterday";
 // "ratings" is the third segment of the header control (🙉), not a fourth
 // screen: it lands on Scores with ratings already showing.
 export type DefaultLandingView = "remember" | "scores" | "news" | "ratings";
-// auto = current behavior (off in morning, last state after noon ET).
+// auto = current behavior (off in morning, last state after noon in the Settings zone).
 // off / on = explicit override.
 export type DefaultRatings = "auto" | "off" | "on";
 
@@ -102,13 +105,7 @@ export function encodeFavorites(
   leagues: Sport[],
   thirdLeague?: Sport | "empty",
   slotLeagues?: (Sport | "empty" | undefined)[],
-  extras?: {
-    theme?: Theme;
-    defaultDateMode?: DefaultDateMode;
-    defaultLandingView?: DefaultLandingView;
-    defaultRatings?: DefaultRatings;
-    newsThirdLeague?: Sport;
-  },
+  extras?: ShareExtras,
 ): URLSearchParams {
   const params = new URLSearchParams();
   if (teams.length > 0) params.set("f", teams.map(encodeTeamId).join("."));
@@ -124,32 +121,113 @@ export function encodeFavorites(
   if (extras?.defaultLandingView) params.set("dv", LANDING_TO_SHORT[extras.defaultLandingView]);
   if (extras?.defaultRatings) params.set("dr", RATINGS_TO_SHORT[extras.defaultRatings]);
   if (extras?.newsThirdLeague) params.set("n", SPORT_TO_SHORT[extras.newsThirdLeague] ?? extras.newsThirdLeague);
+  // The rest of the setup (Jacob 9/28), so one link restores it on any account,
+  // signed in or not. Booleans ride as 1/0 and only when the pref was ever set.
+  // The two switcher lists travel together: one without the other would mix the
+  // sharer's list with the reader's. None of these keys may reuse a highlight
+  // deep-link key (v, hs, he, hi, hp, hu, hl, ht, c) — HomeContent keeps those.
+  const flag = (key: string, v: boolean | undefined) => { if (v !== undefined) params.set(key, v ? "1" : "0"); };
+  const sportList = (list: readonly Sport[] | undefined) => (list?.length ? list.map((s) => SPORT_TO_SHORT[s] ?? s).join(".") : "-");
+  flag("hn", extras?.hideSensitiveNews);
+  flag("mt", extras?.maskVideoTitle);
+  flag("yp", extras?.youtubeNativeControls);
+  flag("sc", extras?.singleColumn);
+  flag("sx", extras?.scrollColumns);
+  flag("ts", extras?.hideTeamStars);
+  if (extras?.hiddenLeagues || extras?.shownLeagues) {
+    params.set("xl", sportList(extras.hiddenLeagues));
+    params.set("ol", sportList(extras.shownLeagues));
+  }
+  if (extras?.catalogHiddenLeagues) params.set("cx", sportList(extras.catalogHiddenLeagues));
+  if (extras?.upcomingRecordLeagues) {
+    params.set("rl", extras.upcomingRecordLeagues.length
+      ? extras.upcomingRecordLeagues.map((k) => (k === "soccer" ? RECORD_SOCCER_SHORT : SPORT_TO_SHORT[k] ?? k)).join(".")
+      : "-");
+  }
   return params;
 }
 
-// Decode: "m1.n15" → ["mlb-1","nba-15"]
-export function decodeFavorites(params: URLSearchParams): {
-  teams?: string[];
-  leagues?: Sport[];
-  thirdLeague?: Sport | "empty";
-  slotLeagues?: (Sport | "empty" | undefined)[];
+// "soccer" is not a Sport, so it has no SPORT_TO_SHORT code. Only the rl list
+// uses this one, and no sport code is "soc".
+const RECORD_SOCCER_SHORT = "soc";
+
+// The params that make HomeContent apply a settings link. "s" (slots) never
+// did on its own, and still does not.
+export const SHARE_PARAM_KEYS = ["f", "l", "fl", "t", "th", "dd", "dv", "dr", "n", "hn", "mt", "yp", "sc", "sx", "ts", "xl", "ol", "cx", "rl"] as const;
+
+export interface ShareExtras {
   theme?: Theme;
   defaultDateMode?: DefaultDateMode;
   defaultLandingView?: DefaultLandingView;
   defaultRatings?: DefaultRatings;
   newsThirdLeague?: Sport;
-} {
-  const result: {
-    teams?: string[];
-    leagues?: Sport[];
-    thirdLeague?: Sport | "empty";
-    slotLeagues?: (Sport | "empty" | undefined)[];
-    theme?: Theme;
-    defaultDateMode?: DefaultDateMode;
-    defaultLandingView?: DefaultLandingView;
-    defaultRatings?: DefaultRatings;
-    newsThirdLeague?: Sport;
-  } = {};
+  // Set = both hideSensitiveNews and hideCrashNews (Settings has one toggle for the pair).
+  hideSensitiveNews?: boolean;
+  maskVideoTitle?: boolean;
+  youtubeNativeControls?: boolean;
+  singleColumn?: boolean;
+  scrollColumns?: boolean;
+  hideTeamStars?: boolean;
+  hiddenLeagues?: Sport[];
+  shownLeagues?: Sport[];
+  catalogHiddenLeagues?: Sport[];
+  upcomingRecordLeagues?: RecordLeague[];
+}
+
+// The ShareExtras a prefs blob carries. Unset prefs stay unset, so the link
+// leaves the reader's own value alone for them.
+export function shareExtrasFromPrefs(p: Preferences): ShareExtras {
+  const news = p.hideSensitiveNews === undefined && p.hideCrashNews === undefined
+    ? undefined
+    : !!(p.hideSensitiveNews || p.hideCrashNews);
+  return {
+    theme: p.theme,
+    defaultDateMode: p.defaultDateMode,
+    defaultLandingView: p.defaultLandingView,
+    defaultRatings: p.defaultRatings,
+    newsThirdLeague: p.newsThirdLeague,
+    hideSensitiveNews: news,
+    maskVideoTitle: p.maskVideoTitle,
+    youtubeNativeControls: p.youtubeNativeControls,
+    singleColumn: p.singleColumn,
+    scrollColumns: p.scrollColumns,
+    hideTeamStars: p.hideTeamStars,
+    hiddenLeagues: p.hiddenLeagues,
+    shownLeagues: p.shownLeagues,
+    catalogHiddenLeagues: p.catalogHiddenLeagues,
+    // The legacy NFL-only switch counts as a choice of "none".
+    upcomingRecordLeagues: Array.isArray(p.upcomingRecordLeagues)
+      ? p.upcomingRecordLeagues
+      : p.hideUpcomingRecords ? [] : undefined,
+  };
+}
+
+// The prefs a decoded link sets. Only keys the link carried are in the result.
+export function sharedExtrasPatch(d: DecodedShare): Partial<Preferences> {
+  const out: Partial<Preferences> = {};
+  if (d.hideSensitiveNews !== undefined) { out.hideSensitiveNews = d.hideSensitiveNews; out.hideCrashNews = d.hideSensitiveNews; }
+  if (d.maskVideoTitle !== undefined) out.maskVideoTitle = d.maskVideoTitle;
+  if (d.youtubeNativeControls !== undefined) out.youtubeNativeControls = d.youtubeNativeControls;
+  if (d.singleColumn !== undefined) out.singleColumn = d.singleColumn;
+  if (d.scrollColumns !== undefined) out.scrollColumns = d.scrollColumns;
+  if (d.hideTeamStars !== undefined) out.hideTeamStars = d.hideTeamStars;
+  if (d.hiddenLeagues !== undefined) out.hiddenLeagues = d.hiddenLeagues.length ? d.hiddenLeagues : undefined;
+  if (d.shownLeagues !== undefined) out.shownLeagues = d.shownLeagues.length ? d.shownLeagues : undefined;
+  if (d.catalogHiddenLeagues !== undefined) out.catalogHiddenLeagues = d.catalogHiddenLeagues.length ? d.catalogHiddenLeagues : undefined;
+  if (d.upcomingRecordLeagues !== undefined) { out.upcomingRecordLeagues = d.upcomingRecordLeagues; out.hideUpcomingRecords = undefined; }
+  return out;
+}
+
+// Decode: "m1.n15" → ["mlb-1","nba-15"]
+export interface DecodedShare extends ShareExtras {
+  teams?: string[];
+  leagues?: Sport[];
+  thirdLeague?: Sport | "empty";
+  slotLeagues?: (Sport | "empty" | undefined)[];
+}
+
+export function decodeFavorites(params: URLSearchParams): DecodedShare {
+  const result: DecodedShare = {};
   const f = params.get("f");
   const l = params.get("l");
   const t = params.get("t");
@@ -180,6 +258,37 @@ export function decodeFavorites(params: URLSearchParams): {
   if (dv && SHORT_TO_LANDING[dv]) result.defaultLandingView = SHORT_TO_LANDING[dv];
   if (dr && SHORT_TO_RATINGS[dr]) result.defaultRatings = SHORT_TO_RATINGS[dr];
   if (n && SHORT_TO_SPORT[n]) result.newsThirdLeague = SHORT_TO_SPORT[n];
+  // Anything but 1/0 is ignored, like an unknown code above.
+  const flag = (key: string): boolean | undefined => {
+    const v = params.get(key);
+    return v === "1" ? true : v === "0" ? false : undefined;
+  };
+  const sportList = (key: string): Sport[] | undefined => {
+    const v = params.get(key);
+    if (v === null) return undefined;
+    if (v === "-" || v === "") return [];
+    return v.split(".").map((tok) => SHORT_TO_SPORT[tok]).filter(Boolean) as Sport[];
+  };
+  result.hideSensitiveNews = flag("hn");
+  result.maskVideoTitle = flag("mt");
+  result.youtubeNativeControls = flag("yp");
+  result.singleColumn = flag("sc");
+  result.scrollColumns = flag("sx");
+  result.hideTeamStars = flag("ts");
+  // Only as a pair, the way the encoder writes them.
+  const xl = sportList("xl");
+  const ol = sportList("ol");
+  if (xl !== undefined && ol !== undefined) { result.hiddenLeagues = xl; result.shownLeagues = ol; }
+  result.catalogHiddenLeagues = sportList("cx");
+  const rl = params.get("rl");
+  if (rl !== null) {
+    result.upcomingRecordLeagues = rl === "-" || rl === ""
+      ? []
+      : rl.split(".")
+        .map((tok): RecordLeague | undefined => (tok === RECORD_SOCCER_SHORT ? "soccer" : SHORT_TO_SPORT[tok]))
+        .filter((k): k is RecordLeague => !!k && ALL_RECORD_LEAGUES.includes(k));
+  }
+  for (const k of Object.keys(result) as (keyof DecodedShare)[]) if (result[k] === undefined) delete result[k];
   return result;
 }
 
@@ -227,6 +336,16 @@ export interface Preferences {
   // by hand. Off by default: Settings is the durable catalog and a first-time
   // visitor should see everything HideScore carries.
   hideOffseasonInCatalog?: boolean;
+  // Leagues the user struck off the Settings catalog with its × (Jacob 9/28).
+  // Stronger than hiddenLeagues: the row leaves the catalog too, and the
+  // league leaves every switcher and the board. A league added to the app
+  // later is never on it, so it shows. Reset to defaults clears it.
+  catalogHiddenLeagues?: Sport[];
+  // The column switcher's "Add more…" sheet: draw the offseason leagues too.
+  // Off by default so the sheet opens on leagues with games; saved so it
+  // opens the way it was left (Jacob 9/29). No Settings row — the toggle
+  // lives in the sheet's footer.
+  showOffseasonInPicker?: boolean;
   // v2 changed opt-in leagues from implicitly checked to default-off. A saved
   // version means this prefs blob has either received the one-time legacy
   // preservation migration or was created after the new defaults launched.
@@ -418,6 +537,10 @@ export interface Preferences {
   // card at a time. Default false (the multi-column board). The top-game ⭐
   // and per-slot league switching still apply.
   singleColumn?: boolean;
+  // Phones and tablets: show all 5 league columns at a readable width and let
+  // the page scroll sideways, instead of 3 narrow ones. Ignored on wide
+  // screens (they already show 5) and when singleColumn is on. Default false.
+  scrollColumns?: boolean;
   // Single-column NEWS layout: same idea as singleColumn but for the news view —
   // stack every news column into one centered, wider column instead of
   // side-by-side. Available on large screens too (the news view already
@@ -442,7 +565,7 @@ export interface Preferences {
   // device with the target app (Raycast, Shortcuts, …). Syncs with the rest of
   // the blob.
   reminderLinkTemplate?: string;
-  // "TV channel links" (Settings → More settings, lib/tvChannelLinks.ts). One
+  // "TV channel links" (Settings → More settings → Links, lib/tvChannelLinks.ts). One
   // line per network, `ESPN = http://…`; that network's chip then opens the
   // link in the device's own player instead of the network's site. Blank = off.
   // Syncs, so the list is pasted once per account.
@@ -450,6 +573,11 @@ export interface Preferences {
   // Which player opens those links. Device-local (lib/devicePrefs.ts): a Mac
   // wants IINA, a phone wants VLC. Undefined = "auto".
   tvPlayer?: TvPlayer;
+  // "Links" (Settings → More settings, lib/frontendLinks.ts): the user's own Redlib and
+  // Invidious/Piped addresses. Reddit / YouTube links then open there instead.
+  // Unset = reddit.com / youtube.com. Syncs, so it is typed once per account.
+  redditFrontend?: string;
+  youtubeFrontend?: string;
   // News headlines are spoilers (a highlight's title gives away the result), so
   // every headline in the news view + modal is blurred by default. The "Titles"
   // eye toggle in the news header flips this on to reveal them all at once.
@@ -546,6 +674,13 @@ const defaults: Preferences = {
   newsTypeFilter: "reddit",
 };
 
+// Every league the board and the switchers skip: the switcher's own off list
+// plus the leagues struck off the Settings catalog. Same shape as hiddenLeagues.
+export function boardHiddenLeagues(p: { hiddenLeagues?: Sport[]; catalogHiddenLeagues?: Sport[] }): Sport[] | undefined {
+  if (!p.catalogHiddenLeagues?.length) return p.hiddenLeagues;
+  return [...new Set([...(p.hiddenLeagues ?? []), ...p.catalogHiddenLeagues])];
+}
+
 // A fresh copy of the install defaults. The signed-in merge starts from these,
 // not from this device's blob — see mergeRemotePreferences in HomeContent.
 export function defaultPreferences(): Preferences {
@@ -568,6 +703,7 @@ export function loadPreferences(): Preferences {
     // before the first fetch/render after a load.
     setServiceTimeZone(prefs.timezone);
     setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
+    setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
     // After setServiceTimeZone, so "today" is the user's chosen zone.
     prefs.watchQueue = pruneWatchQueue(prefs.watchQueue, toYmd(getEtServiceDate()));
     return prefs;
@@ -589,6 +725,7 @@ export function savePreferences(prefs: Preferences): void {
   if (typeof window === "undefined") return;
   setServiceTimeZone(prefs.timezone);
   setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
+  setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
   // localStorage.setItem can throw — quota exceeded, or storage blocked in a
   // sandboxed/private context — and savePreferences runs straight out of click
   // handlers (e.g. toggling a setting). Mirror loadPreferences' guard so a
@@ -601,4 +738,5 @@ export function savePreferences(prefs: Preferences): void {
     /* storage full/unavailable — in-memory prefs still apply this session */
   }
   if (remoteSync) remoteSync(prefs);
+  pushWidgetPrefs(prefs);
 }

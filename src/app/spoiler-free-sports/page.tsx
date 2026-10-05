@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 
 // ⚠️ Corrected 2026-09-20. This page said the score is "hidden first, then
@@ -220,6 +221,10 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/cfl-without-spoilers" className="underline underline-offset-2">
             CFL
           </Link>
+          {/* 2026-10-03: climbing, linked on its first day like the batch above. */}
+          <Link href="/climbing-replays-without-spoilers" className="underline underline-offset-2">
+            Climbing
+          </Link>
           <Link href="/mls-highlights-without-spoilers" className="underline underline-offset-2">
             MLS
           </Link>
@@ -264,14 +269,7 @@ export default function SpoilerFreeSportsPage() {
         ))}
       </section>
 
-      <div className="mt-10 flex gap-4">
-        <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }} data-umami-event="doc-bottom-open-spoiler-free-sports">
-          Back to HideScore
-        </Link>
-        <Link href="/privacy" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
-          Privacy
-        </Link>
-      </div>
+      <DocFooter route="spoiler-free-sports" />
 
       <script
         type="application/ld+json"

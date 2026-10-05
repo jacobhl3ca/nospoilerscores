@@ -10,8 +10,9 @@
 // built ONLY for state === "pre", so a finished game can never reach a
 // calendar with anything result-adjacent attached.
 
-import type { Game, LeagueEventCard, FightBout } from "./types";
+import type { Game, LeagueEventCard, FightBout, ClimbRound } from "./types";
 import { buildShareCard } from "./shareCard";
+import { startTimeLabel } from "./gameTime.ts";
 
 export interface CalendarEvent {
   title: string;
@@ -45,6 +46,9 @@ const DURATION_MIN: Record<string, number> = {
   // International cricket: an ODI is ~8 hours and a Test day ~7, so a long
   // block. A T20I runs short of it, which is the safe side.
   cricketintl: 480,
+  // Climbing rounds carry their own end time (buildClimbRoundCalendarEvent);
+  // this is only the fallback when the calendar has none.
+  climbing: 150,
 };
 const DEFAULT_DURATION_MIN = 150;
 
@@ -114,7 +118,9 @@ export function buildCalendarEvent(game: Game, leagueLabel?: string): CalendarEv
     if (game.seriesNote) parts.push(game.seriesNote);
     if (game.playoffLabel) parts.push(game.playoffLabel);
     if (isTennisTimeEstimate(game.statusDetail)) {
-      if (game.statusDetail?.trim()) parts.push(game.statusDetail.trim());
+      // ESPN's clock is Eastern; "Not before 3:00 PM" reads in the Settings zone.
+      const status = game.statusDetail?.trim() ?? "";
+      if (status) parts.push(CLOCK.test(status) ? startTimeLabel(game) : status);
       note = TENNIS_ESTIMATE_NOTE;
     }
     title = parts.join(" · ");
@@ -169,6 +175,26 @@ export function buildEventCalendarEvent(event: LeagueEventCard, fight?: FightBou
     description: describe(event.broadcasts),
     location: event.subtitle || undefined,
     uid: `${id}${UID_DOMAIN}`,
+  };
+}
+
+// One climbing round, upcoming only. The calendar feed gives a real end time,
+// so the block is the round's own length rather than a per-sport guess.
+export function buildClimbRoundCalendarEvent(event: LeagueEventCard, round: ClimbRound): CalendarEvent | null {
+  if (!event || !round || round.state !== "pre") return null;
+  const start = validStart(round.startsAt);
+  if (!start) return null;
+  const end = round.endsAt ? new Date(round.endsAt) : null;
+  const mins = end && !isNaN(end.getTime()) && end.getTime() > start.getTime()
+    ? Math.round((end.getTime() - start.getTime()) / 60_000)
+    : eventDurationMin("climbing");
+  return {
+    title: `${round.label} · ${event.title}`,
+    startIso: start.toISOString(),
+    durationMin: mins,
+    description: describe(round.streamUrl ? ["YouTube (World Climbing)"] : []),
+    location: event.subtitle || undefined,
+    uid: `climbing-${round.id}${UID_DOMAIN}`,
   };
 }
 

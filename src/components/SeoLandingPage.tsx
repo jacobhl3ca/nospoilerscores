@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import FeedbackBox from "@/components/FeedbackBox";
 import type { ReactNode } from "react";
@@ -106,7 +107,7 @@ export default function SeoLandingPage({
           </li>
           <li aria-hidden="true">›</li>
           <li>
-            <Link href="/spoiler-free-sports" className="hover:underline">Guides</Link>
+            <Link href="/guides" className="hover:underline">Guides</Link>
           </li>
           <li aria-hidden="true">›</li>
           <li aria-current="page" className="font-medium" style={{ color: "var(--text-secondary)" }}>
@@ -244,25 +245,7 @@ export default function SeoLandingPage({
         </div>
       </aside>
 
-      <div className="mt-10 flex flex-wrap gap-x-4 gap-y-2">
-        <Link
-          href="/"
-          className="underline underline-offset-2"
-          style={{ color: "var(--text-muted)" }}
-          data-umami-event={`doc-bottom-open-${route}`}
-        >
-          Back to HideScore
-        </Link>
-        <Link href="/spoiler-free-sports" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
-          Spoiler-free sports guide
-        </Link>
-        <Link href="/faq" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
-          FAQ
-        </Link>
-        <Link href="/about" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
-          About
-        </Link>
-      </div>
+      <DocFooter route={route} />
 
       <script
         type="application/ld+json"
@@ -305,7 +288,7 @@ export default function SeoLandingPage({
                 "@id": `https://hidescore.com${canonical}#breadcrumb`,
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
-                  { "@type": "ListItem", position: 2, name: "Guides", item: "https://hidescore.com/spoiler-free-sports" },
+                  { "@type": "ListItem", position: 2, name: "Guides", item: "https://hidescore.com/guides" },
                   { "@type": "ListItem", position: 3, name: h1, item: `https://hidescore.com${canonical}` },
                 ],
               },

@@ -23,6 +23,10 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // "nations league" title token (lib/youtube.ts). Probe of 10 finished
 // fixtures: 4/10 hits, 0 wrong. The UEFA channel served old "Classic" cuts
 // and is not used.
+// TUDN USA added 2026-10-03 as the fallback (Spanish commentary): over the 70
+// finished games of 9/24-10/2, FOX 8/70, TUDN 60/70, together 63/70, 0 wrong,
+// behind the home-first order gate (the return legs) and a 5-minute floor
+// (TUDN's goal clips). The FAQ and the highlights section say both.
 // No "#N" chip: nations is not in RANK_LEAGUES.
 //
 // ⚠️ WHAT THE APP ACTUALLY DOES — do not write "the score appears when you tap
@@ -60,7 +64,7 @@ const FAQ = [
   },
   {
     q: "Does HideScore have Nations League highlights?",
-    a: "Yes, for the games FOX Sports cuts. A card gets a highlight button only when FOX Sports, the US rights holder, posts a Nations League video of that exact match. In a test of ten finished games FOX had four, and none was the wrong match. A game without a FOX cut shows no button, never a video from another channel.",
+    a: "Yes, for most games. The button plays FOX Sports' cut when FOX, the US rights holder, posted one. FOX cuts only the games it airs, so for the rest the button plays TUDN USA's cut, which has Spanish commentary. In the first 70 games FOX had 8 and TUDN 60, together 63, and none was the wrong match. A game with no cut on either channel shows no button.",
   },
   {
     q: "Where can I watch the Nations League in the US?",
@@ -132,8 +136,8 @@ export default function NationsLeagueWithoutSpoilersPage() {
           p: "The players in these games are the ones you follow every weekend for their clubs. So a Nations League result arrives through club news — a fitness update, a manager's comment, a player's form story — before you ever looked for it. HideScore keeps the game itself covered, so you can check what is on and what has finished without learning how it ended.",
         },
         {
-          h: "Highlights from FOX Sports only",
-          p: "A highlight button uses only FOX Sports, and only a video titled for the Nations League and for those two teams. FOX also posts World Cup, qualifier and Gold Cup games between the same nations, so the competition name in the title is required. FOX cuts about four games in ten. A game without a FOX cut shows no button, because another channel's video could be an old meeting of the same two teams.",
+          h: "Highlights from FOX Sports, else TUDN",
+          p: "A highlight button uses FOX Sports first. FOX cuts only the games it airs, about one in nine, so for the rest the button uses TUDN USA, which has Spanish commentary. Either way the video must name the Nations League and both teams, with the home team first. Each pair plays twice, and the home team is how the two games are told apart. Clips under five minutes are single goals, not the match, so they never play. A game with no cut on either channel shows no button.",
         },
         {
           h: "Watch on FOX",

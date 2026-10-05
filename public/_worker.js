@@ -78,6 +78,21 @@ const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"])
 const AHA_CHANNEL = "atlantic hockey america";
 const AHA_SCORELINE_RX = /^\s*\S.*?\s\d{1,2},\s\S.*?\s\d{1,2}(?:\s(?:\d?OT|SO))?\s-\s(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s\d{1,2},\s\d{4}\s*$/i;
 
+// A press conference is never a highlight, whatever else its title says. The
+// WNBA channel streams one per playoff game — "Minnesota Lynx vs. New York
+// Liberty Game 2 Postgame Press Conference": both teams, the series game, no
+// date, no year — so it passed the bare-WNBA-recap carve-out, landed in a
+// standard tier, and beat the real "… | FULL GAME HIGHLIGHTS | September 29,
+// 2026" cut (demoted as full-game) on all 8 first-round cards (2026-10-01).
+// Applies to every channel. Keep scripts/prebake-news.mjs HL_NOT_HIGHLIGHT_RX
+// in sync by hand.
+const NOT_HIGHLIGHT_RX = /\b(?:press conferences?|pressers?|media availability)\b/i;
+
+// The WNBA bare recap's own shape: "Team A vs. Team B | Month D, YYYY". The
+// carve-out below requires the dated tail, so an undated bare title from the
+// same channel (a stream, a show) never counts as a highlight.
+const WNBA_BARE_RECAP_DATE_RX = /\|\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},\s+\d{4}\s*$/i;
+
 // Chess organizers who post the ROUND itself as a full broadcast VOD, with no
 // "highlights"/"recap" keyword in the title. Lowercased YouTube author_name —
 // mirrors CHESS_ORGANIZER_CHANNELS in src/lib/espn.ts, keep the two in step.
@@ -321,6 +336,468 @@ function parseWeekFromTitle(title) {
 // listed: their postseason and some per-team-channel cuts genuinely carry no
 // week, and that has to keep passing through untouched.
 const WEEK_TOKEN_REQUIRED_CHANNELS = new Set(["tsn"]);
+
+// Channels whose game slots take a title with the word "highlight" only. The
+// NFL channel posts an "NFL Daily" talk show per game ("Lions vs. Panthers
+// Week 4 SNF Recap | NFL Daily", three hosts at a desk): both teams, the week,
+// the year, and "recap", so it cleared every gate and held the 2nd button on
+// 7 of 49 NFL cards (2026-10-05). Every real league cut says "Game
+// Highlights". Keyed on the channel, so it needs no client param. The bare
+// preseason carve-out (isStrictBareNflPreseason) still passes. Keep
+// scripts/prebake-news.mjs HL_HIGHLIGHT_WORD_CHANNELS in sync by hand.
+const HIGHLIGHT_WORD_REQUIRED_CHANNELS = new Set(["nfl"]);
+
+// ── Competition climbing: /api/climbing (added 2026-10-03) ─────────────────
+// Schedule + stream links: sportclimbing/ifsc-calendar (the open-source feed
+// behind ifsc.stream), one JSON asset on every GitHub release. Ratings and the
+// "done" state: ifsc.results.info, World Climbing's own results service, which
+// needs a session cookie + CSRF token from its home page before its JSON API
+// answers (an httponly cookie, so a browser fetch cannot do it — the worker
+// does). ⛔ Spoiler contract: the response carries no athlete name, rank,
+// score, height or time. A finished final becomes ONE 0-100 number; nothing
+// else leaves this file. The calendar's own `start_list` is never copied.
+const CLIMB_CAL_URL = "https://github.com/sportclimbing/ifsc-calendar/releases/latest/download/IFSC-World-Cups-and-World-Championships.json";
+const CLIMB_RESULTS_ORIGIN = "https://ifsc.results.info";
+const CLIMB_WC_LEAGUE = "World Cups and World Championships";
+const CLIMB_BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+const CLIMB_CACHE_ORIGIN = "https://hidescore.com/__climbing";
+// Speed world records in ms, read off ifsc.results.info (record_types "WR")
+// on 2026-10-03: men 4.54 (Wujiang, May 2026), women 5.99 (Krakow, Jul 2026).
+// Update when a new WR is set; a stale value only costs the +10 bonus.
+export const CLIMB_SPEED_WR_MS = { men: 4540, women: 5990 };
+
+// Module scope survives between requests on a warm isolate. The calendar's
+// last good copy is the fallback when GitHub is down; the results session is
+// re-used until the service answers 401/403/419/422.
+let climbCalMemo = null;     // { at, data }
+let climbSession = null;     // { cookie, token }
+const climbMemo = new Map(); // key -> { until, value }
+
+// Tests only: forget the module-scope state between cases.
+export function climbResetState() {
+  climbCalMemo = null;
+  climbSession = null;
+  climbMemo.clear();
+}
+
+// The board's slate day for an instant: the ET calendar day, with the same
+// 1 AM rollover as the client (etSlateYmd), so a 12:30 AM ET start files under
+// the night before.
+export function climbEtSlateYmd(iso) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false,
+  }).formatToParts(new Date(t));
+  const get = (type) => Number(parts.find((p) => p.type === type)?.value ?? "0");
+  const d = new Date(Date.UTC(get("year"), get("month") - 1, get("day")));
+  if (get("hour") % 24 < 1) d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+// One row per category. The calendar lists "Men's & Women's Lead Final" as a
+// single round with categories ["men","women"]; both rows share its stream.
+export function climbExpandRounds(ev) {
+  const rows = [];
+  for (const r of ev?.rounds ?? []) {
+    const discipline = String(r?.disciplines?.[0] ?? "").toLowerCase();
+    const kind = String(r?.kind ?? "").toLowerCase();
+    if (!["boulder", "lead", "speed"].includes(discipline)) continue;
+    if (!["qualification", "semi-final", "final"].includes(kind)) continue;
+    const startsAt = String(r?.starts_at ?? "");
+    if (!Number.isFinite(Date.parse(startsAt))) continue;
+    for (const c of r?.categories ?? []) {
+      const category = String(c).toLowerCase();
+      if (category !== "men" && category !== "women") continue;
+      rows.push({
+        id: `${ev.id}-${discipline}-${category}-${kind}`,
+        kind,
+        discipline,
+        category,
+        startsAt,
+        endsAt: Number.isFinite(Date.parse(r?.ends_at ?? "")) ? String(r.ends_at) : null,
+        provisional: String(r?.schedule_status ?? "") !== "confirmed",
+        streamUrl: typeof r?.stream_url === "string" && /^https:\/\/(?:www\.)?(?:youtu\.be|youtube\.com)\//.test(r.stream_url) ? r.stream_url : null,
+        blockedRegions: Array.isArray(r?.stream_blocked_regions) ? r.stream_blocked_regions.filter((x) => typeof x === "string") : [],
+        ymd: climbEtSlateYmd(startsAt),
+      });
+    }
+  }
+  return rows.sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+}
+
+// pre before the start; post once the results service says the round is
+// finished, or two hours after its scheduled end (the service lags, and a
+// round with no results entry at all must still close); in otherwise.
+export function climbRoundState(startsAt, endsAt, resultsStatus, now) {
+  const s = Date.parse(startsAt);
+  if (!Number.isFinite(s) || now < s) return "pre";
+  if (resultsStatus === "finished") return "post";
+  const e = Number.isFinite(Date.parse(endsAt ?? "")) ? Date.parse(endsAt) : s + 3 * 3600_000;
+  return now >= e + 2 * 3600_000 ? "post" : "in";
+}
+
+const climbClamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
+
+// "33+" → 33.5, "33" → 33. Null for "TOP" and anything unparseable.
+export function climbParseHeight(score) {
+  const m = String(score ?? "").trim().match(/^(\d+(?:\.\d+)?)(\+)?$/);
+  if (!m) return null;
+  return Number(m[1]) + (m[2] ? 0.5 : 0);
+}
+
+const climbRanked = (res) => (res?.ranking ?? [])
+  .filter((a) => Number.isFinite(a?.rank))
+  .sort((a, b) => a.rank - b.rank);
+
+// Boulder final, 2026 points format: top 25, zone 10, minus 0.1 per failed try.
+//   close = 100 − 2 × (1st − 2nd)
+//   + min(15, 1.5 × tops in the final)
+//   + 12 if the leader before the last boulder did not win (running totals
+//     rebuilt from each athlete's ascents in route order)
+//   score = 0.8 × close + bonuses
+// Weights tuned 2026-10-03 on all 32 finished 2026 World Cup finals
+// (scripts/climbing-rating-calibrate.mjs): 8 GREAT, 10 GOOD. One top's worth
+// of gap (~15 points) with a busy final lands just inside GOOD.
+export function climbBoulderRating(res) {
+  const r = climbRanked(res);
+  if (r.length < 2) return null;
+  const total = (a) => (a.ascents ?? []).reduce((s, x) => s + (Number(x?.points) || 0), 0);
+  const scoreOf = (a) => {
+    const n = parseFloat(String(a.score ?? ""));
+    return Number.isFinite(n) ? n : total(a);
+  };
+  const close = 100 - 2 * (scoreOf(r[0]) - scoreOf(r[1]));
+  const tops = r.reduce((s, a) => s + (a.ascents ?? []).filter((x) => x?.top === true).length, 0);
+  let bonus = Math.min(15, 1.5 * tops);
+  const routeIds = (res.routes ?? []).map((x) => x?.id).filter((x) => x != null);
+  const lastRoute = routeIds.length ? routeIds[routeIds.length - 1] : null;
+  const hasPoints = r.every((a) => (a.ascents ?? []).some((x) => Number.isFinite(Number(x?.points))));
+  if (lastRoute != null && hasPoints) {
+    const before = r.map((a) => (a.ascents ?? []).filter((x) => x?.route_id !== lastRoute).reduce((s, x) => s + (Number(x?.points) || 0), 0));
+    const best = Math.max(...before);
+    if (before[0] < best - 1e-9) bonus += 12;
+  }
+  return climbClamp(0.8 * close + bonus);
+}
+
+// Lead final, one route:
+//   close = 100 − 12 × (h1 − h2), heights as numbers ("33+" = 33.5, TOP = top)
+//   + 8 if the top two finish on the same height (countback decides)
+//   + 5 if 2 or more athletes top the route
+//   + 10 if the leader before the last climber is not the winner
+export function climbLeadRating(res) {
+  const r = climbRanked(res);
+  if (r.length < 2) return null;
+  const topped = (a) => (a.ascents ?? []).some((x) => x?.top === true) || /^top$/i.test(String(a.score ?? "").trim());
+  const nums = r.map((a) => climbParseHeight(a.score)).filter((n) => n != null);
+  const topHeight = (nums.length ? Math.max(...nums) : 50) + 3;
+  const h = (a) => (topped(a) ? topHeight : climbParseHeight(a.score));
+  const h1 = h(r[0]);
+  const h2 = h(r[1]);
+  if (h1 == null || h2 == null) return null;
+  let score = 100 - 12 * (h1 - h2);
+  if (h1 === h2) score += 8;
+  if (r.filter(topped).length >= 2) score += 5;
+  // Start order: the results row's start_order when present, else the
+  // round's start list.
+  const pos = new Map();
+  for (const s of res.startlist ?? []) {
+    const p = s?.route_start_positions?.[0]?.position;
+    if (s?.athlete_id != null && Number.isFinite(p)) pos.set(s.athlete_id, p);
+  }
+  const orderOf = (a) => (Number.isFinite(a?.start_order) ? a.start_order : pos.get(a?.athlete_id));
+  const withOrder = r.filter((a) => Number.isFinite(orderOf(a)));
+  if (withOrder.length === r.length) {
+    const last = withOrder.reduce((m, a) => (orderOf(a) > orderOf(m) ? a : m), withOrder[0]);
+    const others = r.filter((a) => a !== last);
+    // The leader before the last climber is the best of everyone else. The
+    // winner differs from that leader exactly when the last climber won.
+    if (last === r[0] && others.length) score += 10;
+  }
+  return climbClamp(score);
+}
+
+// Speed, the big final (the last stage named "Final"; the small final is the
+// bronze race):
+//   close = 100 − margin_ms / 6
+// (tuned 2026-10-03: at / 15 a typical 0.1-0.2 s final read GREAT, and 8 of
+// 12 speed finals were; at / 6 a 0.06 s final is still GREAT, 0.1 s GOOD.)
+//   − 20 if a fall or DNF decided it (fewer than two valid times)
+//   + 10 if the winning time is within 0.05 s of the world record
+export function climbSpeedRating(res) {
+  const stages = res?.speed_elimination_stages ?? [];
+  const big = [...stages].reverse().find((s) => /^final$/i.test(String(s?.stage_name ?? "").trim()));
+  const heat = big?.heats?.[0];
+  if (!heat?.athletes?.length) return null;
+  const timeOf = (a) => {
+    const asc = a?.ascents ?? [];
+    if (asc.some((x) => x?.dnf || x?.dns)) return null;
+    const t = Number(a?.stage_result?.time) || Number(asc[0]?.time_ms) || 0;
+    return t > 0 ? t : null;
+  };
+  const times = heat.athletes.map(timeOf).filter((t) => t != null).sort((a, b) => a - b);
+  if (!times.length) return null;
+  let score;
+  if (times.length >= 2) {
+    score = 100 - (times[1] - times[0]) / 6;
+  } else {
+    // No second valid time: it was a race until the slip, then it was not.
+    score = 70 - 20;
+  }
+  const cat = String(res?.category ?? "").toLowerCase();
+  const wr = CLIMB_SPEED_WR_MS[cat === "women" ? "women" : "men"];
+  if (wr && times[0] - wr <= 50) score += 10;
+  return climbClamp(score);
+}
+
+export function climbFinalRating(res) {
+  const d = String(res?.discipline ?? "").toLowerCase();
+  try {
+    if (d === "boulder") return climbBoulderRating(res);
+    if (d === "lead") return climbLeadRating(res);
+    if (d === "speed") return climbSpeedRating(res);
+  } catch { /* a schema change rates nothing rather than throwing */ }
+  return null;
+}
+
+// A replay found by search must carry exactly the house title, e.g.
+// "Lead finals | Koper 2026" (optionally "Men's …" and "| World Climbing").
+// The channel also posts "X takes gold"-style clips; any other title stays
+// dark. Used only when the calendar has no stream URL for a finished round.
+export function climbReplayTitleOk(title, discipline, kind, category, location, year) {
+  const kindRx = kind === "final" ? "finals?" : kind === "semi-final" ? "semi-finals?" : null;
+  if (!kindRx || !discipline || !location || !year) return false;
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const who = category === "women" ? "women's" : "men's";
+  const t = String(title ?? "").replace(/[’‘]/g, "'").replace(/\s+/g, " ").trim();
+  const rx = new RegExp(`^(?:${who} )?${esc(discipline)} ${kindRx} \\| ${esc(location)} ${esc(year)}(?: \\| world climbing)?$`, "i");
+  return rx.test(t);
+}
+
+async function climbCacheGet(key) {
+  const memo = climbMemo.get(key);
+  if (memo && memo.until > Date.now()) return memo.value;
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  if (!cache) return undefined;
+  try {
+    const hit = await cache.match(new Request(`${CLIMB_CACHE_ORIGIN}/${key}`));
+    if (hit) return await hit.json();
+  } catch { /* miss */ }
+  return undefined;
+}
+
+function climbCachePut(key, value, ttlSec, ctx) {
+  climbMemo.set(key, { until: Date.now() + ttlSec * 1000, value });
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  if (!cache) return;
+  const p = cache.put(
+    new Request(`${CLIMB_CACHE_ORIGIN}/${key}`),
+    new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${ttlSec}` } }),
+  ).catch(() => {});
+  if (ctx?.waitUntil) ctx.waitUntil(p);
+}
+
+// The calendar, 30 minutes fresh, with the last good copy (7 days in the edge
+// cache, and the isolate's memory) when GitHub fails.
+async function climbCalendar(ctx) {
+  if (climbCalMemo && Date.now() - climbCalMemo.at < 30 * 60_000) return climbCalMemo.data;
+  const fresh = await climbCacheGet("calendar");
+  if (fresh && Array.isArray(fresh.events)) {
+    climbCalMemo = { at: Date.now(), data: fresh };
+    return fresh;
+  }
+  try {
+    const r = await fetch(CLIMB_CAL_URL, { headers: { "User-Agent": "HideScore/1.0 (+https://hidescore.com)", Accept: "application/json" }, redirect: "follow" });
+    if (r.ok) {
+      const data = await r.json();
+      if (Array.isArray(data?.events)) {
+        climbCalMemo = { at: Date.now(), data };
+        climbCachePut("calendar", data, 1800, ctx);
+        climbCachePut("calendar-last", data, 7 * 86400, ctx);
+        return data;
+      }
+    }
+  } catch { /* fall back below */ }
+  if (climbCalMemo) return climbCalMemo.data;
+  const last = await climbCacheGet("calendar-last");
+  return last && Array.isArray(last.events) ? last : null;
+}
+
+async function climbHandshake() {
+  try {
+    const r = await fetch(`${CLIMB_RESULTS_ORIGIN}/`, { headers: { "User-Agent": CLIMB_BROWSER_UA, Accept: "text/html" } });
+    if (!r.ok) return null;
+    const html = await r.text();
+    const token = html.match(/<meta\s+name="csrf-token"\s+content="([^"]+)"/)?.[1];
+    const cookie = (r.headers.get("set-cookie") || "").match(/_ifsc_resultservice_session=[^;,\s]+/)?.[0];
+    if (!token || !cookie) return null;
+    climbSession = { cookie, token };
+    return climbSession;
+  } catch {
+    return null;
+  }
+}
+
+// GET a results-service JSON path with the session; one re-handshake on an
+// auth failure. Null on anything else.
+async function climbResultsJson(path) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const s = climbSession ?? (await climbHandshake());
+    if (!s) return null;
+    try {
+      const r = await fetch(`${CLIMB_RESULTS_ORIGIN}${path}`, {
+        headers: {
+          Cookie: s.cookie,
+          "X-Csrf-Token": s.token,
+          Referer: `${CLIMB_RESULTS_ORIGIN}/`,
+          Accept: "application/json",
+          "User-Agent": CLIMB_BROWSER_UA,
+        },
+      });
+      if ([401, 403, 419, 422].includes(r.status)) {
+        climbSession = null;
+        continue;
+      }
+      if (!r.ok) return null;
+      return await r.json();
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+// The event's category rounds: discipline + category + kind → { id, status }.
+async function climbEventRounds(eventId, ctx) {
+  const key = `event-${eventId}`;
+  const cached = await climbCacheGet(key);
+  if (cached) return cached;
+  const ev = await climbResultsJson(`/api/v1/events/${encodeURIComponent(eventId)}`);
+  if (!ev || !Array.isArray(ev.d_cats)) return null;
+  const out = {};
+  let allDone = true;
+  for (const dc of ev.d_cats) {
+    const disc = String(dc?.discipline_kind ?? "").toLowerCase();
+    const cat = String(dc?.category_name ?? "").toLowerCase();
+    for (const cr of dc?.category_rounds ?? []) {
+      const kind = String(cr?.name ?? "").toLowerCase();
+      if (!cr?.category_round_id) continue;
+      out[`${disc}-${cat}-${kind}`] = { id: cr.category_round_id, status: String(cr.status ?? "") };
+      if (cr.status !== "finished") allDone = false;
+    }
+  }
+  climbCachePut(key, out, allDone && Object.keys(out).length ? 86400 : 120, ctx);
+  return out;
+}
+
+async function climbRoundRating(roundId, ctx) {
+  const key = `rating-${roundId}`;
+  const cached = await climbCacheGet(key);
+  if (cached && "rating" in cached) return cached.rating;
+  const res = await climbResultsJson(`/api/v1/category_rounds/${encodeURIComponent(roundId)}/results`);
+  if (!res) return null;
+  const rating = res.status === "finished" ? climbFinalRating(res) : null;
+  if (res.status === "finished") climbCachePut(key, { rating }, 86400, ctx);
+  return rating;
+}
+
+// World Climbing posts a "where to watch" article per event a few days out.
+// Linked only once it answers 200; a 404 is re-checked after 6 hours.
+async function climbWhereToWatch(slug, ctx) {
+  if (!/^[a-z0-9-]+$/.test(String(slug ?? ""))) return null;
+  const key = `wtw-${slug}`;
+  const cached = await climbCacheGet(key);
+  if (cached && "url" in cached) return cached.url;
+  const u = `https://www.worldclimbing.com/news/where-to-watch-the-${slug}`;
+  let ok = false;
+  try {
+    const r = await fetch(u, { headers: { "User-Agent": CLIMB_BROWSER_UA } });
+    ok = r.status === 200;
+  } catch { /* not linked */ }
+  climbCachePut(key, { url: ok ? u : null }, ok ? 86400 : 6 * 3600, ctx);
+  return ok ? u : null;
+}
+
+// A finished round with no stream URL in the calendar: look for the replay on
+// the channel itself, house title only (climbReplayTitleOk).
+async function climbFindReplay(row, location, year, ctx) {
+  const key = `replay-${row.id}`;
+  const cached = await climbCacheGet(key);
+  if (cached && "url" in cached) return cached.url;
+  const word = row.kind === "final" ? "finals" : "semi-finals";
+  const q = `${row.discipline} ${word} ${location} ${year}`;
+  let found = null;
+  try {
+    const r = await fetch(`https://www.youtube.com/@worldclimbing/search?query=${encodeURIComponent(q)}`, {
+      headers: { "User-Agent": CLIMB_BROWSER_UA, "Accept-Language": "en-US,en;q=0.9" },
+    });
+    if (r.ok) {
+      const html = await r.text();
+      for (const block of html.split('"videoRenderer":{').slice(1)) {
+        const id = block.match(/^"videoId":"([A-Za-z0-9_-]{11})"/)?.[1];
+        const title = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/)?.[1] ?? "";
+        if (id && climbReplayTitleOk(title.replace(/\\u0026/g, "&"), row.discipline, row.kind, row.category, location, year)) {
+          found = `https://youtu.be/${id}`;
+          break;
+        }
+      }
+    }
+  } catch { /* stays dark */ }
+  climbCachePut(key, { url: found }, found ? 86400 : 1800, ctx);
+  return found;
+}
+
+// The /api/climbing body for one ET slate day (YYYYMMDD).
+export async function climbDay(ymd, now, ctx) {
+  const cal = await climbCalendar(ctx);
+  if (!cal) return { events: [], error: "calendar" };
+  const out = [];
+  for (const ev of cal.events) {
+    if (ev?.league_name !== CLIMB_WC_LEAGUE) continue;
+    const rows = climbExpandRounds(ev);
+    const days = [...new Set(rows.map((r) => r.ymd))].sort();
+    const today = rows.filter((r) => r.ymd === ymd);
+    if (!today.length) continue;
+    const started = today.some((r) => now >= Date.parse(r.startsAt));
+    const results = started ? await climbEventRounds(ev.id, ctx) : null;
+    const location = String(ev.location ?? "");
+    const year = String(ev.season ?? String(ev.starts_at ?? "").slice(0, 4));
+    const rounds = [];
+    for (const row of today) {
+      const rr = results?.[`${row.discipline}-${row.category}-${row.kind}`];
+      const state = climbRoundState(row.startsAt, row.endsAt, rr?.status, now);
+      let rating = null;
+      if (row.kind === "final" && state === "post" && rr?.id) rating = await climbRoundRating(rr.id, ctx);
+      let streamUrl = row.streamUrl;
+      if (!streamUrl && state === "post" && row.kind !== "qualification") streamUrl = await climbFindReplay(row, location, year, ctx);
+      rounds.push({
+        id: row.id,
+        kind: row.kind,
+        discipline: row.discipline,
+        category: row.category,
+        startsAt: row.startsAt,
+        endsAt: row.endsAt,
+        provisional: row.provisional,
+        streamUrl,
+        blockedRegions: row.blockedRegions,
+        state,
+        rating,
+      });
+    }
+    out.push({
+      id: String(ev.id),
+      name: String(ev.name ?? ""),
+      location,
+      disciplines: [...new Set(today.map((r) => r.discipline))],
+      dayIndex: days.indexOf(ymd) + 1,
+      dayCount: days.length,
+      whereToWatchUrl: await climbWhereToWatch(ev.slug, ctx),
+      rounds,
+    });
+  }
+  return { events: out };
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -568,6 +1045,20 @@ export default {
       // title carries, so it has to be the gate.
       const weekParam = parseInt(url.searchParams.get("week") || "", 10);
       const queryWeek = Number.isFinite(weekParam) && weekParam >= 1 && weekParam <= 25 ? weekParam : null;
+      // order=home → HOME-FIRST ORDER GATE (UEFA Nations League, 2026-10-03).
+      // Each pair meets twice, the return leg 10–12 days after the first, and
+      // neither FOX Sports nor TUDN USA puts a date in the title. Both put the
+      // HOME team first (99/99 TUDN titles and every FOX title checked), so the
+      // title's team order is the only thing that tells the two legs apart.
+      // The query is "Away vs Home highlights …", so the home team is the
+      // second parsed team and must appear first in the title.
+      const homeFirst = url.searchParams.get("order") === "home";
+      // minsec=<n> → DURATION FLOOR. TUDN USA posts 1–2 min goal clips beside
+      // each match cut ("PORTUGAL GOAL! Denmark vs Portugal", 111 s) under the
+      // same two names and competition. A clip whose search card shows a
+      // shorter running time is skipped; an unknown length is let through.
+      const minSecParam = parseInt(url.searchParams.get("minsec") || "", 10);
+      const minSec = Number.isFinite(minSecParam) && minSecParam > 0 ? minSecParam : null;
       const excludeParam = url.searchParams.get("exclude"); // comma-separated videoIds to skip (used by VideoModal fallback retries)
       const excludeSet = new Set(
         (excludeParam || "").split(",").map((s) => s.trim()).filter(Boolean)
@@ -784,13 +1275,13 @@ export default {
           // Paraguay" failed hasTeams while a re-upload's "USA vs Paraguay" won.
           // Keys are the lowercased ESPN short names the client sends.
           "usa": ["usa", "united states", "usmnt"],
-          "bosnia-herz": ["bosnia-herz", "bosnia-herzegovina", "bosnia and herzegovina", "bosnia & herzegovina", "bosnia", "herzegovina"],
+          "bosnia-herz": ["bosnia-herz", "bosnia-herzegovina", "bosnia and herzegovina", "bosnia & herzegovina", "bosnia", "herzegovina", "bosnia y herzegovina"],
           "south korea": ["south korea", "korea republic", "korea"],
           "ivory coast": ["ivory coast", "côte d'ivoire", "cote d'ivoire", "cote d ivoire"],
-          "türkiye": ["türkiye", "turkiye", "turkey"],
+          "türkiye": ["türkiye", "turkiye", "turkey", "turquía"],
           "congo dr": ["congo dr", "dr congo", "dr. congo", "democratic republic of congo"],
           "curaçao": ["curaçao", "curacao"],
-          "czechia": ["czechia", "czech republic"],
+          "czechia": ["czechia", "czech republic", "chequia", "república checa"],
           "iran": ["iran", "ir iran"],
           "cape verde": ["cape verde", "cabo verde"],
           "saudi arabia": ["saudi arabia", "saudi", "ksa"],
@@ -798,7 +1289,7 @@ export default {
           "france": ["france", "francia"],
           "germany": ["germany", "alemania"],
           "morocco": ["morocco", "marruecos"],
-          "netherlands": ["netherlands", "holland", "paises bajos", "países bajos"],
+          "netherlands": ["netherlands", "holland", "paises bajos", "países bajos", "holanda"],
           "senegal": ["senegal", "senegal"],
           "belgium": ["belgium", "belgica", "bélgica"],
           "switzerland": ["switzerland", "swiss", "suiza"],
@@ -807,7 +1298,49 @@ export default {
           "colombia": ["colombia", "colombia"],
           "argentina": ["argentina", "argentina"],
           "spain": ["spain", "españa", "espana"],
+          // UEFA Nations League (2026-10-03): the rest of the 54 nations whose
+          // English or Spanish title form differs from ESPN's short name. TUDN
+          // USA's original titles are Spanish ("Países Bajos vs Alemania"), and
+          // its search cards show an English translation for most uploads
+          // ("Czech Republic vs England"). Accents fold away before matching.
+          // ⚠️ "ireland" / "irlanda" stay ONLY on Rep Ireland, and
+          // CONTAINING_TEAM_NAMES below masks "northern ireland" out of the
+          // title before a Rep Ireland lookup, so one can never match the other.
+          "rep ireland": ["rep ireland", "republic of ireland", "ireland", "irlanda", "república de irlanda"],
+          "n ireland": ["n ireland", "northern ireland", "irlanda del norte"],
+          "england": ["england", "inglaterra"],
+          "scotland": ["scotland", "escocia"],
+          "wales": ["wales", "gales"],
+          "italy": ["italy", "italia"],
+          "croatia": ["croatia", "croacia"],
+          "denmark": ["denmark", "dinamarca"],
+          "norway": ["norway", "noruega"],
+          "sweden": ["sweden", "suecia"],
+          "finland": ["finland", "finlandia"],
+          "iceland": ["iceland", "islandia"],
+          "faroe islands": ["faroe islands", "faroes", "islas feroe"],
+          "poland": ["poland", "polonia"],
+          "hungary": ["hungary", "hungría"],
+          "romania": ["romania", "rumania", "rumanía"],
+          "ukraine": ["ukraine", "ucrania"],
+          "greece": ["greece", "grecia"],
+          "cyprus": ["cyprus", "chipre"],
+          "slovakia": ["slovakia", "eslovaquia"],
+          "slovenia": ["slovenia", "eslovenia"],
+          "north macedonia": ["north macedonia", "macedonia del norte"],
+          "lithuania": ["lithuania", "lituania"],
+          "latvia": ["latvia", "letonia"],
+          "luxembourg": ["luxembourg", "luxemburgo"],
+          "moldova": ["moldova", "moldavia"],
+          "belarus": ["belarus", "bielorrusia"],
+          "kazakhstan": ["kazakhstan", "kazajistán", "kazajstán"],
+          "azerbaijan": ["azerbaijan", "azerbaiyán"],
         };
+        // Team names that CONTAIN another team's name: "Northern Ireland" holds
+        // "Ireland", "Irlanda del Norte" holds "Irlanda". When the team being
+        // looked up does not own one of these, it is blanked out of the title
+        // first, so a Rep Ireland lookup cannot match a Northern Ireland title.
+        const CONTAINING_TEAM_NAMES = ["northern ireland", "irlanda del norte"];
 
         // Extract team names from query: "Away vs Home highlights ..."
         const teamsMatch = query.match(/^(.+?)\s+vs\s+(.+?)\s+(?:highlights|resumen)\b/i);
@@ -845,9 +1378,35 @@ export default {
           return TEAM_VARIANT_INDEX[lower] || TEAM_ALIASES[lower] || [lower];
         }
 
+        // The title as matched for one team: normalized, with every
+        // CONTAINING_TEAM_NAMES entry the team does not own blanked to spaces
+        // (same length, so the order gate's positions stay true).
+        function titleForTeam(titleLower, variants) {
+          let t = normalizeTeamMatch(titleLower);
+          const own = new Set(variants.map(normalizeTeamMatch));
+          for (const name of CONTAINING_TEAM_NAMES) {
+            if (!own.has(name)) t = t.split(name).join(" ".repeat(name.length));
+          }
+          return t;
+        }
+
+        // Where a team first appears in the title (any variant), or -1. Feeds
+        // the home-first order gate; plain substring positions only, so a team
+        // found only through the tolerances below reads -1 and fails closed.
+        function teamTitleIndex(titleLower, teamName) {
+          const variants = getTeamVariants(teamName);
+          const t = titleForTeam(titleLower, variants);
+          let best = -1;
+          for (const v of variants) {
+            const i = t.indexOf(normalizeTeamMatch(v));
+            if (i >= 0 && (best < 0 || i < best)) best = i;
+          }
+          return best;
+        }
+
         function titleHasTeam(titleLower, teamName) {
           const variants = getTeamVariants(teamName);
-          const normalizedTitle = normalizeTeamMatch(titleLower);
+          const normalizedTitle = titleForTeam(titleLower, variants);
           if (variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)))) return true;
           // Singular-nickname tolerance. Not hypothetical: the OFFICIAL NFL
           // channel's Week 15 recap of Dec 14 2025 is titled "Washington
@@ -999,10 +1558,12 @@ export default {
                 titleLower.includes(`${queryRoundOrdinal} round`)));
           // WNBA sometimes publishes its normal 10-minute recap as only
           // "Team A vs. Team B | Month D, YYYY". It is still a highlight when
-          // (and only when) the caller requested the strict WNBA channel; the
-          // team/date gates below still have to match exactly.
+          // (and only when) the caller requested the strict WNBA channel and the
+          // title ends in that dated tail; the team/date gates below still have
+          // to match exactly.
           const isStrictBareWnbaRecap =
-            strictChannelParam && isFromChannel && preferChannelLower === "wnba" && queryHasSpecificTeams;
+            strictChannelParam && isFromChannel && preferChannelLower === "wnba" && queryHasSpecificTeams &&
+            WNBA_BARE_RECAP_DATE_RX.test(title);
           // Chess publishes NO highlight package at all — verified 2026-08-10
           // across every organizer that broadcasts on Lichess. What exists is
           // the round itself, posted as a full VOD titled "2026 Sinquefield
@@ -1076,7 +1637,13 @@ export default {
             isStrictBareWnbaRecap ||
             isChessRoundBroadcast ||
             isStrictBareNflPreseason;
-          if (!isHighlight) continue;
+          if (!isHighlight || NOT_HIGHLIGHT_RX.test(title)) continue;
+          // See HIGHLIGHT_WORD_REQUIRED_CHANNELS: "recap" alone is a talk show here.
+          if (
+            HIGHLIGHT_WORD_REQUIRED_CHANNELS.has(preferChannelLower) &&
+            !titleLower.includes("highlight") &&
+            !isStrictBareNflPreseason
+          ) continue;
 
           // Racing race gate (see the `race` param above). The official channel
           // posts one reel per race all season, so without this the F1 /
@@ -1145,6 +1712,21 @@ export default {
           const hasTeams =
             queryTeams.length === 2 &&
             queryTeams.every((team) => titleHasTeam(titleLower, team));
+
+          // Home-first order gate (order=home, see homeFirst above). A title
+          // that names the away side first is the OTHER leg of the pair, so it
+          // is dropped from every tier, not just ranked lower.
+          if (homeFirst && queryHasSpecificTeams) {
+            if (!hasTeams) continue;
+            const homeAt = teamTitleIndex(titleLower, queryTeams[1]);
+            const awayAt = teamTitleIndex(titleLower, queryTeams[0]);
+            if (homeAt < 0 || awayAt < 0 || homeAt >= awayAt) continue;
+          }
+          // Duration floor (minsec=, see minSec above): a goal clip, not the match.
+          if (minSec !== null) {
+            const len = lengthById.get(videoId);
+            if (Number.isFinite(len) && len < minSec) continue;
+          }
 
           // Date match — strict when both the title carries an
           // explicit date (short form "(5/22/26)" or long form "May
@@ -2095,7 +2677,7 @@ export default {
             (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightExtendedId)
           );
         }
-        if (!videoId && !isGolfQuery && !queryHasSpecificTeams && raceTokens.length === 0 && compTokens.length === 0) {
+        if (!videoId && !isGolfQuery && !queryHasSpecificTeams && raceTokens.length === 0 && compTokens.length === 0 && !HIGHLIGHT_WORD_REQUIRED_CHANNELS.has(preferChannelLower)) {
           // Raw-regex fallback — only for non-golf. For golf we'd
           // rather return 404 than guess wrong and let a random
           // PGA TOUR highlight win the Masters slot.
@@ -2445,6 +3027,51 @@ export default {
         return corsJson({ games });
       } catch {
         return corsJson({ games: [] }, 200, 120);
+      }
+    }
+
+    // ── Competition climbing: one ET day of World Cup rounds ───────────────
+    //   GET /api/climbing?dates=YYYYMMDD → { events: [{ id, name, location,
+    //     disciplines, dayIndex, dayCount, whereToWatchUrl, rounds: [...] }] }
+    // See climbDay above. Always HTTP 200 like /api/cricket-intl; a broken
+    // calendar answers { events: [], error } so the client can say "feed down"
+    // instead of "nothing on".
+    if (url.pathname === "/api/climbing") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+      const cjson = (body, maxAge = 120) =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${maxAge}`,
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      const m = (url.searchParams.get("dates") || "").match(/^(\d{8})$/);
+      const ymd = m ? m[1] : climbEtSlateYmd(new Date().toISOString());
+      const cache = typeof caches !== "undefined" ? caches.default : null;
+      const cacheKey = new Request(`${url.origin}/api/climbing?dates=${ymd}`, { method: "GET" });
+      if (cache) {
+        const hit = await cache.match(cacheKey);
+        if (hit) return hit;
+      }
+      try {
+        const body = await climbDay(ymd, Date.now(), ctx);
+        if (body.error) return cjson(body, 60);
+        const live = body.events.some((e) => e.rounds.some((r) => r.state === "in"));
+        const res = cjson(body, live ? 60 : 300);
+        if (cache && ctx?.waitUntil) ctx.waitUntil(cache.put(cacheKey, res.clone()));
+        return res;
+      } catch {
+        return cjson({ events: [], error: "failed" }, 60);
       }
     }
 
