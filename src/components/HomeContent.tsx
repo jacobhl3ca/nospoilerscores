@@ -478,6 +478,10 @@ const FEEDBACK_LEAGUE_PREFILL = "League request: ";
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
   typeof window !== "undefined" && window.matchMedia(WIDE_BOARD_QUERY).matches;
+// Settings → Scroll columns: 5 columns on a phone or tablet too, with the page
+// scrolling sideways. One wide column wins over it.
+const scrollColumnsOn = (p: { scrollColumns?: boolean; singleColumn?: boolean }) =>
+  !!p.scrollColumns && !p.singleColumn;
 // All slot indexes the prefs system knows about (slots 4-5 render wide-only).
 const SLOT_INDICES = [0, 1, 2, 3, 4];
 
@@ -1224,7 +1228,11 @@ export default function HomeContent({
     return () => mq.removeEventListener("change", handler);
   }, []);
   // Scores-board slot count: 5 wide, 3 otherwise. News view stays 3-column.
-  const slotCount = isWide ? 5 : 3;
+  // Scroll columns gives a narrow screen all 5 too (the page scrolls sideways).
+  const scrollOn = !isWide && scrollColumnsOn(prefs);
+  const slotCount = isWide || scrollOn ? 5 : 3;
+  const scrollOnRef = useRef(scrollOn);
+  scrollOnRef.current = scrollOn;
 
   // The shareable hidescore link for a modal payload — identical to the modal's
   // own "Copy link" (see buildHighlightShareUrl). Returned root-relative ("/?…")
@@ -1498,10 +1506,11 @@ export default function HomeContent({
       }
       // Slot count reads the live viewport so the initial desktop load fetches
       // all 5 leagues in one pass (isWide state hasn't flipped yet on mount).
+      const pullSlots = isWideViewport() || scrollColumnsOn(prefsRef.current) ? 5 : 3;
       let [data] = await Promise.all([
         fetchAllLeagues(
-          date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3,
-          bestYesterdayOptions(prefsRef.current, date, isWideViewport() ? 5 : 3),
+          date, thirdLeague, slotOverrides, pullSlots,
+          bestYesterdayOptions(prefsRef.current, date, pullSlots),
           boardHiddenLeagues(prefsRef.current),
         ),
         loadBakedHighlights(),
@@ -1573,7 +1582,8 @@ export default function HomeContent({
   }, [selectedDate]);
 
   // isWide is a dep so resizing across the 5-column breakpoint silently
-  // fetches (or drops) the extra two leagues. hiddenKey is one too: turning a
+  // fetches (or drops) the extra two leagues; scrollOn does the same for the
+  // Scroll columns setting. hiddenKey is one too: turning a
   // league off in Settings moves its column to the next league at once.
   // What the board and switchers skip: switcher hides + catalog strikes.
   const prefsHiddenLeagues = prefs.hiddenLeagues;
@@ -1593,7 +1603,7 @@ export default function HomeContent({
       fifth: prefs.fifthLeague,
     }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide, hiddenKey]);
+  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide, scrollOn, hiddenKey]);
 
   // A Settings zone change applies at once (Jacob 10/4). The zone moves
   // "today" (1 AM rollover), the next-game day, the soccer/tennis day filters
@@ -2700,6 +2710,7 @@ export default function HomeContent({
   const [pullDelta, setPullDelta] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const pullStartYRef = useRef<number | null>(null);
+  const pullStartXRef = useRef(0);
   const pullDeltaRef = useRef(0);
   const refreshingRef = useRef(false);
   // doRefresh closes over the latest selectedDate/prefs/showNews. We stash
@@ -2746,11 +2757,15 @@ export default function HomeContent({
       if (refreshingRef.current) return;
       if (window.scrollY > 0) return;
       pullStartYRef.current = e.touches[0].clientY;
+      pullStartXRef.current = e.touches[0].clientX;
     };
     const onTouchMove = (e: TouchEvent) => {
       if (pullStartYRef.current === null) return;
       const delta = e.touches[0].clientY - pullStartYRef.current;
-      if (delta < 0) {
+      // Scroll columns: a sideways swipe scrolls the board, not a refresh.
+      const sideways = scrollOnRef.current
+        && Math.abs(e.touches[0].clientX - pullStartXRef.current) > Math.abs(delta);
+      if (delta < 0 || sideways) {
         // User pulled up → cancel. Don't reset start so they can re-pull from
         // the new position by inverting direction; simpler to fully cancel.
         pullStartYRef.current = null;
@@ -4229,10 +4244,10 @@ export default function HomeContent({
           // placeholders below are purely decorative (empty styled divs), so
           // they're aria-hidden and only the sr-only text is voiced (WCAG 4.1.3,
           // matching the role=status pattern in FeedbackBox / SettingsPanel).
-          <div role="status" aria-live="polite" className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+          <div role="status" aria-live="polite" className={`flex flex-row items-stretch gap-2 sm:gap-4${scrollOn && !showNews ? " w-max min-w-full" : " justify-center"}`}>
             <span className="sr-only">{showNews ? "Loading news…" : "Loading games…"}</span>
             {Array.from({ length: slotCount }, (_, i) => i + 1).map((i) => (
-              <div key={i} aria-hidden="true" className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
+              <div key={i} aria-hidden="true" className={`${scrollOn && !showNews ? "min-w-[160px]" : "min-w-0"} flex-1 max-w-[225px] xl:max-w-[280px]`}>
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>
                   <div className="h-6 sm:h-7 w-20 sm:w-24 rounded" style={{ background: "var(--bg-card)" }} />
                   <span className="text-[9px] sm:text-[10px] italic mt-0.5 block" style={{ color: "transparent" }}>{"\u00A0"}</span>
@@ -4776,12 +4791,18 @@ export default function HomeContent({
             // spacer + trailing + are horizontal-centering devices for the row
             // layout, so in column mode the + button moves directly below.
             const singleColumn = prefs.singleColumn ?? false;
+            // Scroll columns: the row grows past the screen (w-max) and the
+            // DOCUMENT scrolls sideways, so .league-sticky-top still pins to
+            // the viewport (an overflow-x box would become its scroll
+            // container). No justify-center: on an overflowing row it pushes
+            // the left columns out of reach.
+            const scrollRow = scrollOn && !singleColumn;
             // Phones cap each row column at ~225px, so when only 1–2 leagues are
             // showing the cards stay narrow with dead side-space (Jacob 6/15).
             // Let them fill the screen — and scale up a lone column's logos/names
             // via ns-cards-lg — so they read bigger and are easier to tap. Desktop
             // and the 3-column layout are untouched.
-            const mobileCols = !singleColumn && isMobile ? slotEntries.length : 0;
+            const mobileCols = !singleColumn && !scrollRow && isMobile ? slotEntries.length : 0;
             // 3 columns on a ~390px phone leaves each card ~98px of content width,
             // so the trailing W-L record overflowed the card's overflow-hidden and
             // got clipped ("scores bleed off" — Jacob 6/18). ns-board-tight drops the
@@ -4790,10 +4811,14 @@ export default function HomeContent({
             const boardTight = mobileCols >= 3;
             const boardRowCls = singleColumn
               ? "relative flex flex-col items-center gap-5 ns-cards-lg"
-              : `relative flex flex-row justify-center items-stretch gap-2 sm:gap-4${mobileCols === 1 ? " ns-cards-lg" : ""}${boardTight ? " ns-board-tight" : ""}`;
+              : scrollRow
+                ? "relative flex flex-row items-stretch gap-2 sm:gap-4 w-max min-w-full ns-board-tight"
+                : `relative flex flex-row justify-center items-stretch gap-2 sm:gap-4${mobileCols === 1 ? " ns-cards-lg" : ""}${boardTight ? " ns-board-tight" : ""}`;
             const colWidthClass = singleColumn
               ? "w-full max-w-[560px]"
-              : mobileCols === 1
+              : scrollRow
+                ? "flex-1 min-w-[160px] max-w-[225px] min-h-[60vh]"
+                : mobileCols === 1
                 ? "flex-1 min-w-0 max-w-[560px] min-h-[60vh]"
                 : mobileCols === 2
                   ? "flex-1 min-w-0 min-h-[60vh]"

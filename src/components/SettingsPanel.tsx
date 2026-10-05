@@ -930,6 +930,7 @@ export default function SettingsPanel({
     newsTypeFilterOrder: undefined,
     newsHiddenSources: undefined,
     singleColumn: undefined,
+    scrollColumns: undefined,
     newsSingleColumn: undefined,
     hideSensitiveNews: undefined,
     hideCrashNews: undefined,
@@ -1864,6 +1865,18 @@ export default function SettingsPanel({
               checked={!prefs.hideControlsHint}
               onChange={(v) => updatePrefs({ hideControlsHint: !v })}
             />
+            {/* Opt-in 5 columns on phones and tablets (Android user ask 10/5).
+                Device-only like One wide column, which wins. Sits here, not
+                under Leagues, so the main panel keeps its height cap (Jacob
+                10/5). A wide screen already shows 5, so the row is hidden there. */}
+            {!isWideBoard && (
+              <ToggleRow
+                label="Scroll columns"
+                hint="On phones and tablets, show all 5 columns and scroll sideways. This device only."
+                checked={prefs.scrollColumns ?? false}
+                onChange={(v) => updatePrefs({ scrollColumns: v })}
+              />
+            )}
             {/* Bring back a one-time explainer you dismissed. These had their own
                 "Spoiler explainers" section, which read like two settings to tune
                 — they are an undo, not a preference (Jacob 8/31). */}

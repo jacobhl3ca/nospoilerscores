@@ -465,7 +465,7 @@ test("settings link carries the whole setup to a fresh browser", async ({ page, 
   const setup = {
     favoriteTeams: ["mlb-10"], theme: "light", switcherDefaultsVersion: 2,
     hideSensitiveNews: true, hideCrashNews: true, maskVideoTitle: true, youtubeNativeControls: false,
-    singleColumn: true, hideTeamStars: true, hiddenLeagues: ["nhl"], shownLeagues: ["ufl", "poker"],
+    singleColumn: true, scrollColumns: true, hideTeamStars: true, hiddenLeagues: ["nhl"], shownLeagues: ["ufl", "poker"],
     upcomingRecordLeagues: ["nfl", "soccer"],
   };
   await page.addInitScript((p) => {
@@ -478,7 +478,7 @@ test("settings link carries the whole setup to a fresh browser", async ({ page, 
   const href = await page.getByRole("dialog", { name: "Settings" }).locator("a", { hasText: /Drag to Bookmarks Bar|HideScore/ }).getAttribute("href");
   expect(href).toBeTruthy();
   const url = new URL(href!);
-  for (const k of ["hn", "mt", "yp", "sc", "ts", "xl", "ol", "rl"]) expect(url.searchParams.has(k), k).toBe(true);
+  for (const k of ["hn", "mt", "yp", "sc", "sx", "ts", "xl", "ol", "rl"]) expect(url.searchParams.has(k), k).toBe(true);
 
   const ctx = await browser.newContext();
   const fresh = await ctx.newPage();

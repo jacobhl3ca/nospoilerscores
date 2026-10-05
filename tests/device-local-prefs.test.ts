@@ -17,3 +17,11 @@ test("a pull keeps this device's single-column choice over an older server blob"
   assert.deepEqual(keepDeviceLocalPrefs(merged, {}), { theme: "light" });
   assert.deepEqual(keepDeviceLocalPrefs({ theme: "light" as const }, { newsSingleColumn: true }), { theme: "light", newsSingleColumn: true });
 });
+
+// Scroll columns (10/5) is a screen choice too: a PC never needs it, a phone may.
+test("scroll columns stays on this device: dropped from the push, kept on pull", () => {
+  assert.deepEqual(withoutDeviceLocalPrefs({ theme: "dark", scrollColumns: true }), { theme: "dark" });
+  const merged = { theme: "light" as const, scrollColumns: false };
+  assert.deepEqual(keepDeviceLocalPrefs(merged, { scrollColumns: true }), { theme: "light", scrollColumns: true });
+  assert.deepEqual(keepDeviceLocalPrefs(merged, {}), { theme: "light" });
+});

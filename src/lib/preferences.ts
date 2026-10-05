@@ -131,6 +131,7 @@ export function encodeFavorites(
   flag("mt", extras?.maskVideoTitle);
   flag("yp", extras?.youtubeNativeControls);
   flag("sc", extras?.singleColumn);
+  flag("sx", extras?.scrollColumns);
   flag("ts", extras?.hideTeamStars);
   if (extras?.hiddenLeagues || extras?.shownLeagues) {
     params.set("xl", sportList(extras.hiddenLeagues));
@@ -151,7 +152,7 @@ const RECORD_SOCCER_SHORT = "soc";
 
 // The params that make HomeContent apply a settings link. "s" (slots) never
 // did on its own, and still does not.
-export const SHARE_PARAM_KEYS = ["f", "l", "fl", "t", "th", "dd", "dv", "dr", "n", "hn", "mt", "yp", "sc", "ts", "xl", "ol", "cx", "rl"] as const;
+export const SHARE_PARAM_KEYS = ["f", "l", "fl", "t", "th", "dd", "dv", "dr", "n", "hn", "mt", "yp", "sc", "sx", "ts", "xl", "ol", "cx", "rl"] as const;
 
 export interface ShareExtras {
   theme?: Theme;
@@ -164,6 +165,7 @@ export interface ShareExtras {
   maskVideoTitle?: boolean;
   youtubeNativeControls?: boolean;
   singleColumn?: boolean;
+  scrollColumns?: boolean;
   hideTeamStars?: boolean;
   hiddenLeagues?: Sport[];
   shownLeagues?: Sport[];
@@ -187,6 +189,7 @@ export function shareExtrasFromPrefs(p: Preferences): ShareExtras {
     maskVideoTitle: p.maskVideoTitle,
     youtubeNativeControls: p.youtubeNativeControls,
     singleColumn: p.singleColumn,
+    scrollColumns: p.scrollColumns,
     hideTeamStars: p.hideTeamStars,
     hiddenLeagues: p.hiddenLeagues,
     shownLeagues: p.shownLeagues,
@@ -205,6 +208,7 @@ export function sharedExtrasPatch(d: DecodedShare): Partial<Preferences> {
   if (d.maskVideoTitle !== undefined) out.maskVideoTitle = d.maskVideoTitle;
   if (d.youtubeNativeControls !== undefined) out.youtubeNativeControls = d.youtubeNativeControls;
   if (d.singleColumn !== undefined) out.singleColumn = d.singleColumn;
+  if (d.scrollColumns !== undefined) out.scrollColumns = d.scrollColumns;
   if (d.hideTeamStars !== undefined) out.hideTeamStars = d.hideTeamStars;
   if (d.hiddenLeagues !== undefined) out.hiddenLeagues = d.hiddenLeagues.length ? d.hiddenLeagues : undefined;
   if (d.shownLeagues !== undefined) out.shownLeagues = d.shownLeagues.length ? d.shownLeagues : undefined;
@@ -268,6 +272,7 @@ export function decodeFavorites(params: URLSearchParams): DecodedShare {
   result.maskVideoTitle = flag("mt");
   result.youtubeNativeControls = flag("yp");
   result.singleColumn = flag("sc");
+  result.scrollColumns = flag("sx");
   result.hideTeamStars = flag("ts");
   // Only as a pair, the way the encoder writes them.
   const xl = sportList("xl");
@@ -531,6 +536,10 @@ export interface Preferences {
   // card at a time. Default false (the multi-column board). The top-game ⭐
   // and per-slot league switching still apply.
   singleColumn?: boolean;
+  // Phones and tablets: show all 5 league columns at a readable width and let
+  // the page scroll sideways, instead of 3 narrow ones. Ignored on wide
+  // screens (they already show 5) and when singleColumn is on. Default false.
+  scrollColumns?: boolean;
   // Single-column NEWS layout: same idea as singleColumn but for the news view —
   // stack every news column into one centered, wider column instead of
   // side-by-side. Available on large screens too (the news view already
