@@ -677,6 +677,19 @@ iframe#yt-player {
   .hs-seek-flash { animation: none; opacity: 1; transform: translateY(-50%); }
 }
 
+/* VideoModal mid-clip pause strip over YouTube's "More videos" row.
+   % = share of the player height.
+   Phone: a flat 58px. The row is 48px tall and its top sits 54px off the bottom
+   of a phone-size embed (measured 10/5, WebKit iPhone + Chromium, 358/390px,
+   scripts/measure-yt-pause-shelf.mjs);
+   the old 96px minimum covered half of the frame on Mom's iPhone. */
+.hs-yt-pause-strip {
+  --hs-yt-strip: clamp(96px, 34%, 210px);
+}
+@media (max-width: 639.98px) {
+  .hs-yt-pause-strip { --hs-yt-strip: 58px; }
+}
+
 /* News: "Restore to feed" from SensitiveHiddenModal — the row a restored post
    lands in gets this so it's obvious WHAT was added and WHERE (Jacob 9/13:
    "the Show just puts them into the feed and I don't know what was added and
