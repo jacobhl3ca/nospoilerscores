@@ -337,6 +337,16 @@ function parseWeekFromTitle(title) {
 // week, and that has to keep passing through untouched.
 const WEEK_TOKEN_REQUIRED_CHANNELS = new Set(["tsn"]);
 
+// Channels whose game slots take a title with the word "highlight" only. The
+// NFL channel posts an "NFL Daily" talk show per game ("Lions vs. Panthers
+// Week 4 SNF Recap | NFL Daily", three hosts at a desk): both teams, the week,
+// the year, and "recap", so it cleared every gate and held the 2nd button on
+// 7 of 49 NFL cards (2026-10-05). Every real league cut says "Game
+// Highlights". Keyed on the channel, so it needs no client param. The bare
+// preseason carve-out (isStrictBareNflPreseason) still passes. Keep
+// scripts/prebake-news.mjs HL_HIGHLIGHT_WORD_CHANNELS in sync by hand.
+const HIGHLIGHT_WORD_REQUIRED_CHANNELS = new Set(["nfl"]);
+
 // ── Competition climbing: /api/climbing (added 2026-10-03) ─────────────────
 // Schedule + stream links: sportclimbing/ifsc-calendar (the open-source feed
 // behind ifsc.stream), one JSON asset on every GitHub release. Ratings and the
@@ -1628,6 +1638,12 @@ export default {
             isChessRoundBroadcast ||
             isStrictBareNflPreseason;
           if (!isHighlight || NOT_HIGHLIGHT_RX.test(title)) continue;
+          // See HIGHLIGHT_WORD_REQUIRED_CHANNELS: "recap" alone is a talk show here.
+          if (
+            HIGHLIGHT_WORD_REQUIRED_CHANNELS.has(preferChannelLower) &&
+            !titleLower.includes("highlight") &&
+            !isStrictBareNflPreseason
+          ) continue;
 
           // Racing race gate (see the `race` param above). The official channel
           // posts one reel per race all season, so without this the F1 /
@@ -2661,7 +2677,7 @@ export default {
             (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightExtendedId)
           );
         }
-        if (!videoId && !isGolfQuery && !queryHasSpecificTeams && raceTokens.length === 0 && compTokens.length === 0) {
+        if (!videoId && !isGolfQuery && !queryHasSpecificTeams && raceTokens.length === 0 && compTokens.length === 0 && !HIGHLIGHT_WORD_REQUIRED_CHANNELS.has(preferChannelLower)) {
           // Raw-regex fallback — only for non-golf. For golf we'd
           // rather return 404 than guess wrong and let a random
           // PGA TOUR highlight win the Masters slot.
