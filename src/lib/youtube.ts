@@ -1033,6 +1033,8 @@ export async function fetchFirstVideoId(query: string, channel?: string, exclude
     if (weekNumber) url += `&week=${weekNumber}`;
     // Home-first order + duration floor — see HIGHLIGHT_MATCH_GATES.
     url += highlightMatchGateParams(gates);
+    // No param for the NFL "highlight" title rule: the worker keys it on
+    // `channel` (HIGHLIGHT_WORD_REQUIRED_CHANNELS), so this lookup gets it as-is.
     const excludeIds = (exclude ?? []).filter((id): id is string => !!id);
     if (excludeIds.length) url += `&exclude=${encodeURIComponent(excludeIds.join(","))}`;
     if (preferExtended) url += `&prefer=extended`;

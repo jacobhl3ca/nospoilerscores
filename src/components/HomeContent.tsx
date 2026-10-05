@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
+import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
@@ -14,7 +15,7 @@ import { LeaguePickerModal } from "./LeaguePickerModal";
 import type { BestYesterdayOptions } from "@/lib/espn";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
-import { fromYmd, etSlateYmd, nextYmd } from "@/lib/etDay";
+import { fromYmd, etSlateYmd, nextYmd, getTimeZone } from "@/lib/etDay";
 import { WATCH_QUEUE_ENABLED, toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
 import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
 import GameCard from "@/components/GameCard";
@@ -22,6 +23,7 @@ import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
 import { fetchAllLeagues, fetchSlateGames, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn, { mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
@@ -48,11 +50,12 @@ import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard"
 import { fetchPlayoffPicture, fieldIsSet } from "@/lib/playoffPicture";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
-import { formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
+import { OFFLINE_BOARD_KEY, formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
 import Link from "next/link";
 import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
+import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -477,6 +480,10 @@ const FEEDBACK_LEAGUE_PREFILL = "League request: ";
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
   typeof window !== "undefined" && window.matchMedia(WIDE_BOARD_QUERY).matches;
+// Settings → Scroll columns: 5 columns on a phone or tablet too, with the page
+// scrolling sideways. One wide column wins over it.
+const scrollColumnsOn = (p: { scrollColumns?: boolean; singleColumn?: boolean }) =>
+  !!p.scrollColumns && !p.singleColumn;
 // All slot indexes the prefs system knows about (slots 4-5 render wide-only).
 const SLOT_INDICES = [0, 1, 2, 3, 4];
 
@@ -637,6 +644,10 @@ export default function HomeContent({
   // Reopen. The ref mirrors the live payload so the popstate handler (Back /
   // Android back gesture) can capture what it is closing without re-subscribing
   // on every modal change.
+  // A footer tap that never reached its page (iOS "No connection", 10/5) is
+  // counted on the next board load: see lib/navRecovered.
+  useEffect(() => { reportNavRecovered(); }, []);
+
   const REOPEN_MS = 8000;
   const videoModalRef = useRef<VideoModalState | null>(null);
   useEffect(() => { videoModalRef.current = videoModal; }, [videoModal]);
@@ -811,6 +822,9 @@ export default function HomeContent({
 
   useEffect(() => {
     const loaded = migrateLegacySwitcherPreferences(loadPreferences());
+    // Android widget: hand it the favorites on launch too, so a user who never
+    // touches Settings after the update still gets a working widget.
+    pushWidgetPrefs(loaded);
     // First-run detection for the league picker: a brand-new install has no
     // stored prefs blob yet. Capture this BEFORE the share-link path below can
     // call savePreferences() (which would write the blob and hide the signal).
@@ -901,7 +915,7 @@ export default function HomeContent({
     //     auto (default) → keep the morning-safety reset (off before noon ET)
     //     off            → always off on launch
     //     on             → always on on launch
-    //   News view does NOT reset — it's a viewer choice, not a spoiler surface.
+    //   News view: see the landing-view rule below (it can drop to Scores).
     const applyLaunchState = (p: Preferences) => {
       const landing = p.defaultLandingView ?? "remember";
       const ratingsMode = p.defaultRatings ?? "auto";
@@ -929,14 +943,19 @@ export default function HomeContent({
       // once against the hardcoded defaults above — and then vanish a frame
       // later — must wait on this. See prefsHydrated's declaration.
       setPrefsHydrated(true);
-      // Landing view: "remember" restores the last view EXCEPT across a day
-      // boundary — a new calendar day (ET) since the last open drops a remembered
-      // News view to Scores so the user never lands on yesterday's spoilers
-      // (Jacob 6/19). Same-day reopens still restore News.
+      // Landing view: "remember" restores the view THIS tab was on, any day,
+      // and whatever another tab or device saved since (Jacob 10/4). A tab
+      // with no view of its own (a new tab, a restart that lost the tab)
+      // restores the saved view EXCEPT across a day boundary: a new calendar
+      // day (ET) since the last open drops a remembered News view to Scores
+      // so a new tab never lands on yesterday's spoilers (Jacob 6/19).
+      // An explicit landing setting wins over both.
       const newDayPassed = !!p.lastOpenDay && p.lastOpenDay !== getDateString(0);
       const demoNews = isDemoNewsRequested();
+      const tabView = readTabView();
       if (demoNews || landing === "news") setShowNews(true);
       else if (landing === "scores" || landing === "ratings") setShowNews(false);
+      else if (tabView) setShowNews(tabView === "news");
       else if (p.showNews && !newDayPassed) setShowNews(true);
       // ?demo=1&view=news wants the first-time spoiler-warning bar ON SCREEN
       // for the shot, not skipped like every other first-time explainer here.
@@ -1042,6 +1061,14 @@ export default function HomeContent({
     if (!prefsHydrated) return;
     document.documentElement.classList.remove("hs-play-dismissed");
   }, [prefsHydrated]);
+
+  // The one writer of this tab's view memory (lib/tabView): every way in or out
+  // of News (the view tabs, the logo, the native tab bar) lands here. Waits for
+  // prefsHydrated so the initial `false` never overwrites the stored view
+  // before applyLaunchState has read it. A ?view=news demo shot is not a choice.
+  useEffect(() => {
+    if (prefsHydrated && !isDemoNewsRequested()) writeTabView(showNews ? "news" : "scores");
+  }, [showNews, prefsHydrated]);
 
   // Cross-device sync on RESUME. The mount effect above only reconciles with the
   // server on a COLD launch, so a change made on another device — e.g. removing
@@ -1210,7 +1237,11 @@ export default function HomeContent({
     return () => mq.removeEventListener("change", handler);
   }, []);
   // Scores-board slot count: 5 wide, 3 otherwise. News view stays 3-column.
-  const slotCount = isWide ? 5 : 3;
+  // Scroll columns gives a narrow screen all 5 too (the page scrolls sideways).
+  const scrollOn = !isWide && scrollColumnsOn(prefs);
+  const slotCount = isWide || scrollOn ? 5 : 3;
+  const scrollOnRef = useRef(scrollOn);
+  scrollOnRef.current = scrollOn;
 
   // The shareable hidescore link for a modal payload — identical to the modal's
   // own "Copy link" (see buildHighlightShareUrl). Returned root-relative ("/?…")
@@ -1484,10 +1515,11 @@ export default function HomeContent({
       }
       // Slot count reads the live viewport so the initial desktop load fetches
       // all 5 leagues in one pass (isWide state hasn't flipped yet on mount).
+      const pullSlots = isWideViewport() || scrollColumnsOn(prefsRef.current) ? 5 : 3;
       let [data] = await Promise.all([
         fetchAllLeagues(
-          date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3,
-          bestYesterdayOptions(prefsRef.current, date, isWideViewport() ? 5 : 3),
+          date, thirdLeague, slotOverrides, pullSlots,
+          bestYesterdayOptions(prefsRef.current, date, pullSlots),
           boardHiddenLeagues(prefsRef.current),
         ),
         loadBakedHighlights(),
@@ -1559,7 +1591,8 @@ export default function HomeContent({
   }, [selectedDate]);
 
   // isWide is a dep so resizing across the 5-column breakpoint silently
-  // fetches (or drops) the extra two leagues. hiddenKey is one too: turning a
+  // fetches (or drops) the extra two leagues; scrollOn does the same for the
+  // Scroll columns setting. hiddenKey is one too: turning a
   // league off in Settings moves its column to the next league at once.
   // What the board and switchers skip: switcher hides + catalog strikes.
   const prefsHiddenLeagues = prefs.hiddenLeagues;
@@ -1579,7 +1612,39 @@ export default function HomeContent({
       fifth: prefs.fifthLeague,
     }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide, hiddenKey]);
+  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide, scrollOn, hiddenKey]);
+
+  // A Settings zone change applies at once (Jacob 10/4). The zone moves
+  // "today" (1 AM rollover), the next-game day, the soccer/tennis day filters
+  // and the past/future boundary — all read in fetchData — so the board pulls
+  // again. A board on today moves to the new zone's today; another day stays.
+  // The saved offline copy was bucketed in the old zone, so it is dropped.
+  // Keyed on the EFFECTIVE zone, not the pref: hydrating saved prefs on load
+  // re-sets the same zone and must not pull twice or drop the offline copy.
+  const prefsTimezone = prefs.timezone;
+  const zoneRef = useRef<{ zone: string; today: string } | null>(null);
+  useEffect(() => {
+    if (!prefsHydrated) return;
+    const zone = getTimeZone();
+    const today = getDateString(0);
+    const prev = zoneRef.current;
+    zoneRef.current = { zone, today };
+    if (!prev || prev.zone === zone || !mountedRef.current || !selectedDate) return;
+    const prevToday = prev.today;
+    try { localStorage.removeItem(OFFLINE_BOARD_KEY); } catch { /* storage blocked */ }
+    if (selectedDate === prevToday && today !== prevToday) {
+      setSelectedDate(today);
+      return;
+    }
+    fetchData(selectedDate, prefs.thirdLeague, {
+      first: prefs.firstLeague,
+      second: prefs.secondLeague,
+      third: prefs.thirdLeague,
+      fourth: prefs.fourthLeague,
+      fifth: prefs.fifthLeague,
+    }, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefsTimezone, prefsHydrated]);
 
   // Best of yesterday is the one column whose CONTENTS depend on prefs other
   // than its slot: its pool is the user's leagues, so starring or
@@ -2654,6 +2719,7 @@ export default function HomeContent({
   const [pullDelta, setPullDelta] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const pullStartYRef = useRef<number | null>(null);
+  const pullStartXRef = useRef(0);
   const pullDeltaRef = useRef(0);
   const refreshingRef = useRef(false);
   // doRefresh closes over the latest selectedDate/prefs/showNews. We stash
@@ -2700,11 +2766,15 @@ export default function HomeContent({
       if (refreshingRef.current) return;
       if (window.scrollY > 0) return;
       pullStartYRef.current = e.touches[0].clientY;
+      pullStartXRef.current = e.touches[0].clientX;
     };
     const onTouchMove = (e: TouchEvent) => {
       if (pullStartYRef.current === null) return;
       const delta = e.touches[0].clientY - pullStartYRef.current;
-      if (delta < 0) {
+      // Scroll columns: a sideways swipe scrolls the board, not a refresh.
+      const sideways = scrollOnRef.current
+        && Math.abs(e.touches[0].clientX - pullStartXRef.current) > Math.abs(delta);
+      if (delta < 0 || sideways) {
         // User pulled up → cancel. Don't reset start so they can re-pull from
         // the new position by inverting direction; simpler to fully cancel.
         pullStartYRef.current = null;
@@ -3425,7 +3495,7 @@ export default function HomeContent({
             "online" pull lands. */}
         {offline?.savedAt != null && (
           <p role="status" data-testid="offline-line" className="text-center text-xs pt-2 -mb-1" style={{ color: "var(--text-muted)" }}>
-            Offline · updated {formatOfflineUpdated(offline.savedAt, Date.now())}
+            Offline · updated {formatOfflineUpdated(offline.savedAt, Date.now(), getTimeZone())}
           </p>
         )}
         {/* First-run explanations for the Ratings and News tabs. These replaced
@@ -4183,10 +4253,10 @@ export default function HomeContent({
           // placeholders below are purely decorative (empty styled divs), so
           // they're aria-hidden and only the sr-only text is voiced (WCAG 4.1.3,
           // matching the role=status pattern in FeedbackBox / SettingsPanel).
-          <div role="status" aria-live="polite" className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+          <div role="status" aria-live="polite" className={`flex flex-row items-stretch gap-2 sm:gap-4${scrollOn && !showNews ? " w-max min-w-full" : " justify-center"}`}>
             <span className="sr-only">{showNews ? "Loading news…" : "Loading games…"}</span>
             {Array.from({ length: slotCount }, (_, i) => i + 1).map((i) => (
-              <div key={i} aria-hidden="true" className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
+              <div key={i} aria-hidden="true" className={`${scrollOn && !showNews ? "min-w-[160px]" : "min-w-0"} flex-1 max-w-[225px] xl:max-w-[280px]`}>
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>
                   <div className="h-6 sm:h-7 w-20 sm:w-24 rounded" style={{ background: "var(--bg-card)" }} />
                   <span className="text-[9px] sm:text-[10px] italic mt-0.5 block" style={{ color: "transparent" }}>{"\u00A0"}</span>
@@ -4730,12 +4800,18 @@ export default function HomeContent({
             // spacer + trailing + are horizontal-centering devices for the row
             // layout, so in column mode the + button moves directly below.
             const singleColumn = prefs.singleColumn ?? false;
+            // Scroll columns: the row grows past the screen (w-max) and the
+            // DOCUMENT scrolls sideways, so .league-sticky-top still pins to
+            // the viewport (an overflow-x box would become its scroll
+            // container). No justify-center: on an overflowing row it pushes
+            // the left columns out of reach.
+            const scrollRow = scrollOn && !singleColumn;
             // Phones cap each row column at ~225px, so when only 1–2 leagues are
             // showing the cards stay narrow with dead side-space (Jacob 6/15).
             // Let them fill the screen — and scale up a lone column's logos/names
             // via ns-cards-lg — so they read bigger and are easier to tap. Desktop
             // and the 3-column layout are untouched.
-            const mobileCols = !singleColumn && isMobile ? slotEntries.length : 0;
+            const mobileCols = !singleColumn && !scrollRow && isMobile ? slotEntries.length : 0;
             // 3 columns on a ~390px phone leaves each card ~98px of content width,
             // so the trailing W-L record overflowed the card's overflow-hidden and
             // got clipped ("scores bleed off" — Jacob 6/18). ns-board-tight drops the
@@ -4744,10 +4820,14 @@ export default function HomeContent({
             const boardTight = mobileCols >= 3;
             const boardRowCls = singleColumn
               ? "relative flex flex-col items-center gap-5 ns-cards-lg"
-              : `relative flex flex-row justify-center items-stretch gap-2 sm:gap-4${mobileCols === 1 ? " ns-cards-lg" : ""}${boardTight ? " ns-board-tight" : ""}`;
+              : scrollRow
+                ? "relative flex flex-row items-stretch gap-2 sm:gap-4 w-max min-w-full ns-board-tight"
+                : `relative flex flex-row justify-center items-stretch gap-2 sm:gap-4${mobileCols === 1 ? " ns-cards-lg" : ""}${boardTight ? " ns-board-tight" : ""}`;
             const colWidthClass = singleColumn
               ? "w-full max-w-[560px]"
-              : mobileCols === 1
+              : scrollRow
+                ? "flex-1 min-w-[160px] max-w-[225px] min-h-[60vh]"
+                : mobileCols === 1
                 ? "flex-1 min-w-0 max-w-[560px] min-h-[60vh]"
                 : mobileCols === 2
                   ? "flex-1 min-w-0 min-h-[60vh]"
@@ -4849,18 +4929,23 @@ export default function HomeContent({
             (+ ♥ Rate in the native shells, 9/29).
             Settings came out (the header gear is the one way in), Guides is a
             real page (/guides) rather than a popup, and Feedback goes to
-            /contact, which hosts the same form. Plain <a href> (not next/link)
-            so crawlers follow them. On a 320px phone the row wraps to two lines
+            /contact, which hosts the same form. next/link with prefetch off
+            (10/5): it still renders a real <a href> that crawlers follow, but a
+            tap is a soft navigation (a fetch), so the iOS shell's "No
+            connection" handler (it fires on any failed page load) can't turn
+            one lost request on an idle connection into the offline screen.
+            Prefetch off: each prefetch is a Pages Worker request.
+            On a 320px phone the row wraps to two lines
             rather than dropping an item. The "App Store" and "Google Play" text
             links that used to sit here are gone (Jacob 8/24): the badges below
             say the same thing better. */}
         <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-          <a href="/about" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</a>
-          <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
-          <a href="/guides" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</a>
-          <a href="/contact" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</a>
-          <a href="/contact#feedback" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</a>
-          <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
+          <Link href="/about" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</Link>
+          <Link href="/faq" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</Link>
+          <Link href="/guides" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</Link>
+          <Link href="/contact" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</Link>
+          <Link href="/contact#feedback" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</Link>
+          <Link href="/privacy" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</Link>
           {/* Native shells only (9/29): the web has no store to rate on. A plain
               <a> with no target, like Settings' "Rate this app", so the store
               app opens on the review sheet. A link is all the store rules
@@ -4881,6 +4966,9 @@ export default function HomeContent({
             </a>
           )}
         </div>
+        {/* Legal line (10/3, ahead of the Product Hunt launch): the About page
+            sentence, so every board visit carries it too. */}
+        <p className="max-w-md">HideScore is not affiliated with, endorsed by, or sponsored by any league, team or broadcaster.</p>
         {/* No visible trigger: kept mounted only so Settings' "Send feedback"
             and "Request a league" can open the form in place. */}
         <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} hideTrigger />

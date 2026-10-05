@@ -621,6 +621,26 @@ export function promoteLoneExtended({ official, officialChannel, extended, prima
   return { official: extended, officialChannel: primaryChannel, extended: null, promoted: true };
 }
 
+// ── "Highlight" title rule ───────────────────────────────────────────────────
+
+// Mirrors HIGHLIGHT_WORD_REQUIRED_CHANNELS in public/_worker.js — keep in sync by
+// hand. The NFL channel's "NFL Daily" talk show ("Lions vs. Panthers Week 4 SNF
+// Recap | NFL Daily") names both teams, the week and "recap", so it cleared every
+// other gate and held the 2nd button on 7 of 49 NFL cards (2026-10-05). The
+// worker refuses it for new lookups; this refuses a CARRIED id the same way.
+// The bare preseason title ("… | 2026 Preseason Week 3") still passes when the
+// card is an exhibition, as the worker's isStrictBareNflPreseason does. An
+// unreadable title passes: the team check already refuses an empty one.
+export const HL_HIGHLIGHT_WORD_CHANNELS = new Set(["nfl"]);
+export function titleLacksHighlightWord(channel, title, preseason = false) {
+  if (!HL_HIGHLIGHT_WORD_CHANNELS.has(String(channel ?? "").toLowerCase())) return false;
+  const t = String(title ?? "").toLowerCase();
+  if (!t) return false;
+  if (t.includes("highlight")) return false;
+  if (preseason && /\bpreseason/.test(t)) return false;
+  return true;
+}
+
 // ── NFL club short cut (section 5 of the plan) ───────────────────────────────
 
 // Two clubs can each post a package for the same game; keep the shorter one.

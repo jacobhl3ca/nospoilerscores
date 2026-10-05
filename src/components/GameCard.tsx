@@ -7,6 +7,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName, sportGroup } from "@/lib/espn";
 import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
+import { startTimeLabel } from "@/lib/gameTime";
 import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick, liveWatchProps, watchLinkProps } from "@/lib/openExternal";
 import { gameRef } from "@/lib/tvChannelLinks";
@@ -140,12 +141,6 @@ function alignLiveClockSweep(e: AnimationEvent<HTMLElement>) {
   }
 }
 
-function cleanStatusDetail(detail: string, stripDate: boolean): string {
-  let cleaned = detail.replace(/\s*(EDT|EST|CDT|CST|MDT|MST|PDT|PST|ET|CT|MT|PT)\s*$/i, "");
-  if (stripDate) cleaned = cleaned.replace(/^\d{1,2}\/\d{1,2}\s*-\s*/, "");
-  return cleaned.trim();
-}
-
 // Compact network label for the inline status-bar chip (Jacob 6/10): the rating
 // badge centers on the card, so the network sits small and short beside it.
 // "MLB.TV" → "MLB", "MLB Network" → "MLB", "Prime Video" → "Prime", "Apple TV+"
@@ -221,19 +216,8 @@ export function CompactUpcomingCard({
   onShowDetails?: (game: Game) => void;
 }) {
   const home = game.homeTeam;
-  // Local tip-off time — mirrors GameCard's pre-game localTime derivation:
-  // prefer ESPN's status text, else fall back to the game's own date.
-  const localTime = (() => {
-    const cleaned = cleanStatusDetail(game.statusDetail, true);
-    if (cleaned && /\bTBD\b/i.test(cleaned)) return "TBD";
-    if (!cleaned || cleaned.toLowerCase() === "scheduled" || !/\d{1,2}:\d{2}/.test(cleaned) || /^starts\s/i.test(cleaned)) {
-      try {
-        const d = new Date(game.date);
-        if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
-      } catch { /* fall through */ }
-    }
-    return cleaned;
-  })();
+  // Tip-off time in the reader's zone — the same path as GameCard's localTime.
+  const localTime = startTimeLabel(game);
   const network = game.broadcasts[0] ?? null;
   const networkHref = network
     ? ((/\b(amazon|prime)\b/i.test(network) && game.primeStreamUrl) || networkStreamUrl(network, game.id, game.sport) || sportStreamFallback(game.sport))
@@ -377,13 +361,9 @@ function PairingMaskCard({ game, nextGameDate, leagueTag, showRatings, onReveal 
   // ESPN's raw headline ("NLDS - Game 1") in the column subtitle's form ("NLDS · Game 1").
   const round = game.playoffLabel ? shortenPlayoffLabel(game.playoffLabel) : "Finals";
   let time = game.state === "in" ? "Live" : game.state === "post" ? "Final" : "";
-  if (game.state === "pre") {
-    const d = new Date(game.date);
-    // A series slot with no start time yet sits at local midnight in the feed
-    // ("TBD @ LAD", 10/3 04:00Z) — read ESPN's "TBD" the way CompactUpcomingCard does.
-    if (/\bTBD\b/i.test(cleanStatusDetail(game.statusDetail, true))) time = "TBD";
-    else if (!isNaN(d.getTime())) time = formatTime(d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() }));
-  }
+  // A series slot with no start time yet sits at local midnight in the feed
+  // ("TBD @ LAD", 10/3 04:00Z) — startTimeLabel reads ESPN's "TBD" for it.
+  if (game.state === "pre") time = formatTime(startTimeLabel(game));
   // Same three bands as a full card (meta row, then two team-row heights), so
   // the column keeps its rhythm: the round sits where the away team would and
   // the button where the home team would.
@@ -534,15 +514,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
     if (diffDays === -1) return "Yesterday";
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: getTimeZone() });
   })() : null;
-  const teamViewTime = teamView && isFuture ? (() => {
-    const cleaned = cleanStatusDetail(game.statusDetail, true);
-    if (cleaned && /\bTBD\b/i.test(cleaned)) return "TBD";
-    try {
-      const d = new Date(game.date);
-      if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
-    } catch { /* fall through */ }
-    return null;
-  })() : null;
+  const teamViewTime = teamView && isFuture ? startTimeLabel(game) || null : null;
   // Doubleheader disambiguation: a finished game that shares its day with another
   // of the team's games shows its (device-local) start time, so the two FINAL
   // cards aren't visually identical. Time is not a spoiler.
@@ -553,25 +525,10 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
     } catch { /* fall through */ }
     return null;
   })() : null;
-  const localTime = isFuture ? (() => {
-    const cleaned = cleanStatusDetail(game.statusDetail, true);
-    // Playoff "If Necessary" games come back with date = midnight ET and
-    // statusDetail "TBD" / "M/D - TBD". Falling through to game.date would
-    // render "12:00 AM" — short-circuit to TBD so the user sees ESPN's label.
-    if (cleaned && /\bTBD\b/i.test(cleaned)) return "TBD";
-    // ESPN sometimes omits a time (EPL/MLS "Scheduled"), returns a date-only string
-    // like "Starts 5/3", or prefixes the time with "Starts M/D" (e.g. "Starts 5/5 7:00 PM").
-    // In any of those cases derive the local tip-off from game.date.
-    if (!cleaned || cleaned.toLowerCase() === "scheduled" || !/\d{1,2}:\d{2}/.test(cleaned) || /^starts\s/i.test(cleaned)) {
-      try {
-        const d = new Date(game.date);
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
-        }
-      } catch { /* fall through */ }
-    }
-    return cleaned;
-  })() : null;
+  // ESPN's status clock is always Eastern; startTimeLabel turns it (or
+  // game.date when there is none — "Scheduled", "Starts 5/3") into the
+  // reader's zone. Playoff "If Necessary" slots stay "TBD".
+  const localTime = isFuture ? startTimeLabel(game) : null;
   // Play-in placeholders arrive with slashed names like "Clippers/Trail Blazers"
   // (shortDisplayName) and "LAC/POR" (abbreviation). Treat those as TBD too.
   const isPlaceholderName = (s?: string) => !!s && s.includes("/");
@@ -986,7 +943,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 // exact same string twice).
                 withEspn(
                   <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-                    {formatTime(localTime || cleanStatusDetail(game.statusDetail, false))}
+                    {formatTime(localTime)}
                     {/* Delayed start (Jacob 9/27): the start time alone read as
                         on schedule. Same yellow as a live-game delay. */}
                     {delayedStart ? <span className="ml-1 text-yellow-500 font-medium">{delayedStart}</span> : null}

@@ -35,6 +35,7 @@ import {
 } from "@/lib/playoffPicture";
 import { fetchMlbPostseason, mlbPickBracket, mlbRoundHeading, type MlbPostseason } from "@/lib/mlbPicks";
 import BracketPicks from "@/components/BracketPicks";
+import { getTimeZone } from "@/lib/etDay";
 
 // The MLB playoff picture, behind one reveal.
 //
@@ -904,7 +905,7 @@ export default function PlayoffPictureModal({
   const updatedLabel = picture?.updated
     ? (() => {
         const d = new Date(picture.updated);
-        return isNaN(d.getTime()) ? null : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+        return isNaN(d.getTime()) ? null : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
       })()
     : null;
 

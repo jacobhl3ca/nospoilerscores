@@ -740,6 +740,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // wins, and only clips with no YouTube id (e.g. MLB statsapi HLS) fall through
   // to hlsMode/embedMode.
   const hlsMode = !!playbackUrl && !videoId;
+  // A Reddit GIF post plays as Reddit's mp4 of the GIF (preview.redd.it
+  // <id>.gif?format=mp4). It loops like the GIF it is; other clips do not.
+  const loopClip = !!playbackUrl && /\.gif\?[^#]*\bformat=mp4\b/i.test(playbackUrl);
   const embedMode = !!embedUrl && !playbackUrl && !videoId;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
@@ -3034,6 +3037,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
+                loop={loopClip}
                 onPlaying={trackVideoPlay}
                 onEnded={markHighlightWatched}
                 onPlay={() => setPlayerState("playing")}

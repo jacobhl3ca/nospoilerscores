@@ -55,14 +55,24 @@
     <svg viewBox="0 0 24 24"><path d="M2 8.8a16 16 0 0 1 20 0M5.5 12.6a11 11 0 0 1 13 0M9 16.4a6 6 0 0 1 6 0"/><circle cx="12" cy="20" r="0.9" fill="currentColor" stroke="none"/><path d="M3 3l18 18"/></svg>
   </div>
   <h1>No connection</h1>
-  <p>HideScore loads today&rsquo;s games live, so it won&rsquo;t show you a cached scoreboard that might be hours stale. Reconnect and try again.</p>
+  <p>Reconnect and try again. After HideScore has opened once with a connection, it shows your last board here when you are offline.</p>
   <button type="button" id="retry">Try again</button>
   <p class="note">hidescore.com</p>
 </main>
 <script>
-  document.getElementById('retry').addEventListener('click', function () {
-    location.replace('https://hidescore.com/');
-  });
+  // ?from= = the page that failed to load (the iOS shell adds it from 1.0.9,
+  // MainViewController's NavigationRetryProxy). Only a hidescore.com page goes
+  // back (localhost: simulator builds); anything else opens the board.
+  var target = 'https://hidescore.com/';
+  try {
+    var from = new URL(new URLSearchParams(location.search).get('from'));
+    if ((from.protocol === 'https:' && (from.hostname === 'hidescore.com' || from.hostname === 'www.hidescore.com')) ||
+        from.hostname === 'localhost') target = from.href;
+  } catch (e) {}
+  function retry() { location.replace(target); }
+  document.getElementById('retry').addEventListener('click', retry);
+  // The connection came back by itself (Wi-Fi, tunnel, airplane mode off): go on without a tap.
+  addEventListener('online', retry);
 </script>
 </body>
 </html>

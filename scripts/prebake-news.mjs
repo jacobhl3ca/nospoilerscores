@@ -10,12 +10,13 @@ import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
   parseRelativeTime, isoDurationToSec, etYmd, shiftYmd, dailyCoversDate, weekdayCoversDate,
   weeklyWindowFromPublished, nflWeekWindow, parseEmbedPlayable, parseWatchPagePlayable, parseWatchPageOwner, matchSeriesTitle, pickNewest, stripRecapRecord,
-  fillHeading, pickShorterClub, promoteLoneExtended, eplSeasonYear, uploadFitsGameDate, keepCarriedRecap,
+  fillHeading, pickShorterClub, promoteLoneExtended, titleLacksHighlightWord, eplSeasonYear, uploadFitsGameDate, keepCarriedRecap,
   RECAP_ARCHIVE_START, recapEndYmd, monthsBetween, recapMonths, recapInMainFile, splitEmptyByMonth,
   recapEmptyIsFinal, recapFileBody,
   classifyMlbReviewTitle, mlbReviewSeason, mlbTeamIdsFromKeywords, mlbToEspnTeamIds, ROUND_ORDER,
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
+import { redlibGifMp4Path } from "./lib/redlib-gif.mjs";
 import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
@@ -1810,6 +1811,12 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
     // 1) Reddit-hosted video (v.redd.it) → the open HLS CDN (audio + CORS:*).
     const vm = block.match(/\/(?:hls|vid)\/([a-z0-9]{8,16})\b/i) || block.match(/v\.redd\.it\/([a-z0-9]{8,16})/i);
     if (vm) videoUrl = `https://v.redd.it/${vm[1]}/HLSPlaylist.m3u8`;
+    // 1b) Reddit-hosted GIF → its looping mp4 (the poster below stays the
+    //     row thumbnail). Without this a GIF post opened as its still frame.
+    if (!videoUrl) {
+      const gif = redlibGifMp4Path(block);
+      if (gif) videoUrl = redlibMediaToReddit(gif);
+    }
 
     // 2) Reddit-hosted image post → lightboxable full-res (imageFullUrl).
     const imgPath = (block.match(/class="post_media_image[^"]*"[^>]*href="([^"]+)"/) || [])[1] ||
@@ -3077,6 +3084,13 @@ async function hlVideoIsNotHighlight(id) {
   return !!meta?.title && HL_NOT_HIGHLIGHT_RX.test(meta.title);
 }
 
+// See titleLacksHighlightWord (scripts/lib/recaps.mjs). Returns the title when
+// the slot's channel needs "highlight" in it and the title lacks it, else null.
+async function hlVideoTitleRejected(id, channel, preseason) {
+  const meta = await hlOembedMeta(id);
+  return titleLacksHighlightWord(channel, meta?.title, preseason) ? meta.title : null;
+}
+
 async function hlVideoMatchesTeams(id, away, home, homeFirst = false) {
   const meta = await hlOembedMeta(id);
   if (!meta?.title || !hlTitleHasTeam(meta.title, away) || !hlTitleHasTeam(meta.title, home)) return false;
@@ -3960,6 +3974,13 @@ async function bakeGameHighlights() {
         // leave the slot null — but they must not be treated the same. See the
         // HIGHLIGHT-AGE-DROP branch at the write below.
         let ageRejected = 0;
+        // "highlight" title rule (NFL) — see titleLacksHighlightWord. Logs and
+        // returns true when the slot's id must go.
+        const titleRejected = async (slot, id, channel) => {
+          const title = await hlVideoTitleRejected(id, channel, preseason);
+          if (title) console.warn(`HIGHLIGHT-TITLE-REJECT ${key} ${slot}=${id} (${title})`);
+          return !!title;
+        };
         if (prevOfficial && prevExtended && prevOfficial === prevExtended) {
           console.warn(`HIGHLIGHT-DUPLICATE-REJECT ${key} extended=${prevExtended}`);
           prevExtended = null;
@@ -3972,6 +3993,7 @@ async function bakeGameHighlights() {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
         }
+        if (prevOfficial && (await titleRejected("official", prevOfficial, officialChannel))) prevOfficial = null;
         if (prevOfficial && !(await hlVideoMatchesDate(prevOfficial, item.date))) {
           console.warn(`HIGHLIGHT-AGE-REJECT ${key} official=${prevOfficial} (${away} vs ${home} ${dateStr})`);
           prevOfficial = null;
@@ -3981,6 +4003,7 @@ async function bakeGameHighlights() {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevExtended = null;
         }
+        if (prevExtended && (await titleRejected("extended", prevExtended, secondaryChannel))) prevExtended = null;
         if (prevExtended && !(await hlVideoMatchesDate(prevExtended, item.date))) {
           console.warn(`HIGHLIGHT-AGE-REJECT ${key} extended=${prevExtended} (${away} vs ${home} ${dateStr})`);
           prevExtended = null;
@@ -3996,6 +4019,7 @@ async function bakeGameHighlights() {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
           }
+          if (official && (await titleRejected("newly-resolved official", official, primaryChannel))) official = null;
           if (official && !(await hlVideoMatchesDate(official, item.date))) {
             console.warn(`HIGHLIGHT-AGE-REJECT ${key} newly-resolved official=${official} (${away} vs ${home} ${dateStr})`);
             official = null;
@@ -4011,6 +4035,7 @@ async function bakeGameHighlights() {
               console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home})`);
               continue;
             }
+            if (await titleRejected(`fallback ${fb.channel}`, id, fb.channel)) continue;
             if (!(await hlVideoMatchesDate(id, item.date))) {
               console.warn(`HIGHLIGHT-AGE-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home} ${dateStr})`);
               ageRejected++;
@@ -4032,6 +4057,7 @@ async function bakeGameHighlights() {
           for (const c of channels) {
             const id = await hlChannelSearchOfficial(key, c.channel, away, home, item.date, c.tokens, [prevExtended], week, gates);
             if (!id) continue;
+            if (await titleRejected(`channel-search ${c.channel}`, id, c.channel)) continue;
             official = id;
             officialChannel = c.channel;
             break;
@@ -4065,6 +4091,7 @@ async function bakeGameHighlights() {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home})`);
             extended = null;
           }
+          if (extended && (await titleRejected("newly-resolved extended", extended, secondaryChannel))) extended = null;
           if (extended && !(await hlVideoMatchesDate(extended, item.date))) {
             console.warn(`HIGHLIGHT-AGE-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home} ${dateStr})`);
             extended = null;

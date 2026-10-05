@@ -3138,8 +3138,11 @@ function parseRailSlugTime(slug: string): string | null {
 }
 
 let bigInningPromise: Promise<BigInningSchedule> | null = null;
+// "Today" below is read in the Settings zone, so a zone change starts over.
+let bigInningZone = "";
 export function loadBigInningSchedule(): Promise<BigInningSchedule> {
-  if (!bigInningPromise) {
+  if (!bigInningPromise || bigInningZone !== getTimeZone()) {
+    bigInningZone = getTimeZone();
     bigInningPromise = (async () => {
       // The static schedule (per-night start times) and the "Featured on MLB.TV"
       // rail (per-night selection slug) are independent — fetch in parallel and
@@ -5343,7 +5346,8 @@ export async function fetchGames(
   sport: Sport,
   date?: string
 ): Promise<{ games: Game[]; failed: boolean }> {
-  const finishedKey = date && date < toYmd(getEtServiceDate()) ? `${sport}|${date}` : null;
+  // Keyed by zone too: the day's games are bucketed in the Settings zone.
+  const finishedKey = date && date < toYmd(getEtServiceDate()) ? `${sport}|${date}|${getTimeZone()}` : null;
   const held = finishedKey ? finishedDayCache.get(finishedKey) : undefined;
   if (held && Date.now() - held.at < FINISHED_DAY_TTL_MS) return { games: JSON.parse(held.json) as Game[], failed: false };
   const url = scoreboardUrl(sport);

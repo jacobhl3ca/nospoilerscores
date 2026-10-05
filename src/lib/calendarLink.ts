@@ -12,6 +12,7 @@
 
 import type { Game, LeagueEventCard, FightBout, ClimbRound } from "./types";
 import { buildShareCard } from "./shareCard";
+import { startTimeLabel } from "./gameTime.ts";
 
 export interface CalendarEvent {
   title: string;
@@ -117,7 +118,9 @@ export function buildCalendarEvent(game: Game, leagueLabel?: string): CalendarEv
     if (game.seriesNote) parts.push(game.seriesNote);
     if (game.playoffLabel) parts.push(game.playoffLabel);
     if (isTennisTimeEstimate(game.statusDetail)) {
-      if (game.statusDetail?.trim()) parts.push(game.statusDetail.trim());
+      // ESPN's clock is Eastern; "Not before 3:00 PM" reads in the Settings zone.
+      const status = game.statusDetail?.trim() ?? "";
+      if (status) parts.push(CLOCK.test(status) ? startTimeLabel(game) : status);
       note = TENNIS_ESTIMATE_NOTE;
     }
     title = parts.join(" · ");
