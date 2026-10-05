@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { clearFooterTap } from "@/lib/navRecovered";
 
 // Reading-progress line across the top of the viewport on the doc pages
 // (rendered by DocTopBar), 2026-09-25. Scales one fixed 3px element with a
@@ -10,6 +11,8 @@ import { useEffect, useRef } from "react";
 export default function DocReadProgress() {
   const ref = useRef<HTMLDivElement>(null);
 
+  // Every doc page mounts this, so it marks a board footer tap as arrived.
+  useEffect(() => { clearFooterTap(); }, []);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;

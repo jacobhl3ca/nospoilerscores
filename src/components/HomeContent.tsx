@@ -55,6 +55,7 @@ import Link from "next/link";
 import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
+import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -643,6 +644,10 @@ export default function HomeContent({
   // Reopen. The ref mirrors the live payload so the popstate handler (Back /
   // Android back gesture) can capture what it is closing without re-subscribing
   // on every modal change.
+  // A footer tap that never reached its page (iOS "No connection", 10/5) is
+  // counted on the next board load: see lib/navRecovered.
+  useEffect(() => { reportNavRecovered(); }, []);
+
   const REOPEN_MS = 8000;
   const videoModalRef = useRef<VideoModalState | null>(null);
   useEffect(() => { videoModalRef.current = videoModal; }, [videoModal]);
@@ -4935,12 +4940,12 @@ export default function HomeContent({
             links that used to sit here are gone (Jacob 8/24): the badges below
             say the same thing better. */}
         <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-          <Link href="/about" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</Link>
-          <Link href="/faq" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</Link>
-          <Link href="/guides" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</Link>
-          <Link href="/contact" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</Link>
-          <Link href="/contact#feedback" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</Link>
-          <Link href="/privacy" prefetch={false} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</Link>
+          <Link href="/about" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</Link>
+          <Link href="/faq" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</Link>
+          <Link href="/guides" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</Link>
+          <Link href="/contact" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</Link>
+          <Link href="/contact#feedback" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</Link>
+          <Link href="/privacy" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</Link>
           {/* Native shells only (9/29): the web has no store to rate on. A plain
               <a> with no target, like Settings' "Rate this app", so the store
               app opens on the review sheet. A link is all the store rules
