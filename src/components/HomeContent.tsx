@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
+import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
@@ -812,6 +813,9 @@ export default function HomeContent({
 
   useEffect(() => {
     const loaded = migrateLegacySwitcherPreferences(loadPreferences());
+    // Android widget: hand it the favorites on launch too, so a user who never
+    // touches Settings after the update still gets a working widget.
+    pushWidgetPrefs(loaded);
     // First-run detection for the league picker: a brand-new install has no
     // stored prefs blob yet. Capture this BEFORE the share-link path below can
     // call savePreferences() (which would write the blob and hide the signal).

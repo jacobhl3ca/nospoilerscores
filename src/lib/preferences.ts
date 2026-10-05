@@ -4,6 +4,7 @@ import { setServiceTimeZone, getEtServiceDate, toYmd } from "./etDay";
 import { pruneWatchQueue, type WatchQueueEntry } from "./watchQueue";
 import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
 import { setFrontendLinks } from "./frontendLinks";
+import { pushWidgetPrefs } from "./widgetBridge";
 
 const STORAGE_KEY = "nss-preferences";
 // For the cross-tab storage listener in HomeContent.
@@ -728,4 +729,5 @@ export function savePreferences(prefs: Preferences): void {
     /* storage full/unavailable — in-memory prefs still apply this session */
   }
   if (remoteSync) remoteSync(prefs);
+  pushWidgetPrefs(prefs);
 }

@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(HideScoreGoogleAuthPlugin.class);
+        registerPlugin(HideScoreWidgetPlugin.class);
         super.onCreate(savedInstanceState);
         installBackHandler();
         reportRendererCrashes();

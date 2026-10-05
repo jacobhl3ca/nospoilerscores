@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4×2 by default, resizable. updatePeriodMillis 30 min re-renders from the
+     cache; the network is hit at most every 3 h (WidgetRefresher). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/widget_hidescore"
+    android:minHeight="110dp"
+    android:minWidth="250dp"
+    android:minResizeHeight="60dp"
+    android:minResizeWidth="180dp"
+    android:previewImage="@drawable/widget_preview"
+    android:previewLayout="@layout/widget_hidescore"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="2"
+    android:targetCellWidth="4"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />
