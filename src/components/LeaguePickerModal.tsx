@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Sport } from "@/lib/types";
 import { LeagueMark } from "./LeagueMark";
 import { trackEvent } from "@/lib/track";
@@ -9,6 +9,9 @@ export interface LeaguePickerOption {
   sport: Sport;
   label: string;
   offseason?: boolean;
+  // false = an opt-in league (not in the switcher by default). The first-run
+  // sheet keeps those behind "More leagues".
+  defaultInSwitcher?: boolean;
 }
 
 // The league pill sheet. Two callers share one look (Jacob 9/29: "a nice modal
@@ -79,7 +82,17 @@ export function LeaguePickerModal({
   const titleId = multi ? "league-picker-title" : "league-add-more-title";
   // The column's own league stays even when offseason, so the sheet always
   // shows where you are.
-  const shown = multi || showOffseason ? options : options.filter((o) => !o.offseason || selected.includes(o.sport));
+  // The first-run sheet opens on the default leagues only (Jacob 10/4: "a
+  // shorter list"); "More leagues" adds the opt-in rest after them. A stable
+  // split, so the first-screen pills never move, and a picked league stays
+  // after "Fewer". No numeric cap: ~10 pills on 10/4, ~11 at most in a year.
+  const [expanded, setExpanded] = useState(false);
+  const core = options.filter((o) => o.defaultInSwitcher !== false);
+  const rest = options.filter((o) => o.defaultInSwitcher === false);
+  const canCollapse = multi && core.length > 0 && rest.length > 0;
+  const shown = multi
+    ? (!canCollapse || expanded ? [...core, ...rest] : [...core, ...rest.filter((o) => selected.includes(o.sport))])
+    : showOffseason ? options : options.filter((o) => !o.offseason || selected.includes(o.sport));
 
   // Escape closes the sheet too — same as tapping its backdrop. Brings it in
   // line with the ratings/news explainers and every other modal in the app,
@@ -230,7 +243,9 @@ export function LeaguePickerModal({
                 // lone group missing it.
                 aria-pressed={multi ? on : undefined}
                 aria-current={current ? "true" : undefined}
-                className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                // The Settings league chip's look (Jacob 10/1: one chip
+                // everywhere): rounded-md, 11px, uppercase name.
+                className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 style={multi && on
                   ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
                   : {
@@ -241,27 +256,42 @@ export function LeaguePickerModal({
               >
                 {/* Fixed 1rem slot, reserved whether or not this pill is
                     picked, so selecting one never changes any pill's width. */}
-                <span aria-hidden className="inline-block w-4 shrink-0 text-center text-xs font-bold tabular-nums">
-                  {multi && on ? idx + 1 : ""}
-                </span>
-                {/* The mark always sits on a white chip. Most of these are
-                    dark-on-transparent, so on the accent-blue selected fill
-                    they'd disappear; knocking them to solid white instead
-                    turned filled marks (MLB) into a featureless blob. The
-                    chip keeps every logo legible and identical in both
-                    states, so selecting a pill changes only its background. */}
-                <LeagueMark sport={o.sport} size={16} src={demoOption?.logo} plate />
-                <span>{demoOption?.label ?? o.label}</span>
+                {multi && (
+                  <span aria-hidden className="inline-block w-3 shrink-0 text-center text-[11px] font-bold tabular-nums">
+                    {on ? idx + 1 : ""}
+                  </span>
+                )}
+                {/* No white plate (Jacob 10/1), the same mark as the
+                    Settings chips: ESPN's dark-theme copy in dark mode and on
+                    the accent fill, a sport emoji for a league with none. */}
+                <LeagueMark sport={o.sport} src={demoOption?.logo} tone={multi && on ? "dark" : "auto"} className="-my-0.5" />
+                <span className="uppercase tracking-wide">{demoOption?.label ?? o.label}</span>
                 {/* Start dates dropped here on purpose (Jacob 8/9): six
                     "· starts Aug 21" tails made the grid unreadable and are
                     noise at signup. The kickoff banner still announces them
                     and the column switcher still shows them. "offseason"
                     stays — that one changes whether the column has games. */}
-                {o.offseason && <em className="font-normal text-xs" style={{ color: multi && on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
-                {elsewhere && <em className="font-normal text-xs" style={{ color: "var(--text-muted)" }}>· col {elsewhere.col}</em>}
+                {o.offseason && <em className="font-normal text-[11px]" style={{ color: multi && on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
+                {elsewhere && <em className="font-normal text-[11px]" style={{ color: "var(--text-muted)" }}>· col {elsewhere.col}</em>}
               </button>
             );
           })}
+          {/* Last in the grid, outline and no mark, like the Settings chip. */}
+          {canCollapse && (
+            <button
+              type="button"
+              data-testid="league-picker-more"
+              aria-expanded={expanded}
+              onClick={() => {
+                if (!expanded) track("more");
+                setExpanded((v) => !v);
+              }}
+              className="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide transition-colors cursor-pointer"
+              style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+            >
+              {expanded ? "Fewer" : "More leagues"}
+            </button>
+          )}
         </div>
         {multi ? (
           <div className="flex gap-2 shrink-0">
@@ -278,7 +308,7 @@ export function LeaguePickerModal({
             <button
               type="button"
               onClick={() => {
-                track("done", { picks: String(selected.length), leagues: selected.join(",").slice(0, 100) });
+                track("done", { picks: String(selected.length), leagues: selected.join(",").slice(0, 100), more: expanded ? "1" : "0" });
                 onConfirm?.();
               }}
               className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"

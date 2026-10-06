@@ -59,6 +59,20 @@
 
         </activity>
 
+        <!-- Home-screen widget: upcoming games for favorite teams, no scores.
+             Not exported: only the system (widget host updates) and this app
+             (the ↻ button, a favorites change) send to it. -->
+        <receiver
+            android:name=".HideScoreWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/hidescore_widget_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

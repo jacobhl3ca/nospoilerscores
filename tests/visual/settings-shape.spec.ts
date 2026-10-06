@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 // Settings shape pass (Jacob 9/25, reordered 9/28): search-first teams, 3
-// slots on phones, the switcher catalog folded, the records chips open the
-// picker in place, the email form behind a link, no Time zone. Same prefs
+// slots on phones, the switcher catalog folded, the records chips are direct
+// on/off toggles for My leagues (10/4), the email form behind a link, Time
+// zone in Default view (back 10/4) without its ZIP helper. Same prefs
 // throughout — these tests pin the layout and that nothing new is written just
 // by opening the panel.
 
@@ -56,6 +57,10 @@ async function dismissLeaguePicker(page: Page) {
   });
 }
 
+// The quiet Sign out · Reset to defaults · Delete account row (Jacob 10/1).
+const bottomRow = (page: Page) => page.getByRole("dialog", { name: "Settings" })
+  .locator("div.text-center", { has: page.getByRole("button", { name: "Reset to defaults" }) });
+
 async function start(page: Page, viewport: { width: number; height: number }, signedIn = false) {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -69,7 +74,7 @@ async function start(page: Page, viewport: { width: number; height: number }, si
 
 const SIGNED_IN_ORDER = [
   "Theme", "Leagues", "Favorite teams", "Default view", "News",
-  "Highlight video player", "Links", "Account", "Share & reset",
+  "Highlight video player", "Account", "Share",
 ];
 
 test("phone: section order, search first, 3 slots, folds closed, short panel", async ({ page }) => {
@@ -81,6 +86,11 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
     "Account", ...SIGNED_IN_ORDER.filter((t) => t !== "Account"),
   ]);
   await expect(dialog.locator("summary", { hasText: "More settings" })).toBeVisible();
+  // More settings now sits under Share (Jacob 10/1).
+  const shareBottom = await dialog.locator("section", { has: page.locator("h3", { hasText: /^Share$/ }) })
+    .evaluate((el) => el.getBoundingClientRect().bottom);
+  const moreTop = await dialog.locator("summary", { hasText: "More settings" }).evaluate((el) => el.getBoundingClientRect().top);
+  expect(moreTop).toBeGreaterThan(shareBottom);
 
   const teams = dialog.locator("section", { has: page.locator("h3", { hasText: "Favorite teams" }) });
   await expect(teams.locator("input, select, button").first()).toHaveAttribute("type", "search");
@@ -92,19 +102,101 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
     .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
   expect(new Set(themeTops).size).toBe(1);
 
-  // Time zone and its ZIP helper are gone, folded or not.
-  await dialog.locator("summary", { hasText: "More settings" }).click();
-  await expect(dialog.getByLabel("Time zone", { exact: true })).toHaveCount(0);
+  // Time zone is back (10/4) in Default view as a row of pills, visible with
+  // More settings closed and not inside it; the full list waits behind
+  // Other…, and its ZIP helper stays out.
+  await expect(dialog.getByRole("group", { name: "Time zone", exact: true })).toBeVisible();
+  await expect(dialog.locator("details").getByRole("group", { name: "Time zone", exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel("All time zones")).toHaveCount(0);
   await expect(dialog.getByLabel("US ZIP code for time zone")).toHaveCount(0);
-  await expect(dialog.getByRole("radiogroup").or(dialog.getByRole("group", { name: "Header league switcher" }))).toBeVisible();
-  await dialog.locator("summary", { hasText: "More settings" }).click();
 
   // The 9/25 pass left the phone panel at 2,171 px; the 9/28 Links section
   // (two URL rows) adds 120 px, and the 9/30 league logos widen the My leagues
-  // chips into one more row (32 px). Nothing else may grow it.
+  // chips into one more row (32 px): 2,323. The 10/1 cleanup (team picker row
+  // = My leagues only, no helper line, no news hint, Reset in the bottom row)
+  // took it to 2,095, measured 10/1. The 10/4 round (Links into More
+  // settings, Time zone up into Default view, Records as direct toggles) took
+  // it to 2,009, measured 10/4. Nothing else may grow it.
   const height = await dialog.locator(".overflow-y-auto").first().evaluate((el) => el.scrollHeight);
-  expect(height).toBeLessThanOrEqual(2323);
+  expect(height).toBeLessThanOrEqual(2010);
   expect(errors).toEqual([]);
+});
+
+const ZONE_PILLS = ["Auto", "ET", "CT", "MT", "PT", "Other…"];
+const zoneGroup = (page: Page) => page.getByRole("dialog", { name: "Settings" }).getByRole("group", { name: "Time zone", exact: true });
+const zonePill = (page: Page, label: string) => zoneGroup(page).getByRole("button", { name: new RegExp(`^${label}( —|$)`) });
+
+test("Time zone: CT saves Chicago, Auto removes the key, Other… picks Tokyo", async ({ page }) => {
+  await start(page, DESKTOP);
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  const read = () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+  await expect(zoneGroup(page).getByRole("button")).toHaveText(ZONE_PILLS);
+  await expect(zonePill(page, "Auto")).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByText(/^Auto · your device \(.+\) · now \d{1,2}:\d{2} [AP]M$/)).toBeVisible();
+
+  await zonePill(page, "CT").click();
+  await expect.poll(async () => (await read()).timezone).toBe("America/Chicago");
+  await expect(zonePill(page, "CT")).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByText(/^Times show in Central · now \d{1,2}:\d{2} [AP]M$/)).toBeVisible();
+
+  await zonePill(page, "Auto").click();
+  await expect.poll(async () => "timezone" in (await read())).toBe(false);
+
+  await expect(dialog.getByLabel("All time zones")).toHaveCount(0);
+  await zonePill(page, "Other…").click();
+  const all = dialog.getByLabel("All time zones");
+  await expect(all).toBeVisible();
+  await expect(all.locator("option").first()).toHaveText(/^Auto — your device/);
+  expect("timezone" in (await read())).toBe(false);
+  await all.selectOption("Asia/Tokyo");
+  await expect.poll(async () => (await read()).timezone).toBe("Asia/Tokyo");
+  await expect(zonePill(page, "Other…")).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByText(/^Times show in Tokyo · now /)).toBeVisible();
+});
+
+test("Time zone: a saved Phoenix opens Other… on load and is not rewritten", async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("seeded")) {
+      localStorage.setItem("nss-preferences", JSON.stringify({ timezone: "America/Phoenix", switcherDefaultsVersion: 2 }));
+      sessionStorage.setItem("seeded", "1");
+    }
+  });
+  await start(page, DESKTOP);
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await expect(zonePill(page, "Other…")).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByLabel("All time zones")).toHaveValue("America/Phoenix");
+  await expect(dialog.getByText(/^Times show in Phoenix · now /)).toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+  expect(saved.timezone).toBe("America/Phoenix");
+});
+
+for (const viewport of [PHONE, DESKTOP]) {
+  test(`Time zone ${viewport.width}: all 6 pills on one row`, async ({ page }) => {
+    await start(page, viewport);
+    const boxes = await zoneGroup(page).getByRole("button").evaluateAll((els) => els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), clipped: el.scrollWidth > el.clientWidth };
+    }));
+    expect(boxes).toHaveLength(6);
+    expect(new Set(boxes.map((b) => b.top)).size).toBe(1);
+    expect(boxes.some((b) => b.clipped)).toBe(false);
+  });
+}
+
+test("Time zone sits in Default view: under Landing date and the switch hour, above Landing view", async ({ page }) => {
+  await start(page, PHONE);
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  const top = (name: string) => dialog.getByRole("group", { name, exact: true })
+    .evaluate((el) => el.getBoundingClientRect().top);
+  const view = dialog.locator("section", { has: page.locator("h3", { hasText: /^Default view$/ }) });
+  await expect(view.getByRole("group", { name: "Time zone", exact: true })).toBeVisible();
+  expect(await top("Time zone")).toBeGreaterThan(await top("Landing date"));
+  expect(await top("Time zone")).toBeLessThan(await top("Landing view"));
+
+  await dialog.getByRole("group", { name: "Landing date" }).getByRole("button", { name: /^Automatic/ }).click();
+  const hourTop = await dialog.getByLabel("Automatic switch time").evaluate((el) => el.getBoundingClientRect().top);
+  expect(await top("Time zone")).toBeGreaterThan(hourTop);
+  expect(await top("Time zone")).toBeLessThan(await top("Landing view"));
 });
 
 for (const viewport of [PHONE, DESKTOP]) {
@@ -115,17 +207,21 @@ for (const viewport of [PHONE, DESKTOP]) {
 
     const account = dialog.locator("section", { has: page.locator("h3", { hasText: "Account" }) });
     await expect(account.locator("p")).toHaveCount(1);
-    await expect(account).toContainText("🍎Signed in with Apple · synced");
+    // Apple's mark is an svg now, not the 🍎 emoji (Jacob 10/1).
+    await expect(account.locator("p")).toHaveText("Signed in with Apple · synced");
+    await expect(account.locator("p svg")).toHaveCount(1);
+    await expect(account).not.toContainText("🍎");
     expect(await dialog.evaluate((el) => el.textContent ?? "")).not.toContain("privaterelay");
-    await expect(account.getByRole("button")).toHaveCount(0);
+    // Linking sits right under the Account line, not in the bottom row.
+    await expect(account.getByRole("button")).toHaveText(["Link another way to sign in"]);
 
     const links = dialog.locator("div.text-center", { has: page.getByRole("button", { name: "Delete account" }) }).getByRole("button");
-    await expect(links).toHaveText(["Sign out", "Link another way to sign in", "Delete account"]);
+    await expect(links).toHaveText(["Sign out", "Reset to defaults", "Delete account"]);
     await expect(dialog.getByText("Removes your synced data")).toHaveCount(0);
-    // Linking opens in place under the row.
-    await dialog.getByRole("button", { name: "Link another way to sign in" }).click();
-    await expect(dialog.getByRole("button", { name: "Link Google" })).toBeVisible();
-    await expect(dialog.locator('input[type="email"]')).toBeVisible();
+    // Linking opens in place inside Account.
+    await account.getByRole("button", { name: "Link another way to sign in" }).click();
+    await expect(account.getByRole("button", { name: "Link Google" })).toBeVisible();
+    await expect(account.locator('input[type="email"]')).toBeVisible();
     expect(errors).toEqual([]);
   });
 }
@@ -140,6 +236,15 @@ test("desktop: 5 slots and the landing view on one row", async ({ page }) => {
   const tops = await landing.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
   expect(new Set(tops).size).toBe(1);
   expect(errors).toEqual([]);
+});
+
+test("signed out: the bottom row is Reset to defaults alone", async ({ page }) => {
+  await start(page, PHONE);
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  const row = dialog.locator("div.text-center", { has: page.getByRole("button", { name: "Reset to defaults" }) });
+  await expect(row.getByRole("button")).toHaveText(["Reset to defaults"]);
+  await expect(dialog.getByRole("button", { name: "Sign out" })).toHaveCount(0);
+  await expect(dialog.locator("section", { has: page.locator("h3", { hasText: /^Share$/ }) }).getByRole("button", { name: "Reset to defaults" })).toHaveCount(0);
 });
 
 test("signed out: the email form waits behind Use email instead", async ({ page }) => {
@@ -235,30 +340,74 @@ for (const viewport of [PHONE, DESKTOP]) {
   });
 }
 
-test("records: the leagues are chips, a tap opens the picker in place, a pick persists", async ({ page }) => {
+// Records = one on/off chip per league in My leagues (Jacob 10/4). Scoped to
+// the Records group: a bare "MLB" button also matches the team picker tab.
+test("records: direct toggles for My leagues", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-29T15:00:00-04:00"));
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("seeded")) {
+      localStorage.setItem("nss-preferences", JSON.stringify({ firstLeague: "mlb", secondLeague: "nfl", thirdLeague: "wnba", leaguesOnboarded: true, switcherDefaultsVersion: 2 }));
+      sessionStorage.setItem("seeded", "1");
+    }
+  });
   await start(page, PHONE);
   const dialog = page.getByRole("dialog", { name: "Settings" });
-  const summary = dialog.getByLabel("Records on upcoming games: NFL, NCAAF, CFL, UFL", { exact: true });
-  await expect(summary.getByRole("button")).toHaveText(["NFL", "NCAAF", "CFL", "UFL"]);
-  await expect(dialog.getByText("Each team's record, in italics, on upcoming and live games")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Change" })).toHaveCount(0);
-  await expect(dialog.getByRole("group", { name: "Records on upcoming games" })).toHaveCount(0);
+  const read = () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+  const records = dialog.getByRole("group", { name: "Records on upcoming games" });
+  const chip = (name: string) => records.getByRole("button", { name, exact: true });
+  const caveat = dialog.getByText("Leagues that play most days can show a result you have not watched yet.");
 
-  await summary.getByRole("button", { name: "CFL" }).click();
-  const picker = dialog.getByRole("group", { name: "Records on upcoming games" });
-  await picker.getByRole("button", { name: "MLB", exact: true }).click();
-  await dialog.getByRole("button", { name: "Done" }).click();
-  await expect(dialog.getByLabel("Records on upcoming games: NFL, NCAAF, CFL, UFL, MLB", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Each team's record, in italics, on upcoming and live games")).toBeVisible();
+  await expect(records.getByRole("button", { name: "Done" })).toHaveCount(0);
+  await expect(records.getByRole("button", { name: "All", exact: true })).toHaveCount(0);
+  await expect(chip("NFL")).toHaveAttribute("aria-pressed", "true");
+  await expect(chip("MLB")).toHaveAttribute("aria-pressed", "false");
+  await expect(caveat).toHaveCount(0);
+
+  await chip("MLB").click();
+  await expect(chip("MLB")).toHaveAttribute("aria-pressed", "true");
+  await expect(caveat).toBeVisible();
+  await expect.poll(async () => (await read()).upcomingRecordLeagues).toEqual(["nfl", "ncaaf", "cfl", "ufl", "mlb"]);
 
   await page.reload();
   await openSettings(page);
-  await expect(dialog.getByLabel("Records on upcoming games: NFL, NCAAF, CFL, UFL, MLB", { exact: true })).toBeVisible();
+  await expect(chip("MLB")).toHaveAttribute("aria-pressed", "true");
+  await chip("MLB").click();
+  await expect(chip("MLB")).toHaveAttribute("aria-pressed", "false");
+  await expect(caveat).toHaveCount(0);
+  await chip("MLB").click();
+
+  // Untick MLB in My leagues: its Records chip leaves, the stored key stays.
+  await dialog.getByRole("group", { name: "Leagues in the header switcher" }).getByRole("checkbox", { name: "MLB", exact: true }).click();
+  await expect(chip("MLB")).toHaveCount(0);
+  await expect(chip("NFL")).toBeVisible();
+  expect((await read()).upcomingRecordLeagues).toContain("mlb");
+});
+
+test("records: no record-capable league in My leagues shows one muted line", async ({ page }) => {
+  // Every league that keeps a team record, struck off the switcher.
+  const teamLeagues = [
+    "mlb", "nba", "wnba", "ncaam", "ncaaw", "ncaaf", "nfl", "ufl", "nhl", "ncaah", "cfl", "ncaawh", "ncaavb",
+    "ncaawsoc", "ncaamsoc", "ncaabase", "ncaasoft", "fifa", "epl", "mls", "ucl", "uel", "laliga", "seriea",
+    "bundesliga", "ligue1", "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi", "uecl", "facup",
+    "copadelrey", "dfbpokal", "nations",
+  ];
+  await page.addInitScript((hidden) => {
+    if (!sessionStorage.getItem("seeded")) {
+      localStorage.setItem("nss-preferences", JSON.stringify({ hiddenLeagues: hidden, leaguesOnboarded: true, switcherDefaultsVersion: 2 }));
+      sessionStorage.setItem("seeded", "1");
+    }
+  }, teamLeagues);
+  await start(page, PHONE);
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await expect(dialog.getByRole("group", { name: "Records on upcoming games" })).toHaveCount(0);
+  await expect(dialog.getByText("No league in My leagues keeps team records.")).toBeVisible();
 });
 
 test("default view: the switch hour sits inline under Automatic; Auto's rule is visible", async ({ page }) => {
   await start(page, PHONE);
   const dialog = page.getByRole("dialog", { name: "Settings" });
-  await expect(dialog.getByText("Auto = off in the morning, last state after noon ET")).toBeVisible();
+  await expect(dialog.getByText("Auto = off in the morning, last state after noon", { exact: true })).toBeVisible();
   await expect(dialog.getByLabel("Automatic switch time")).toHaveCount(0);
   await dialog.getByRole("group", { name: "Landing date" }).getByRole("button", { name: /^Automatic/ }).click();
   const hour = dialog.getByLabel("Automatic switch time");
@@ -282,7 +431,7 @@ test("reset: confirm, then Settings reset · Undo puts the favorites back", asyn
   const read = () => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
   const before = await read();
   page.once("dialog", (d) => d.accept());
-  await dialog.getByRole("button", { name: "Reset to defaults" }).click();
+  await bottomRow(page).getByRole("button", { name: "Reset to defaults" }).click();
   const toast = dialog.getByRole("status").filter({ hasText: "Settings reset" });
   await expect(toast).toBeVisible();
   const cleared = await read();
@@ -303,7 +452,7 @@ test("reset: the undo toast leaves after 15 s", async ({ page }) => {
   await start(page, PHONE);
   const dialog = page.getByRole("dialog", { name: "Settings" });
   page.once("dialog", (d) => d.accept());
-  await dialog.getByRole("button", { name: "Reset to defaults" }).click();
+  await bottomRow(page).getByRole("button", { name: "Reset to defaults" }).click();
   const toast = dialog.getByRole("status").filter({ hasText: "Settings reset" });
   await expect(toast).toBeVisible();
   await page.clock.runFor(14_000);
@@ -316,7 +465,7 @@ test("settings link carries the whole setup to a fresh browser", async ({ page, 
   const setup = {
     favoriteTeams: ["mlb-10"], theme: "light", switcherDefaultsVersion: 2,
     hideSensitiveNews: true, hideCrashNews: true, maskVideoTitle: true, youtubeNativeControls: false,
-    singleColumn: true, hideTeamStars: true, hiddenLeagues: ["nhl"], shownLeagues: ["ufl", "poker"],
+    singleColumn: true, scrollColumns: true, hideTeamStars: true, hiddenLeagues: ["nhl"], shownLeagues: ["ufl", "poker"],
     upcomingRecordLeagues: ["nfl", "soccer"],
   };
   await page.addInitScript((p) => {
@@ -329,7 +478,7 @@ test("settings link carries the whole setup to a fresh browser", async ({ page, 
   const href = await page.getByRole("dialog", { name: "Settings" }).locator("a", { hasText: /Drag to Bookmarks Bar|HideScore/ }).getAttribute("href");
   expect(href).toBeTruthy();
   const url = new URL(href!);
-  for (const k of ["hn", "mt", "yp", "sc", "ts", "xl", "ol", "rl"]) expect(url.searchParams.has(k), k).toBe(true);
+  for (const k of ["hn", "mt", "yp", "sc", "sx", "ts", "xl", "ol", "rl"]) expect(url.searchParams.has(k), k).toBe(true);
 
   const ctx = await browser.newContext();
   const fresh = await ctx.newPage();

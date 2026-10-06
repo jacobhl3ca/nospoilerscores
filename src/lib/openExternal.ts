@@ -202,7 +202,7 @@ async function openViaAppLink(url: string): Promise<void> {
 
 export function openExternal(url: string): void {
   if (!url) return;
-  // The user's own Redlib / Invidious (Settings → Links). First, so a moved
+  // The user's own Redlib / Invidious (Settings → More settings → Links). First, so a moved
   // YouTube link goes to the browser below, not the YouTube app.
   url = rewriteExternalUrl(url, frontendConfig());
   if (isCapacitorNative()) {

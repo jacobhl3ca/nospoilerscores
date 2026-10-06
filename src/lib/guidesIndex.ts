@@ -74,6 +74,10 @@ export const GUIDE_GROUPS: GuideGroup[] = [
     guides: [{ href: "/ufc-results-without-spoilers", label: "UFC results without spoilers" }],
   },
   {
+    sport: "Climbing",
+    guides: [{ href: "/climbing-replays-without-spoilers", label: "Climbing World Cup replays without spoilers" }],
+  },
+  {
     sport: "Cricket",
     guides: [{ href: "/cricket-highlights-without-spoilers", label: "Cricket highlights without spoilers" }],
   },
@@ -85,6 +89,7 @@ export const GUIDE_GROUPS: GuideGroup[] = [
       { href: "/watch-sports-highlights-without-spoilers", label: "Watch sports highlights without spoilers" },
       { href: "/watch", label: "Watch any YouTube link without spoilers" },
       { href: "/best-spoiler-free-sports-sites", label: "The best spoiler-free sports sites and apps" },
+      { href: "/dtmts-alternative", label: "A DTMTS alternative for every other sport" },
       { href: "/redzone-for-every-sport", label: "Is there a RedZone for every sport?" },
       { href: "/no-spoiler-scores", label: "No-spoiler scores" },
       { href: "/teams", label: "Team schedules without spoilers" },

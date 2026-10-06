@@ -1,0 +1,2601 @@
+{
+ "events/1487": {
+  "id": 1487,
+  "name": "World Climbing Series Koper 2026",
+  "type": "classic",
+  "league_id": 1,
+  "rounds": [
+   {
+    "id": 2812,
+    "name": "Qualification"
+   },
+   {
+    "id": 2984,
+    "name": "Semi-final"
+   },
+   {
+    "id": 2985,
+    "name": "Final"
+   }
+  ],
+  "league_season_id": 457,
+  "season_id": 38,
+  "starts_at": "2026-09-03 22:00:00 UTC",
+  "ends_at": "2026-09-05 21:59:00 UTC",
+  "local_start_date": "2026-09-04",
+  "local_end_date": "2026-09-05",
+  "timezone": {
+   "value": "Europe/Ljubljana"
+  },
+  "location": "Koper, Slovenia",
+  "registration_url": "/api/v1/events/1487/registrations",
+  "public_information": {
+   "organiser_name": null,
+   "organiser_url": null,
+   "venue_name": null,
+   "description": null
+  },
+  "cup_name": "IFSC Climbing World Cup 2026",
+  "country": "SLO",
+  "registration_deadline": "2026-08-20T23:59:00.000Z",
+  "registration_opens_at": "2025-04-22T00:00:00.000Z",
+  "removal_deadline": "2026-08-20T23:59:00.000Z",
+  "athlete_self_registration": false,
+  "team_official_self_registration": false,
+  "event_logo": null,
+  "series_logo": null,
+  "cover": null,
+  "infosheet_url": "https://d1n1qj9geboqnb.cloudfront.net/ifsc/public/81yqj1x1gyyft5pgfvh21kbbzbqn",
+  "additional_info_url": null,
+  "is_paraclimbing_event": false,
+  "self_judged": false,
+  "d_cats": [
+   {
+    "dcat_id": 1,
+    "event_id": 1487,
+    "dcat_name": "LEAD Men",
+    "discipline_id": 1819,
+    "discipline_kind": "lead",
+    "category_id": 6964,
+    "category_name": "Men",
+    "status": "finished",
+    "status_as_of": "2026-09-05 19:01:14 UTC",
+    "ranking_as_of": "2026-09-05 18:43:42 UTC",
+    "category_rounds": [
+     {
+      "category_round_id": 10444,
+      "kind": "lead",
+      "name": "Qualification",
+      "category": "Men",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-04 12:28:21 UTC",
+      "result_url": "/api/v1/category_rounds/10444/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 1
+      },
+      "format_identifier": "lead_one_group_two_routes",
+      "format": "IFSC: 2 routes",
+      "routes": [
+       {
+        "id": 18035,
+        "name": "1",
+        "startlist": "/api/v1/routes/18035/startlist",
+        "ranking": "/api/v1/routes/18035/results"
+       },
+       {
+        "id": 18036,
+        "name": "2",
+        "startlist": "/api/v1/routes/18036/startlist",
+        "ranking": "/api/v1/routes/18036/results"
+       }
+      ]
+     },
+     {
+      "category_round_id": 11019,
+      "kind": "lead",
+      "name": "Semi-final",
+      "category": "Men",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-04 20:34:50 UTC",
+      "result_url": "/api/v1/category_rounds/11019/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 2
+      },
+      "format_identifier": "lead_one_group_one_route",
+      "format": "IFSC: 1 route",
+      "routes": [
+       {
+        "id": 20612,
+        "name": "1",
+        "startlist": "/api/v1/routes/20612/startlist",
+        "ranking": "/api/v1/routes/20612/results"
+       }
+      ]
+     },
+     {
+      "category_round_id": 11021,
+      "kind": "lead",
+      "name": "Final",
+      "category": "Men",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-05 18:59:02 UTC",
+      "result_url": "/api/v1/category_rounds/11021/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 3
+      },
+      "format_identifier": "lead_one_group_one_route",
+      "format": "IFSC: 1 route",
+      "routes": [
+       {
+        "id": 20614,
+        "name": "1",
+        "startlist": "/api/v1/routes/20614/startlist",
+        "ranking": "/api/v1/routes/20614/results"
+       }
+      ]
+     }
+    ],
+    "full_results_url": "/api/v1/events/1487/result/1",
+    "top_3_results": [
+     {
+      "athlete_id": 14606,
+      "squad_id": null,
+      "rank": 1,
+      "name": "SUZUKI Neo",
+      "bib_number": "123",
+      "firstname": "Neo",
+      "lastname": "SUZUKI",
+      "country": "JPN",
+      "organisation_id": 25,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png"
+     },
+     {
+      "athlete_id": 11390,
+      "squad_id": null,
+      "rank": 2,
+      "name": "YOSHIDA Satone",
+      "bib_number": "122",
+      "firstname": "Satone",
+      "lastname": "YOSHIDA",
+      "country": "JPN",
+      "organisation_id": 25,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png"
+     },
+     {
+      "athlete_id": 14090,
+      "squad_id": null,
+      "rank": 3,
+      "name": "TRI RAMADANI Putra",
+      "bib_number": "110",
+      "firstname": "Putra",
+      "lastname": "TRI RAMADANI",
+      "country": "INA",
+      "organisation_id": 45,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/INA.png"
+     }
+    ]
+   },
+   {
+    "dcat_id": 5,
+    "event_id": 1487,
+    "dcat_name": "LEAD Women",
+    "discipline_id": 1819,
+    "discipline_kind": "lead",
+    "category_id": 6965,
+    "category_name": "Women",
+    "status": "finished",
+    "status_as_of": "2026-09-05 20:15:07 UTC",
+    "ranking_as_of": "2026-09-05 20:09:35 UTC",
+    "category_rounds": [
+     {
+      "category_round_id": 10445,
+      "kind": "lead",
+      "name": "Qualification",
+      "category": "Women",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-04 12:36:02 UTC",
+      "result_url": "/api/v1/category_rounds/10445/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 1
+      },
+      "format_identifier": "lead_one_group_two_routes",
+      "format": "IFSC: 2 routes",
+      "routes": [
+       {
+        "id": 18037,
+        "name": "1",
+        "startlist": "/api/v1/routes/18037/startlist",
+        "ranking": "/api/v1/routes/18037/results"
+       },
+       {
+        "id": 18038,
+        "name": "2",
+        "startlist": "/api/v1/routes/18038/startlist",
+        "ranking": "/api/v1/routes/18038/results"
+       }
+      ]
+     },
+     {
+      "category_round_id": 11020,
+      "kind": "lead",
+      "name": "Semi-final",
+      "category": "Women",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-04 20:48:04 UTC",
+      "result_url": "/api/v1/category_rounds/11020/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 2
+      },
+      "format_identifier": "lead_one_group_one_route",
+      "format": "IFSC: 1 route",
+      "routes": [
+       {
+        "id": 20613,
+        "name": "1",
+        "startlist": "/api/v1/routes/20613/startlist",
+        "ranking": "/api/v1/routes/20613/results"
+       }
+      ]
+     },
+     {
+      "category_round_id": 11022,
+      "kind": "lead",
+      "name": "Final",
+      "category": "Women",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-05 20:10:17 UTC",
+      "result_url": "/api/v1/category_rounds/11022/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 3
+      },
+      "format_identifier": "lead_one_group_one_route",
+      "format": "IFSC: 1 route",
+      "routes": [
+       {
+        "id": 20615,
+        "name": "1",
+        "startlist": "/api/v1/routes/20615/startlist",
+        "ranking": "/api/v1/routes/20615/results"
+       }
+      ]
+     }
+    ],
+    "full_results_url": "/api/v1/events/1487/result/5",
+    "top_3_results": [
+     {
+      "athlete_id": 1147,
+      "squad_id": null,
+      "rank": 1,
+      "name": "GARNBRET Janja",
+      "bib_number": "58",
+      "firstname": "Janja",
+      "lastname": "GARNBRET",
+      "country": "SLO",
+      "organisation_id": 15,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/SLO.png"
+     },
+     {
+      "athlete_id": 1811,
+      "squad_id": null,
+      "rank": 2,
+      "name": "Raboutou Brooke",
+      "bib_number": "70",
+      "firstname": "Brooke",
+      "lastname": "RABOUTOU",
+      "country": "USA",
+      "organisation_id": 20,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/USA.png"
+     },
+     {
+      "athlete_id": 2080,
+      "squad_id": null,
+      "rank": 3,
+      "name": "SEO Chaehyun",
+      "bib_number": "48",
+      "firstname": "Chaehyun",
+      "lastname": "SEO",
+      "country": "KOR",
+      "organisation_id": 21,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/KOR.png"
+     }
+    ]
+   }
+  ],
+  "dcats": [
+   {
+    "dcat_id": 1,
+    "event_id": 1487,
+    "dcat_name": "LEAD Men",
+    "discipline_id": 1819,
+    "discipline_kind": "lead",
+    "category_id": 6964,
+    "category_name": "Men",
+    "status": "finished",
+    "status_as_of": "2026-09-05 19:01:14 UTC",
+    "ranking_as_of": "2026-09-05 18:43:42 UTC",
+    "category_rounds": [
+     {
+      "category_round_id": 10444,
+      "kind": "lead",
+      "name": "Qualification",
+      "category": "Men",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-04 12:28:21 UTC",
+      "result_url": "/api/v1/category_rounds/10444/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 1
+      },
+      "format_identifier": "lead_one_group_two_routes",
+      "format": "IFSC: 2 routes",
+      "routes": [
+       {
+        "id": 18035,
+        "name": "1",
+        "startlist": "/api/v1/routes/18035/startlist",
+        "ranking": "/api/v1/routes/18035/results"
+       },
+       {
+        "id": 18036,
+        "name": "2",
+        "startlist": "/api/v1/routes/18036/startlist",
+        "ranking": "/api/v1/routes/18036/results"
+       }
+      ]
+     },
+     {
+      "category_round_id": 11019,
+      "kind": "lead",
+      "name": "Semi-final",
+      "category": "Men",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-04 20:34:50 UTC",
+      "result_url": "/api/v1/category_rounds/11019/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 2
+      },
+      "format_identifier": "lead_one_group_one_route",
+      "format": "IFSC: 1 route",
+      "routes": [
+       {
+        "id": 20612,
+        "name": "1",
+        "startlist": "/api/v1/routes/20612/startlist",
+        "ranking": "/api/v1/routes/20612/results"
+       }
+      ]
+     },
+     {
+      "category_round_id": 11021,
+      "kind": "lead",
+      "name": "Final",
+      "category": "Men",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-05 18:59:02 UTC",
+      "result_url": "/api/v1/category_rounds/11021/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 3
+      },
+      "format_identifier": "lead_one_group_one_route",
+      "format": "IFSC: 1 route",
+      "routes": [
+       {
+        "id": 20614,
+        "name": "1",
+        "startlist": "/api/v1/routes/20614/startlist",
+        "ranking": "/api/v1/routes/20614/results"
+       }
+      ]
+     }
+    ],
+    "full_results_url": "/api/v1/events/1487/result/1",
+    "top_3_results": [
+     {
+      "athlete_id": 14606,
+      "squad_id": null,
+      "rank": 1,
+      "name": "SUZUKI Neo",
+      "bib_number": "123",
+      "firstname": "Neo",
+      "lastname": "SUZUKI",
+      "country": "JPN",
+      "organisation_id": 25,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png"
+     },
+     {
+      "athlete_id": 11390,
+      "squad_id": null,
+      "rank": 2,
+      "name": "YOSHIDA Satone",
+      "bib_number": "122",
+      "firstname": "Satone",
+      "lastname": "YOSHIDA",
+      "country": "JPN",
+      "organisation_id": 25,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png"
+     },
+     {
+      "athlete_id": 14090,
+      "squad_id": null,
+      "rank": 3,
+      "name": "TRI RAMADANI Putra",
+      "bib_number": "110",
+      "firstname": "Putra",
+      "lastname": "TRI RAMADANI",
+      "country": "INA",
+      "organisation_id": 45,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/INA.png"
+     }
+    ]
+   },
+   {
+    "dcat_id": 5,
+    "event_id": 1487,
+    "dcat_name": "LEAD Women",
+    "discipline_id": 1819,
+    "discipline_kind": "lead",
+    "category_id": 6965,
+    "category_name": "Women",
+    "status": "finished",
+    "status_as_of": "2026-09-05 20:15:07 UTC",
+    "ranking_as_of": "2026-09-05 20:09:35 UTC",
+    "category_rounds": [
+     {
+      "category_round_id": 10445,
+      "kind": "lead",
+      "name": "Qualification",
+      "category": "Women",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-04 12:36:02 UTC",
+      "result_url": "/api/v1/category_rounds/10445/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 1
+      },
+      "format_identifier": "lead_one_group_two_routes",
+      "format": "IFSC: 2 routes",
+      "routes": [
+       {
+        "id": 18037,
+        "name": "1",
+        "startlist": "/api/v1/routes/18037/startlist",
+        "ranking": "/api/v1/routes/18037/results"
+       },
+       {
+        "id": 18038,
+        "name": "2",
+        "startlist": "/api/v1/routes/18038/startlist",
+        "ranking": "/api/v1/routes/18038/results"
+       }
+      ]
+     },
+     {
+      "category_round_id": 11020,
+      "kind": "lead",
+      "name": "Semi-final",
+      "category": "Women",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-04 20:48:04 UTC",
+      "result_url": "/api/v1/category_rounds/11020/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 2
+      },
+      "format_identifier": "lead_one_group_one_route",
+      "format": "IFSC: 1 route",
+      "routes": [
+       {
+        "id": 20613,
+        "name": "1",
+        "startlist": "/api/v1/routes/20613/startlist",
+        "ranking": "/api/v1/routes/20613/results"
+       }
+      ]
+     },
+     {
+      "category_round_id": 11022,
+      "kind": "lead",
+      "name": "Final",
+      "category": "Women",
+      "schedule": null,
+      "status": "finished",
+      "status_as_of": "2026-09-05 20:10:17 UTC",
+      "result_url": "/api/v1/category_rounds/11022/results",
+      "starting_groups": [],
+      "combined_stages": [],
+      "round": {
+       "league_round_id": 3
+      },
+      "format_identifier": "lead_one_group_one_route",
+      "format": "IFSC: 1 route",
+      "routes": [
+       {
+        "id": 20615,
+        "name": "1",
+        "startlist": "/api/v1/routes/20615/startlist",
+        "ranking": "/api/v1/routes/20615/results"
+       }
+      ]
+     }
+    ],
+    "full_results_url": "/api/v1/events/1487/result/5",
+    "top_3_results": [
+     {
+      "athlete_id": 1147,
+      "squad_id": null,
+      "rank": 1,
+      "name": "GARNBRET Janja",
+      "bib_number": "58",
+      "firstname": "Janja",
+      "lastname": "GARNBRET",
+      "country": "SLO",
+      "organisation_id": 15,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/SLO.png"
+     },
+     {
+      "athlete_id": 1811,
+      "squad_id": null,
+      "rank": 2,
+      "name": "Raboutou Brooke",
+      "bib_number": "70",
+      "firstname": "Brooke",
+      "lastname": "RABOUTOU",
+      "country": "USA",
+      "organisation_id": 20,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/USA.png"
+     },
+     {
+      "athlete_id": 2080,
+      "squad_id": null,
+      "rank": 3,
+      "name": "SEO Chaehyun",
+      "bib_number": "48",
+      "firstname": "Chaehyun",
+      "lastname": "SEO",
+      "country": "KOR",
+      "organisation_id": 21,
+      "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/KOR.png"
+     }
+    ]
+   }
+  ],
+  "disciplines": [
+   {
+    "id": 1819,
+    "kind": "lead",
+    "settings": null
+   }
+  ],
+  "computed_combined_categories": [],
+  "team_ranking_disciplines": [
+   "lead"
+  ],
+  "team_ranking_url": "/api/v1/events/1487/team_results/",
+  "time_rankings": false,
+  "time_ranking_url": null,
+  "custom_event_registration_fields": []
+ },
+ "category_rounds/11021/results": {
+  "id": 11021,
+  "event": "World Climbing Series Koper 2026",
+  "event_id": 1487,
+  "dcat_id": 1,
+  "discipline": "Lead",
+  "status": "finished",
+  "status_as_of": "2026-09-05 18:59:02 UTC",
+  "category": "Men",
+  "round": "Final",
+  "format": "IFSC: 1 route",
+  "format_identifier": "lead_one_group_one_route",
+  "routes": [
+   {
+    "id": 20614,
+    "name": "1",
+    "startlist": "/api/v1/routes/20614/startlist",
+    "ranking": "/api/v1/routes/20614/results"
+   }
+  ],
+  "ranking": [
+   {
+    "athlete_id": 14606,
+    "name": "SUZUKI Neo",
+    "firstname": "Neo",
+    "lastname": "SUZUKI",
+    "country": "JPN",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png",
+    "federation_id": 25,
+    "bib": "123",
+    "rank": 1,
+    "score": "33+",
+    "ascents": [
+     {
+      "route_id": 20614,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "33+",
+      "plus": true,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 18:53:41 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 11390,
+    "name": "YOSHIDA Satone",
+    "firstname": "Satone",
+    "lastname": "YOSHIDA",
+    "country": "JPN",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png",
+    "federation_id": 25,
+    "bib": "122",
+    "rank": 2,
+    "score": "30+",
+    "ascents": [
+     {
+      "route_id": 20614,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "30+",
+      "plus": true,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 18:53:36 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 14090,
+    "name": "TRI RAMADANI Putra",
+    "firstname": "Putra",
+    "lastname": "TRI RAMADANI",
+    "country": "INA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/INA.png",
+    "federation_id": 45,
+    "bib": "110",
+    "rank": 3,
+    "score": "28+",
+    "ascents": [
+     {
+      "route_id": 20614,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "28+",
+      "plus": true,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 18:53:39 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 532,
+    "name": "AVEZOU Sam",
+    "firstname": "Sam",
+    "lastname": "AVEZOU",
+    "country": "FRA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/FRA.png",
+    "federation_id": 10,
+    "bib": "99",
+    "rank": 4,
+    "score": "23+",
+    "ascents": [
+     {
+      "route_id": 20614,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "23+",
+      "plus": true,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 18:53:37 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 912,
+    "name": "SCHENK Filip",
+    "firstname": "Filip",
+    "lastname": "SCHENK",
+    "country": "ITA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/ITA.png",
+    "federation_id": 13,
+    "bib": "115",
+    "rank": 5,
+    "score": "23",
+    "ascents": [
+     {
+      "route_id": 20614,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "23",
+      "plus": false,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 18:53:43 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 2101,
+    "name": "LEE Dohyun",
+    "firstname": "Dohyun",
+    "lastname": "LEE",
+    "country": "KOR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/KOR.png",
+    "federation_id": 21,
+    "bib": "126",
+    "rank": 6,
+    "score": "23",
+    "ascents": [
+     {
+      "route_id": 20614,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "23",
+      "plus": false,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 18:53:42 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 1029,
+    "name": "PLACCI Giovanni",
+    "firstname": "Giovanni",
+    "lastname": "PLACCI",
+    "country": "ITA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/ITA.png",
+    "federation_id": 13,
+    "bib": "114",
+    "rank": 7,
+    "score": "22+",
+    "ascents": [
+     {
+      "route_id": 20614,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "22+",
+      "plus": true,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 18:53:40 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 15034,
+    "name": "JUNG Chanjin",
+    "firstname": "Chanjin",
+    "lastname": "JUNG",
+    "country": "KOR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/KOR.png",
+    "federation_id": 21,
+    "bib": "128",
+    "rank": 8,
+    "score": "22",
+    "ascents": [
+     {
+      "route_id": 20614,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "22",
+      "plus": false,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 18:53:35 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   }
+  ],
+  "startlist": [
+   {
+    "athlete_id": 15034,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20614,
+      "position": 1
+     }
+    ],
+    "name": "JUNG Chanjin",
+    "firstname": "Chanjin",
+    "lastname": "JUNG",
+    "bib": "128",
+    "country": "KOR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/KOR.png",
+    "federation_id": 21,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 11390,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20614,
+      "position": 2
+     }
+    ],
+    "name": "YOSHIDA Satone",
+    "firstname": "Satone",
+    "lastname": "YOSHIDA",
+    "bib": "122",
+    "country": "JPN",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png",
+    "federation_id": 25,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 532,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20614,
+      "position": 3
+     }
+    ],
+    "name": "AVEZOU Sam",
+    "firstname": "Sam",
+    "lastname": "AVEZOU",
+    "bib": "99",
+    "country": "FRA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/FRA.png",
+    "federation_id": 10,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 14090,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20614,
+      "position": 4
+     }
+    ],
+    "name": "TRI RAMADANI Putra",
+    "firstname": "Putra",
+    "lastname": "TRI RAMADANI",
+    "bib": "110",
+    "country": "INA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/INA.png",
+    "federation_id": 45,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 1029,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20614,
+      "position": 5
+     }
+    ],
+    "name": "PLACCI Giovanni",
+    "firstname": "Giovanni",
+    "lastname": "PLACCI",
+    "bib": "114",
+    "country": "ITA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/ITA.png",
+    "federation_id": 13,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 14606,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20614,
+      "position": 6
+     }
+    ],
+    "name": "SUZUKI Neo",
+    "firstname": "Neo",
+    "lastname": "SUZUKI",
+    "bib": "123",
+    "country": "JPN",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png",
+    "federation_id": 25,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 2101,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20614,
+      "position": 7
+     }
+    ],
+    "name": "LEE Dohyun",
+    "firstname": "Dohyun",
+    "lastname": "LEE",
+    "bib": "126",
+    "country": "KOR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/KOR.png",
+    "federation_id": 21,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 912,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20614,
+      "position": 8
+     }
+    ],
+    "name": "SCHENK Filip",
+    "firstname": "Filip",
+    "lastname": "SCHENK",
+    "bib": "115",
+    "country": "ITA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/ITA.png",
+    "federation_id": 13,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   }
+  ]
+ },
+ "category_rounds/11022/results": {
+  "id": 11022,
+  "event": "World Climbing Series Koper 2026",
+  "event_id": 1487,
+  "dcat_id": 5,
+  "discipline": "Lead",
+  "status": "finished",
+  "status_as_of": "2026-09-05 20:10:17 UTC",
+  "category": "Women",
+  "round": "Final",
+  "format": "IFSC: 1 route",
+  "format_identifier": "lead_one_group_one_route",
+  "routes": [
+   {
+    "id": 20615,
+    "name": "1",
+    "startlist": "/api/v1/routes/20615/startlist",
+    "ranking": "/api/v1/routes/20615/results"
+   }
+  ],
+  "ranking": [
+   {
+    "athlete_id": 1147,
+    "name": "GARNBRET Janja",
+    "firstname": "Janja",
+    "lastname": "GARNBRET",
+    "country": "SLO",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/SLO.png",
+    "federation_id": 15,
+    "bib": "58",
+    "rank": 1,
+    "score": "42+",
+    "ascents": [
+     {
+      "route_id": 20615,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "42+",
+      "plus": true,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 20:10:12 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 1811,
+    "name": "Raboutou Brooke",
+    "firstname": "Brooke",
+    "lastname": "RABOUTOU",
+    "country": "USA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/USA.png",
+    "federation_id": 20,
+    "bib": "70",
+    "rank": 2,
+    "score": "33",
+    "ascents": [
+     {
+      "route_id": 20615,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "33",
+      "plus": false,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 20:10:10 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 2080,
+    "name": "SEO Chaehyun",
+    "firstname": "Chaehyun",
+    "lastname": "SEO",
+    "country": "KOR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/KOR.png",
+    "federation_id": 21,
+    "bib": "48",
+    "rank": 3,
+    "score": "32+",
+    "ascents": [
+     {
+      "route_id": 20615,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "32+",
+      "plus": true,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 20:10:12 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 13021,
+    "name": "SANDERS Annie",
+    "firstname": "Annie",
+    "lastname": "SANDERS",
+    "country": "USA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/USA.png",
+    "federation_id": 20,
+    "bib": "72",
+    "rank": 4,
+    "score": "32+",
+    "ascents": [
+     {
+      "route_id": 20615,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "32+",
+      "plus": true,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 20:10:09 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 13329,
+    "name": "REKAR Rosa",
+    "firstname": "Rosa",
+    "lastname": "REKAR",
+    "country": "SLO",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/SLO.png",
+    "federation_id": 15,
+    "bib": "55",
+    "rank": 5,
+    "score": "30",
+    "ascents": [
+     {
+      "route_id": 20615,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "30",
+      "plus": false,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 20:10:11 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 1226,
+    "name": "PILZ Jessica",
+    "firstname": "Jessica",
+    "lastname": "PILZ",
+    "country": "AUT",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/AUT.png",
+    "federation_id": 16,
+    "bib": "5",
+    "rank": 6,
+    "score": "27",
+    "ascents": [
+     {
+      "route_id": 20615,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "27",
+      "plus": false,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 20:10:08 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 620,
+    "name": "AVEZOU Zélia",
+    "firstname": "Zélia",
+    "lastname": "AVEZOU",
+    "country": "FRA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/FRA.png",
+    "federation_id": 10,
+    "bib": "25",
+    "rank": 7,
+    "score": "25",
+    "ascents": [
+     {
+      "route_id": 20615,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "25",
+      "plus": false,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 20:10:07 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 14031,
+    "name": "KIM Chaeyeong",
+    "firstname": "Chaeyeong",
+    "lastname": "KIM",
+    "country": "KOR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/KOR.png",
+    "federation_id": 21,
+    "bib": "47",
+    "rank": 8,
+    "score": "13+",
+    "ascents": [
+     {
+      "route_id": 20615,
+      "route_name": "1",
+      "top": false,
+      "top_tries": null,
+      "score": "13+",
+      "plus": true,
+      "restarted": false,
+      "time_ms": 0,
+      "modified": "2026-09-05 20:10:06 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   }
+  ],
+  "startlist": [
+   {
+    "athlete_id": 14031,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20615,
+      "position": 1
+     }
+    ],
+    "name": "KIM Chaeyeong",
+    "firstname": "Chaeyeong",
+    "lastname": "KIM",
+    "bib": "47",
+    "country": "KOR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/KOR.png",
+    "federation_id": 21,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 620,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20615,
+      "position": 2
+     }
+    ],
+    "name": "AVEZOU Zélia",
+    "firstname": "Zélia",
+    "lastname": "AVEZOU",
+    "bib": "25",
+    "country": "FRA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/FRA.png",
+    "federation_id": 10,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 1226,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20615,
+      "position": 3
+     }
+    ],
+    "name": "PILZ Jessica",
+    "firstname": "Jessica",
+    "lastname": "PILZ",
+    "bib": "5",
+    "country": "AUT",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/AUT.png",
+    "federation_id": 16,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 13021,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20615,
+      "position": 4
+     }
+    ],
+    "name": "SANDERS Annie",
+    "firstname": "Annie",
+    "lastname": "SANDERS",
+    "bib": "72",
+    "country": "USA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/USA.png",
+    "federation_id": 20,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 1811,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20615,
+      "position": 5
+     }
+    ],
+    "name": "RABOUTOU Brooke",
+    "firstname": "Brooke",
+    "lastname": "RABOUTOU",
+    "bib": "70",
+    "country": "USA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/USA.png",
+    "federation_id": 20,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 13329,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20615,
+      "position": 6
+     }
+    ],
+    "name": "REKAR Rosa",
+    "firstname": "Rosa",
+    "lastname": "REKAR",
+    "bib": "55",
+    "country": "SLO",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/SLO.png",
+    "federation_id": 15,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 2080,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20615,
+      "position": 7
+     }
+    ],
+    "name": "SEO Chaehyun",
+    "firstname": "Chaehyun",
+    "lastname": "SEO",
+    "bib": "48",
+    "country": "KOR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/KOR.png",
+    "federation_id": 21,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 1147,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 20615,
+      "position": 8
+     }
+    ],
+    "name": "GARNBRET Janja",
+    "firstname": "Janja",
+    "lastname": "GARNBRET",
+    "bib": "58",
+    "country": "SLO",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/SLO.png",
+    "federation_id": 15,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   }
+  ]
+ },
+ "category_rounds/10667/results": {
+  "id": 10667,
+  "event": "World Climbing Series Bern 2026",
+  "event_id": 1478,
+  "dcat_id": 3,
+  "discipline": "Boulder",
+  "status": "finished",
+  "status_as_of": "2026-05-24 17:43:10 UTC",
+  "category": "Men",
+  "round": "Final",
+  "points_per_boulder_settings": {
+   "points_per_zone": 10,
+   "points_per_top": 25,
+   "points_per_low_zone": null,
+   "use_low_zone": false,
+   "fall_deduction": 0.1
+  },
+  "format": "IFSC: finals 2026 (points)",
+  "format_identifier": "boulder_finals_ifsc_2026",
+  "routes": [
+   {
+    "id": 18760,
+    "name": "1",
+    "startlist": "/api/v1/routes/18760/startlist"
+   },
+   {
+    "id": 18761,
+    "name": "2",
+    "startlist": "/api/v1/routes/18761/startlist"
+   },
+   {
+    "id": 18762,
+    "name": "3",
+    "startlist": "/api/v1/routes/18762/startlist"
+   },
+   {
+    "id": 18763,
+    "name": "4",
+    "startlist": "/api/v1/routes/18763/startlist"
+   }
+  ],
+  "ranking": [
+   {
+    "athlete_id": 13040,
+    "name": "ANRAKU Sorato",
+    "firstname": "Sorato",
+    "lastname": "ANRAKU",
+    "country": "JPN",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png",
+    "federation_id": 25,
+    "bib": "201",
+    "rank": 1,
+    "score": "99.7",
+    "start_order": 8,
+    "ascents": [
+     {
+      "route_id": 18760,
+      "route_name": "1",
+      "top": true,
+      "top_tries": 1,
+      "zone": true,
+      "zone_tries": 1,
+      "low_zone": true,
+      "points": 25.0,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:45:57 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18761,
+      "route_name": "2",
+      "top": true,
+      "top_tries": 2,
+      "zone": true,
+      "zone_tries": 2,
+      "low_zone": true,
+      "points": 24.9,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:04:23 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18762,
+      "route_name": "3",
+      "top": true,
+      "top_tries": 2,
+      "zone": true,
+      "zone_tries": 2,
+      "low_zone": true,
+      "points": 24.9,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:32:33 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18763,
+      "route_name": "4",
+      "top": true,
+      "top_tries": 2,
+      "zone": true,
+      "zone_tries": 2,
+      "low_zone": true,
+      "points": 24.9,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:43:10 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false,
+    "invisible_score": null,
+    "applied_invisible_score_tiebreaker": false
+   },
+   {
+    "athlete_id": 11675,
+    "name": "SCHALCK Mejdi",
+    "firstname": "Mejdi",
+    "lastname": "SCHALCK",
+    "country": "FRA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/FRA.png",
+    "federation_id": 10,
+    "bib": "301",
+    "rank": 2,
+    "score": "84.3",
+    "start_order": 4,
+    "ascents": [
+     {
+      "route_id": 18760,
+      "route_name": "1",
+      "top": true,
+      "top_tries": 2,
+      "zone": true,
+      "zone_tries": 1,
+      "low_zone": true,
+      "points": 24.9,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:29:10 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18761,
+      "route_name": "2",
+      "top": true,
+      "top_tries": 4,
+      "zone": true,
+      "zone_tries": 4,
+      "low_zone": true,
+      "points": 24.7,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:47:37 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18762,
+      "route_name": "3",
+      "top": true,
+      "top_tries": 3,
+      "zone": true,
+      "zone_tries": 3,
+      "low_zone": true,
+      "points": 24.8,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:04:24 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18763,
+      "route_name": "4",
+      "top": false,
+      "top_tries": 3,
+      "zone": true,
+      "zone_tries": 2,
+      "low_zone": true,
+      "points": 9.9,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:27:50 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false,
+    "invisible_score": null,
+    "applied_invisible_score_tiebreaker": false
+   },
+   {
+    "athlete_id": 373,
+    "name": "VAN DUYSEN Hannes",
+    "firstname": "Hannes",
+    "lastname": "VAN DUYSEN",
+    "country": "BEL",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/BEL.png",
+    "federation_id": 9,
+    "bib": "202",
+    "rank": 3,
+    "score": "69.2",
+    "start_order": 6,
+    "ascents": [
+     {
+      "route_id": 18760,
+      "route_name": "1",
+      "top": false,
+      "top_tries": 3,
+      "zone": true,
+      "zone_tries": 1,
+      "low_zone": true,
+      "points": 10.0,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:39:18 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18761,
+      "route_name": "2",
+      "top": false,
+      "top_tries": 10,
+      "zone": true,
+      "zone_tries": 6,
+      "low_zone": true,
+      "points": 9.5,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:57:14 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18762,
+      "route_name": "3",
+      "top": true,
+      "top_tries": 3,
+      "zone": true,
+      "zone_tries": 1,
+      "low_zone": true,
+      "points": 24.8,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:16:19 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18763,
+      "route_name": "4",
+      "top": true,
+      "top_tries": 2,
+      "zone": true,
+      "zone_tries": 1,
+      "low_zone": true,
+      "points": 24.9,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:35:21 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false,
+    "invisible_score": null,
+    "applied_invisible_score_tiebreaker": false
+   },
+   {
+    "athlete_id": 11871,
+    "name": "AMAGASA Sohta",
+    "firstname": "Sohta",
+    "lastname": "AMAGASA",
+    "country": "JPN",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png",
+    "federation_id": 25,
+    "bib": "304",
+    "rank": 4,
+    "score": "68.4",
+    "start_order": 7,
+    "ascents": [
+     {
+      "route_id": 18760,
+      "route_name": "1",
+      "top": false,
+      "top_tries": 4,
+      "zone": true,
+      "zone_tries": 2,
+      "low_zone": true,
+      "points": 9.9,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:43:59 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18761,
+      "route_name": "2",
+      "top": true,
+      "top_tries": 3,
+      "zone": true,
+      "zone_tries": 3,
+      "low_zone": true,
+      "points": 24.8,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:59:55 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18762,
+      "route_name": "3",
+      "top": true,
+      "top_tries": 10,
+      "zone": true,
+      "zone_tries": 9,
+      "low_zone": true,
+      "points": 24.1,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:22:12 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18763,
+      "route_name": "4",
+      "top": false,
+      "top_tries": 7,
+      "zone": true,
+      "zone_tries": 5,
+      "low_zone": true,
+      "points": 9.6,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:40:30 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false,
+    "invisible_score": null,
+    "applied_invisible_score_tiebreaker": false
+   },
+   {
+    "athlete_id": 11683,
+    "name": "BARK Adi",
+    "firstname": "Adi",
+    "lastname": "BARK",
+    "country": "ISR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/ISR.png",
+    "federation_id": 60,
+    "bib": "213",
+    "rank": 5,
+    "score": "38.8",
+    "start_order": 2,
+    "ascents": [
+     {
+      "route_id": 18760,
+      "route_name": "1",
+      "top": false,
+      "top_tries": 4,
+      "zone": true,
+      "zone_tries": 2,
+      "low_zone": true,
+      "points": 9.9,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:21:35 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18761,
+      "route_name": "2",
+      "top": false,
+      "top_tries": 8,
+      "zone": true,
+      "zone_tries": 5,
+      "low_zone": true,
+      "points": 9.6,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:39:17 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18762,
+      "route_name": "3",
+      "top": false,
+      "top_tries": 10,
+      "zone": true,
+      "zone_tries": 6,
+      "low_zone": true,
+      "points": 9.5,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:57:18 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18763,
+      "route_name": "4",
+      "top": false,
+      "top_tries": 5,
+      "zone": true,
+      "zone_tries": 3,
+      "low_zone": true,
+      "points": 9.8,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:16:51 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false,
+    "invisible_score": null,
+    "applied_invisible_score_tiebreaker": false
+   },
+   {
+    "athlete_id": 688,
+    "name": "MILNE Maximillian",
+    "firstname": "Maximillian",
+    "lastname": "MILNE",
+    "country": "GBR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/GBR.png",
+    "federation_id": 11,
+    "bib": "209",
+    "rank": 6,
+    "score": "29.6",
+    "start_order": 3,
+    "ascents": [
+     {
+      "route_id": 18760,
+      "route_name": "1",
+      "top": false,
+      "top_tries": 3,
+      "zone": true,
+      "zone_tries": 1,
+      "low_zone": true,
+      "points": 10.0,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:25:53 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18761,
+      "route_name": "2",
+      "top": false,
+      "top_tries": 6,
+      "zone": true,
+      "zone_tries": 4,
+      "low_zone": true,
+      "points": 9.7,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:44:00 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18762,
+      "route_name": "3",
+      "top": false,
+      "top_tries": 9,
+      "zone": false,
+      "zone_tries": 4,
+      "low_zone": false,
+      "points": 0.0,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:10:36 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18763,
+      "route_name": "4",
+      "top": false,
+      "top_tries": 4,
+      "zone": true,
+      "zone_tries": 2,
+      "low_zone": true,
+      "points": 9.9,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:22:14 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false,
+    "invisible_score": null,
+    "applied_invisible_score_tiebreaker": false
+   },
+   {
+    "athlete_id": 547,
+    "name": "JENFT Paul",
+    "firstname": "Paul",
+    "lastname": "JENFT",
+    "country": "FRA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/FRA.png",
+    "federation_id": 10,
+    "bib": "208",
+    "rank": 7,
+    "score": "29.4",
+    "start_order": 5,
+    "ascents": [
+     {
+      "route_id": 18760,
+      "route_name": "1",
+      "top": false,
+      "top_tries": 4,
+      "zone": true,
+      "zone_tries": 1,
+      "low_zone": true,
+      "points": 10.0,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:34:12 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18761,
+      "route_name": "2",
+      "top": false,
+      "top_tries": 4,
+      "zone": true,
+      "zone_tries": 1,
+      "low_zone": true,
+      "points": 10.0,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:57:14 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18762,
+      "route_name": "3",
+      "top": false,
+      "top_tries": 9,
+      "zone": true,
+      "zone_tries": 7,
+      "low_zone": true,
+      "points": 9.4,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 17:16:19 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18763,
+      "route_name": "4",
+      "top": false,
+      "top_tries": 7,
+      "zone": false,
+      "zone_tries": 7,
+      "low_zone": false,
+      "points": 0.0,
+      "low_zone_tries": null,
+      "modified": "2026-05-24 17:32:41 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false,
+    "invisible_score": null,
+    "applied_invisible_score_tiebreaker": false
+   },
+   {
+    "athlete_id": 1929,
+    "name": "Duffy Colin",
+    "firstname": "Colin",
+    "lastname": "DUFFY",
+    "country": "USA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/USA.png",
+    "federation_id": 20,
+    "bib": "305",
+    "rank": 8,
+    "score": "29.4",
+    "start_order": 1,
+    "ascents": [
+     {
+      "route_id": 18760,
+      "route_name": "1",
+      "top": false,
+      "top_tries": 4,
+      "zone": true,
+      "zone_tries": 3,
+      "low_zone": true,
+      "points": 9.8,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:18:47 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18761,
+      "route_name": "2",
+      "top": false,
+      "top_tries": 9,
+      "zone": true,
+      "zone_tries": 4,
+      "low_zone": true,
+      "points": 9.7,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:34:13 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18762,
+      "route_name": "3",
+      "top": false,
+      "top_tries": 8,
+      "zone": true,
+      "zone_tries": 2,
+      "low_zone": true,
+      "points": 9.9,
+      "low_zone_tries": 1,
+      "modified": "2026-05-24 16:57:17 +00:00",
+      "status": "locked"
+     },
+     {
+      "route_id": 18763,
+      "route_name": "4",
+      "top": false,
+      "top_tries": 8,
+      "zone": false,
+      "zone_tries": 8,
+      "low_zone": false,
+      "points": 0.0,
+      "low_zone_tries": null,
+      "modified": "2026-05-24 17:16:57 +00:00",
+      "status": "locked"
+     }
+    ],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false,
+    "invisible_score": null,
+    "applied_invisible_score_tiebreaker": false
+   }
+  ],
+  "startlist": [
+   {
+    "athlete_id": 1929,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 18760,
+      "position": 1
+     },
+     {
+      "route_name": "2",
+      "route_id": 18761,
+      "position": 5
+     },
+     {
+      "route_name": "3",
+      "route_id": 18762,
+      "position": 9
+     },
+     {
+      "route_name": "4",
+      "route_id": 18763,
+      "position": 13
+     }
+    ],
+    "name": "DUFFY Colin",
+    "firstname": "Colin",
+    "lastname": "DUFFY",
+    "bib": "305",
+    "country": "USA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/USA.png",
+    "federation_id": 20,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 11683,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 18760,
+      "position": 2
+     },
+     {
+      "route_name": "2",
+      "route_id": 18761,
+      "position": 6
+     },
+     {
+      "route_name": "3",
+      "route_id": 18762,
+      "position": 10
+     },
+     {
+      "route_name": "4",
+      "route_id": 18763,
+      "position": 14
+     }
+    ],
+    "name": "BARK Adi",
+    "firstname": "Adi",
+    "lastname": "BARK",
+    "bib": "213",
+    "country": "ISR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/ISR.png",
+    "federation_id": 60,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 688,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 18760,
+      "position": 3
+     },
+     {
+      "route_name": "2",
+      "route_id": 18761,
+      "position": 7
+     },
+     {
+      "route_name": "3",
+      "route_id": 18762,
+      "position": 11
+     },
+     {
+      "route_name": "4",
+      "route_id": 18763,
+      "position": 15
+     }
+    ],
+    "name": "MILNE Maximillian",
+    "firstname": "Maximillian",
+    "lastname": "MILNE",
+    "bib": "209",
+    "country": "GBR",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/GBR.png",
+    "federation_id": 11,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 11675,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 18760,
+      "position": 4
+     },
+     {
+      "route_name": "2",
+      "route_id": 18761,
+      "position": 8
+     },
+     {
+      "route_name": "3",
+      "route_id": 18762,
+      "position": 12
+     },
+     {
+      "route_name": "4",
+      "route_id": 18763,
+      "position": 16
+     }
+    ],
+    "name": "SCHALCK Mejdi",
+    "firstname": "Mejdi",
+    "lastname": "SCHALCK",
+    "bib": "301",
+    "country": "FRA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/FRA.png",
+    "federation_id": 10,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 547,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 18760,
+      "position": 5
+     },
+     {
+      "route_name": "2",
+      "route_id": 18761,
+      "position": 9
+     },
+     {
+      "route_name": "3",
+      "route_id": 18762,
+      "position": 13
+     },
+     {
+      "route_name": "4",
+      "route_id": 18763,
+      "position": 17
+     }
+    ],
+    "name": "JENFT Paul",
+    "firstname": "Paul",
+    "lastname": "JENFT",
+    "bib": "208",
+    "country": "FRA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/FRA.png",
+    "federation_id": 10,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 373,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 18760,
+      "position": 6
+     },
+     {
+      "route_name": "2",
+      "route_id": 18761,
+      "position": 10
+     },
+     {
+      "route_name": "3",
+      "route_id": 18762,
+      "position": 14
+     },
+     {
+      "route_name": "4",
+      "route_id": 18763,
+      "position": 18
+     }
+    ],
+    "name": "VAN DUYSEN Hannes",
+    "firstname": "Hannes",
+    "lastname": "VAN DUYSEN",
+    "bib": "202",
+    "country": "BEL",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/BEL.png",
+    "federation_id": 9,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 11871,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 18760,
+      "position": 7
+     },
+     {
+      "route_name": "2",
+      "route_id": 18761,
+      "position": 11
+     },
+     {
+      "route_name": "3",
+      "route_id": 18762,
+      "position": 15
+     },
+     {
+      "route_name": "4",
+      "route_id": 18763,
+      "position": 19
+     }
+    ],
+    "name": "AMAGASA Sohta",
+    "firstname": "Sohta",
+    "lastname": "AMAGASA",
+    "bib": "304",
+    "country": "JPN",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png",
+    "federation_id": 25,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   },
+   {
+    "athlete_id": 13040,
+    "squad_id": null,
+    "route_start_positions": [
+     {
+      "route_name": "1",
+      "route_id": 18760,
+      "position": 8
+     },
+     {
+      "route_name": "2",
+      "route_id": 18761,
+      "position": 12
+     },
+     {
+      "route_name": "3",
+      "route_id": 18762,
+      "position": 16
+     },
+     {
+      "route_name": "4",
+      "route_id": 18763,
+      "position": 20
+     }
+    ],
+    "name": "ANRAKU Sorato",
+    "firstname": "Sorato",
+    "lastname": "ANRAKU",
+    "bib": "201",
+    "country": "JPN",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/JPN.png",
+    "federation_id": 25,
+    "squad_members": null,
+    "paraclimbing_guide": null
+   }
+  ]
+ },
+ "category_rounds/10673/results": {
+  "id": 10673,
+  "event": "World Climbing Series Comunidad de Madrid 2026",
+  "event_id": 1479,
+  "dcat_id": 2,
+  "discipline": "Speed",
+  "status": "finished",
+  "status_as_of": "2026-05-31 17:25:03 UTC",
+  "category": "Men",
+  "round": "Final",
+  "format": "IFSC 2026+: Elimination",
+  "format_identifier": "speed_elimination_ifsc_2026",
+  "routes": [
+   {
+    "id": 18808,
+    "name": "A",
+    "startlist": "/api/v1/routes/18808/startlist"
+   },
+   {
+    "id": 18809,
+    "name": "B",
+    "startlist": "/api/v1/routes/18809/startlist"
+   }
+  ],
+  "speed_elimination_stages": [
+   {
+    "stage_id": 3,
+    "stage_name": "Small Final",
+    "heats": [
+     {
+      "id": 88346,
+      "number": 15,
+      "athletes": [
+       {
+        "participant_id": 98078,
+        "athlete_id": 16426,
+        "name": "Jie YANG",
+        "firstname": "Jie",
+        "lastname": "YANG",
+        "ascents": [
+         {
+          "route_id": 18808,
+          "route_name": "A",
+          "time_ms": 4847,
+          "dnf": false,
+          "dns": false,
+          "modified": "2026-05-31 17:18:42 +00:00",
+          "status": "confirmed",
+          "formatted_ascent_score": "4.84",
+          "time_score": "4.84"
+         }
+        ],
+        "country": "CHN",
+        "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/CHN.png",
+        "bib": "65",
+        "route_name": "A",
+        "under_appeal": false,
+        "stage_result": {
+         "time": 4847,
+         "score": "4.84",
+         "ascent_summary": "4.84",
+         "winner": true,
+         "qualified": true,
+         "score_time": null
+        }
+       },
+       {
+        "participant_id": 98084,
+        "athlete_id": 13592,
+        "name": "Zach HAMMER",
+        "firstname": "Zach",
+        "lastname": "HAMMER",
+        "ascents": [
+         {
+          "route_id": 18809,
+          "route_name": "B",
+          "time_ms": 4866,
+          "dnf": false,
+          "dns": false,
+          "modified": "2026-05-31 17:18:50 +00:00",
+          "status": "confirmed",
+          "formatted_ascent_score": "4.86",
+          "time_score": "4.86"
+         }
+        ],
+        "country": "USA",
+        "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/USA.png",
+        "bib": "12",
+        "route_name": "B",
+        "under_appeal": false,
+        "stage_result": {
+         "time": 4866,
+         "score": "4.86",
+         "ascent_summary": "4.86",
+         "winner": false,
+         "qualified": false,
+         "score_time": null
+        }
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "stage_id": 4,
+    "stage_name": "Final",
+    "heats": [
+     {
+      "id": 88347,
+      "number": 16,
+      "athletes": [
+       {
+        "participant_id": 98082,
+        "athlete_id": 14963,
+        "name": "Shouhong CHU",
+        "firstname": "Shouhong",
+        "lastname": "CHU",
+        "ascents": [
+         {
+          "route_id": 18808,
+          "route_name": "A",
+          "time_ms": 4750,
+          "dnf": false,
+          "dns": false,
+          "modified": "2026-05-31 17:24:46 +00:00",
+          "status": "confirmed",
+          "formatted_ascent_score": "4.75",
+          "time_score": "4.75"
+         }
+        ],
+        "country": "CHN",
+        "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/CHN.png",
+        "bib": "33",
+        "route_name": "A",
+        "under_appeal": false,
+        "stage_result": {
+         "time": 4750,
+         "score": "4.75",
+         "ascent_summary": "4.75",
+         "winner": true,
+         "qualified": true,
+         "score_time": null
+        }
+       },
+       {
+        "participant_id": 98077,
+        "athlete_id": 16253,
+        "name": "Antasyafi ROBBY AL HILMI",
+        "firstname": "Antasyafi",
+        "lastname": "ROBBY AL HILMI",
+        "ascents": [
+         {
+          "route_id": 18809,
+          "route_name": "B",
+          "time_ms": 4812,
+          "dnf": false,
+          "dns": false,
+          "modified": "2026-05-31 17:24:51 +00:00",
+          "status": "confirmed",
+          "formatted_ascent_score": "4.81",
+          "time_score": "4.81"
+         }
+        ],
+        "country": "INA",
+        "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/INA.png",
+        "bib": "53",
+        "route_name": "B",
+        "under_appeal": false,
+        "stage_result": {
+         "time": 4812,
+         "score": "4.81",
+         "ascent_summary": "4.81",
+         "winner": false,
+         "qualified": false,
+         "score_time": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "ranking": [
+   {
+    "athlete_id": 14963,
+    "name": "CHU Shouhong",
+    "firstname": "Shouhong",
+    "lastname": "CHU",
+    "country": "CHN",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/CHN.png",
+    "federation_id": 37,
+    "bib": "33",
+    "rank": 1,
+    "score": "4.75",
+    "score_time": "4.75",
+    "record": false,
+    "record_types": [],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 16253,
+    "name": "ROBBY AL HILMI Antasyafi",
+    "firstname": "Antasyafi",
+    "lastname": "ROBBY AL HILMI",
+    "country": "INA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/INA.png",
+    "federation_id": 45,
+    "bib": "53",
+    "rank": 2,
+    "score": "4.81",
+    "score_time": "4.81",
+    "record": false,
+    "record_types": [],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 16426,
+    "name": "YANG Jie",
+    "firstname": "Jie",
+    "lastname": "YANG",
+    "country": "CHN",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/CHN.png",
+    "federation_id": 37,
+    "bib": "65",
+    "rank": 3,
+    "score": "4.84",
+    "score_time": "4.84",
+    "record": false,
+    "record_types": [],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   },
+   {
+    "athlete_id": 13592,
+    "name": "HAMMER Zach",
+    "firstname": "Zach",
+    "lastname": "HAMMER",
+    "country": "USA",
+    "flag_url": "https://d1n1qj9geboqnb.cloudfront.net/flags/USA.png",
+    "federation_id": 20,
+    "bib": "12",
+    "rank": 4,
+    "score": "4.86",
+    "score_time": "4.86",
+    "record": false,
+    "record_types": [],
+    "combined_stages": null,
+    "active": false,
+    "under_appeal": false
+   }
+  ]
+ }
+}

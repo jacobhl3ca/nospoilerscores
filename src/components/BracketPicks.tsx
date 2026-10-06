@@ -35,6 +35,7 @@ import {
 } from "@/lib/picksAccount";
 import { shadeFor } from "@/lib/playoffPicture";
 import { getApiBase } from "@/lib/youtube";
+import { getTimeZone } from "@/lib/etDay";
 
 // The Picks tab: tap a winner per series, submit, and see how it went.
 //
@@ -86,7 +87,7 @@ const samePicks = (a: Picks, b: Picks) => {
 };
 
 const fmtLock = (d: Date) =>
-  d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
 
 type Board =
   | { state: "loading" }

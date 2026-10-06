@@ -71,9 +71,17 @@ export function toggleRecordLeague(current: ReadonlySet<RecordLeague>, key: Reco
   return ALL_RECORD_LEAGUES.filter((k) => next.has(k));
 }
 
-// "All" turns everything on, or everything off when everything is already on.
-export function toggleAllRecordLeagues(current: ReadonlySet<RecordLeague>): RecordLeague[] {
-  return ALL_RECORD_LEAGUES.every((k) => current.has(k)) ? [] : [...ALL_RECORD_LEAGUES];
+// The Records chips Settings shows for the leagues in My leagues (Jacob 10/4:
+// only my leagues, tap on/off). Keeps their order, drops a league with no team
+// record, and folds every soccer competition into one "soccer" key at the
+// first soccer league's place.
+export function recordKeysForLeagues(leagues: readonly { sport: Sport; isSoccer: boolean }[]): RecordLeague[] {
+  const keys: RecordLeague[] = [];
+  for (const { sport, isSoccer } of leagues) {
+    const key = recordLeagueFor(sport, isSoccer);
+    if (key && !keys.includes(key)) keys.push(key);
+  }
+  return keys;
 }
 
 // Tooltip wording on the card. Soccer and NHL records have a third number,

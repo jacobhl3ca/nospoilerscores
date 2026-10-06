@@ -4,6 +4,12 @@ import { createJiti } from "jiti";
 import type { Game, LeagueEventCard, FightBout } from "../src/lib/types.ts";
 import type { CalendarEvent } from "../src/lib/calendarLink.ts";
 
+// etDay through the same jiti instance, so the zone set here is the one
+// calendarLink reads.
+const { setServiceTimeZone } = (await createJiti(import.meta.url).import("../src/lib/etDay.ts")) as {
+  setServiceTimeZone: (tz: string | undefined) => void;
+};
+
 // calendarLink imports shareCard at runtime (the uid reuses the share-card
 // key), so load it through jiti like live-progress does for espn.ts.
 const jiti = createJiti(import.meta.url);
@@ -113,12 +119,24 @@ const tennis = (over: Partial<Game> = {}): Game =>
   });
 
 test("tennis with an order-of-play estimate carries it in the title and flags it in the description", () => {
+  setServiceTimeZone("America/New_York");
   const ev = buildCalendarEvent(tennis());
+  setServiceTimeZone(undefined);
   assert.ok(ev);
   assert.equal(ev.title, "Shelton vs Alcaraz · US Open 2026 · Quarterfinal · Not before 3:00 PM");
   assert.match(ev.description, /ESPN's estimate/);
   assert.equal(ev.location, undefined);
   assert.equal(ev.durationMin, 180);
+});
+
+test("the tennis title's ESPN clock (Eastern) reads in the Settings zone", () => {
+  setServiceTimeZone("America/Los_Angeles");
+  try {
+    assert.equal(buildCalendarEvent(tennis())?.title, "Shelton vs Alcaraz · US Open 2026 · Quarterfinal · Not before 12:00 PM");
+    assert.equal(buildCalendarEvent(tennis({ statusDetail: "Followed by" }))?.title, "Shelton vs Alcaraz · US Open 2026 · Quarterfinal · Followed by");
+  } finally {
+    setServiceTimeZone(undefined);
+  }
 });
 
 test("tennis with a plain clock is not flagged; a day-only fallback makes no event", () => {

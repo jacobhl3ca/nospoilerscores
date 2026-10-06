@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One widget row: 7:30 PM · league chip · AWAY @ HOME · channel.
+     The time and channel cells have fixed widths so the columns line up. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="22dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <TextView
+        android:id="@+id/row_time"
+        android:layout_width="56dp"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:textColor="@color/widget_text"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/row_league"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/widget_chip"
+        android:gravity="center"
+        android:maxLines="1"
+        android:minWidth="34dp"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:textColor="@color/widget_text"
+        android:textSize="10sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/row_teams"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/widget_text"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/row_channel"
+        android:layout_width="60dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:ellipsize="end"
+        android:gravity="end"
+        android:maxLines="1"
+        android:textColor="@color/widget_muted"
+        android:textSize="11sp" />
+</LinearLayout>

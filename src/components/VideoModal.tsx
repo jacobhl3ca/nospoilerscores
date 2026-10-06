@@ -271,6 +271,20 @@ function compFallbackParam(fallbackUrl: string): string {
   }
 }
 
+// Home-first order gate + duration floor carried the same way (`nss_order=`,
+// `nss_minsec=` — see HIGHLIGHT_MATCH_GATES in lib/youtube.ts). A Nations
+// League pair meets twice under undated titles, so a retry without the order
+// gate can serve the other leg.
+function matchGateFallbackParam(fallbackUrl: string): string {
+  try {
+    const sp = new URL(fallbackUrl).searchParams;
+    const minSec = sp.get("nss_minsec");
+    return `${sp.get("nss_order") === "home" ? "&order=home" : ""}${minSec && /^\d{1,4}$/.test(minSec) ? `&minsec=${minSec}` : ""}`;
+  } catch {
+    return "";
+  }
+}
+
 // Minimal Reddit selftext renderer. Reddit selftext is markdown but we only
 // care about the structural bits that matter for readability — paragraphs,
 // line breaks, and autolinked URLs. Full markdown (headings, bold, code
@@ -730,6 +744,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // wins, and only clips with no YouTube id (e.g. MLB statsapi HLS) fall through
   // to hlsMode/embedMode.
   const hlsMode = !!playbackUrl && !videoId;
+  // A Reddit GIF post plays as Reddit's mp4 of the GIF (preview.redd.it
+  // <id>.gif?format=mp4). It loops like the GIF it is; other clips do not.
+  const loopClip = !!playbackUrl && /\.gif\?[^#]*\bformat=mp4\b/i.test(playbackUrl);
   const embedMode = !!embedUrl && !playbackUrl && !videoId;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
@@ -1766,6 +1783,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       const raceParam = raceFallbackParam(fallbackUrl);
       const weekParam = weekFallbackParam(fallbackUrl);
       const compParam = compFallbackParam(fallbackUrl);
+      const matchGateParam = matchGateFallbackParam(fallbackUrl);
       // Fail closed if a highlight caller ever forgets to carry its channel
       // contract. The old unscoped branch was how NFL (and every other league)
       // could resolve correctly, hit an embed error, then silently swap to a
@@ -1783,7 +1801,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // EventCard's UFC chain is sequential).
         for (const channel of strictChannels) {
           const res = await fetch(
-            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}${weekParam}${compParam}`
+            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}${weekParam}${compParam}${matchGateParam}`
           );
           const data = res.ok ? await res.json() : null;
           if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
@@ -2095,9 +2113,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // hasStarted). So in that window we must not put a clickable target of our
   // own over it — our button would eat the tap and hand it to playVideo(),
   // which is a postMessage with no user activation, and nothing would happen.
-  // We render hint text only, pushed below centre and fully click-through, so
+  // We render hint text only, at the top of the frame and fully click-through, so
   // YouTube's red button stays the tap target.
   const ytTapThrough = ytMode && !hasStarted;
+  // iPhone, iPod, or an iPad that reports itself as a Mac (iPadOS desktop UA).
+  // The modal only mounts after a tap on the client, so reading navigator in
+  // the initializer cannot differ from a server render.
+  const [iosDevice] = useState(() =>
+    typeof navigator !== "undefined" &&
+    (/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)));
 
   // LIGHT, non-blocking autoplay hint (Jacob 7/16): when the browser blocks even
   // muted autoplay, show a translucent centered play button + a small pill hint —
@@ -2107,10 +2131,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // (see clearAutoplayBlocked). Only the play button itself catches a click,
   // and only once in-document playback is possible (HLS, or a YT clip that has
   // already played and is merely paused).
+  //
+  // iPhone / iPad (Mom's phone, 10/5): iOS has no per-site autoplay setting, so
+  // the desktop line named a setting she could not find. The usual cause on iOS
+  // is Low Power Mode, which refuses even muted autoplay, so that is what the
+  // pill says. In the tap-through state the pill sits at the TOP of the frame,
+  // over the title band: lower down it covered YouTube's own red play button,
+  // and the bottom row holds "More videos" and the YouTube logo.
   const autoplayPrompt = autoplayBlocked ? (
     <div
       role="alert"
-      className={`pointer-events-none absolute inset-0 z-40 flex flex-col items-center px-6 text-center ${ytTapThrough ? "justify-end pb-[18%]" : "justify-center gap-2"}`}
+      className={`pointer-events-none absolute inset-0 z-40 flex flex-col items-center px-6 text-center ${ytTapThrough ? "justify-start pt-1.5" : "justify-center gap-2"}`}
     >
       {!ytTapThrough && (
         <button
@@ -2123,9 +2154,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 20,12 7,20" /></svg>
         </button>
       )}
-      <span className="rounded-full px-3 py-1 text-[11px] font-medium text-white/90" style={{ background: "rgba(0,0,0,0.5)" }}>
-        Tap to play — enable autoplay for HideScore to skip this
-      </span>
+      {iosDevice ? (
+        <span data-testid="autoplay-pill" className="flex flex-col rounded-2xl px-3 py-1 text-[11px] leading-tight font-medium text-white/90" style={{ background: "rgba(0,0,0,0.85)" }}>
+          <span>Tap to play</span>
+          <span className="text-[10px] text-white/70">Low Power Mode pauses autoplay</span>
+        </span>
+      ) : (
+        <span data-testid="autoplay-pill" className="rounded-full px-3 py-1 text-[11px] font-medium text-white/90" style={{ background: "rgba(0,0,0,0.5)" }}>
+          Tap to play — enable autoplay for HideScore to skip this
+        </span>
+      )}
     </div>
   ) : null;
 
@@ -2584,18 +2622,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       acceptable, because the strip is pointer-events-none and a
                       click anywhere on the player resumes, which brings the bar
                       straight back.
-                      clamp, because the card does NOT scale with the player: it
-                      sits ~65px off the bottom of a 720px-tall frame and ~70px off
-                      a 224px one, so the min does the work on a phone and the max
-                      stops it eating a third of a desktop frame. */}
+                      Height lives in .hs-yt-pause-strip (globals.css): the
+                      desktop clamp, and a flat 68px on a phone. On a phone the
+                      96px clamp minimum covered half of a ~205px frame (Mom's
+                      iPhone, 10/5). Measured 10/5 with this file's playerVars
+                      (WebKit iPhone + Chromium, 358-639px wide): the "More
+                      videos" button is one 48px row whose top sits 54px off the
+                      bottom of a short frame and 64px off a taller one. 68px =
+                      64 plus 4. */}
                   <div
                     aria-hidden
-                    className="pointer-events-none absolute inset-x-0 bottom-0 z-20"
-                    style={{ height: "clamp(96px, 34%, 210px)", background: "#000" }}
+                    data-testid="yt-pause-strip"
+                    className="hs-yt-pause-strip pointer-events-none absolute inset-x-0 bottom-0 z-20"
+                    style={{ height: "var(--hs-yt-strip)", background: "#000" }}
                   />
                   {/* Paused badge — the frame is visible now, so the play glyph
-                      needs its own scrim to stay legible over footage. */}
-                  <div aria-hidden className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                      needs its own scrim to stay legible over footage. Centred on
+                      the whole frame, so it sits on YouTube's own centre play
+                      button. The 68px phone strip no longer reaches it (the 96px
+                      one cut its lower half); centring it above the strip
+                      instead showed two play buttons stacked (10/5). */}
+                  <div aria-hidden data-testid="yt-pause-badge" className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
                     <span className="flex items-center justify-center w-16 h-16 rounded-full" style={{ background: "rgba(0,0,0,0.55)" }}>
                       <svg width="34" height="34" viewBox="0 0 24 24" fill="rgba(255,255,255,0.85)"><polygon points="6,4 20,12 6,20" /></svg>
                     </span>
@@ -3031,6 +3078,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
+                loop={loopClip}
                 onPlaying={trackVideoPlay}
                 onEnded={markHighlightWatched}
                 onPlay={() => setPlayerState("playing")}
@@ -3065,11 +3113,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 // outcome for a beat before playback covers it, which is exactly
                 // the spoiler this app exists to prevent. Drop it for game
                 // recaps (the black frame beneath is spoiler-free and lasts a
-                // few hundred ms) and keep it for news clips, whose posters are
-                // the item's own picture and carry no result. This is the
-                // no-extra-tap version of the reverted reveal overlay (5131079f
-                // → f498eaf5): no gate to click, just no spoiler frame.
-                poster={shareCard ? undefined : (proxyImage(poster) ?? undefined)}
+                // few hundred ms). This is the no-extra-tap version of the
+                // reverted reveal overlay (5131079f → f498eaf5): no gate to
+                // click, just no spoiler frame. A news clip (ESPN mp4, Reddit
+                // video or GIF) shows its own picture only in the "Tap to play"
+                // state, when the browser blocks autoplay: before playback the
+                // still flashed and then the video jumped in (Jacob 10/4, ESPN
+                // Videos), so it now starts from black, same as a game recap.
+                poster={shareCard || !autoplayBlocked ? undefined : (proxyImage(poster) ?? undefined)}
               />
             ) : (
               <iframe

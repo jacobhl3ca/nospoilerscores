@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widget. Same palette as hidescore.com (globals.css bg and text). -->
+<resources>
+    <color name="widget_bg">#FFFFFF</color>
+    <color name="widget_text">#111111</color>
+    <color name="widget_muted">#666666</color>
+    <color name="widget_chip_bg">#EBEBEB</color>
+    <color name="widget_accent">#2563EB</color>
+</resources>
