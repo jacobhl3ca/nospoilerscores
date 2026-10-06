@@ -2096,9 +2096,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // hasStarted). So in that window we must not put a clickable target of our
   // own over it — our button would eat the tap and hand it to playVideo(),
   // which is a postMessage with no user activation, and nothing would happen.
-  // We render hint text only, pushed below centre and fully click-through, so
+  // We render hint text only, at the top of the frame and fully click-through, so
   // YouTube's red button stays the tap target.
   const ytTapThrough = ytMode && !hasStarted;
+  // iPhone, iPod, or an iPad that reports itself as a Mac (iPadOS desktop UA).
+  // The modal only mounts after a tap on the client, so reading navigator in
+  // the initializer cannot differ from a server render.
+  const [iosDevice] = useState(() =>
+    typeof navigator !== "undefined" &&
+    (/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)));
 
   // LIGHT, non-blocking autoplay hint (Jacob 7/16): when the browser blocks even
   // muted autoplay, show a translucent centered play button + a small pill hint —
@@ -2108,10 +2114,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // (see clearAutoplayBlocked). Only the play button itself catches a click,
   // and only once in-document playback is possible (HLS, or a YT clip that has
   // already played and is merely paused).
+  //
+  // iPhone / iPad (Mom's phone, 10/5): iOS has no per-site autoplay setting, so
+  // the desktop line named a setting she could not find. The usual cause on iOS
+  // is Low Power Mode, which refuses even muted autoplay, so that is what the
+  // pill says. In the tap-through state the pill sits at the TOP of the frame,
+  // over the title band: lower down it covered YouTube's own red play button,
+  // and the bottom row holds "More videos" and the YouTube logo.
   const autoplayPrompt = autoplayBlocked ? (
     <div
       role="alert"
-      className={`pointer-events-none absolute inset-0 z-40 flex flex-col items-center px-6 text-center ${ytTapThrough ? "justify-end pb-[18%]" : "justify-center gap-2"}`}
+      className={`pointer-events-none absolute inset-0 z-40 flex flex-col items-center px-6 text-center ${ytTapThrough ? "justify-start pt-1.5" : "justify-center gap-2"}`}
     >
       {!ytTapThrough && (
         <button
@@ -2124,9 +2137,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 20,12 7,20" /></svg>
         </button>
       )}
-      <span className="rounded-full px-3 py-1 text-[11px] font-medium text-white/90" style={{ background: "rgba(0,0,0,0.5)" }}>
-        Tap to play — enable autoplay for HideScore to skip this
-      </span>
+      {iosDevice ? (
+        <span data-testid="autoplay-pill" className="flex flex-col rounded-2xl px-3 py-1 text-[11px] leading-tight font-medium text-white/90" style={{ background: "rgba(0,0,0,0.85)" }}>
+          <span>Tap to play</span>
+          <span className="text-[10px] text-white/70">Low Power Mode pauses autoplay</span>
+        </span>
+      ) : (
+        <span data-testid="autoplay-pill" className="rounded-full px-3 py-1 text-[11px] font-medium text-white/90" style={{ background: "rgba(0,0,0,0.5)" }}>
+          Tap to play — enable autoplay for HideScore to skip this
+        </span>
+      )}
     </div>
   ) : null;
 
@@ -2585,18 +2605,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       acceptable, because the strip is pointer-events-none and a
                       click anywhere on the player resumes, which brings the bar
                       straight back.
-                      clamp, because the card does NOT scale with the player: it
-                      sits ~65px off the bottom of a 720px-tall frame and ~70px off
-                      a 224px one, so the min does the work on a phone and the max
-                      stops it eating a third of a desktop frame. */}
+                      Height lives in .hs-yt-pause-strip (globals.css): the
+                      desktop clamp, and a flat 68px on a phone. On a phone the
+                      96px clamp minimum covered half of a ~205px frame (Mom's
+                      iPhone, 10/5). Measured 10/5 with this file's playerVars
+                      (WebKit iPhone + Chromium, 358-639px wide): the "More
+                      videos" button is one 48px row whose top sits 54px off the
+                      bottom of a short frame and 64px off a taller one. 68px =
+                      64 plus 4. */}
                   <div
                     aria-hidden
-                    className="pointer-events-none absolute inset-x-0 bottom-0 z-20"
-                    style={{ height: "clamp(96px, 34%, 210px)", background: "#000" }}
+                    data-testid="yt-pause-strip"
+                    className="hs-yt-pause-strip pointer-events-none absolute inset-x-0 bottom-0 z-20"
+                    style={{ height: "var(--hs-yt-strip)", background: "#000" }}
                   />
                   {/* Paused badge — the frame is visible now, so the play glyph
-                      needs its own scrim to stay legible over footage. */}
-                  <div aria-hidden className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                      needs its own scrim to stay legible over footage. Centred on
+                      the whole frame, so it sits on YouTube's own centre play
+                      button. The 68px phone strip no longer reaches it (the 96px
+                      one cut its lower half); centring it above the strip
+                      instead showed two play buttons stacked (10/5). */}
+                  <div aria-hidden data-testid="yt-pause-badge" className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
                     <span className="flex items-center justify-center w-16 h-16 rounded-full" style={{ background: "rgba(0,0,0,0.55)" }}>
                       <svg width="34" height="34" viewBox="0 0 24 24" fill="rgba(255,255,255,0.85)"><polygon points="6,4 20,12 6,20" /></svg>
                     </span>
