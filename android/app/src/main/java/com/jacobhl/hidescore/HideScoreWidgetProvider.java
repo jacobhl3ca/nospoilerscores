@@ -8,17 +8,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.RemoteViews;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
@@ -26,12 +22,13 @@ import org.json.JSONObject;
  *
  * The 30-min system tick re-renders from the cache (games that have started drop
  * off) and hits the network at most every 3 h. A favorites change in the app
- * (HideScoreWidgetPlugin) and the ↻ button fetch at once.
+ * (HideScoreWidgetPlugin) and the refresh button fetch at once.
  */
 public class HideScoreWidgetProvider extends AppWidgetProvider {
     static final String ACTION_REFRESH = "com.jacobhl.hidescore.WIDGET_REFRESH";
     private static final ExecutorService EXEC = Executors.newSingleThreadExecutor();
-    private static final int MAX_ROWS = 5;
+    // Root padding + header row + "Updated" footer, in dp (widget_hidescore.xml).
+    private static final int CHROME_DP = 60;
 
     @Override
     public void onUpdate(Context context, AppWidgetManager mgr, int[] ids) {
@@ -93,8 +90,7 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
 
         views.removeAllViews(R.id.widget_rows);
         String updated = "";
-        int max = rowsFor(mgr.getAppWidgetOptions(id));
-        List<String[]> rows = new ArrayList<>();  // {chip, teams, time, channel}
+        List<WidgetRows.Row> rows = new ArrayList<>();
         String message = null;
 
         if (!p.contains(WidgetRefresher.KEY_TEAMS)) {
@@ -108,8 +104,8 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
             } else {
                 try {
                     JSONObject cache = new JSONObject(raw);
-                    updated = "Updated " + format("h:mm a", cache.optLong("updated"), zone);
-                    rows = rowsFromCache(cache, zone);
+                    updated = "Updated " + WidgetRows.format("h:mm a", cache.optLong("updated"), zone);
+                    rows = WidgetRows.fromCache(cache, zone, System.currentTimeMillis());
                     if (rows.isEmpty()) message = "No upcoming games this week";
                 } catch (Exception e) {
                     message = "Open HideScore to set up";
@@ -120,14 +116,8 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         if (message != null) {
             views.addView(R.id.widget_rows, messageRow(pkg, message));
         } else {
-            for (int i = 0; i < rows.size() && i < max; i++) {
-                String[] r = rows.get(i);
-                RemoteViews row = new RemoteViews(pkg, R.layout.widget_row);
-                row.setTextViewText(R.id.row_league, r[0]);
-                row.setTextViewText(R.id.row_teams, r[1]);
-                row.setTextViewText(R.id.row_time, r[2]);
-                row.setTextViewText(R.id.row_channel, r[3]);
-                views.addView(R.id.widget_rows, row);
+            for (WidgetRows.Row r : WidgetRows.fit(rows, budgetDp(mgr.getAppWidgetOptions(id)))) {
+                views.addView(R.id.widget_rows, rowView(pkg, r));
             }
         }
         views.setTextViewText(R.id.widget_updated, updated);
@@ -145,39 +135,19 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         mgr.updateAppWidget(id, views);
     }
 
-    /** Postseason leagues first as one generic row each, then games by start time. */
-    static List<String[]> rowsFromCache(JSONObject cache, TimeZone zone) {
-        List<String[]> rows = new ArrayList<>();
-        JSONObject leagues = cache.optJSONObject("leagues");
-        JSONArray names = leagues == null ? null : leagues.names();
-        List<String> masked = new ArrayList<>();
-        for (int i = 0; names != null && i < names.length(); i++) {
-            String key = names.optString(i);
-            JSONObject l = leagues.optJSONObject(key);
-            if (l != null && l.optBoolean("post")) {
-                masked.add(key);
-                rows.add(new String[] {chip(key, l), "Playoffs: open HideScore", "", ""});
-            }
+    private static RemoteViews rowView(String pkg, WidgetRows.Row r) {
+        if (r.kind == WidgetRows.Kind.DAY) {
+            RemoteViews day = new RemoteViews(pkg, R.layout.widget_day);
+            day.setTextViewText(R.id.widget_day, r.teams);
+            return day;
         }
-        long now = System.currentTimeMillis();
-        List<WidgetParser.Game> games = new ArrayList<>();
-        JSONArray arr = cache.optJSONArray("games");
-        for (int i = 0; arr != null && i < arr.length(); i++) {
-            WidgetParser.Game g = WidgetParser.Game.fromJson(arr.optJSONObject(i));
-            if (g.startMs > now && !masked.contains(g.league)) games.add(g);
-        }
-        Collections.sort(games, (a, b) -> Long.compare(a.startMs, b.startMs));
-        for (WidgetParser.Game g : games) {
-            JSONObject l = leagues == null ? null : leagues.optJSONObject(g.league);
-            rows.add(new String[] {chip(g.league, l), g.away + " @ " + g.home, format("EEE h:mm a", g.startMs, zone), g.channel});
-        }
-        return rows;
-    }
-
-    /** "MLB", "NFL"…; a long catalog label ("Premier League") falls back to the key ("EPL"). */
-    private static String chip(String key, JSONObject league) {
-        String label = league == null ? "" : league.optString("label");
-        return label.isEmpty() || label.length() > 6 ? key.toUpperCase(Locale.US) : label;
+        RemoteViews row = new RemoteViews(pkg, R.layout.widget_row);
+        row.setViewVisibility(R.id.row_time, r.kind == WidgetRows.Kind.MASK ? View.GONE : View.VISIBLE);
+        row.setTextViewText(R.id.row_time, r.time);
+        row.setTextViewText(R.id.row_league, r.chip);
+        row.setTextViewText(R.id.row_teams, r.teams);
+        row.setTextViewText(R.id.row_channel, r.channel);
+        return row;
     }
 
     private static RemoteViews messageRow(String pkg, String text) {
@@ -186,17 +156,11 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         return row;
     }
 
-    /** Rows that fit the widget's current height (header + footer ≈ 52 dp, a row ≈ 24 dp). */
-    private static int rowsFor(Bundle options) {
+    /** Height left for rows (portrait = max height); 3 game rows' worth when unknown. */
+    private static int budgetDp(Bundle options) {
         int h = options == null ? 0 : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0);
         if (h <= 0 && options != null) h = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
-        if (h <= 0) return 3;
-        return Math.max(1, Math.min(MAX_ROWS, (h - 52) / 24));
-    }
-
-    private static String format(String pattern, long ms, TimeZone zone) {
-        SimpleDateFormat f = new SimpleDateFormat(pattern, Locale.US);
-        f.setTimeZone(zone);
-        return f.format(new Date(ms));
+        if (h <= 0) return 3 * WidgetRows.GAME_DP + WidgetRows.DAY_DP;
+        return h - CHROME_DP;
     }
 }

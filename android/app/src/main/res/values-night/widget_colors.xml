@@ -4,4 +4,5 @@
     <color name="widget_text">#EDEDED</color>
     <color name="widget_muted">#9CA3AF</color>
     <color name="widget_chip_bg">#2A2A2A</color>
+    <color name="widget_accent">#60A5FA</color>
 </resources>
