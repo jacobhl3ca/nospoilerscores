@@ -64,44 +64,77 @@ export function pickEspnVideoClip(payload, id) {
   return { url, ...(Number.isFinite(sec) && sec > 0 ? { sec: Math.round(sec) } : {}) };
 }
 
-// Give each ESPN Videos item its videoUrl + durationSec. A clip is asked at
-// most once: the prior feed file (by id) and the state's answered ids
-// (hit or miss) are read first. Only an unknown id costs a request, `gapMs`
-// apart and at most `max` per call. A failed request is not recorded, so the
-// next bake asks again.
+// ESPN's own clip type: videos[0].tracking.coverageType ("OnePlay",
+// "Highlight", "Analysis", …), or "" when absent or for a different id. Read
+// from the clip-API answer the bake already asks for the mp4.
+export function espnClipKind(payload, id) {
+  const v = Array.isArray(payload?.videos) ? payload.videos[0] : null;
+  if (!v) return "";
+  if (id != null && v.id != null && String(v.id) !== String(id)) return "";
+  const kind = v.tracking?.coverageType;
+  return typeof kind === "string" ? kind.trim() : "";
+}
+
+// Talk clips the card drops: Analysis, InstantAnalysis, PressConference,
+// Interview. The title filters miss a talk clip with no blocked word ("Paul
+// Finebaum and Heather Dinich differ on SEC's top team", Jacob 10/4). Exact
+// names only: a missing or new type is kept.
+const TALK_KINDS = new Set(["analysis", "instantanalysis", "pressconference", "interview"]);
+export function isEspnTalkKind(kind) {
+  return typeof kind === "string" && TALK_KINDS.has(kind.replace(/\s+/g, "").toLowerCase());
+}
+
+// Give each ESPN Videos item its videoUrl + durationSec, and drop talk clips
+// by ESPN's own type. A clip is asked at most once: an answered id records
+// its `kind` in the state (hit or miss), and a known id is never asked again.
+// An entry written before `kind` existed is asked one more time. Only those
+// cost a request, `gapMs` apart and at most `max` per call. A failed request
+// is not recorded, so the next bake asks again; until then the item keeps
+// the carried clip (the prior feed file by id, then the state's url).
 //   off    → every videoUrl is dropped (the ESPN_VIDEO_PLAY=0 switch).
-//   on     → false still carries known clips but asks nothing new.
+//   on     → false still carries known clips and drops known talk clips,
+//            but asks nothing new.
 //   prior  → Map id → item from the last written feed.
-//   state  → { clips: { [id]: { at, url?, sec? } } }, updated in place.
+//   state  → { clips: { [id]: { at, url?, sec?, kind } } }, updated in place.
 //   fetchClip(id) → the API payload, or null on any failure.
-export async function attachEspnVideoClips(items, { on, off, prior, state, fetchClip, max = 8, gapMs = 1000, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+//   limit  → stop once this many items are kept (the feed's cap of 10), so a
+//            dropped talk clip makes room for the next item.
+export async function attachEspnVideoClips(items, { on, off, prior, state, fetchClip, limit = Infinity, max = 8, gapMs = 1000, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   let requests = 0;
+  let dropped = 0;
   let lastAt = 0;
   const out = [];
   for (const item of items) {
+    if (out.length >= limit) break;
     const bare = { ...item };
     delete bare.videoUrl;
     delete bare.durationSec;
     if (off || !/^\d+$/.test(String(item.id))) { out.push(bare); continue; }
-    const carried = prior?.get(item.id);
     let clip = null;
-    if (carried?.videoUrl && MP4_HOST_RX.test(carried.videoUrl)) {
-      clip = { url: carried.videoUrl, ...(Number.isFinite(carried.durationSec) ? { sec: carried.durationSec } : {}) };
-    } else if (state.clips[item.id]) {
-      const known = state.clips[item.id];
-      clip = known.url && MP4_HOST_RX.test(known.url) ? known : null;
-    } else if (on && requests < max) {
+    let answered = typeof state.clips[item.id]?.kind === "string";
+    if (!answered && on && requests < max) {
       const wait = lastAt + gapMs - now();
       if (wait > 0) await sleep(wait);
       requests++;
       const payload = await fetchClip(item.id).catch(() => null);
       lastAt = now();
       if (payload) {
+        answered = true;
         clip = pickEspnVideoClip(payload, item.id);
-        state.clips[item.id] = { at: now(), ...(clip ?? {}) };
+        state.clips[item.id] = { at: now(), ...(clip ?? {}), kind: espnClipKind(payload, item.id) };
+      }
+    }
+    if (answered && isEspnTalkKind(state.clips[item.id].kind)) { dropped++; continue; }
+    if (!clip) {
+      const carried = prior?.get(item.id);
+      const entry = state.clips[item.id];
+      if (carried?.videoUrl && MP4_HOST_RX.test(carried.videoUrl)) {
+        clip = { url: carried.videoUrl, ...(Number.isFinite(carried.durationSec) ? { sec: carried.durationSec } : {}) };
+      } else if (entry?.url && MP4_HOST_RX.test(entry.url)) {
+        clip = entry;
       }
     }
     out.push(clip ? { ...bare, videoUrl: clip.url, ...(clip.sec ? { durationSec: clip.sec } : {}) } : bare);
   }
-  return { items: out, requests };
+  return { items: out, requests, dropped };
 }
