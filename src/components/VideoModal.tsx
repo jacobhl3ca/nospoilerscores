@@ -3096,11 +3096,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 // outcome for a beat before playback covers it, which is exactly
                 // the spoiler this app exists to prevent. Drop it for game
                 // recaps (the black frame beneath is spoiler-free and lasts a
-                // few hundred ms) and keep it for news clips, whose posters are
-                // the item's own picture and carry no result. This is the
-                // no-extra-tap version of the reverted reveal overlay (5131079f
-                // → f498eaf5): no gate to click, just no spoiler frame.
-                poster={shareCard ? undefined : (proxyImage(poster) ?? undefined)}
+                // few hundred ms). This is the no-extra-tap version of the
+                // reverted reveal overlay (5131079f → f498eaf5): no gate to
+                // click, just no spoiler frame. A news clip (ESPN mp4, Reddit
+                // video or GIF) shows its own picture only in the "Tap to play"
+                // state, when the browser blocks autoplay: before playback the
+                // still flashed and then the video jumped in (Jacob 10/4, ESPN
+                // Videos), so it now starts from black, same as a game recap.
+                poster={shareCard || !autoplayBlocked ? undefined : (proxyImage(poster) ?? undefined)}
               />
             ) : (
               <iframe

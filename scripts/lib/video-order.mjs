@@ -27,12 +27,13 @@ export function mergeVideos(carry, fresh, nowMs) {
 // items share one firstSeenAt per bake). Non-numeric ids tie at 0.
 const idNum = (i) => (/^\d+$/.test(i.id) ? Number(i.id) : 0);
 
-// Order: newest video first, ICYMI second, the rest newest-first. Capped at 10.
-export function orderVideos(all, pinnedId) {
+// Order: newest video first, ICYMI second, the rest newest-first. Capped at
+// `limit` (10; the ESPN feed caps later, after talk clips drop out).
+export function orderVideos(all, pinnedId, limit = 10) {
   const pinned = pinnedId ? all.filter((i) => i.id === pinnedId) : [];
   const rest = all
     .filter((i) => i.id !== pinnedId)
     .sort((a, b) => ((b.firstSeenAt || 0) - (a.firstSeenAt || 0)) || (idNum(b) - idNum(a)));
   const ordered = rest.length > 0 ? [rest[0], ...pinned, ...rest.slice(1)] : pinned;
-  return ordered.slice(0, 10);
+  return ordered.slice(0, limit);
 }
