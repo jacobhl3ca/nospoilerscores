@@ -17,6 +17,7 @@ import {
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
 import { redlibGifMp4Path } from "./lib/redlib-gif.mjs";
+import { redlibImagePath, redlibThumbPath } from "./lib/redlib-image.mjs";
 import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
@@ -1836,18 +1837,9 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
     }
 
     // 2) Reddit-hosted image post → lightboxable full-res (imageFullUrl).
-    const imgPath = (block.match(/class="post_media_image[^"]*"[^>]*href="([^"]+)"/) || [])[1] ||
-      (block.match(/<img[^>]*class="post_media_image[^"]*"[^>]*src="([^"]+)"/) || [])[1] ||
-      // redlib (perennialte.ch current build) emits the anchor as
-      // <a href="/preview/pre/<id>.jpeg?..." class="post_media_image short"> — href
-      // BEFORE class, and the inner <img> carries no class — so both regexes above
-      // miss it and EVERY i.redd.it/preview image post renders image-less (the
-      // RSS image fix never runs because redlib "succeeds" first). Grab the
-      // <img src> after the post_media_image anchor, attribute-order-agnostic.
-      // The mini's own redlib (9/29 build) also puts an HTML comment between the
-      // anchor and the <img> ("<!-- i.redd.it images speical case -->"), so skip
-      // any comments there too — without it r/soccer baked 0 image thumbnails.
-      (block.match(/post_media_image[^>]*>\s*(?:<!--[\s\S]*?-->\s*)*<img[^>]+\bsrc="([^"]+)"/) || [])[1];
+    //    Every redlib card shape (href before or after class, bare <img>, sized
+    //    <svg><image>) lives in redlibImagePath — see scripts/lib/redlib-image.mjs.
+    const imgPath = redlibImagePath(block);
     if (imgPath) {
       imageUrl = redlibMediaToReddit(imgPath);
       imageFullUrl = imageUrl;
@@ -1869,9 +1861,9 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
     if (tHref) {
       const extUrl = decodeEntities(tHref);
       if (!imageUrl) {
-        const tImg = block.match(/<a[^>]*class="post_thumbnail[^"]*"[\s\S]{0,500}?<img[^>]*src="([^"]+)"/);
+        const tImg = redlibThumbPath(block);
         if (tImg) {
-          imageUrl = redlibMediaToReddit(tImg[1]);
+          imageUrl = redlibMediaToReddit(tImg);
           // Listing thumbnails are 140px (square-cropped for galleries). Mark it
           // so the client shows it as a tile, not as a lightbox "photo", unless
           // the gallery resolver below finds the real images.
