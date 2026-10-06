@@ -105,6 +105,8 @@ test("talk kind: Analysis, InstantAnalysis, PressConference and Interview drop; 
   for (const k of ["Analysis", "InstantAnalysis", "PressConference", "Interview"]) assert.equal(isEspnTalkKind(k), true, k);
   for (const k of ["OnePlay", "Highlight", "Final Game Highlight", "Feature", ""]) assert.equal(isEspnTalkKind(k), false, k);
   assert.equal(isEspnTalkKind(undefined), false);
+  assert.equal(isEspnTalkKind("Interview Highlights"), false, "a new type is kept");
+  assert.equal(isEspnTalkKind("Press Conference"), true);
 });
 
 test("clip kind: read from tracking.coverageType, empty when absent or for another id", () => {
@@ -129,6 +131,14 @@ test("attach: an Analysis clip leaves the feed, its kind is kept, and the next b
   assert.equal(asked, 2);
   assert.deepEqual(second.items.map((i) => i.id), ["50099412"]);
   assert.equal(second.items[0].videoUrl, mp4("c50099412"));
+});
+
+test("attach: a dropped talk clip makes room for the next item under the limit", async () => {
+  const state = { clips: { "21": { at: Date.now(), kind: "Interview" } } };
+  const never = async () => { throw new Error("must not ask"); };
+  const { items, dropped } = await attachEspnVideoClips(["20", "21", "22", "23"].map(feedItem), { on: false, off: false, prior: new Map(), state, fetchClip: never, limit: 2, sleep: noSleep });
+  assert.equal(dropped, 1);
+  assert.deepEqual(items.map((i) => i.id), ["20", "22"]);
 });
 
 test("attach: an old state entry without kind is asked once, then never again", async () => {

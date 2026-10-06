@@ -77,11 +77,11 @@ export function espnClipKind(payload, id) {
 
 // Talk clips the card drops: Analysis, InstantAnalysis, PressConference,
 // Interview. The title filters miss a talk clip with no blocked word ("Paul
-// Finebaum and Heather Dinich differ on SEC's top team", Jacob 10/4). A
-// missing or new type is kept.
-const TALK_KIND_RX = /analysis|press\s*conference|interview/i;
+// Finebaum and Heather Dinich differ on SEC's top team", Jacob 10/4). Exact
+// names only: a missing or new type is kept.
+const TALK_KINDS = new Set(["analysis", "instantanalysis", "pressconference", "interview"]);
 export function isEspnTalkKind(kind) {
-  return typeof kind === "string" && TALK_KIND_RX.test(kind);
+  return typeof kind === "string" && TALK_KINDS.has(kind.replace(/\s+/g, "").toLowerCase());
 }
 
 // Give each ESPN Videos item its videoUrl + durationSec, and drop talk clips
@@ -97,12 +97,15 @@ export function isEspnTalkKind(kind) {
 //   prior  → Map id → item from the last written feed.
 //   state  → { clips: { [id]: { at, url?, sec?, kind } } }, updated in place.
 //   fetchClip(id) → the API payload, or null on any failure.
-export async function attachEspnVideoClips(items, { on, off, prior, state, fetchClip, max = 8, gapMs = 1000, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+//   limit  → stop once this many items are kept (the feed's cap of 10), so a
+//            dropped talk clip makes room for the next item.
+export async function attachEspnVideoClips(items, { on, off, prior, state, fetchClip, limit = Infinity, max = 8, gapMs = 1000, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   let requests = 0;
   let dropped = 0;
   let lastAt = 0;
   const out = [];
   for (const item of items) {
+    if (out.length >= limit) break;
     const bare = { ...item };
     delete bare.videoUrl;
     delete bare.durationSec;

@@ -1322,7 +1322,9 @@ async function fetchESPNTopVideos() {
   // scrape here, so it does not take one of the 10 slots on later bakes.
   const state = await readEspnVideoState();
   scraped = scraped.filter((i) => !isEspnTalkKind(state.clips[i.id]?.kind));
-  const merged = await persistVideos("espn-videos", scraped, icymi?.id);
+  // Uncapped here: attachEspnVideoClips keeps the first 10 that are not talk,
+  // so a talk clip found in this bake does not leave the feed one short.
+  const merged = await persistVideos("espn-videos", scraped, icymi?.id, Infinity);
   return await espnVideoClips(merged, prior?.items, state);
 }
 
@@ -1348,6 +1350,7 @@ async function espnVideoClips(items, priorItems, state) {
   const { items: out, requests, dropped } = await attachEspnVideoClips(items, {
     on: ESPN_VIDEO_PLAY_ON,
     off: ESPN_VIDEO_PLAY_OFF,
+    limit: 10,
     prior,
     state,
     fetchClip: async (id) => {
@@ -1442,7 +1445,7 @@ function scrapeESPNTopVideosFromHtml(html, icymi) {
 // 10 "big videos that hit the frontpage" builds up across the day. Rolls over
 // at ET midnight (a fresh day starts fresh). ICYMI is pinned to slot 2 (index
 // 1) so the day's newest hero video leads and ICYMI sits below it.
-async function persistVideos(name, fresh, pinnedId) {
+async function persistVideos(name, fresh, pinnedId, limit = 10) {
   const path = `${OUT_DIR}/${name}.json`;
   let existing = null;
   try {
@@ -1480,7 +1483,7 @@ async function persistVideos(name, fresh, pinnedId) {
     }
   }
   // Order: newest first, ICYMI second, rest newest-first.
-  return orderVideos([...byId.values()], pinnedId);
+  return orderVideos([...byId.values()], pinnedId, limit);
 }
 
 // ── Reddit top posts (per-league + general /r/sports) ────────────
