@@ -228,13 +228,32 @@ test("ESPN's highlighted games lead the column, ahead of the strip's order", asy
     .evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league")))).toEqual(["mlb", "nhl", "ncaaf"]);
 });
 
-test("ratings mode keeps ESPN's order instead of re-sorting by rating", async ({ page }) => {
-  await page.setViewportSize({ width: 1180, height: 820 });
-  await seed(page, { showRatings: true });
-  await page.goto("/");
-  await expect(cards(page)).toHaveCount(4, { timeout: 30_000 });
-  expect(await cardNames(page)).toEqual(EXPECTED);
-});
+// Ratings view (Jacob 10/6: "espn frontpage league is not ordered by rating
+// when in ratings tab"): inside a league block the finals sort by rating like
+// every other column's. The strip lists a 56-3 blowout before a 47-44 final;
+// ratings on puts the close one first, ratings off keeps the strip's order.
+// Live still leads the block in both.
+for (const showRatings of [true, false]) {
+  test(`ratings ${showRatings ? "on" : "off"}: an ESPN front page block's finals ${showRatings ? "sort by rating" : "keep ESPN's order"}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1180, height: 820 });
+    await seed(page, { showRatings });
+    const strip = { sports: [{ slug: "football", leagues: [{ slug: "college-football", events: [{ id: "c5", priority: 0 }, { id: "c1", priority: 1 }, { id: "c2", priority: 2 }] }] }] };
+    await page.route("**/apis/v2/scoreboard/header**", (route: Route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(strip) }));
+    await page.route("**/apis/site/v2/sports/football/college-football/scoreboard**", (route: Route) => {
+      const events = new URL(route.request().url()).searchParams.get("dates") === TODAY ? [
+        event("c5", T("7", "Rutgers", "RUTG", "3"), T("8", "Ohio State", "OSU", "56"), "2026-09-26T16:00:00Z", "final"),
+        ...BOARDS["football/college-football"].slice(0, 2),
+      ] : [];
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ events }) });
+    });
+    await page.goto("/");
+    await expect(cards(page)).toHaveCount(3, { timeout: 30_000 });
+    expect(await cardNames(page)).toEqual(showRatings
+      ? ["Oklahoma at Georgia", "Texas at Tennessee", "Rutgers at Ohio State"]
+      : ["Oklahoma at Georgia", "Rutgers at Ohio State", "Texas at Tennessee"]);
+  });
+}
 
 // Opt-in while it is tested (Jacob 9/26: "default off for all"): no row
 // until Settings turns it on or a column pins it. These seeds pin a real

@@ -1468,10 +1468,10 @@ export default function LeagueColumn({
     return Number.isNaN(t) ? 8.64e15 : t;
   };
 
-  const sortedGames = [...league.games].sort((a, b) => {
+  const compareGames = (a: Game, b: Game): number => {
     // ESPN front page arrives in ESPN's own strip order — that order IS the
-    // column, in both modes. Array.prototype.sort is stable, so 0 keeps it.
-    // See lib/topEvents.ts.
+    // column. Array.prototype.sort is stable, so 0 keeps it; the Ratings view
+    // sorts inside each league block instead (groupEspnFrontPage, lib/topEvents.ts).
     // Best of yesterday arrives ranked too (lib/bestYesterday.ts).
     if (crossLeague) return 0;
     const aPri = getFavPriority(a);
@@ -1543,12 +1543,18 @@ export default function LeagueColumn({
     }
 
     return chronoMs(a.date) - chronoMs(b.date);
-  });
+  };
+  const sortedGames = [...league.games].sort(compareGames);
+  // The "Last played" lookback slate (all finals) arrives in feed order. The
+  // Ratings view sorts it like the day's own finals: stars first, then best
+  // rating (Jacob 10/6).
+  const lookbackGames = (games: Game[]) => (topMatchups ? [...games].sort(compareGames) : games);
   // ESPN front page lays out the way espn.com does: a block per league, and
   // inside each live, then upcoming, then final, the homepage's featured
-  // games first within each state (Jacob 9/26).
+  // games first within each state (Jacob 9/26). The Ratings view sorts each
+  // block's live games and finals by rating (Jacob 10/6).
   // Every other column keeps its live / upcoming / final sections below.
-  const espnGroups = league.sport === "top" ? groupEspnFrontPage(sortedGames, league.espnFeatured) : null;
+  const espnGroups = league.sport === "top" ? groupEspnFrontPage(sortedGames, league.espnFeatured, topMatchups) : null;
   // The header subtitle already reads "NLWC · Game 3" for every game in the
   // column, so each pre-game card skips its own "Game 3" line. Same games the
   // subtitle reads (see the PlayoffSubtitle call below). A mixed column (ESPN
@@ -1656,7 +1662,7 @@ export default function LeagueColumn({
   );
   const renderEspnGroups = (games: Game[]) => (
     <div className="flex flex-col gap-2.5 sm:gap-3">
-      {groupEspnFrontPage(games, league.espnFeatured).map((group, i) => {
+      {groupEspnFrontPage(games, league.espnFeatured, topMatchups).map((group, i) => {
         return (
           <div key={group.sport} className="flex flex-col gap-1.5 sm:gap-2" data-espn-league={group.sport}>
             {!isDemoModeActive() && !(i === 0 && leadLabelSlot) && espnLabelRow(espnGroupLabel(group), group.sport)}
@@ -1823,7 +1829,7 @@ export default function LeagueColumn({
   const renderPreviousSlate = (games: Game[]) => {
     return (
       <div className="flex flex-col gap-1.5 sm:gap-2">
-        {games.map((game) => (
+        {lookbackGames(games).map((game) => (
           <GameCard
             key={game.id}
             game={game}
