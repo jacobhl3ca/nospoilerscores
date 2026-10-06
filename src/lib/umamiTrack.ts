@@ -1,9 +1,9 @@
 // Umami custom events from client components.
 //
 // The tracker script loads with defer, so on a fast first paint an event can
-// fire before window.umami exists. Retry for ~5 s instead of losing it. First
-// used by the first-run league picker (#247), whose "shown" event the
-// drop-off count depends on; the Picks tab reuses it for its submit event.
+// fire before window.umami exists. Retry for ~5 s instead of losing it. A copy
+// of the first-run league picker's (#247), for the Picks tab's submit event.
+// lib/track (#249) replaces both once it lands.
 
 type Umami = { track: (event: string, data?: Record<string, string>) => void };
 

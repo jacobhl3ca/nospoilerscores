@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Sport } from "@/lib/types";
 import { LeagueMark } from "./LeagueMark";
-import { trackSoon } from "@/lib/umamiTrack";
 
 export interface LeaguePickerOption {
   sport: Sport;
@@ -12,6 +11,14 @@ export interface LeaguePickerOption {
   // false = an opt-in league (not in the switcher by default). The first-run
   // sheet keeps those behind "More leagues".
   defaultInSwitcher?: boolean;
+}
+
+// The tracker script loads with defer, so on a fast first paint the sheet can
+// open before window.umami exists. Retry for ~5 s instead of losing the
+// "shown" event the drop-off count depends on.
+function trackSoon(name: string, data?: Record<string, string>, tries = 20) {
+  if (window.umami) { window.umami.track(name, data); return; }
+  if (tries > 0) setTimeout(() => trackSoon(name, data, tries - 1), 250);
 }
 
 // The league pill sheet. Two callers share one look (Jacob 9/29: "a nice modal
