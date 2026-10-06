@@ -23,7 +23,7 @@ import {
 } from "./lib/fotmob.mjs";
 import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
-import { pickEspnGameClip, attachEspnVideoClips } from "./lib/espn-clip.mjs";
+import { pickEspnGameClip, attachEspnVideoClips, isEspnTalkKind } from "./lib/espn-clip.mjs";
 import { isRealEspnClip, mergeVideos, orderVideos } from "./lib/video-order.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
 import { etServiceYmd, mergeEspnFrontSnapshot, parseFrontPageFeedIds, trimEspnHeader } from "./lib/espn-front.mjs";
@@ -1318,8 +1318,12 @@ async function fetchESPNTopVideos() {
   }
   let prior = null;
   try { prior = JSON.parse(await readFile(`${OUT_DIR}/espn-videos.json`, "utf8")); } catch { /* first run */ }
+  // A clip ESPN already typed as talk (Analysis, Interview, …) leaves the
+  // scrape here, so it does not take one of the 10 slots on later bakes.
+  const state = await readEspnVideoState();
+  scraped = scraped.filter((i) => !isEspnTalkKind(state.clips[i.id]?.kind));
   const merged = await persistVideos("espn-videos", scraped, icymi?.id);
-  return await espnVideoClips(merged, prior?.items);
+  return await espnVideoClips(merged, prior?.items, state);
 }
 
 // ── ESPN Videos: a direct mp4 per item, so the modal plays it ────────────
@@ -1333,12 +1337,15 @@ const ESPN_VIDEO_PLAY_ON = !ESPN_VIDEO_PLAY_OFF && process.env.GITHUB_ACTIONS !=
 const ESPN_VIDEO_STATE_PATH = ".bake-state/espn-video-clip.json";
 const ESPN_VIDEO_STATE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
-async function espnVideoClips(items, priorItems) {
+async function readEspnVideoState() {
   let saved = null;
   try { saved = JSON.parse(await readFile(ESPN_VIDEO_STATE_PATH, "utf8")); } catch { /* first run */ }
-  const state = { clips: saved?.clips && typeof saved.clips === "object" ? saved.clips : {} };
+  return { clips: saved?.clips && typeof saved.clips === "object" ? saved.clips : {} };
+}
+
+async function espnVideoClips(items, priorItems, state) {
   const prior = new Map((Array.isArray(priorItems) ? priorItems : []).map((i) => [i.id, i]));
-  const { items: out, requests } = await attachEspnVideoClips(items, {
+  const { items: out, requests, dropped } = await attachEspnVideoClips(items, {
     on: ESPN_VIDEO_PLAY_ON,
     off: ESPN_VIDEO_PLAY_OFF,
     prior,
@@ -1348,7 +1355,15 @@ async function espnVideoClips(items, priorItems) {
       return res.ok ? await res.json() : null;
     },
   });
-  console.log(`ESPN-VIDEO-CLIP-REQUESTS n=${requests} playable=${out.filter((i) => i.videoUrl).length}/${out.length}${ESPN_VIDEO_PLAY_OFF ? " (off)" : ""}`);
+  // kinds= tallies ESPN's clip type for this bake's items, so a new
+  // coverageType shows up in the bake log.
+  const kinds = {};
+  for (const i of items) {
+    const kind = state.clips[i.id]?.kind;
+    if (typeof kind === "string") kinds[kind || "none"] = (kinds[kind || "none"] || 0) + 1;
+  }
+  const kindList = Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k.replace(/\s+/g, "_")}:${n}`).join(",");
+  console.log(`ESPN-VIDEO-CLIP-REQUESTS n=${requests} playable=${out.filter((i) => i.videoUrl).length}/${out.length} dropped=${dropped} kinds=${kindList || "-"}${ESPN_VIDEO_PLAY_OFF ? " (off)" : ""}`);
   const cutoff = Date.now() - ESPN_VIDEO_STATE_TTL_MS;
   for (const [k, v] of Object.entries(state.clips)) if (!(v?.at > cutoff)) delete state.clips[k];
   try {

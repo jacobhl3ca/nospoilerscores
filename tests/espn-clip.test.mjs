@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { pickEspnGameClip, espnVideoMp4, pickEspnVideoClip, attachEspnVideoClips } from "../scripts/lib/espn-clip.mjs";
+import { pickEspnGameClip, espnVideoMp4, pickEspnVideoClip, attachEspnVideoClips, espnClipKind, isEspnTalkKind } from "../scripts/lib/espn-clip.mjs";
 import { isScoreSpoiler } from "../src/lib/spoilers.ts";
 
 // Shape trimmed from the live esp.1 summary for Racing Santander at Celta Vigo
@@ -91,11 +91,71 @@ test("attach: unknown ids are asked once each, capped, and a premium answer is r
 });
 
 test("attach: a fresh scrape without videoUrl still gets the carried clip", async () => {
+  // No state entry, so the id is asked once for its kind; the request fails,
+  // and the item keeps the clip the prior file carries.
   const prior = new Map([["9", { ...feedItem("9"), videoUrl: mp4("c9"), durationSec: 40 }]]);
-  const { items, requests } = await attachEspnVideoClips([feedItem("9")], { on: true, off: false, prior, state: { clips: {} }, fetchClip: async () => { throw new Error("must not ask"); }, sleep: noSleep });
-  assert.equal(requests, 0);
+  const { items, requests } = await attachEspnVideoClips([feedItem("9")], { on: true, off: false, prior, state: { clips: {} }, fetchClip: async () => { throw new Error("network"); }, sleep: noSleep });
+  assert.equal(requests, 1);
   assert.equal(items[0].videoUrl, mp4("c9"));
   assert.equal(items[0].durationSec, 40);
+});
+
+// ESPN's own clip type, videos[0].tracking.coverageType (read 2026-10-04).
+test("talk kind: Analysis, InstantAnalysis, PressConference and Interview drop; the rest stay", () => {
+  for (const k of ["Analysis", "InstantAnalysis", "PressConference", "Interview"]) assert.equal(isEspnTalkKind(k), true, k);
+  for (const k of ["OnePlay", "Highlight", "Final Game Highlight", "Feature", ""]) assert.equal(isEspnTalkKind(k), false, k);
+  assert.equal(isEspnTalkKind(undefined), false);
+});
+
+test("clip kind: read from tracking.coverageType, empty when absent or for another id", () => {
+  assert.equal(espnClipKind(apiPayload("7", { tracking: { coverageType: "Analysis" } }), "7"), "Analysis");
+  assert.equal(espnClipKind(apiPayload("7"), "7"), "");
+  assert.equal(espnClipKind(apiPayload("7", { tracking: { coverageType: "Analysis" } }), "8"), "");
+  assert.equal(espnClipKind(null, "7"), "");
+});
+
+test("attach: an Analysis clip leaves the feed, its kind is kept, and the next bake asks nothing", async () => {
+  const state = { clips: {} };
+  let asked = 0;
+  const fetchClip = async (id) => { asked++; return apiPayload(id, { tracking: { coverageType: id === "50099411" ? "Analysis" : "OnePlay" } }); };
+  const items = [feedItem("50099411"), feedItem("50099412")];
+  const first = await attachEspnVideoClips(items, { on: true, off: false, prior: new Map(), state, fetchClip, sleep: noSleep });
+  assert.deepEqual(first.items.map((i) => i.id), ["50099412"]);
+  assert.equal(first.dropped, 1);
+  assert.equal(state.clips["50099411"].kind, "Analysis");
+  assert.equal(state.clips["50099412"].kind, "OnePlay");
+  const second = await attachEspnVideoClips(items, { on: true, off: false, prior: new Map(first.items.map((i) => [i.id, i])), state, fetchClip, sleep: noSleep });
+  assert.equal(second.requests, 0);
+  assert.equal(asked, 2);
+  assert.deepEqual(second.items.map((i) => i.id), ["50099412"]);
+  assert.equal(second.items[0].videoUrl, mp4("c50099412"));
+});
+
+test("attach: an old state entry without kind is asked once, then never again", async () => {
+  const state = { clips: { "6": { at: Date.now(), url: mp4("c6"), sec: 30 } } };
+  const prior = new Map([["6", { ...feedItem("6"), videoUrl: mp4("c6"), durationSec: 30 }]]);
+  let asked = 0;
+  const fetchClip = async (id) => { asked++; return apiPayload(id, { tracking: { coverageType: "Highlight" } }); };
+  const first = await attachEspnVideoClips([feedItem("6")], { on: true, off: false, prior, state, fetchClip, sleep: noSleep });
+  assert.equal(first.requests, 1);
+  assert.equal(state.clips["6"].kind, "Highlight");
+  assert.equal(first.items[0].videoUrl, mp4("c6"));
+  const second = await attachEspnVideoClips([feedItem("6")], { on: true, off: false, prior: new Map(first.items.map((i) => [i.id, i])), state, fetchClip, sleep: noSleep });
+  assert.equal(second.requests, 0);
+  assert.equal(asked, 1);
+});
+
+test("attach: on=false asks nothing, carries an entry without kind, drops a known talk clip", async () => {
+  const state = { clips: {
+    "11": { at: Date.now(), url: mp4("c11") },
+    "12": { at: Date.now(), url: mp4("c12"), kind: "PressConference" },
+    "13": { at: Date.now(), kind: "" },
+  } };
+  const never = async () => { throw new Error("must not ask"); };
+  const { items, requests, dropped } = await attachEspnVideoClips(["11", "12", "13"].map(feedItem), { on: false, off: false, prior: new Map(), state, fetchClip: never, sleep: noSleep });
+  assert.equal(requests, 0);
+  assert.equal(dropped, 1);
+  assert.deepEqual(items.map((i) => [i.id, i.videoUrl]), [["11", mp4("c11")], ["13", undefined]]);
 });
 
 test("attach: off drops every carried clip; GitHub Actions (on=false) carries but never asks", async () => {

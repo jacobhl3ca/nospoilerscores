@@ -67,6 +67,8 @@ test("an ESPN Videos item with a baked mp4 plays in the modal's <video>", async 
   const video = page.locator('[role="dialog"] video');
   await expect(video).toBeVisible();
   await expect(video).toHaveAttribute("src", `${CDN}/16x9/one/one.mp4`);
+  // No cover photo before the clip plays: it starts from black (Jacob 10/4).
+  expect(await video.getAttribute("poster")).toBeNull();
   await expect(dialog(page).getByText(/Open on ESPN/).first()).toBeVisible();
 });
 
