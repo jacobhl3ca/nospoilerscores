@@ -7,14 +7,9 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
@@ -37,29 +32,22 @@ final class WidgetRefresher {
     static final String PREFS = "hidescore_widget";
     static final String KEY_TEAMS = "teams";        // JSON array of "mlb-1" ids
     static final String KEY_TZ = "tz";              // IANA zone or ""
-    static final String KEY_CACHE = "cache";        // see writeCache
+    static final String KEY_THEME = "theme";        // system | light | dark (WidgetTheme)
+    static final String KEY_CACHE = "cache";        // see WidgetCache.merge
     static final String KEY_LAST_FETCH = "last_fetch";
+    static final String KEY_FULL_OK = "full_ok";    // last refresh where every request worked
     private static final String KEY_CATALOG = "catalog";
     private static final String KEY_CATALOG_AT = "catalog_at";
 
     static final long NETWORK_EVERY_MS = 3 * 60 * 60 * 1000L;
     private static final long CATALOG_EVERY_MS = 24 * 60 * 60 * 1000L;
-    private static final int MAX_LEAGUES = 4;
     private static final int DAYS = 7;
     private static final int TIMEOUT_MS = 5000;
-    private static final long STOP_AFTER_MS = 8000;
+    /** One limit for the catalog, the days and the logos together (goAsync allows 10 s). */
+    static final long STOP_AFTER_MS = 9000;
 
     private static final String CATALOG_URL = "https://hidescore.com/tv/catalog.json";
     private static final String FALLBACK_BASE = "https://site.web.api.espn.com/apis/site/v2/sports";
-    private static final Map<String, String> FALLBACK_PATHS = new HashMap<>();
-    static {
-        FALLBACK_PATHS.put("mlb", "/baseball/mlb/scoreboard");
-        FALLBACK_PATHS.put("nba", "/basketball/nba/scoreboard");
-        FALLBACK_PATHS.put("nhl", "/hockey/nhl/scoreboard");
-        FALLBACK_PATHS.put("nfl", "/football/nfl/scoreboard");
-        FALLBACK_PATHS.put("epl", "/soccer/eng.1/scoreboard");
-        FALLBACK_PATHS.put("mls", "/soccer/usa.1/scoreboard");
-    }
 
     static SharedPreferences prefs(Context c) {
         return c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -70,97 +58,77 @@ final class WidgetRefresher {
         return System.currentTimeMillis() - last >= NETWORK_EVERY_MS;
     }
 
-    /** Fetch and write the cache. Keeps the old cache when nothing could be fetched. */
-    static void refresh(Context c) {
+    /** Fetch and write the cache by {@code deadline}. Keeps the old cache when nothing could be fetched. */
+    static void refresh(Context c, long deadline) {
         SharedPreferences p = prefs(c);
         if (!p.contains(KEY_TEAMS)) return;  // the app has not pushed favorites yet
-        Map<String, Set<String>> byLeague = leaguesInOrder(p.getString(KEY_TEAMS, "[]"));
         long now = System.currentTimeMillis();
         try {
-            if (byLeague.isEmpty()) {
-                writeCache(p, now, new ArrayList<WidgetParser.Game>(), new LinkedHashMap<String, Boolean>(), new HashMap<String, String>());
-                return;
-            }
-            JSONObject catalog = catalog(p, now);
+            JSONObject catalog = catalog(p, now, deadline);
             String base = catalog == null ? FALLBACK_BASE : catalog.optString("espnBase", FALLBACK_BASE);
-            Map<String, String> paths = new HashMap<>(FALLBACK_PATHS);
+            Map<String, String> paths = new HashMap<>(WidgetCache.FALLBACK_PATHS);
             Map<String, String> labels = new HashMap<>();
             JSONArray leagues = catalog == null ? null : catalog.optJSONArray("leagues");
             for (int i = 0; leagues != null && i < leagues.length(); i++) {
                 JSONObject l = leagues.optJSONObject(i);
-                if (l == null) continue;
+                if (l == null || l.optString("path").isEmpty()) continue;
                 paths.put(l.optString("key"), l.optString("path"));
                 labels.put(l.optString("key"), l.optString("label"));
             }
+            Map<String, Set<String>> byLeague = WidgetCache.leaguesInOrder(p.getString(KEY_TEAMS, "[]"), paths.keySet());
+            if (byLeague.isEmpty()) {
+                write(p, WidgetCache.empty(now), now, true);
+                return;
+            }
 
             TimeZone zone = zone(p);
-            SimpleDateFormat ymd = new SimpleDateFormat("yyyyMMdd", Locale.US);
-            ymd.setTimeZone(zone);
-            List<Callable<Object[]>> tasks = new ArrayList<>();
+            List<String> days = WidgetCache.dayKeys(now, zone, DAYS);
+            final List<String[]> keys = new ArrayList<>();
+            List<Callable<WidgetParser.Day>> tasks = new ArrayList<>();
             for (Map.Entry<String, Set<String>> e : byLeague.entrySet()) {
                 final String league = e.getKey();
                 final String path = paths.get(league);
-                if (path == null || path.isEmpty()) continue;
                 final Set<String> favs = e.getValue();
                 final boolean soccer = path.startsWith("/soccer/");
-                String groups = league.equals("ncaaf") || league.equals("ncaam") || league.equals("ncaaw") ? "&groups=50" : "";
-                for (int d = 0; d < DAYS; d++) {
-                    final String url = base + path + "?dates=" + ymd.format(new Date(now + d * 86_400_000L)) + "&limit=300" + groups;
-                    tasks.add(() -> new Object[] {league, WidgetParser.parseDay(get(url), league, soccer, favs)});
+                for (String ymd : days) {
+                    final String url = WidgetCache.dayUrl(base, path, league, ymd);
+                    keys.add(new String[] {league, ymd});
+                    tasks.add(() -> WidgetParser.parseDay(get(url, TIMEOUT_MS), league, soccer, favs));
                 }
             }
 
+            List<Future<WidgetParser.Day>> results;
             ExecutorService pool = Executors.newFixedThreadPool(6);
-            List<Future<Object[]>> results;
             try {
-                results = pool.invokeAll(tasks, STOP_AFTER_MS, TimeUnit.MILLISECONDS);
+                results = pool.invokeAll(tasks, Math.max(1, deadline - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
             } finally {
                 pool.shutdownNow();
             }
-            int ok = 0;
-            Map<String, WidgetParser.Game> games = new LinkedHashMap<>();
-            Map<String, Boolean> post = new LinkedHashMap<>();
-            for (String league : byLeague.keySet()) post.put(league, false);
-            for (Future<Object[]> f : results) {
-                Object[] r;
+            List<WidgetCache.Slot> slots = new ArrayList<>();
+            boolean full = true;
+            for (int i = 0; i < results.size(); i++) {
+                WidgetParser.Day day;
                 try {
-                    r = f.get();
-                } catch (Exception skipped) {
-                    continue;  // timed out, cancelled, offline or bad JSON: that day is skipped
+                    day = results.get(i).get();
+                } catch (Exception failed) {
+                    day = null;  // timed out, cancelled, offline or bad JSON: keep that day's old games
+                    full = false;
                 }
-                ok++;
-                String league = (String) r[0];
-                WidgetParser.Day day = (WidgetParser.Day) r[1];
-                if (day.postseason) post.put(league, true);
-                for (WidgetParser.Game g : day.games) games.put(g.id, g);  // dedupe by event id
+                slots.add(new WidgetCache.Slot(keys.get(i)[0], keys.get(i)[1], day));
             }
-            if (ok == 0) return;  // offline: keep the cached list and its old "Updated" stamp
-            writeCache(p, now, new ArrayList<>(games.values()), post, labels);
+            JSONObject old = null;
+            try {
+                String raw = p.getString(KEY_CACHE, null);
+                if (raw != null) old = new JSONObject(raw);
+            } catch (Exception ignored) {
+                // unreadable: start over
+            }
+            JSONObject cache = WidgetCache.merge(old, slots, labels, zone, now);
+            if (cache == null) return;  // offline: keep the cached list as it is
+            write(p, cache, now, full);
         } catch (Exception ignored) {
             // A widget refresh must never crash the app process.
         }
-    }
-
-    /** Favorites "mlb-1", "nfl-21" … grouped by league, favorites order, first 4 leagues. */
-    static Map<String, Set<String>> leaguesInOrder(String teamsJson) {
-        Map<String, Set<String>> out = new LinkedHashMap<>();
-        try {
-            JSONArray teams = new JSONArray(teamsJson);
-            for (int i = 0; i < teams.length(); i++) {
-                String id = teams.optString(i);
-                int dash = id.indexOf('-');
-                if (dash <= 0 || dash == id.length() - 1) continue;
-                String league = id.substring(0, dash);
-                if (!out.containsKey(league)) {
-                    if (out.size() >= MAX_LEAGUES) continue;
-                    out.put(league, new LinkedHashSet<String>());
-                }
-                out.get(league).add(id.substring(dash + 1));
-            }
-        } catch (Exception ignored) {
-            // bad JSON = no favorites
-        }
-        return out;
     }
 
     static TimeZone zone(SharedPreferences p) {
@@ -173,26 +141,13 @@ final class WidgetRefresher {
         return TimeZone.getDefault();
     }
 
-    /**
-     * Cache: {"updated": ms, "games": [Game…], "leagues": {"mlb": {"label": "MLB", "post": true}}}.
-     * Games carry teams, start, channel only (WidgetParser's whitelist).
-     */
-    private static void writeCache(SharedPreferences p, long now, List<WidgetParser.Game> games,
-                                   Map<String, Boolean> post, Map<String, String> labels) throws Exception {
-        JSONArray arr = new JSONArray();
-        for (WidgetParser.Game g : games) arr.put(g.toJson());
-        JSONObject leagues = new JSONObject();
-        for (Map.Entry<String, Boolean> e : post.entrySet()) {
-            String label = labels.get(e.getKey());
-            leagues.put(e.getKey(), new JSONObject()
-                .put("label", label == null || label.isEmpty() ? e.getKey().toUpperCase(Locale.US) : label)
-                .put("post", e.getValue()));
-        }
-        JSONObject cache = new JSONObject().put("updated", now).put("games", arr).put("leagues", leagues);
-        p.edit().putString(KEY_CACHE, cache.toString()).putLong(KEY_LAST_FETCH, now).apply();
+    private static void write(SharedPreferences p, JSONObject cache, long now, boolean full) {
+        SharedPreferences.Editor e = p.edit().putString(KEY_CACHE, cache.toString()).putLong(KEY_LAST_FETCH, now);
+        if (full) e.putLong(KEY_FULL_OK, now);
+        e.apply();
     }
 
-    private static JSONObject catalog(SharedPreferences p, long now) {
+    private static JSONObject catalog(SharedPreferences p, long now, long deadline) {
         String cached = p.getString(KEY_CATALOG, null);
         if (cached != null && now - p.getLong(KEY_CATALOG_AT, 0) < CATALOG_EVERY_MS) {
             try {
@@ -202,7 +157,9 @@ final class WidgetRefresher {
             }
         }
         try {
-            String body = get(CATALOG_URL);
+            // At most a third of the time limit: the days still need theirs.
+            int timeout = (int) Math.max(500, Math.min(TIMEOUT_MS, (deadline - System.currentTimeMillis()) / 3));
+            String body = get(CATALOG_URL, timeout);
             JSONObject o = new JSONObject(body);
             p.edit().putString(KEY_CATALOG, body).putLong(KEY_CATALOG_AT, now).apply();
             return o;
@@ -215,18 +172,32 @@ final class WidgetRefresher {
         }
     }
 
-    private static String get(String url) throws Exception {
+    /** A non-200 answer. */
+    static final class HttpStatus extends Exception {
+        final int code;
+
+        HttpStatus(int code) {
+            super("HTTP " + code);
+            this.code = code;
+        }
+    }
+
+    private static String get(String url, int timeoutMs) throws Exception {
+        return new String(getBytes(url, timeoutMs), StandardCharsets.UTF_8);
+    }
+
+    static byte[] getBytes(String url, int timeoutMs) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-        conn.setConnectTimeout(TIMEOUT_MS);
-        conn.setReadTimeout(TIMEOUT_MS);
-        conn.setRequestProperty("Accept", "application/json");
+        conn.setConnectTimeout(timeoutMs);
+        conn.setReadTimeout(timeoutMs);
         try {
-            if (conn.getResponseCode() != 200) throw new Exception("HTTP " + conn.getResponseCode());
+            int code = conn.getResponseCode();
+            if (code != 200) throw new HttpStatus(code);
             try (InputStream in = conn.getInputStream()) {
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 byte[] buf = new byte[16384];
                 for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
-                return new String(out.toByteArray(), StandardCharsets.UTF_8);
+                return out.toByteArray();
             }
         } finally {
             conn.disconnect();

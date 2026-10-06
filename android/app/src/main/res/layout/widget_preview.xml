@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget picker preview (API 31+): fixed sample rows, so the picker never
+     shows an empty card. RemoteViews-safe classes only. Older launchers use
+     drawable-nodpi/widget_preview.png. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:paddingStart="12dp"
+    android:paddingEnd="6dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:includeFontPadding="false"
+            android:text="@string/widget_monkey"
+            android:textSize="15sp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:text="Tomorrow"
+            android:textColor="@color/widget_accent"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:importantForAccessibility="no"
+            android:padding="7dp"
+            android:src="@drawable/ic_widget_refresh"
+            android:tint="@color/widget_muted" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingEnd="6dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="22dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="56dp"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="7:30 PM"
+                android:textColor="@color/widget_text"
+                android:textSize="12sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="NHL"
+                android:textColor="@color/widget_text"
+                android:textSize="10sp" android:textStyle="bold"
+                android:background="@drawable/widget_chip"
+                android:gravity="center"
+                android:minWidth="34dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="NYI @ NYR"
+                android:textColor="@color/widget_text"
+                android:textSize="13sp" android:textStyle="bold"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1" />
+            <TextView
+                android:layout_width="52dp"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="ESPN"
+                android:textColor="@color/widget_muted"
+                android:textSize="11sp"
+                android:gravity="end" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="18dp"
+            android:gravity="bottom"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:paddingTop="4dp"
+            android:text="Fri Oct 9"
+            android:textColor="@color/widget_accent"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="22dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="56dp"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="7:00 PM"
+                android:textColor="@color/widget_text"
+                android:textSize="12sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="NCAAH"
+                android:textColor="@color/widget_text"
+                android:textSize="10sp" android:textStyle="bold"
+                android:background="@drawable/widget_chip"
+                android:gravity="center"
+                android:minWidth="34dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="AKFB @ BC"
+                android:textColor="@color/widget_text"
+                android:textSize="13sp" android:textStyle="bold"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1" />
+            <TextView
+                android:layout_width="52dp"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="ESPN+"
+                android:textColor="@color/widget_muted"
+                android:textSize="11sp"
+                android:gravity="end" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="22dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="56dp"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="8:15 PM"
+                android:textColor="@color/widget_text"
+                android:textSize="12sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="NFL"
+                android:textColor="@color/widget_text"
+                android:textSize="10sp" android:textStyle="bold"
+                android:background="@drawable/widget_chip"
+                android:gravity="center"
+                android:minWidth="34dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="CHI @ GB"
+                android:textColor="@color/widget_text"
+                android:textSize="13sp" android:textStyle="bold"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1" />
+            <TextView
+                android:layout_width="52dp"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="NBC"
+                android:textColor="@color/widget_muted"
+                android:textSize="11sp"
+                android:gravity="end" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>
