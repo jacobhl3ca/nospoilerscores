@@ -686,6 +686,8 @@ function PicksView({ picture, post, failed }: { picture: PlayoffPicture; post: M
       lockAt={post.lockAt}
       lockTbd={post.lockTbd}
       results={post.results}
+      starts={post.starts}
+      lateClose={post.lateClose}
       note="Seeds can still move until the regular season ends. If one moves, the picks it touches clear and you pick again."
     />
   );
@@ -1052,10 +1054,15 @@ export default function PlayoffPictureModal({
                 </button>
               ) : null}
             </div>
-            <div data-picture-footer className="flex items-baseline justify-between gap-x-4 text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-              <p className="m-0">Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards.</p>
-              {updatedLabel ? <p className="m-0 ml-auto whitespace-nowrap tabular-nums">Updated {updatedLabel}</p> : null}
-            </div>
+            {/* Once the field is set the seeds are settled and the standings
+                stop moving, so the seed note says nothing new and "Updated"
+                reads as a stale stamp. */}
+            {fieldSet ? null : (
+              <div data-picture-footer className="flex items-baseline justify-between gap-x-4 text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+                <p className="m-0">Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards.</p>
+                {updatedLabel ? <p className="m-0 ml-auto whitespace-nowrap tabular-nums">Updated {updatedLabel}</p> : null}
+              </div>
+            )}
           </>
         )}
       </div>

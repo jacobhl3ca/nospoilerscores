@@ -13,7 +13,14 @@ import type { Picks } from "./bracketPicks";
 // .ts extension: see the note in prefsSync.ts.
 import { getAuthState } from "./prefsSync.ts";
 
-export interface Sent { name: string; picks: Picks; at: string }
+export interface Sent {
+  name: string;
+  picks: Picks;
+  at: string;
+  /** Set on a bracket sent after the lock: when it first came in. Local only;
+   *  the account copy drops it, and BracketPicks reads the leaderboard's. */
+  lateAt?: string;
+}
 export interface Saved { name: string; draft: Picks; sent: Sent | null; posted: boolean }
 export interface AccountPicks { token: string; boards: Record<string, Sent> }
 
