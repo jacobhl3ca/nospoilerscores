@@ -130,11 +130,52 @@ public class WidgetParserTest {
             .put("leagues", new JSONObject()
                 .put("mlb", new JSONObject().put("label", "MLB").put("post", mlb.postseason))
                 .put("nfl", new JSONObject().put("label", "NFL").put("post", false)));
-        List<String[]> rows = HideScoreWidgetProvider.rowsFromCache(cache, TimeZone.getTimeZone("America/New_York"));
-        assertEquals(1 + nfl.games.size(), rows.size());
-        assertEquals("Playoffs: open HideScore", rows.get(0)[1]);
-        for (String[] row : rows) {
-            for (String cell : row) assertFalse(cell, SPOILER.matcher(cell).find());
+        List<WidgetRows.Row> rows = WidgetRows.fromCache(cache, TimeZone.getTimeZone("America/New_York"), 0);
+        // Mask row, one day header (all games share a start), the games.
+        assertEquals(1 + 1 + nfl.games.size(), rows.size());
+        assertEquals("Playoffs: open HideScore", rows.get(0).teams);
+        for (WidgetRows.Row row : rows) {
+            for (String cell : row.cells()) assertFalse(cell, SPOILER.matcher(cell).find());
         }
+    }
+
+    private static JSONObject game(String id, String channel, long start) throws Exception {
+        return new WidgetParser.Game(id, "nhl", "NYI", "NYR", channel, start).toJson();
+    }
+
+    @Test
+    public void rowsGetDayHeadersOneChannelAndFitTheHeight() throws Exception {
+        TimeZone ny = TimeZone.getTimeZone("America/New_York");
+        long now = WidgetParser.parseIso("2026-10-05T16:00Z");   // Mon 12:00 PM ET
+        JSONArray games = new JSONArray()
+            .put(game("a", "NHL Network · ESPN+", WidgetParser.parseIso("2026-10-05T23:30Z")))  // Mon 7:30 PM
+            .put(game("b", "Prime Video", WidgetParser.parseIso("2026-10-06T23:00Z")))          // Tue 7:00 PM
+            .put(game("c", "ESPN+", WidgetParser.parseIso("2026-10-08T23:00Z")))                // Thu
+            .put(game("old", "ESPN", WidgetParser.parseIso("2026-10-05T15:00Z")));              // started
+        JSONObject cache = new JSONObject().put("games", games)
+            .put("leagues", new JSONObject().put("nhl", new JSONObject().put("label", "NHL").put("post", false)));
+        List<WidgetRows.Row> rows = WidgetRows.fromCache(cache, ny, now);
+        assertEquals(6, rows.size());
+        assertEquals("Today", rows.get(0).teams);
+        assertEquals("7:30 PM", rows.get(1).time);
+        assertEquals("NHL Net", rows.get(1).channel);
+        assertEquals("NYI @ NYR", rows.get(1).teams);
+        assertEquals("Tomorrow", rows.get(2).teams);
+        assertEquals("Prime", rows.get(3).channel);
+        assertEquals("Thu Oct 8", rows.get(4).teams);
+        assertEquals(WidgetRows.Kind.GAME, rows.get(5).kind);
+
+        // 62 dp: Today + 7:30 game + room for one more game, but not a header + game.
+        List<WidgetRows.Row> fit = WidgetRows.fit(rows, 62);
+        assertEquals(2, fit.size());
+        // No room at all still shows the first game under its header.
+        assertEquals(2, WidgetRows.fit(rows, 0).size());
+        // Never more than 6 games however tall.
+        JSONArray many = new JSONArray();
+        for (int i = 0; i < 10; i++) many.put(game("g" + i, "ESPN", now + 3_600_000L * (i + 1)));
+        List<WidgetRows.Row> tall = WidgetRows.fit(WidgetRows.fromCache(new JSONObject().put("games", many), ny, now), 2000);
+        int shown = 0;
+        for (WidgetRows.Row r : tall) if (r.kind != WidgetRows.Kind.DAY) shown++;
+        assertEquals(WidgetRows.MAX_GAMES, shown);
     }
 }
