@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
+import { seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
@@ -2716,6 +2717,33 @@ export default function HomeContent({
     () => enabledCategories(prefs.hideSensitiveNews, prefs.hideCrashNews),
     [prefs.hideSensitiveNews, prefs.hideCrashNews],
   );
+  // 👁 Hide seen (Jacob 10/6). The tracker marks a post seen after 1.5 s on
+  // screen, toggle on or off, so flipping it on hides what was already read.
+  // The surfaces filter on a SNAPSHOT, not the live store: a post that turns
+  // seen while he is looking at it must not vanish under his eyes. A new
+  // snapshot is taken only when the toggle flips, the News tab is entered,
+  // the source/league set changes, or a pull-to-refresh reloads the feeds.
+  const mainRef = useRef<HTMLElement>(null);
+  useNewsSeenTracker(mainRef, showNews && prefsHydrated);
+  const [seenSnapshot, setSeenSnapshot] = useState<Set<string>>(() => new Set());
+  const seenSnapshotTrigger = [
+    showNews, prefs.newsHideSeen, prefs.newsFeedView, newsTypeFilters.join(","), newsRefreshKey,
+    prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague,
+    prefs.newsThirdLeague, prefs.newsTopNews, prefs.newsFocusLeague, prefs.newsSingleColumn,
+    prefs.newsVideosOnly, prefs.showTextPosts, prefs.hideSensitiveNews, prefs.hideCrashNews,
+    (prefs.newsHiddenSources ?? []).join(","),
+  ].join("|");
+  useEffect(() => {
+    // localStorage is client-only, so the snapshot is read here, not in render.
+    if (showNews && prefs.newsHideSeen) setSeenSnapshot(seenKeys());
+  }, [seenSnapshotTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hideSeenKeys = prefs.newsHideSeen ? seenSnapshot : undefined;
+  // Per-surface "dropped as seen" counts, summed for the 👁 tooltip.
+  const [seenHiddenById, setSeenHiddenById] = useState<Record<string, number>>({});
+  const reportSeenHidden = useCallback((id: string, count: number) => {
+    setSeenHiddenById((prev) => ((prev[id] ?? 0) === count ? prev : { ...prev, [id]: count }));
+  }, []);
+  const hiddenSeenCount = Object.values(seenHiddenById).reduce((a, b) => a + b, 0);
   const [pullDelta, setPullDelta] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const pullStartYRef = useRef<number | null>(null);
@@ -3234,6 +3262,35 @@ export default function HomeContent({
                 onClick={() => updatePrefs({ newsSingleColumn: !prefs.newsSingleColumn })}
               />
             )}
+            {/* 👁 Hide seen, LEFT of ⇅ (Jacob 10/6): drop every post that sat
+                on screen 1.5 s on an earlier look. Same round shape and
+                filled-accent = on treatment as ⇅ and the funnel. */}
+            {showNews && (
+              <button
+                type="button"
+                onClick={() => updatePrefs({ newsHideSeen: !prefs.newsHideSeen })}
+                className="monkey-toggle relative w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                style={{
+                  background: prefs.newsHideSeen ? "var(--accent)" : "var(--bg-card)",
+                  border: `1px solid ${prefs.newsHideSeen ? "var(--accent)" : "var(--border)"}`,
+                  color: prefs.newsHideSeen ? "white" : "var(--text-muted)",
+                }}
+                title={prefs.newsHideSeen
+                  ? `Hide posts you've seen — tap to show all (${hiddenSeenCount} hidden)`
+                  : "Showing all posts — tap to hide seen"}
+                aria-label={prefs.newsHideSeen ? "Hide seen posts (on)" : "Hide seen posts"}
+                aria-pressed={!!prefs.newsHideSeen}
+                data-testid="news-hide-seen"
+              >
+                {/* Eye with a slash. */}
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" y1="2" x2="22" y2="22" />
+                </svg>
+              </button>
+            )}
             {/* Read order, immediately LEFT of the funnel (Jacob 8/9). This is a
                 reading choice you change mid-scroll — "let me work up from the
                 bottom of r/nba" — so it belongs on the news header next to the
@@ -3489,7 +3546,7 @@ export default function HomeContent({
           the 1280px breakpoint doesn't widen the still-3-column board while
           the extra leagues load; the layout swaps once, when they arrive
           (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
-      <main id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none${!showNews ? " board-noselect" : ""}`}>
+      <main ref={mainRef} id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none${!showNews ? " board-noselect" : ""}`}>
         {/* No connection: the board below is the device copy (lib/offlineBoard.ts).
             One quiet line says so and when it was pulled. It goes away when the
             "online" pull lands. */}
@@ -4117,6 +4174,8 @@ export default function HomeContent({
                 videosOnly={!!prefs.newsVideosOnly}
                 oldestFirst={!!prefs.newsOldestFirst}
                 hiddenCategories={hiddenNewsCategories}
+                hideSeenKeys={hideSeenKeys}
+                onSeenHiddenCount={reportSeenHidden}
               />
             );
           }
@@ -4171,6 +4230,8 @@ export default function HomeContent({
                     videosOnly={!!prefs.newsVideosOnly}
                     hiddenCategories={hiddenNewsCategories}
                     oldestFirst={!!prefs.newsOldestFirst}
+                    hideSeenKeys={hideSeenKeys}
+                    onSeenHiddenCount={reportSeenHidden}
                   />
                 </>
               )}
@@ -4197,6 +4258,8 @@ export default function HomeContent({
                     showTextPosts={!!prefs.showTextPosts}
                     oldestFirst={!!prefs.newsOldestFirst}
                     hiddenCategories={hiddenNewsCategories}
+                    hideSeenKeys={hideSeenKeys}
+                    onSeenHiddenCount={reportSeenHidden}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -4225,6 +4288,8 @@ export default function HomeContent({
                       showTextPosts={!!prefs.showTextPosts}
                       oldestFirst={!!prefs.newsOldestFirst}
                       hiddenCategories={hiddenNewsCategories}
+                      hideSeenKeys={hideSeenKeys}
+                      onSeenHiddenCount={reportSeenHidden}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).
                       removable={renderedEntries.length > 1}

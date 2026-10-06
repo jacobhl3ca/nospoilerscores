@@ -8,6 +8,7 @@ import { frontendHref } from "@/lib/frontendLinks";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
+import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
 import {
   NewsSource,
   PlayHandler,
@@ -41,6 +42,10 @@ interface NewsFeedProps {
   // preference itself is untouched). Categories switched on by the two
   // Settings toggles; empty = filter off.
   hiddenCategories?: SensitiveCategory[];
+  // 👁 Hide seen snapshot (see NewsColumn's prop of the same name) and the
+  // tooltip count it reports back. undefined = toggle off.
+  hideSeenKeys?: Set<string>;
+  onSeenHiddenCount?: (id: string, count: number) => void;
 }
 
 // Merge every source's items into one de-duped, time-sorted list. Dedupe by the
@@ -103,7 +108,7 @@ function useAggregatedFeed(sources: NewsSource[]) {
   return items;
 }
 
-export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, oldestFirst, hiddenCategories }: NewsFeedProps) {
+export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, oldestFirst, hiddenCategories, hideSeenKeys, onSeenHiddenCount }: NewsFeedProps) {
   const items = useAggregatedFeed(sources);
 
   // Session-only restore set + the modal it feeds — same idea as NewsColumn's
@@ -122,9 +127,11 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, o
   // hiddenItems is the actual list the sensitive filter removed (minus any the
   // user already restored this session), so the modal can show real posts
   // rather than just a count.
-  const [visible, hiddenItems] = useMemo<[NewsItem[], NewsItem[]]>(
+  const [visible, hiddenItems, seenHidden] = useMemo<[NewsItem[], NewsItem[], number]>(
     () => {
-      const preFilter = (items ?? []).filter((it) => passesNewsFilters(it, videosOnly, showTextPosts));
+      const passing = (items ?? []).filter((it) => passesNewsFilters(it, videosOnly, showTextPosts));
+      // 👁 Hide seen first, so a seen post never also counts as sensitive-hidden.
+      const preFilter = dropSeen(passing, hideSeenKeys);
       const isRestored = (it: NewsItem) => restoredKeys.has(keyOf(it));
       const hidden = hiddenCategories?.length
         ? preFilter.filter((it) => isSensitiveNews(it, hiddenCategories) && !isRestored(it))
@@ -134,11 +141,12 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, o
         : preFilter;
       // ⇅ Oldest first: the Feed is already time-sorted newest-first, so a plain
       // reverse IS chronological order here. Reverse a copy — `items` is shared.
-      return [oldestFirst ? [...kept].reverse() : kept, hidden];
+      return [oldestFirst ? [...kept].reverse() : kept, hidden, passing.length - preFilter.length];
     },
-    [items, showTextPosts, videosOnly, oldestFirst, hiddenCategories, restoredKeys]
+    [items, showTextPosts, videosOnly, oldestFirst, hiddenCategories, restoredKeys, hideSeenKeys]
   );
   const sensitiveHidden = hiddenItems.length;
+  useReportSeenHidden(onSeenHiddenCount, seenHidden);
 
   // Flash + scroll the restored row(s) into view — imperative DOM lookup by
   // data-news-key (set on FeedPost's <article>), same technique as NewsColumn.
@@ -210,8 +218,10 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, o
         {/* Same copy as the Cards column's all-filtered state (NewsColumn), so
             an empty Videos-only feed says WHY it's empty and how to fix it
             instead of a bare "No posts to show." */}
-        {videosOnly ? "No videos here right now." : "No posts to show."}
-        {videosOnly && (
+        {seenHidden > 0
+          ? `All ${seenHidden} seen — tap 👁 to show them.`
+          : videosOnly ? "No videos here right now." : "No posts to show."}
+        {videosOnly && seenHidden === 0 && (
           <span className="block mt-1" style={{ opacity: 0.8 }}>
             Turn off Videos only, or widen Source in the filter menu.
           </span>
