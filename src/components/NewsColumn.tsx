@@ -10,6 +10,7 @@ import { handleExternalClick } from "@/lib/openExternal";
 import { frontendHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
+import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
 
 export interface NewsSource {
   label: string;
@@ -155,6 +156,12 @@ interface NewsColumnProps {
   // Reverse each source's rendered order (oldest first) — the ⇅ news-header
   // control, so a feed can be read bottom-to-top.
   oldestFirst?: boolean;
+  // 👁 Hide seen: posts whose key is in this set are dropped (lib/newsSeen).
+  // A snapshot HomeContent takes, so a post seen while on screen stays put.
+  // undefined = toggle off.
+  hideSeenKeys?: Set<string>;
+  // How many posts this column dropped as seen, for the 👁 tooltip.
+  onSeenHiddenCount?: (id: string, count: number) => void;
   // Show the subtle × remove-column control on this column's title (see
   // NewsColumnTitle.removable) — set only when more than one column is visible.
   removable?: boolean;
@@ -975,7 +982,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys, onHiddenItems }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; restoredKeys?: Set<string>; onHiddenItems?: (label: string, items: NewsItem[]) => void }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys, onHiddenItems, hideSeenKeys, onSeenHidden }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; restoredKeys?: Set<string>; onHiddenItems?: (label: string, items: NewsItem[]) => void; hideSeenKeys?: Set<string>; onSeenHidden?: (label: string, count: number) => void }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1013,12 +1020,15 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   // footer line and hand the actual posts to SensitiveHiddenModal — Jacob
   // 9/25: tapping "Show" used to just dump everything into the feed with no
   // way to tell what was added or where.
-  const [shown, hiddenItems] = useMemo<[NewsItem[], NewsItem[]]>(
+  const [shown, hiddenItems, seenHidden] = useMemo<[NewsItem[], NewsItem[], number]>(
     // Videos only wins over Text posts (Jacob 9/14) — see passesNewsFilters.
     // (The 7/16 rule let Text posts re-admit headline-only rows under Videos
     // only; once Text posts defaulted ON on 8/9 that made Videos only a no-op.)
     () => {
-      const preFilter = items.filter((item) => passesNewsFilters(item, !!videosOnly, !!showTextPosts));
+      const passing = items.filter((item) => passesNewsFilters(item, !!videosOnly, !!showTextPosts));
+      // 👁 Hide seen goes first: a seen post is gone, so it must not also
+      // count toward the sensitive "N hidden" line.
+      const preFilter = dropSeen(passing, hideSeenKeys);
       // A post the sensitive filter caught, but the user explicitly restored
       // from the modal, counts as kept from here on — restoredKeys persists
       // per-column for the session (see NewsColumn), same lifetime the old
@@ -1033,11 +1043,12 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
       // Bottom-to-top reading order (the ⇅ control next to the funnel). Reverse
       // AFTER filtering so the flip is over what's actually on screen, and copy
       // first — items is the fetched array other memos also read.
-      return [oldestFirst ? [...kept].reverse() : kept, hidden];
+      return [oldestFirst ? [...kept].reverse() : kept, hidden, passing.length - preFilter.length];
     },
-    [items, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys],
+    [items, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys, hideSeenKeys],
   );
   useEffect(() => { onHiddenItems?.(source.label, hiddenItems); }, [hiddenItems, source.label, onHiddenItems]);
+  useEffect(() => { onSeenHidden?.(source.label, seenHidden); }, [seenHidden, source.label, onSeenHidden]);
   // Publish exactly what is rendered so modal prev/next never pages into a row
   // that the active Videos filter hid.
   useEffect(() => { onItemsLoaded?.(source.label, shown); }, [shown, source.label, onItemsLoaded]);
@@ -1090,6 +1101,8 @@ export default function NewsColumn({
   oldestFirst,
   removable,
   hiddenCategories,
+  hideSeenKeys,
+  onSeenHiddenCount,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
 
@@ -1125,6 +1138,14 @@ export default function NewsColumn({
     [sources, hiddenItemsBySource],
   );
   const sensitiveHidden = hiddenItems.length;
+
+  // 👁 Hide seen, per source, totalled the same way (mounted sources only).
+  const [seenBySource, setSeenBySource] = useState<Record<string, number>>({});
+  const handleSeenHidden = useCallback((label: string, count: number) => {
+    setSeenBySource((prev) => ((prev[label] ?? 0) === count ? prev : { ...prev, [label]: count }));
+  }, []);
+  const seenHidden = sources.reduce((n, s) => n + (seenBySource[s.label] ?? 0), 0);
+  useReportSeenHidden(onSeenHiddenCount, seenHidden);
 
   // Session-only restore set — mirrors the old showSensitiveNews escape hatch's
   // lifetime (gone on next app open, the Settings toggle is the durable
@@ -1221,6 +1242,8 @@ export default function NewsColumn({
             hiddenCategories={hiddenCategories}
             restoredKeys={restoredKeys}
             onHiddenItems={handleHiddenItems}
+            hideSeenKeys={hideSeenKeys}
+            onSeenHidden={handleSeenHidden}
           />
         ))}
         {allFiltered && (
@@ -1232,12 +1255,20 @@ export default function NewsColumn({
             className="rounded-lg px-3 py-6 text-center text-xs leading-relaxed"
             style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)", color: "var(--text-muted)" }}
           >
-            {videosOnly ? "No videos here right now." : "Nothing to show with these filters."}
-            <span className="block mt-1" style={{ opacity: 0.8 }}>
-              {videosOnly
-                ? "Turn off Videos only, or widen Source in the filter menu."
-                : "Try widening Source in the filter menu."}
-            </span>
+            {seenHidden > 0 ? (
+              // Empty only because 👁 Hide seen took the rest — say that, not
+              // "these filters", or a caught-up column reads as broken.
+              <>All {seenHidden} seen — tap 👁 to show them.</>
+            ) : (
+              <>
+                {videosOnly ? "No videos here right now." : "Nothing to show with these filters."}
+                <span className="block mt-1" style={{ opacity: 0.8 }}>
+                  {videosOnly
+                    ? "Turn off Videos only, or widen Source in the filter menu."
+                    : "Try widening Source in the filter menu."}
+                </span>
+              </>
+            )}
           </div>
         )}
         {sensitiveHidden > 0 && (
