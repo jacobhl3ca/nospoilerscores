@@ -22,7 +22,7 @@ import GameCard from "@/components/GameCard";
 import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
-import { fetchAllLeagues, fetchSlateGames, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { fetchAllLeagues, fetchSlateGames, fetchLastFinishedDay, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
@@ -573,6 +573,10 @@ const POPULAR_WORLD_CUP_TEAMS = [
 // short enough that a new user never notices the hold.
 const PICKER_AUTH_GRACE_MS = 1500;
 
+// How long a league-page hand-off (`?lg=`) waits for that league's last
+// finished day before the board opens on its default day instead.
+const LANDING_LOOKUP_MS = 3000;
+
 export default function HomeContent({
   initialOffset,
   initialDate,
@@ -594,6 +598,12 @@ export default function HomeContent({
   // day, so the error state says "offline" instead of "Failed to load".
   const [offline, setOffline] = useState<{ savedAt: number | null } | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
+  // `?lg=nfl` from a league page's "Open …" button (SeoLandingPage ctaHref).
+  // The board opens on that league's last finished day and the first-run
+  // picker starts with it chosen. Read in the date effect below, not during
+  // render: on a client-side Link the address bar is not updated until after
+  // the new page renders. Invalid keys are ignored.
+  const landingLeagueRef = useRef<Sport | null>(null);
 
   // Compute smart default date client-side only to avoid SSG hydration mismatch.
   // Reads the persisted defaultDateMode pref so "always today" / "always yesterday"
@@ -613,7 +623,25 @@ export default function HomeContent({
         return;
       }
       const stored = loadPreferences();
-      setSelectedDate(getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode, stored.smartCutoffHour)));
+      const fallback = getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode, stored.smartCutoffHour));
+      const lg = new URLSearchParams(window.location.search).get("lg");
+      const landingLeague = ALL_LEAGUES.some((l) => l.sport === lg && !l.hidden) ? (lg as Sport) : null;
+      landingLeagueRef.current = landingLeague;
+      if (!landingLeague) {
+        setSelectedDate(fallback);
+        return;
+      }
+      // League page hand-off: wait for the league's last finished day, capped so
+      // a slow ESPN answer only costs LANDING_LOOKUP_MS before the default day.
+      let settled = false;
+      const settle = (d: string | null) => {
+        if (settled) return;
+        settled = true;
+        setSelectedDate(d ?? fallback);
+      };
+      const timer = window.setTimeout(() => settle(null), LANDING_LOOKUP_MS);
+      fetchLastFinishedDay(landingLeague).then(settle, () => settle(null));
+      return () => { settled = true; window.clearTimeout(timer); };
     }
   }, [initialOffset, initialDate, worldCupHub, selectedDate]);
   // First-time notice for the Ratings tab. Was a blocking confirm dialog until
@@ -634,7 +662,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; league?: string | null };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -1272,7 +1300,8 @@ export default function HomeContent({
     return abs ? abs.replace(/^https?:\/\/[^/]+/, "") : null;
   }, []);
 
-  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => {
+  // `league` is appended by LeagueColumn for analytics (VideoModal's trackLeague).
+  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[], league?: string) => {
     clearReopen();
     // See demoHighlightPoster's comment in demoMode.ts: a resolved videoId can
     // still be a real clip even off an anonymized card, because it's keyed by
@@ -1283,7 +1312,7 @@ export default function HomeContent({
       setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       return;
     }
-    setVideoModal({ videoId, fallbackUrl, shareCard, alternates });
+    setVideoModal({ videoId, fallbackUrl, shareCard, alternates, league });
     const href = modalShareHref({ videoId, fallbackUrl, shareCard });
     if (href) window.history.pushState({ videoModal: true }, "", href);
   }, [modalShareHref, clearReopen]);
@@ -2269,9 +2298,12 @@ export default function HomeContent({
         updatePrefs({ leaguesOnboarded: true });
         return;
       }
+      // Arrived from a league page: that league starts chosen.
+      const landing = landingLeagueRef.current;
+      if (landing && pickerOptions.some((o) => o.sport === landing)) setPickerSel([landing]);
       setShowLeaguePicker(true);
     }
-  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled, updatePrefs]);
+  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled, updatePrefs, pickerOptions]);
 
   // How many leagues the picker lets you take = how many columns this viewport
   // will actually render (3 phone / 5 wide). It said "up to 3" on a desktop that
@@ -5228,6 +5260,7 @@ export default function HomeContent({
           embedUrl={videoModal.embedUrl}
           poster={videoModal.poster}
           sourceLabel={videoModal.sourceLabel}
+          league={videoModal.league}
           headline={videoModal.headline}
           byline={videoModal.byline}
           published={videoModal.published}

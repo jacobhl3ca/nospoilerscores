@@ -33,9 +33,12 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // post. On a LIVE card it is still there, and an ESPN fightcenter page prints
 // the prelim results that have already happened. So the honest claim is that
 // the board records no result, NOT that nothing can reach one.
-const TITLE = "UFC Results Without Spoilers: Watch the Card Before You Know | HideScore";
+// Title + description led with "UFC No Spoilers" / "UFC without spoilers" on
+// 2026-10-06: those are the queries (138 and 85 impressions in 10 days), and
+// the old "UFC Results …" title got 4 clicks from 338 impressions at pos 5.9.
+const TITLE = "UFC No Spoilers: Full Fight Card, Results Hidden | HideScore";
 const DESC =
-  "Follow a UFC fight card without seeing who won. Every bout is listed with no result printed anywhere, and highlights open with the title masked. Free.";
+  "UFC without spoilers: see the full fight card, not who won. Every bout is listed, no result is printed, and highlights open with the title masked. Free.";
 const CANONICAL = "/ufc-results-without-spoilers";
 
 const FAQ = [
@@ -155,7 +158,7 @@ export default function UfcResultsWithoutSpoilersPage() {
         "Add the UFC column from Settings and it stays on your board.",
       ]}
       ctaLabel="Open UFC without spoilers"
-      ctaHref="/today"
+      ctaHref="/yesterday?lg=ufc"
       links={[
         { href: "/f1-without-spoilers", label: "F1" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },

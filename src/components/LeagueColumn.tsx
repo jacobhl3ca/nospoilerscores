@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -34,7 +34,7 @@ interface LeagueColumnProps {
   isPastDate: boolean;
   isToday?: boolean;
   sortByMatchups?: boolean;
-  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => void;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[], league?: string) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   // Clicking a game card body opens a spoiler-safe details popup (owned by HomeContent).
   onShowDetails?: (game: Game) => void;
@@ -955,6 +955,19 @@ export default function LeagueColumn({
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
+  // Tags every highlight tap with this column's sport for the video-play /
+  // video-out events. An event tile (F1, UFC) has no share card to name its
+  // league; a game card's share card key still wins in VideoModal, which keeps
+  // the mixed ESPN / Best columns right.
+  const leagueSport = league.sport;
+  // Stays undefined without a handler: children hide their buttons on that.
+  const playHighlight = useMemo(
+    () => onPlayHighlight
+      ? (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) =>
+          onPlayHighlight(videoId, fallbackUrl, shareCard, alternates, leagueSport)
+      : undefined,
+    [onPlayHighlight, leagueSport],
+  );
   const [condenseExpanded, setCondenseExpanded] = useState(false); // "Show more" in condensed single-column mode
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
   // A long league name ("NFL Preseason") wraps to two lines in a narrow mobile
@@ -1601,7 +1614,7 @@ export default function LeagueColumn({
                 showRatings={showRatings}
                 leagueLabel={cardLeagueLabel(game)}
                 leagueTag={cardLeagueTag(game)}
-                onPlayHighlight={onPlayHighlight}
+                onPlayHighlight={playHighlight}
                 onPlayEmbed={onPlayEmbed}
                 isPastDate={isPastDate}
                 isToday={isToday}
@@ -1637,7 +1650,7 @@ export default function LeagueColumn({
         showRatings={showRatings}
         leagueLabel={cardLeagueLabel(game)}
         leagueTag={cardLeagueTag(game)}
-        onPlayHighlight={onPlayHighlight}
+        onPlayHighlight={playHighlight}
         onPlayEmbed={onPlayEmbed}
         isPastDate={pastDate}
         isToday={isToday}
@@ -1717,7 +1730,7 @@ export default function LeagueColumn({
           showRatings={showRatings}
           leagueLabel={cardLeagueLabel(game)}
           leagueTag={cardLeagueTag(game)}
-          onPlayHighlight={onPlayHighlight}
+          onPlayHighlight={playHighlight}
           onPlayEmbed={onPlayEmbed}
           nextGameDate={nextGameDate}
           useAbbreviations={useAbbreviations}
@@ -1761,7 +1774,7 @@ export default function LeagueColumn({
             showRatings={showRatings}
             leagueLabel={cardLeagueLabel(game)}
             leagueTag={cardLeagueTag(game)}
-            onPlayHighlight={onPlayHighlight}
+            onPlayHighlight={playHighlight}
             onPlayEmbed={onPlayEmbed}
             isPastDate
             useAbbreviations={useAbbreviations}
@@ -2173,7 +2186,7 @@ export default function LeagueColumn({
             favoriteTeams={favoriteTeams}
             onToggleFavoriteTeam={onToggleFavoriteTeam}
             showRatings={showRatings}
-            onPlayHighlight={onPlayHighlight}
+            onPlayHighlight={playHighlight}
             onPlayEmbed={onPlayEmbed}
             onShowDetails={onShowDetails}
             onBack={() => setTeamViewTeam(null)}
@@ -2187,10 +2200,10 @@ export default function LeagueColumn({
           showRatings={showRatings}
           leagueLabel={league.label}
           selectedDate={selectedDate}
-          onPlayHighlight={onPlayHighlight}
+          onPlayHighlight={playHighlight}
         />
       ) : league.eventCard && section !== "finished" ? (
-        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} showRatings={showRatings} />
+        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={playHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} showRatings={showRatings} />
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
           league.fetchFailed ? (
@@ -2272,7 +2285,7 @@ export default function LeagueColumn({
               showRatings={showRatings}
               leagueLabel={cardLeagueLabel(game)}
               leagueTag={cardLeagueTag(game)}
-              onPlayHighlight={onPlayHighlight}
+              onPlayHighlight={playHighlight}
               onPlayEmbed={onPlayEmbed}
               isPastDate={isPastDate}
               isToday={isToday}
@@ -2295,7 +2308,7 @@ export default function LeagueColumn({
               showRatings={showRatings}
               leagueLabel={cardLeagueLabel(game)}
               leagueTag={cardLeagueTag(game)}
-              onPlayHighlight={onPlayHighlight}
+              onPlayHighlight={playHighlight}
               onPlayEmbed={onPlayEmbed}
               isToday={isToday}
               useAbbreviations={useAbbreviations}
@@ -2314,7 +2327,7 @@ export default function LeagueColumn({
               showRatings={showRatings}
               leagueLabel={cardLeagueLabel(game)}
               leagueTag={cardLeagueTag(game)}
-              onPlayHighlight={onPlayHighlight}
+              onPlayHighlight={playHighlight}
               onPlayEmbed={onPlayEmbed}
               isToday={isToday}
               useAbbreviations={useAbbreviations}
@@ -2347,7 +2360,7 @@ export default function LeagueColumn({
               showRatings={showRatings}
               leagueLabel={cardLeagueLabel(game)}
               leagueTag={cardLeagueTag(game)}
-              onPlayHighlight={onPlayHighlight}
+              onPlayHighlight={playHighlight}
               onPlayEmbed={onPlayEmbed}
               isPastDate={false}
               isToday={isToday}

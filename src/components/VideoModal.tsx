@@ -42,6 +42,10 @@ interface VideoModalProps {
   // default (e.g. "r/baseball" instead of "Reddit", "MLB Most Popular" instead
   // of "MLB.com"). Falls back to URL-host inference when null.
   sourceLabel?: string | null;
+  // Sport key ("nfl", "f1") for the video-play / video-out events. A game
+  // highlight's share card key already leads with it, so this is only needed
+  // for clips without one (F1 / UFC event tiles); see trackLeague.
+  league?: string | null;
   // Third footer link, e.g. the MLB season-review dialog behind an MLB.com cut.
   extraLink?: { label: string; onClick: () => void } | null;
   // Post metadata — surfaced in a card layout so the modal is a useful
@@ -122,7 +126,7 @@ interface YTPlayer {
   // Optional because they aren't guaranteed present on every API revision.
   getAvailableQualityLevels?: () => string[];
   setPlaybackQuality?: (quality: string) => void;
-  getVideoData?: () => { title?: string } | undefined;
+  getVideoData?: () => { title?: string; author?: string } | undefined;
   // Caption modules for the CC toggle. loadModule presence is verified at the
   // call site (typeof check); setOption is called with optional chaining.
   loadModule: (module: string) => void;
@@ -197,6 +201,17 @@ function strictFallbackChannels(fallbackUrl: string): string[] {
       .filter(Boolean);
   } catch {
     return [];
+  }
+}
+
+// The channel a highlight was resolved from: the first `nss_channels` entry,
+// strict or not. Game highlights and F1 / golf tiles carry it; a bare watch
+// URL does not. Used only as the analytics `source` when no sourceLabel is set.
+function leadFallbackChannel(fallbackUrl: string): string {
+  try {
+    return (new URL(fallbackUrl).searchParams.get("nss_channels") || "").split("|")[0].trim();
+  } catch {
+    return "";
   }
 }
 
@@ -476,7 +491,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, league, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   // The React-owned box the YouTube player lives INSIDE. React renders this and
   // nothing else touches it; the #yt-player node YT destroys is a plain DOM
@@ -775,15 +790,35 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const postKey = [videoId, playbackUrl, embedUrl, imageUrl, fallbackUrl, headline]
     .map((v) => v || "")
     .join("\u0000");
+  // Analytics labels shared by video-play and video-out. A YouTube game
+  // highlight opens with no sourceLabel, which left `source` "unknown" on more
+  // than half of all plays (Oct 3–4); the channel it was resolved from rides on
+  // the fallback URL, and the player itself knows the uploader once it loads.
+  const trackLeague = (shareCard?.key.split("-")[0] || league || "unknown").slice(0, 20);
+  const trackSource = useCallback(
+    () => (sourceLabel || leadFallbackChannel(fallbackUrl) || playerRef.current?.getVideoData?.()?.author || "unknown").slice(0, 40),
+    [sourceLabel, fallbackUrl],
+  );
   const trackedPlayRef = useRef<string | null>(null);
   const trackVideoPlay = useCallback(() => {
     if (!postKey || trackedPlayRef.current === postKey) return;
     trackedPlayRef.current = postKey;
     window.umami?.track("video-play", {
       player: ytMode ? "youtube" : hlsMode ? "native" : "other",
-      source: (sourceLabel || "unknown").slice(0, 40),
+      source: trackSource(),
+      league: trackLeague,
     });
-  }, [postKey, ytMode, hlsMode, sourceLabel]);
+  }, [postKey, ytMode, hlsMode, trackSource, trackLeague]);
+  // The "Watch on YouTube" hand-off. NFL and F1 refuse embeds, so every one of
+  // their highlights ends here and video-play never fires; without this event
+  // those leagues read as unwatched. Once per clip, like video-play. `via` =
+  // the blocked-clip card or the footer link.
+  const trackedOutRef = useRef<string | null>(null);
+  const trackVideoOut = useCallback((via: "card" | "footer") => {
+    if (!postKey || trackedOutRef.current === postKey) return;
+    trackedOutRef.current = postKey;
+    window.umami?.track("video-out", { source: trackSource(), league: trackLeague, via });
+  }, [postKey, trackSource, trackLeague]);
   // Same reuse trap as trackedPlayRef: postKey dedupes so paging past the
   // same clip twice (or a stray double ENDED event) only counts as "finished
   // watching a highlight" once per clip, which is all the in-app rating
@@ -2543,7 +2578,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   ))}
                   <button
                     type="button"
-                    onClick={() => openExternal(sourceShareUrl || fallbackUrl)}
+                    onClick={() => { trackVideoOut("card"); openExternal(sourceShareUrl || fallbackUrl); }}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors cursor-pointer"
                     style={embedAlternates.length
                       ? { color: "rgba(255,255,255,0.7)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }
@@ -3181,7 +3216,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               // openExternal) instead of opening the in-app browser. The helper
               // still stopPropagation()s — so the click doesn't dismiss the
               // modal — and leaves modifier/middle-clicks to the browser.
-              onClick={handleExternalClick(sourceShareUrl)}
+              onClick={(e) => { if (ytMode) trackVideoOut("footer"); handleExternalClick(sourceShareUrl)(e); }}
               className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
             >
               {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}

@@ -5332,6 +5332,36 @@ async function fetchPreviousGameDayRange(
   return { date: latest, games: games.filter((g) => dayOf(g.date) === latest) };
 }
 
+// The board day a league page's "Open …" button lands on: the most recent day,
+// today included, with a finished game or event in that league. A weekly league
+// (NFL, college football, F1, UFC) is empty on most "yesterdays", so the old
+// fixed /yesterday link often opened a day with nothing to watch. Null = no
+// finished game in the lookback, or a failed fetch; the caller keeps its default.
+export async function fetchLastFinishedDay(sport: Sport): Promise<string | null> {
+  const today = toYmd(getEtServiceDate());
+  if (sport === "f1" || sport === "ufc" || sport === "nascar" || sport === "indycar") {
+    try {
+      const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+      url.searchParams.set("dates", `${shiftYmd(today, -EVENT_LOOKBACK_DAYS)}-${today}`);
+      const res = await fetchWithRetry(url.toString());
+      if (!res.ok) return null;
+      const data = await res.json();
+      const done = ((data.events ?? []) as LeagueEvent[]).filter((e) => e.status?.type?.state === "post");
+      const last = done[done.length - 1];
+      if (!last) return null;
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit" })
+        .format(new Date(last.date)).replace(/-/g, "");
+      return day && day <= today ? day : null;
+    } catch {
+      return null;
+    }
+  }
+  // fetchPreviousGameDayRange walks back from the day BEFORE its anchor, so
+  // anchoring on tomorrow puts today's finished games in the walk.
+  const last = await fetchPreviousGameDayRange(sport, nextYmd(today));
+  return last && last.date <= today ? last.date : null;
+}
+
 // A finished day's scoreboard does not change. Best of yesterday reads up to
 // eight of yesterday's scoreboards on the today board, and a tap on Yesterday
 // reads the same ones again; holding a finished day here for a few minutes
