@@ -26,6 +26,7 @@ import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
 import { HL_TEAM_SHORT_ALIASES, hlDateStrs, hlNamePairs, hlTypoWordIndex } from "./lib/hl-retry.mjs";
 import { createTitleForTeam, teamNameIndex } from "./lib/team-names.mjs";
 import { pickEspnGameClip, attachEspnVideoClips, isEspnTalkKind } from "./lib/espn-clip.mjs";
+import { collectOneFeedClips, dropClipIds } from "./lib/espn-onefeed-clips.mjs";
 import { isRealEspnClip, mergeVideos, orderVideos } from "./lib/video-order.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
 import { etServiceYmd, mergeEspnFrontSnapshot, parseFrontPageFeedIds, trimEspnHeader } from "./lib/espn-front.mjs";
@@ -932,23 +933,24 @@ function getESPNHomeHtml() {
   return _espnHomeHtmlPromise;
 }
 
-// ESPN homepage "ICYMI" widget — single curated video, always present in the
-// <article class="sub-module editorial"> block. Used as the headline video in
-// the col-3 ESPN Videos card.
-async function fetchESPNICYMI() {
-  const html = await getESPNHomeHtml();
-  const blockM = html.match(/<article class="sub-module editorial"[\s\S]{0,10000}?<\/article>/);
-  if (!blockM) return null;
-  const block = blockM[0];
+// ESPN homepage "ICYMI" widget — single curated video in the
+// <article class="sub-module editorial"> block whose <h2> reads ICYMI ("Sounding
+// Off" and "Trending Now" use the same class, so the first such block is not
+// always it). Used as the headline video in the col-3 ESPN Videos card.
+function parseESPNICYMI(html) {
+  const blocks = html.match(/<article class="sub-module editorial"[\s\S]{0,10000}?<\/article>/g) || [];
+  const block = blocks.find((b) => /<h2[^>]*>\s*ICYMI\s*<\/h2>/i.test(b));
+  if (!block) return null;
   // ESPN serves ICYMI with and without the data-video attribute (depends on auth
   // state / region flags). Fall back to the clip?id= URL that's always in the
   // thumbnail anchor.
-  const vidM = block.match(/data-video="watch,\d+,\d+,(\d+)/) || block.match(/clip\?id=(\d+)/);
+  const vidM = block.match(/data-video="watch,\d+,\d+,(\d+)/) || block.match(/clip\?id=(\d+)/) || block.match(/\/video\/clip\/_\/id\/(\d+)/);
   if (!vidM) return null;
   const vid = vidM[1];
   const imgM = block.match(/data-default-src="(https?:\/\/[^"]+\.jpg)"/);
-  // Headline is the <h2><a>...</a></h2> under the text-container <li>.
-  const titleM = block.match(/<h2[^>]*><a[^>]+href="[^"]*clip\?id=\d+"[^>]*>([\s\S]{5,300}?)<\/a><\/h2>/);
+  // Headline is the <h2><a>...</a></h2> under the text-container <li>. ESPN
+  // links it as /video/clip?id=N or (since 10/2026) /video/clip/_/id/N/slug.
+  const titleM = block.match(/<h2[^>]*><a[^>]+href="[^"]*(?:clip\?id=\d+|\/video\/clip\/_\/id\/\d+[^"]*)"[^>]*>([\s\S]{5,300}?)<\/a><\/h2>/);
   const descM = block.match(/<p[^>]*>([\s\S]{5,500}?)<\/p>/);
   const title = titleM ? decodeEntities(titleM[1].replace(/<[^>]+>/g, "")) : "";
   if (!title) return null;
@@ -963,6 +965,9 @@ async function fetchESPNICYMI() {
     byline: "",
     section: "ICYMI",
   };
+}
+async function fetchESPNICYMI() {
+  return parseESPNICYMI(await getESPNHomeHtml());
 }
 
 // Map ESPN article URL path → sport-logo URL for the small badge shown left
@@ -1289,6 +1294,31 @@ function isEspnAnalystTake(title) {
   return !m[1].toLowerCase().split(/\s+/).some((w) => ESPN_VIDEO_LABEL_WORDS.has(w));
 }
 
+// The ESPN front page body feed (oneFeed): the espn-front snapshot reads its
+// featured ids, and the ESPN Videos card reads its per-game clip strips and
+// module clips (scripts/lib/espn-onefeed-clips.mjs). The client fetches the
+// same URL (src/lib/espn.ts) with its own per-origin `hs=`.
+const ESPN_FRONT_FEED_URL = "https://onefeed.fan.api.espn.com/apis/v3/cached/contentEngine/oneFeed/frontpage?source=ESPN.com+-+FAM&showfc=true&region=us&lang=en&editionKey=espn-en&isPremium=true&offset=0&limit=10";
+
+// Per-game clip sets + module clips for the ESPN Videos card, or [] on any
+// failure (the scrape alone still makes a card). One request per bake; the
+// mp4s, lengths and clip types ride in the feed, so 0 clip-API calls.
+async function fetchESPNOneFeedClips() {
+  try {
+    const res = await fetch(`${ESPN_FRONT_FEED_URL}&hs=hidescore-bake`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const titleOk = (t) => !VIDEO_BLOCKLIST.some((re) => re.test(t)) && !isEspnAnalystTake(t);
+    return collectOneFeedClips(await res.json(), Date.now(), { titleOk });
+  } catch (e) {
+    console.warn(`ESPN-ONEFEED-CLIPS skipped: ${e?.message || e}`);
+    return [];
+  }
+}
+
+// The card's cap: the newest hero, ICYMI, then game sets + clips (was 10
+// before the game sets, Jacob 10/7).
+const ESPN_VIDEOS_CAP = 20;
+
 async function fetchESPNTopVideos() {
   // ICYMI is ESPN's hand-picked headline video — pinned to slot 2 so the day's
   // newest big-format video leads and ICYMI sits below it as a clearly-labeled
@@ -1321,13 +1351,30 @@ async function fetchESPNTopVideos() {
   let prior = null;
   try { prior = JSON.parse(await readFile(`${OUT_DIR}/espn-videos.json`, "utf8")); } catch { /* first run */ }
   // A clip ESPN already typed as talk (Analysis, Interview, …) leaves the
-  // scrape here, so it does not take one of the 10 slots on later bakes.
+  // scrape here, so it does not take one of the 20 slots on later bakes.
   const state = await readEspnVideoState();
   scraped = scraped.filter((i) => !isEspnTalkKind(state.clips[i.id]?.kind));
-  // Uncapped here: attachEspnVideoClips keeps the first 10 that are not talk,
+  // Game clip sets + module clips from the oneFeed. A clip the scrape (or an
+  // earlier bake today) already shows as its own card — the hero, ICYMI —
+  // stays that card, and the game's set drops it.
+  const ownCards = new Set(scraped.map((i) => String(i.id)));
+  if (prior && isSameEtDay(prior.fetchedAt)) {
+    for (const i of prior.items || []) if (!i.feedClip) ownCards.add(String(i.id));
+  }
+  const oneFeed = dropClipIds(await fetchESPNOneFeedClips(), ownCards);
+  const sets = oneFeed.filter((i) => i.clips);
+  console.log(`ESPN-ONEFEED-CLIPS items=${oneFeed.length} sets=${sets.length} clips=${sets.reduce((n, i) => n + i.clips.length, 0) + oneFeed.length - sets.length}`);
+  scraped = [...scraped, ...oneFeed];
+  // Uncapped here: attachEspnVideoClips keeps the first 20 that are not talk,
   // so a talk clip found in this bake does not leave the feed one short.
   const merged = await persistVideos("espn-videos", scraped, icymi?.id, Infinity);
   return await espnVideoClips(merged, prior?.items, state);
+}
+
+function isSameEtDay(iso) {
+  if (!iso) return false;
+  const day = (d) => d.toLocaleDateString("en-US", { timeZone: "America/New_York" });
+  return day(new Date(iso)) === day(new Date());
 }
 
 // ── ESPN Videos: a direct mp4 per item, so the modal plays it ────────────
@@ -1352,7 +1399,7 @@ async function espnVideoClips(items, priorItems, state) {
   const { items: out, requests, dropped } = await attachEspnVideoClips(items, {
     on: ESPN_VIDEO_PLAY_ON,
     off: ESPN_VIDEO_PLAY_OFF,
-    limit: 10,
+    limit: ESPN_VIDEOS_CAP,
     prior,
     state,
     fetchClip: async (id) => {
@@ -1444,10 +1491,10 @@ function scrapeESPNTopVideosFromHtml(html, icymi) {
 }
 
 // Merge freshly-scraped videos with what we wrote earlier today so the full top
-// 10 "big videos that hit the frontpage" builds up across the day. Rolls over
+// 20 "big videos that hit the frontpage" builds up across the day. Rolls over
 // at ET midnight (a fresh day starts fresh). ICYMI is pinned to slot 2 (index
 // 1) so the day's newest hero video leads and ICYMI sits below it.
-async function persistVideos(name, fresh, pinnedId, limit = 10) {
+async function persistVideos(name, fresh, pinnedId, limit = ESPN_VIDEOS_CAP) {
   const path = `${OUT_DIR}/${name}.json`;
   let existing = null;
   try {
@@ -5637,7 +5684,6 @@ if (runCricketSeries) {
 // 15-min espn cron owns the file and uploads it on its own. The same two URLs
 // the client fetches (src/lib/espn.ts), minus the client's per-origin `hs=`.
 const ESPN_FRONT_HEADER_URL = "https://site.web.api.espn.com/apis/v2/scoreboard/header?region=us&lang=en&contentorigin=espn&tz=America%2FNew_York";
-const ESPN_FRONT_FEED_URL = "https://onefeed.fan.api.espn.com/apis/v3/cached/contentEngine/oneFeed/frontpage?source=ESPN.com+-+FAM&showfc=true&region=us&lang=en&editionKey=espn-en&isPremium=true&offset=0&limit=10";
 async function bakeEspnFrontSnapshot() {
   const date = etServiceYmd();
   const path = `${OUT_DIR}/espn-front/${date}.json`;

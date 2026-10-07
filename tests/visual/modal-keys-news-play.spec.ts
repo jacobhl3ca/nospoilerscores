@@ -93,7 +93,7 @@ const BASE_PREFS = {
   defaultDateMode: "today",
 };
 
-async function openDeepLinkedVideoPost(page: import("@playwright/test").Page, opts: { dropWindowBlur?: boolean } = {}) {
+async function openDeepLinkedVideoPost(page: import("@playwright/test").Page, opts: { dropWindowBlur?: boolean; headlinesOn?: boolean } = {}) {
   if (opts.dropWindowBlur) {
     // Registered before the app's own listener, so stopImmediatePropagation
     // keeps it from ever seeing a window blur.
@@ -107,7 +107,7 @@ async function openDeepLinkedVideoPost(page: import("@playwright/test").Page, op
   );
   await page.addInitScript((base) => {
     localStorage.setItem("nss-preferences", JSON.stringify(base));
-  }, BASE_PREFS);
+  }, { ...BASE_PREFS, ...(opts.headlinesOn ? { revealNewsTitles: true } : {}) });
 
   const headline = "Giants edge Cowboys in the fourth";
   await page.goto(
@@ -171,4 +171,22 @@ test("H still peeks the headline when the window blur never fires (Safari)", asy
   await expect.poll(() => title.evaluate((el) => getComputedStyle(el).filter), {
     message: "the onStateChange path did not recover focus on its own",
   }).toBe("none");
+});
+
+// Jacob 10/7: with the Headlines chip ON every headline shows, and H used to
+// do nothing visible (a peek could only un-blur). H is now a two-way toggle
+// whatever the chip says: chip on → H blurs this post's headline, H again
+// hands it back to the chip (shown).
+test("Headlines chip on: H blurs the post's headline, H again shows it", async ({ page }) => {
+  const headline = await openDeepLinkedVideoPost(page, { headlinesOn: true });
+  const title = page.getByRole("dialog").locator(".news-title", { hasText: headline });
+  await expect(page.locator("html")).toHaveClass(/reveal-news-titles/);
+  await expect.poll(() => title.evaluate((el) => getComputedStyle(el).filter)).toBe("none");
+  await page.getByRole("dialog").focus();
+  await page.keyboard.press("h");
+  await expect.poll(() => title.evaluate((el) => getComputedStyle(el).filter)).toMatch(/blur\(/);
+  await expect(title).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("h");
+  await expect.poll(() => title.evaluate((el) => getComputedStyle(el).filter)).toBe("none");
+  await expect(title).toHaveAttribute("aria-pressed", "true");
 });

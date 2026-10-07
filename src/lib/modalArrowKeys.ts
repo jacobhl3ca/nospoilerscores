@@ -15,7 +15,7 @@
 // runner can't load, so the routing lives here where it can be tested (same
 // reason pollRank.ts and sessionVisits.ts exist).
 
-export type ArrowAction = "gallery" | "seek" | "page";
+export type ArrowAction = "gallery" | "clip" | "seek" | "page";
 
 export type ArrowContext = {
   /** Shift was held. */
@@ -24,6 +24,10 @@ export type ArrowContext = {
   canSeek: boolean;
   /** A multi-picture gallery has another picture in this direction. */
   galleryCanStep: boolean;
+  /** An ESPN clip set is up (Jacob 10/7): ←/→ step its clips, never seek. */
+  inClipSet?: boolean;
+  /** The clip set has another clip in this direction. */
+  clipCanStep?: boolean;
   /** A previous/next post exists in this direction (the pager is armed). */
   hasNeighbour: boolean;
 };
@@ -32,6 +36,10 @@ export type ArrowContext = {
 export function routeArrowKey(ctx: ArrowContext): ArrowAction | null {
   if (ctx.shift) return ctx.hasNeighbour ? "page" : null;
   if (ctx.galleryCanStep) return "gallery";
+  // A clip set is a gallery of videos: ←/→ walk the clips like pictures, and
+  // J/L keep the seeking. At either end the key does nothing (rather than
+  // seek 5 s), so the legend's "Prev / next clip" is the whole story.
+  if (ctx.inClipSet) return ctx.clipCanStep ? "clip" : null;
   if (ctx.canSeek) return "seek";
   return ctx.hasNeighbour ? "page" : null;
 }
@@ -66,16 +74,21 @@ export type ModalKeyContext = {
   canSeek: boolean;
   /** A multi-picture gallery has another picture in the ←/→ direction. */
   galleryCanStep: boolean;
+  /** An ESPN clip set is up, so ←/→ step clips instead of seeking. */
+  inClipSet?: boolean;
+  /** The clip set has another clip in the ←/→ direction. */
+  clipCanStep?: boolean;
   /** A previous post exists (the pager is armed backwards). */
   hasPrev: boolean;
   /** A next post exists (the pager is armed forwards). */
   hasNext: boolean;
-  /** This post has a headline to blur, so H has something to peek. */
+  /** This post has a headline that H can blur or show. */
   hasHeadline: boolean;
 };
 
 export type ModalKeyAction =
   | "gallery"
+  | "clip"
   | "seek"
   | "page-prev"
   | "page-next"
@@ -132,6 +145,8 @@ export function routeModalKey(ctx: ModalKeyContext): ModalKeyAction | null {
       shift: ctx.shift,
       canSeek: ctx.canSeek,
       galleryCanStep: ctx.galleryCanStep,
+      inClipSet: ctx.inClipSet,
+      clipCanStep: ctx.clipCanStep,
       hasNeighbour: dir < 0 ? ctx.hasPrev : ctx.hasNext,
     });
     if (action === "page") return dir < 0 ? "page-prev" : "page-next";
@@ -168,8 +183,10 @@ export function routeModalKey(ctx: ModalKeyContext): ModalKeyAction | null {
     return ctx.canSeek ? "toggle-play" : null;
   }
 
-  // H peeks THIS post's headline (see the peekedKey state in VideoModal — the
-  // peek is per-post and is never written to prefs). Repeat would strobe it.
+  // H flips THIS post's headline to the opposite of the Headlines chip, and H
+  // again hands it back to the chip (headlineOverride in VideoModal — per
+  // post, never written to prefs). So H works with the chip on or off
+  // (Jacob 10/7). Repeat would strobe it.
   if (key === "h" || key === "H") {
     if (ctx.repeat) return null;
     return ctx.hasHeadline ? "peek-headline" : null;
@@ -193,4 +210,67 @@ export function routeModalKey(ctx: ModalKeyContext): ModalKeyAction | null {
   }
 
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The gates every page-level key handler shares (the post modal above, the
+// News list below), written once.
+
+/** Cmd, Ctrl or Alt held: the browser's and the OS's chord, never ours. */
+export function isChord(e: { metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean }): boolean {
+  return !!(e.metaKey || e.ctrlKey || e.altKey);
+}
+
+/** Focus is somewhere a key types: INPUT, TEXTAREA, SELECT or contentEditable. */
+export function isTypingTarget(t: { tagName?: string; isContentEditable?: boolean } | null | undefined): boolean {
+  if (!t) return false;
+  const tag = t.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || !!t.isContentEditable;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The News list's own keys (Jacob 10/7), live only while the News view is up
+// and nothing sits over it: H flips the Headlines chip, M the Media chip, E
+// Hide seen, and ? opens or closes the Keys card. Each is the same tap its
+// chip takes, so the chip's aria-pressed is the read-back.
+
+export type NewsListKeyAction = "headlines" | "media" | "hide-seen" | "keys";
+
+export type NewsListKeyContext = {
+  /** e.key. */
+  key: string;
+  /** Cmd, Ctrl or Alt was held (isChord). */
+  chord: boolean;
+  /** e.repeat. */
+  repeat: boolean;
+  /** Focus is in a text field (isTypingTarget). */
+  inTextEntry: boolean;
+  /** The News view is on screen and no modal, panel or popover is open. */
+  active: boolean;
+};
+
+/** null = leave the key alone (no preventDefault). */
+export function routeNewsListKey(ctx: NewsListKeyContext): NewsListKeyAction | null {
+  if (!ctx.active || ctx.chord || ctx.inTextEntry || ctx.repeat) return null;
+  switch (ctx.key) {
+    case "h": case "H": return "headlines";
+    case "m": case "M": return "media";
+    case "e": case "E": return "hide-seen";
+    case "?": return "keys";
+    default: return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H in the post modal (Jacob 10/7): a true two-way toggle whatever the
+// Headlines chip says. null = the headline follows the chip; "show" / "hide"
+// = this post's override. H from null goes to the opposite of the chip (so
+// the first press always changes what is on screen), and H again hands the
+// headline back to the chip.
+
+export type HeadlineOverride = "show" | "hide" | null;
+
+export function nextHeadlineOverride(current: HeadlineOverride, chipOn: boolean): HeadlineOverride {
+  if (current !== null) return null;
+  return chipOn ? "hide" : "show";
 }

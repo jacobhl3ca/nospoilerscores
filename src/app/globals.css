@@ -180,6 +180,14 @@ html.reveal-news-titles .news-card-titles-off .news-title:not(.peek) {
   user-select: none;
   -webkit-user-select: none;
 }
+/* The post modal's H with the Headlines chip ON (Jacob 10/7): .peek-hide
+   blurs that one headline again, with the default blur's own values. */
+html.reveal-news-titles .news-title.peek-hide {
+  filter: blur(7px);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
 /* Text-post visibility is independent from headline reveal. .news-textpost
    marks one mixed-source row; .news-card-alltext collapses an all-text source
    card so hiding its rows never leaves a bare header behind. */

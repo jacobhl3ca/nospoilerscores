@@ -187,3 +187,25 @@ test("attach: a failed request is not remembered, a carried non-akamaized URL is
   assert.equal(items[0].videoUrl, undefined);
   assert.deepEqual(state.clips, {});
 });
+
+test("attach: a oneFeed clip set keeps its own mp4 + clips and costs no request, even when off", async () => {
+  let asked = 0;
+  const fetchClip = async () => { asked++; return null; };
+  const set = { ...feedItem("50122460"), feedClip: true, videoUrl: mp4("c50122460"), durationSec: 77, clips: [{ id: "50122460" }, { id: "50122461" }] };
+  for (const flags of [{ on: true, off: false }, { on: false, off: true }]) {
+    const { items, requests } = await attachEspnVideoClips([set], { ...flags, prior: new Map(), state: { clips: {} }, fetchClip, sleep: noSleep });
+    assert.equal(requests, 0);
+    assert.equal(items[0].videoUrl, mp4("c50122460"));
+    assert.equal(items[0].clips.length, 2);
+  }
+  assert.equal(asked, 0);
+});
+
+test("attach: the clip API's publish time fills an item that had none (ICYMI)", async () => {
+  const state = { clips: {} };
+  const fetchClip = async (id) => apiPayload(id, { originalPublishDate: "2026-10-05T23:42:00Z" });
+  const icymi = { ...feedItem("50113065"), published: "" };
+  const { items } = await attachEspnVideoClips([icymi], { on: true, off: false, prior: new Map(), state, fetchClip, sleep: noSleep });
+  assert.equal(items[0].published, "2026-10-05T23:42:00Z");
+  assert.equal(state.clips["50113065"].pub, "2026-10-05T23:42:00Z");
+});

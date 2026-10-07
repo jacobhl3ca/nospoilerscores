@@ -123,6 +123,10 @@ export interface NewsItem {
   videoUrl?: string | null;
   // Clip length in seconds, when the source gives one (ESPN Videos).
   durationSec?: number | null;
+  // ESPN Videos game clip set (Jacob 10/7): every clip ESPN lists under one
+  // game, in order, 2+ long. The card shows clip 1 (the item's own fields);
+  // the modal steps through the rest with ‹ › and ← →. Absent on single clips.
+  clips?: NewsClip[] | null;
   // Brightcove default-player iframe URL — set on NHL.com videos, which are
   // Brightcove-hosted rather than YouTube/raw-HLS. The modal renders it in a
   // plain <iframe> (embedMode), letting Brightcove handle policy key/geo/DRM.
@@ -146,6 +150,17 @@ export interface NewsItem {
   // blurred in the Feed view like headlines. Only set on Reddit items, and only
   // for the top handful of posts per feed (comment scraping is rate-limited).
   comments?: string[] | null;
+}
+
+// One clip of an ESPN Videos clip set. Each carries its own mp4, still and
+// (spoiler-blurred) headline.
+export interface NewsClip {
+  id: string;
+  headline: string;
+  videoUrl: string;
+  imageUrl?: string | null;
+  durationSec?: number | null;
+  published?: string | null;
 }
 
 interface RawImage { url?: string; height?: number; width?: number }
@@ -291,10 +306,20 @@ export async function fetchPrebaked(name: string): Promise<NewsItem[]> {
 // An ESPN Videos item plays in the modal only from a direct mp4 on ESPN's
 // akamaized CDN (the bake's own rule, scripts/lib/espn-clip.mjs). Anything
 // else falls back to the image + "Open on ESPN".
+// A clip set gets the same gate per clip: a clip off that host leaves the set,
+// and a set of fewer than 2 is no set.
 const ESPN_MP4_RX = /^https:\/\/[a-z0-9.-]+\.akamaized\.net\/.+\.mp4(\?|$)/i;
 export function gateEspnVideoUrl(item: NewsItem): NewsItem {
-  if (!item.videoUrl || ESPN_MP4_RX.test(item.videoUrl)) return item;
-  return { ...item, videoUrl: null };
+  let out = item;
+  if (out.videoUrl && !ESPN_MP4_RX.test(out.videoUrl)) out = { ...out, videoUrl: null };
+  if (out.clips) {
+    const ok = Array.isArray(out.clips)
+      ? out.clips.filter((c) => !!c && typeof c.videoUrl === "string" && ESPN_MP4_RX.test(c.videoUrl))
+      : [];
+    if (ok.length < 2) out = { ...out, clips: null };
+    else if (ok.length !== out.clips.length) out = { ...out, clips: ok };
+  }
+  return out;
 }
 
 // Leagues that have a prebaked official-site feed. Add here as new scrapers land.

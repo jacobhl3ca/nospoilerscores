@@ -20,11 +20,13 @@ export type KeyLegendContext = {
   canSeek: boolean;
   /** A multi-picture gallery is up, so ←/→ walk pictures instead of scrubbing. */
   galleryCanStep: boolean;
+  /** An ESPN clip set is up, so ←/→ step clips and J/L do the seeking. */
+  clipSet?: boolean;
   /** A previous post exists (the pager is armed backwards). */
   hasPrev: boolean;
   /** A next post exists (the pager is armed forwards). */
   hasNext: boolean;
-  /** This post has a blurred headline, so H has something to peek. */
+  /** This post has a headline that H can blur or show. */
   hasHeadline: boolean;
 };
 
@@ -69,6 +71,15 @@ export function buildKeyLegend(ctx: KeyLegendContext): KeyLegendRow[] {
   // branch is live is the one we print.
   if (ctx.galleryCanStep) {
     rows.push({ id: "arrows", keys: ["←", "→"], label: "Prev / next picture" });
+  } else if (ctx.clipSet) {
+    // A clip set: the arrows walk the clips (like a picture gallery), so J/L
+    // are the seek keys here.
+    rows.push({ id: "arrows", keys: ["←", "→"], label: "Prev / next clip" });
+    if (ctx.canSeek) {
+      rows.push({ id: "jl", keys: ["J", "L"], label: "Skip 10s" });
+      rows.push({ id: "pct", keys: ["0–9"], label: "Jump ahead" });
+      rows.push({ id: "mf", keys: ["M", "F"], label: "Mute / fullscreen" });
+    }
   } else if (ctx.canSeek) {
     rows.push({ id: "arrows", keys: ["←", "→"], label: "Skip 5s" });
     rows.push({ id: "jl", keys: ["J", "L"], label: "Skip 10s" });
@@ -82,7 +93,7 @@ export function buildKeyLegend(ctx: KeyLegendContext): KeyLegendRow[] {
   // ↑/↓. Printing the plain pair as its own row would have given a text post
   // two rows both labelled "Next post".
   if (hasNeighbour) {
-    const contentOwnsArrows = ctx.galleryCanStep || ctx.canSeek;
+    const contentOwnsArrows = ctx.galleryCanStep || !!ctx.clipSet || ctx.canSeek;
     const keys = contentOwnsArrows ? [] : pagingKeys(ctx, "←", "→");
     keys.push(...pagingKeys(ctx, "↑", "↓"));
     if (contentOwnsArrows) keys.push(...pagingKeys(ctx, "⇧←", "⇧→"));
@@ -131,6 +142,8 @@ export function toModalKeyContext(
     onControl: false,
     canSeek: ctx.canSeek,
     galleryCanStep: ctx.galleryCanStep,
+    inClipSet: !!ctx.clipSet,
+    clipCanStep: !!ctx.clipSet,
     hasPrev: ctx.hasPrev,
     hasNext: ctx.hasNext,
     hasHeadline: ctx.hasHeadline,

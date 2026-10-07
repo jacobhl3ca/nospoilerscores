@@ -273,3 +273,30 @@ test("the hint setting off hides the Keys button on a post; ? still opens the le
   await page.keyboard.press("?");
   await expect(panel(page)).toBeVisible();
 });
+
+// The page's corner Keys card (ControlsHint) — Jacob 10/7: the News list's
+// own keys get a group, and the post preview names H.
+const cornerCard = (page: Page) => page.getByRole("dialog", { name: "Keyboard shortcuts" });
+
+test("the corner Keys card lists the News list keys, and H under In a post", async ({ page }) => {
+  await setup(page);
+  await page.locator(".hs-controls-hint").getByRole("button", { name: "Keyboard shortcuts", exact: true }).click();
+  const card = cornerCard(page);
+  await expect(card.getByText("News list", { exact: true })).toBeVisible();
+  for (const label of ["Headlines", "Media", "Hide seen", "Show / hide this card", "Peek headline"]) {
+    await expect(card.getByText(label, { exact: true })).toBeVisible();
+  }
+});
+
+test("? on the News list opens and closes the corner card, even with the hint off", async ({ page }) => {
+  await setup(page, { hintOff: true });
+  await expect(page.locator('button[aria-label="Open post"]').first()).toBeVisible();
+  await expect(cornerCard(page)).toHaveCount(0);
+  await page.keyboard.press("?");
+  await expect(cornerCard(page)).toBeVisible();
+  // No pill and no "Don't show this again" while the hint is off.
+  await expect(cornerCard(page).getByText("Don't show this again")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Hide the keyboard shortcuts hint" })).toHaveCount(0);
+  await page.keyboard.press("?");
+  await expect(cornerCard(page)).toHaveCount(0);
+});

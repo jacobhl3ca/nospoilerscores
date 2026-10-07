@@ -26,12 +26,36 @@ test("orderVideos: pinned ICYMI sits at index 1 and only there", () => {
   assert.equal(out.filter((i) => i.id === "9").length, 1);
 });
 
-test("orderVideos: pinned only, and cap at 10", () => {
+test("orderVideos: pinned only, and cap at 20", () => {
   assert.deepEqual(orderVideos([v(9, 50)], "9").map((i) => i.id), ["9"]);
-  const many = Array.from({ length: 15 }, (_, k) => v(k + 1, (k + 1) * 10));
+  const many = Array.from({ length: 25 }, (_, k) => v(k + 1, (k + 1) * 10));
   const out = orderVideos(many);
-  assert.equal(out.length, 10);
-  assert.equal(out[0].id, "15");
+  assert.equal(out.length, 20);
+  assert.equal(out[0].id, "25");
+  assert.equal(orderVideos(many, undefined, 10).length, 10);
+});
+
+test("orderVideos: the newest hero scrape leads, ICYMI second, then sets + clips newest first", () => {
+  const hero = v(100, 500);
+  const icymi = v(90, 500);
+  const set = { ...v(300, 500), feedClip: true, gameId: "g1", clips: [] };
+  const single = { ...v(200, 600), feedClip: true };
+  const out = orderVideos([set, single, icymi, hero], "90");
+  assert.deepEqual(out.map((i) => i.id), ["100", "90", "200", "300"]);
+});
+
+test("orderVideos: only feed clips → the newest one leads", () => {
+  const out = orderVideos([{ ...v(1, 100), feedClip: true }, { ...v(2, 200), feedClip: true }]);
+  assert.deepEqual(out.map((i) => i.id), ["2", "1"]);
+});
+
+test("mergeVideos: a fresh game set replaces the carried set of the same game and keeps its first sighting", () => {
+  const carry = [{ ...v(10, 100), gameId: "g1", clips: [{ id: "10" }, { id: "11" }] }, v(5, 50)];
+  const fresh = [{ ...v(12, undefined), gameId: "g1", clips: [{ id: "12" }, { id: "10" }, { id: "11" }] }];
+  const byId = mergeVideos(carry, fresh, 999);
+  assert.deepEqual([...byId.keys()].sort(), ["12", "5"]);
+  assert.equal(byId.get("12").firstSeenAt, 100);
+  assert.equal(byId.get("12").clips.length, 3, "clips ride along");
 });
 
 test("mergeVideos: carry-forward keeps the earliest firstSeenAt, fresh fields win", () => {

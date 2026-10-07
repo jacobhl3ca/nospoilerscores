@@ -45,7 +45,7 @@ import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts, type Ca
 import SettingsPanel from "@/components/SettingsPanel";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
 import AutoplayBlockedPopover from "@/components/AutoplayBlockedPopover";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, type NewsClip } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
@@ -66,6 +66,7 @@ import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
 import SupportLine from "@/components/SupportLine";
+import { useNewsListKeys } from "@/lib/useNewsListKeys";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -784,7 +785,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; seenKey?: string | null };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; clips?: NewsClip[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; seenKey?: string | null };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -1469,6 +1470,7 @@ export default function HomeContent({
     embedUrl: opts.embedUrl || null,
     imageUrl: opts.imageUrl || null,
     images: opts.images || null,
+    clips: opts.clips || null,
     poster: opts.poster || null,
     fallbackUrl: opts.fallbackUrl,
     sourceLabel: opts.sourceLabel || null,
@@ -3150,6 +3152,22 @@ export default function HomeContent({
   const [settingsOpen, setSettingsOpen] = useState(false);
   // News filter popover (source type + focus league) — same click-away pattern.
   const [newsFilterOpen, setNewsFilterOpen] = useState(false);
+  // The Keys card (ControlsHint), held here so the News list's "?" opens it.
+  const [controlsHintOpen, setControlsHintOpen] = useState(false);
+  // News list keys (Jacob 10/7): H / M / E flip the Headlines / Media / Hide
+  // seen chips, ? the Keys card. Only with the News view up and none of its
+  // overlays open; useNewsListKeys also stands down under any other modal.
+  const newsKeysActive = showNews && !videoModal && !settingsOpen && !newsFilterOpen
+    && !detailGame && !detailEvent && !calendarOpen && !groupsOpen && !slamBracketOpen
+    && !playoffPictureOpen && !reviewOpen && !showLeaguePicker && !addLeague;
+  useNewsListKeys(newsKeysActive, (action) => {
+    switch (action) {
+      case "headlines": updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles }); break;
+      case "media": updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true }); break;
+      case "hide-seen": updatePrefs({ newsHideSeen: !prefs.newsHideSeen }); break;
+      case "keys": setControlsHintOpen((v) => !v); break;
+    }
+  });
   const newsFilterRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!newsFilterOpen) return;
@@ -5945,6 +5963,7 @@ export default function HomeContent({
           playbackUrl={videoModal.playbackUrl}
           imageUrl={videoModal.imageUrl}
           images={videoModal.images}
+          clips={videoModal.clips}
           embedUrl={videoModal.embedUrl}
           poster={videoModal.poster}
           sourceLabel={videoModal.sourceLabel}
@@ -6055,6 +6074,9 @@ export default function HomeContent({
         enabled={!prefs.hideControlsHint}
         onDismiss={() => updatePrefs({ hideControlsHint: true })}
         modalOpen={!!videoModal}
+        open={controlsHintOpen}
+        onOpenChange={setControlsHintOpen}
+        newsView={showNews}
       />
 
       <SettingsPanel
