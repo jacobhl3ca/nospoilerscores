@@ -10,6 +10,7 @@ import { Preferences, Theme, defaultPreferences, loadPreferences, savePreference
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
+import { filterLeague } from "@/lib/favoritesFilter";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import { LeaguePickerModal } from "./LeaguePickerModal";
@@ -4375,11 +4376,23 @@ export default function HomeContent({
         ) : (
           (() => {
             const isPast = selectedDate < getDateString(0);
-            const hasNonFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state !== "post"));
-            const hasFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state === "post"));
+            // "Only my teams" decides the Final split on the games the columns
+            // will actually draw, or a column could show a "Final" header with
+            // no cards under it.
+            const favStrict = prefs.favoritesOnlyStrict ?? [];
+            const shownGames = (l: LeagueData) => filterLeague(l, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
+            const hasNonFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state !== "post"));
+            const hasFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state === "post"));
             const showFinalSplit = hasNonFinished && hasFinished;
             const commonProps = {
               favoriteTeams: prefs.favoriteTeams,
+              favoritesOnly: !!prefs.favoritesOnly,
+              favoritesOnlyStrict: favStrict,
+              onSetFavoritesOnlyStrict: (sport: Sport, on: boolean) => updatePrefs({
+                favoritesOnlyStrict: on
+                  ? [...favStrict.filter((s) => s !== sport), sport]
+                  : favStrict.filter((s) => s !== sport),
+              }),
               onToggleFavoriteTeam: toggleFavoriteTeam,
               showRatings: prefs.showRatings,
               isPastDate: isPast,

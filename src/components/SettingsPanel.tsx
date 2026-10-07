@@ -874,6 +874,8 @@ export default function SettingsPanel({
     defaultRatings: "auto",
     hideLeagueChevrons: undefined,
     hideTeamStars: undefined,
+    favoritesOnly: undefined,
+    favoritesOnlyStrict: undefined,
     hideWatchLaterPill: undefined,
     watchQueue: undefined,
     upcomingRecordLeagues: undefined,
@@ -1541,6 +1543,14 @@ export default function SettingsPanel({
               hint="The ★ next to team names"
               checked={!prefs.hideTeamStars}
               onChange={(v) => updatePrefs({ hideTeamStars: !v })}
+            />
+            <ToggleRow
+              label="Only my teams"
+              hint="Hide games your starred teams aren't in. A league with no starred team still shows all its games until you star one."
+              checked={!!prefs.favoritesOnly}
+              // Off also clears the per-league ✕ list, so turning it back on
+              // starts from the "star a team" banner everywhere.
+              onChange={(v) => updatePrefs(v ? { favoritesOnly: true } : { favoritesOnly: undefined, favoritesOnlyStrict: undefined })}
             />
             {WATCH_QUEUE_ENABLED ? (
               <ToggleRow
