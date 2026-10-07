@@ -14,7 +14,7 @@ function withWindow(cap: unknown, fn: () => void) {
 
 const prefs = { favoriteTeams: ["mlb-19", "nfl-3"], timezone: "America/Chicago" };
 
-test("android with the plugin: sends teams + zone once per change", () => {
+test("android with the plugin: sends teams + zone + theme once per change", () => {
   const sent: unknown[] = [];
   withWindow({
     isNativePlatform: () => true, getPlatform: () => "android",
@@ -25,9 +25,24 @@ test("android with the plugin: sends teams + zone once per change", () => {
     pushWidgetPrefs({ favoriteTeams: ["mlb-19"], timezone: undefined });
   });
   assert.deepEqual(sent, [
-    { teams: ["mlb-19", "nfl-3"], tz: "America/Chicago" },
-    { teams: ["mlb-19"], tz: null },
+    { teams: ["mlb-19", "nfl-3"], tz: "America/Chicago", theme: "system" },
+    { teams: ["mlb-19"], tz: null, theme: "system" },
   ]);
+});
+
+test("a Theme pill change alone is pushed (the widget recolors)", () => {
+  const sent: unknown[] = [];
+  withWindow({
+    isNativePlatform: () => true, getPlatform: () => "android",
+    Plugins: { HideScoreWidget: { setPrefs: (p: unknown) => { sent.push(p); return Promise.resolve(); } } },
+  }, () => {
+    pushWidgetPrefs({ ...prefs, theme: "system" });
+    pushWidgetPrefs({ ...prefs, theme: "dark" });
+    pushWidgetPrefs({ ...prefs, theme: "dark" });
+    pushWidgetPrefs({ ...prefs, theme: "light" });
+  });
+  assert.deepEqual(sent.map((p) => (p as { theme: string }).theme), ["system", "dark", "light"]);
+  assert.deepEqual(sent[1], { teams: ["mlb-19", "nfl-3"], tz: "America/Chicago", theme: "dark" });
 });
 
 test("no-op on web, iOS, and an old Android build without the plugin", () => {

@@ -17,7 +17,7 @@ import org.json.JSONObject;
  * Reads one ESPN scoreboard day for the home-screen widget, spoiler-safe.
  *
  * Whitelist only: event id, start time, season type, status name, team id +
- * abbreviation, broadcast names. A notes headline is read only to DROP a game,
+ * abbreviation + logo URL, broadcast names. A notes headline is read only to DROP a game,
  * never to show it. Score, record, rank, series, recap and status.detail are
  * never read, so nothing here can carry them into the widget cache.
  *
@@ -34,25 +34,45 @@ final class WidgetParser {
         final String home;
         final String channel;
         final long startMs;
+        /** ESPN logo paths (WidgetCache.logoPath), "" when none. */
+        final String awayLogo;
+        final String homeLogo;
+        /** The yyyyMMdd day it was fetched under ("" until WidgetCache.merge sets it). */
+        final String d;
 
-        Game(String id, String league, String away, String home, String channel, long startMs) {
+        Game(String id, String league, String away, String home, String channel, long startMs,
+             String awayLogo, String homeLogo, String d) {
             this.id = id;
             this.league = league;
             this.away = away;
             this.home = home;
             this.channel = channel;
             this.startMs = startMs;
+            this.awayLogo = awayLogo == null ? "" : awayLogo;
+            this.homeLogo = homeLogo == null ? "" : homeLogo;
+            this.d = d == null ? "" : d;
+        }
+
+        Game(String id, String league, String away, String home, String channel, long startMs) {
+            this(id, league, away, home, channel, startMs, "", "", "");
+        }
+
+        Game withDay(String day) {
+            return new Game(id, league, away, home, channel, startMs, awayLogo, homeLogo, day);
         }
 
         JSONObject toJson() throws JSONException {
             return new JSONObject()
                 .put("id", id).put("league", league).put("away", away)
-                .put("home", home).put("channel", channel).put("start", startMs);
+                .put("home", home).put("channel", channel).put("start", startMs)
+                .put("awayLogo", awayLogo).put("homeLogo", homeLogo).put("d", d);
         }
 
         static Game fromJson(JSONObject o) {
             return new Game(o.optString("id"), o.optString("league"), o.optString("away"),
-                o.optString("home"), o.optString("channel"), o.optLong("start"));
+                o.optString("home"), o.optString("channel"), o.optLong("start"),
+                WidgetCache.checkPath(o.optString("awayLogo")), WidgetCache.checkPath(o.optString("homeLogo")),
+                o.optString("d"));
         }
     }
 
@@ -118,7 +138,7 @@ final class WidgetParser {
         JSONObject comp = comps == null ? null : comps.optJSONObject(0);
         if (comp == null) return null;
 
-        String homeId = null, homeAbbr = null, awayId = null, awayAbbr = null;
+        String homeId = null, homeAbbr = null, awayId = null, awayAbbr = null, homeLogo = "", awayLogo = "";
         JSONArray competitors = comp.optJSONArray("competitors");
         for (int i = 0; competitors != null && i < competitors.length(); i++) {
             JSONObject c = competitors.optJSONObject(i);
@@ -128,9 +148,11 @@ final class WidgetParser {
             if ("home".equals(side)) {
                 homeId = team.optString("id");
                 homeAbbr = team.optString("abbreviation");
+                homeLogo = WidgetCache.logoPath(team.optString("logo"));
             } else if ("away".equals(side)) {
                 awayId = team.optString("id");
                 awayAbbr = team.optString("abbreviation");
+                awayLogo = WidgetCache.logoPath(team.optString("logo"));
             }
         }
         if (isTbd(homeId, homeAbbr) || isTbd(awayId, awayAbbr)) return null;
@@ -158,7 +180,7 @@ final class WidgetParser {
             }
         }
         String channel = join(names, " · ");
-        return new Game(event.optString("id"), league, awayAbbr, homeAbbr, channel, start);
+        return new Game(event.optString("id"), league, awayAbbr, homeAbbr, channel, start, awayLogo, homeLogo, "");
     }
 
     private static boolean isTbd(String id, String abbr) {
