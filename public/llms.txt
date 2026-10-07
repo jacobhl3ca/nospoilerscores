@@ -71,6 +71,7 @@ button rather than serving a re-upload whose title gives the result away.
 - https://hidescore.com/how-to-watch-sports-highlights-without-spoilers — the practical how-to
 - https://hidescore.com/best-spoiler-free-sports-sites — honest comparison with the other spoiler-free apps
 - https://hidescore.com/dtmts-alternative — for DTMTS (Don't Tell Me The Score) users who follow more than the NBA, NFL, NHL and MLB
+- https://hidescore.com/how-to-avoid-sports-spoilers — the settings outside HideScore: score alerts, muted words, blocking or redirecting ESPN, TV apps
 - https://hidescore.com/about — what HideScore is and what it never shows
 - https://hidescore.com/contact — how to reach us (hi@hidescore.com)
 - https://hidescore.com/faq — what it does, what it costs, which leagues
