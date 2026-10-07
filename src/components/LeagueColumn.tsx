@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -22,6 +22,7 @@ import GameCard, { CompactUpcomingCard, PairingRevealAll } from "./GameCard";
 import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
 import { compareRatedLive } from "@/lib/liveSort";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
+import { applyFavoritesFilter, filterLeague } from "@/lib/favoritesFilter";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
@@ -81,6 +82,13 @@ interface LeagueColumnProps {
   // Favorite-stars next to team names on the cards (Settings can hide them).
   // Suppressed automatically when the column is a single Finals matchup.
   showTeamStars?: boolean;
+  // "Only my teams" (Settings): keep only starred teams' games. Leagues in
+  // `favoritesOnlyStrict` stay empty while no team there is starred; the
+  // callback adds (✕ on the banner) or removes ("Show all") one. See
+  // lib/favoritesFilter.ts.
+  favoritesOnly?: boolean;
+  favoritesOnlyStrict?: readonly Sport[];
+  onSetFavoritesOnlyStrict?: (sport: Sport, on: boolean) => void;
   // Leagues whose upcoming cards show the italic W-L (picked in Settings) —
   // see lib/upcomingRecords.ts.
   upcomingRecordLeagues?: ReadonlySet<RecordLeague>;
@@ -914,8 +922,11 @@ function formatDateCompact(yyyymmdd: string): string {
 // SHORT_LEAGUE_LABELS + HEADER_SHORT_LABEL_MAX_PX moved to lib/leagueLabels
 // so the guard test can import them without pulling JSX through node.
 
+// Stable default, so the filter memo below isn't rebuilt every render.
+const NO_STRICT: readonly Sport[] = [];
+
 export default function LeagueColumn({
-  league,
+  league: rawLeague,
   favoriteTeams,
   onToggleFavoriteTeam,
   showRatings,
@@ -940,6 +951,9 @@ export default function LeagueColumn({
   switcherMode,
   onCycleLeague,
   showTeamStars,
+  favoritesOnly = false,
+  favoritesOnlyStrict = NO_STRICT,
+  onSetFavoritesOnlyStrict,
   upcomingRecordLeagues,
   shownElsewhere,
   onRetry,
@@ -953,6 +967,14 @@ export default function LeagueColumn({
   onAbbrevReport,
   namesCompact,
 }: LeagueColumnProps) {
+  // "Only my teams": everything below draws `league`, already cut down to the
+  // starred teams' games. Memoised so an unchanged filter keeps the object
+  // (and every effect keyed on it) stable; off = the raw league itself.
+  const fav = useMemo(
+    () => filterLeague(rawLeague, favoriteTeams, favoritesOnly, favoritesOnlyStrict),
+    [rawLeague, favoriteTeams, favoritesOnly, favoritesOnlyStrict],
+  );
+  const league = useMemo(() => applyFavoritesFilter(rawLeague, fav), [rawLeague, fav]);
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
   const [condenseExpanded, setCondenseExpanded] = useState(false); // "Show more" in condensed single-column mode
@@ -1528,10 +1550,15 @@ export default function LeagueColumn({
   // Final series), so starring can't reorder anything — hide the stars there
   // (Jacob 6/11). Counts the lookahead/lookback slates too, so the upcoming
   // series rows can't sneak a second matchup past the check.
+  // Counted on the UNFILTERED league: with "Only my teams" on, one starred
+  // team's game must still carry the star that un-stars it.
   const distinctMatchups = new Set(
-    [...league.games, ...(league.nextGameDay?.games ?? []), ...(league.previousGameDay?.games ?? [])].map(matchupKey),
+    [...rawLeague.games, ...(rawLeague.nextGameDay?.games ?? []), ...(rawLeague.previousGameDay?.games ?? [])].map(matchupKey),
   ).size;
-  const cardStars = !!showTeamStars && distinctMatchups > 1;
+  // While the "star a team" banner shows, the stars show too — even after they
+  // auto-hid on the third visit (lib/sessionVisits.ts), and even on a single
+  // matchup — because the banner asks for a star, so the card has to offer one.
+  const cardStars = fav.mode === "banner" || (!!showTeamStars && distinctMatchups > 1);
 
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
@@ -1778,8 +1805,10 @@ export default function LeagueColumn({
   // Not-started league on a past tab (empty slate, no recent games, but an
   // upcoming one exists — e.g. the World Cup before kickoff). The header gets a
   // compact "Starts Tomorrow" cue while the body can still show upcoming cards.
+  // The lookback is read off the RAW league: "Only my teams" empties it on any
+  // day no starred team played, which is not the league being unstarted.
   const notStartedDate = isPastDate && league.games.length === 0
-    && !(league.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
+    && !(rawLeague.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
     ? formatDateCompact(league.nextGameDay.date)
     : null;
 
@@ -2163,6 +2192,29 @@ export default function LeagueColumn({
           <div className="absolute inset-x-0 bottom-2">{espnLabelRow(leadLabel!, espnGroups![0].sport)}</div>
         </div>
       ) : topCard}
+      {fav.mode === "banner" && renderUpcoming && !teamViewTeam && (
+        // "Only my teams" is on but nobody in this league is starred: show the
+        // whole slate and say how to narrow it. ✕ = filter this league anyway
+        // (it then shows nothing until a team is starred).
+        <div
+          data-fav-only-banner
+          className="mb-1.5 sm:mb-2 flex items-start gap-1.5 rounded px-2 py-1.5 text-[11px] leading-snug"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+        >
+          <span className="flex-1">★ Showing all {league.label} — star a team to keep only yours</span>
+          {onSetFavoritesOnlyStrict && (
+            <button
+              type="button"
+              onClick={() => onSetFavoritesOnlyStrict(league.sport, true)}
+              aria-label={`Only my teams in ${league.label}`}
+              className="shrink-0 cursor-pointer px-0.5 leading-none hover:opacity-70"
+              style={{ color: "var(--text-muted)" }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
       <PairingRevealAll games={cardGames} className="mb-1.5 sm:mb-2" />
       {teamViewTeam && !league.golfTournament ? (
         section === "finished" ? null : (
@@ -2219,6 +2271,34 @@ export default function LeagueColumn({
                 </button>
               )}
             </div>
+          ) : fav.mode === "strict-empty" ? (
+            // "Only my teams", ✕ pressed on this league, nobody starred yet.
+            <div data-fav-only-strict className="flex flex-col items-center gap-1 py-6 sm:py-8">
+              <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
+                No {league.label} team starred yet
+              </p>
+              {onSetFavoritesOnlyStrict && (
+                <button
+                  type="button"
+                  onClick={() => onSetFavoritesOnlyStrict(league.sport, false)}
+                  className="text-[11px] sm:text-xs underline underline-offset-2 cursor-pointer hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Show all
+                </button>
+              )}
+            </div>
+          ) : fav.mode === "filter" && !league.previousGameDay && (isPastDate ? !notStartedDate : !league.nextGameDay) ? (
+            // "Only my teams" left nothing on this day or either side of it.
+            // The offseason return date still beats a shrug; mid-season that
+            // block is null, and "Upcoming Schedule TBD" would be a lie when
+            // the league is playing, just not the starred teams.
+            seasonOpenerBlock ?? (
+              <div data-fav-only-empty className="flex flex-col items-center gap-0.5 py-6 sm:py-8">
+                <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>No games for your teams</p>
+                <p className="text-center text-[10px] sm:text-xs" style={{ color: "var(--text-muted)", opacity: 0.7 }}>Star more teams in Settings</p>
+              </div>
+            )
           ) : isPastDate ? (
             league.previousGameDay && league.previousGameDay.games.length > 0 ? (
               renderPreviousSlate(league.previousGameDay.games)

@@ -361,6 +361,14 @@ export interface Preferences {
   // sticks — session counting has stopped by then. See STARS_AUTO_HIDE_SESSION
   // in lib/sessionVisits.ts.
   hideTeamStars?: boolean;
+  // "Only my teams" (Settings, Jacob 10/7): a league column keeps only the
+  // games a starred team plays in. Opt-in, undefined = off. A league with no
+  // starred team still shows all its games, with a cell asking the user to
+  // star one — unless the league is in `favoritesOnlyStrict`, where the user
+  // pressed that cell's ✕ and the column shows nothing until a team is
+  // starred. See lib/favoritesFilter.ts.
+  favoritesOnly?: boolean;
+  favoritesOnlyStrict?: Sport[];
   // Games queued with the card's "Later" pill, shown in the Watch queue strip
   // above the board until marked Done (Jacob 9/27). Newest last, at most 20;
   // anything older than 3 days is dropped on load. Syncs like favoriteTeams.

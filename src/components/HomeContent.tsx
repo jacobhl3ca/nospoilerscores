@@ -10,6 +10,7 @@ import { Preferences, Theme, defaultPreferences, loadPreferences, savePreference
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
+import { filterLeague } from "@/lib/favoritesFilter";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import { LeaguePickerModal } from "./LeaguePickerModal";
@@ -477,6 +478,10 @@ function kickoffMessage(k: LeagueKickoff): string {
 // the 2026-08-03 league request landed as an anonymous bare sentence and there
 // was nothing in it to file against.
 const FEEDBACK_LEAGUE_PREFILL = "League request: ";
+
+// Stable stand-in for an unset favoritesOnlyStrict, so each column's filter
+// memo isn't rebuilt on every board render.
+const NO_FAV_STRICT: Sport[] = [];
 
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
@@ -4375,11 +4380,23 @@ export default function HomeContent({
         ) : (
           (() => {
             const isPast = selectedDate < getDateString(0);
-            const hasNonFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state !== "post"));
-            const hasFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state === "post"));
+            // "Only my teams" decides the Final split on the games the columns
+            // will actually draw, or a column could show a "Final" header with
+            // no cards under it.
+            const favStrict = prefs.favoritesOnlyStrict ?? NO_FAV_STRICT;
+            const shownGames = (l: LeagueData) => filterLeague(l, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
+            const hasNonFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state !== "post"));
+            const hasFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state === "post"));
             const showFinalSplit = hasNonFinished && hasFinished;
             const commonProps = {
               favoriteTeams: prefs.favoriteTeams,
+              favoritesOnly: !!prefs.favoritesOnly,
+              favoritesOnlyStrict: favStrict,
+              onSetFavoritesOnlyStrict: (sport: Sport, on: boolean) => updatePrefs({
+                favoritesOnlyStrict: on
+                  ? [...favStrict.filter((s) => s !== sport), sport]
+                  : favStrict.filter((s) => s !== sport),
+              }),
               onToggleFavoriteTeam: toggleFavoriteTeam,
               showRatings: prefs.showRatings,
               isPastDate: isPast,
