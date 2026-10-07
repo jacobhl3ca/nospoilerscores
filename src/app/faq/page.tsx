@@ -55,6 +55,12 @@ const FAQ: { q: string; a: string; links?: FaqLink[] }[] = [
     q: "How can I watch sports highlights without spoilers?",
     a: "Open HideScore before checking search, YouTube, league apps, or social feeds. No score or winner is written on the board, the optional ratings help you pick the best finished games, and each game card links to recap or condensed highlights when available.",
   },
+  // Added 2026-10-07 with the guide it links to.
+  {
+    q: "How do I avoid spoilers outside HideScore?",
+    a: "Most spoilers come from your phone, not a scores site: turn off score alerts in ESPN, Apple Sports and your team's app, mute the team name on X and Threads, clear sports widgets and Live Activities from the lock screen, and block or redirect the sites you open by habit. Every step is in",
+    links: [{ href: "/how-to-avoid-sports-spoilers", text: "how to avoid sports spoilers everywhere else" }],
+  },
   {
     q: "Which sports and leagues does HideScore cover?",
     a: "HideScore covers the NBA, WNBA, MLB, NHL, NFL, college basketball and football, golf, tennis, motorsports, combat sports, cricket, rugby union, the NRL, the AFL, the CFL, chess, poker, competition climbing, and soccer. Soccer includes the Premier League, MLS, Champions League, Europa League, Conference League, La Liga, Serie A, Bundesliga, Ligue 1, Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, the UEFA Nations League, and major international tournaments.",

@@ -84,6 +84,7 @@ export const GUIDE_GROUPS: GuideGroup[] = [
   {
     sport: "How-to and compare",
     guides: [
+      { href: "/how-to-avoid-sports-spoilers", label: "How to avoid sports spoilers everywhere else" },
       { href: "/spoiler-free-sports", label: "Spoiler-free sports scores and highlights" },
       { href: "/how-to-watch-sports-highlights-without-spoilers", label: "How to watch sports highlights without spoilers" },
       { href: "/watch-sports-highlights-without-spoilers", label: "Watch sports highlights without spoilers" },

@@ -15,6 +15,24 @@ type LinkItem = {
   label: string;
 };
 
+// A section can carry numbered sub-steps, each with an optional code block
+// (a filter line, a hosts entry, a command) and a closing note. Added
+// 2026-10-07 for /how-to-avoid-sports-spoilers, whose "block the sites" step
+// gives one method per platform with the exact line to paste. A section with
+// only h + p renders byte-identical to before.
+type SubStep = {
+  h: string;
+  p: string;
+  code?: string;
+};
+
+type Section = {
+  h: string;
+  p: string;
+  steps?: SubStep[];
+  note?: string;
+};
+
 type SeoLandingPageProps = {
   // Small uppercase kicker above the h1. Was a plain "HideScore" line until
   // 2026-09-25; the pinned bar already carries the brand.
@@ -32,7 +50,7 @@ type SeoLandingPageProps = {
   // passes nothing gets byte-identical output to before.
   lead?: ReactNode;
   intro: string[];
-  sections: { h: string; p: string }[];
+  sections: Section[];
   bullets: string[];
   ctaLabel: string;
   ctaHref?: string;
@@ -85,7 +103,12 @@ export default function SeoLandingPage({
   const topic = subject ?? h1.replace(/\s+without spoilers$/i, "");
   const route = canonical.replace(/^\//, "");
   // Read time over everything a reader scrolls past, FAQ included, at 230 wpm.
-  const words = [...intro, ...sections.flatMap((x) => [x.h, x.p]), ...bullets, ...faq.flatMap((x) => [x.q, x.a])]
+  const words = [
+    ...intro,
+    ...sections.flatMap((x) => [x.h, x.p, ...(x.steps ?? []).flatMap((s) => [s.h, s.p, s.code ?? ""]), x.note ?? ""]),
+    ...bullets,
+    ...faq.flatMap((x) => [x.q, x.a]),
+  ]
     .join(" ")
     .split(/\s+/).length;
   const readMin = Math.max(1, Math.ceil(words / 230));
@@ -182,6 +205,25 @@ export default function SeoLandingPage({
           <p className="mb-4" style={body}>
             {section.p}
           </p>
+          {section.steps?.map((step, j) => (
+            <div key={`${step.h}-${j}`} className="mb-4">
+              <h3 className="font-semibold mb-1">{step.h}</h3>
+              <p style={body}>{step.p}</p>
+              {step.code ? (
+                <pre
+                  className="mt-2 overflow-x-auto rounded-md px-3 py-2 text-[13px] leading-snug"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                >
+                  <code>{step.code}</code>
+                </pre>
+              ) : null}
+            </div>
+          ))}
+          {section.note ? (
+            <p className="mb-4" style={body}>
+              {section.note}
+            </p>
+          ) : null}
         </section>
       ))}
 

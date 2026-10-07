@@ -76,6 +76,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // Added 2026-10-05: HideScore already ranks 2.7 for "dont tell me the
     // score" with zero clicks; this is the page those searches should land on.
     "/dtmts-alternative",
+    // Added 2026-10-07: the settings outside HideScore (alerts, muted words,
+    // blockers, redirects), for "how to avoid sports spoilers" searches.
+    "/how-to-avoid-sports-spoilers",
     "/redzone-for-every-sport",
     "/faq",
     // Added 2026-09-24: who runs the site and how to reach it, for the
@@ -100,6 +103,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // Added 2026-10-05 beside the comparison page it splits off from: same
     // cross-service intent, aimed at "dtmts" and "don't tell me the score".
     "/dtmts-alternative",
+    // Added 2026-10-07: same how-to intent as the two how-to pages above.
+    "/how-to-avoid-sports-spoilers",
     // Added 2026-09-20. High-intent rather than league-intent: it answers a
     // question ("is there a redzone for <sport>") that currently lands on the
     // homepage, and it is the only page on the site carrying the dated
