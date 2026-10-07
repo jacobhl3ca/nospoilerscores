@@ -1805,8 +1805,10 @@ export default function LeagueColumn({
   // Not-started league on a past tab (empty slate, no recent games, but an
   // upcoming one exists — e.g. the World Cup before kickoff). The header gets a
   // compact "Starts Tomorrow" cue while the body can still show upcoming cards.
+  // The lookback is read off the RAW league: "Only my teams" empties it on any
+  // day no starred team played, which is not the league being unstarted.
   const notStartedDate = isPastDate && league.games.length === 0
-    && !(league.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
+    && !(rawLeague.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
     ? formatDateCompact(league.nextGameDay.date)
     : null;
 
@@ -2286,7 +2288,7 @@ export default function LeagueColumn({
                 </button>
               )}
             </div>
-          ) : fav.mode === "filter" && !league.nextGameDay && !league.previousGameDay ? (
+          ) : fav.mode === "filter" && !league.previousGameDay && (isPastDate ? !notStartedDate : !league.nextGameDay) ? (
             // "Only my teams" left nothing on this day or either side of it.
             // The offseason return date still beats a shrug; mid-season that
             // block is null, and "Upcoming Schedule TBD" would be a lie when

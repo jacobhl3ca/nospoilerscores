@@ -479,6 +479,10 @@ function kickoffMessage(k: LeagueKickoff): string {
 // was nothing in it to file against.
 const FEEDBACK_LEAGUE_PREFILL = "League request: ";
 
+// Stable stand-in for an unset favoritesOnlyStrict, so each column's filter
+// memo isn't rebuilt on every board render.
+const NO_FAV_STRICT: Sport[] = [];
+
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
   typeof window !== "undefined" && window.matchMedia(WIDE_BOARD_QUERY).matches;
@@ -4379,7 +4383,7 @@ export default function HomeContent({
             // "Only my teams" decides the Final split on the games the columns
             // will actually draw, or a column could show a "Final" header with
             // no cards under it.
-            const favStrict = prefs.favoritesOnlyStrict ?? [];
+            const favStrict = prefs.favoritesOnlyStrict ?? NO_FAV_STRICT;
             const shownGames = (l: LeagueData) => filterLeague(l, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
             const hasNonFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state !== "post"));
             const hasFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state === "post"));
