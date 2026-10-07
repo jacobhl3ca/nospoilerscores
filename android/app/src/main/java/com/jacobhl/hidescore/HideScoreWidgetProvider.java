@@ -33,6 +33,10 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
     // Root padding + header row, in dp (widget_hidescore.xml).
     private static final int CHROME_DP = 44;
     private static final String KEY_PAGE = "page_";
+    // Narrower than this (dp), the channel cell goes so the team names fit. A
+    // 4-wide Pixel widget is 360 dp, 3-wide 266 dp; the pager's arrows take 48 dp.
+    private static final int LIST_CHANNEL_DP = 300;
+    private static final int PAGER_CHANNEL_DP = 340;
 
     @Override
     public void onUpdate(Context context, AppWidgetManager mgr, int[] ids) {
@@ -175,10 +179,12 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         } else if (plan.paged) {
             headerDay = plan.headerDay;
             count = (plan.page + 1) + "/" + plan.pages;
-            views.addView(R.id.widget_rows, pager(context, id, plan.body.get(0), theme, logos));
+            boolean channel = roomFor(mgr.getAppWidgetOptions(id), PAGER_CHANNEL_DP);
+            views.addView(R.id.widget_rows, pager(context, id, plan.body.get(0), theme, logos, channel));
         } else {
             headerDay = plan.headerDay;
-            for (WidgetRows.Row r : plan.body) views.addView(R.id.widget_rows, rowView(context, r, theme, logos));
+            boolean channel = roomFor(mgr.getAppWidgetOptions(id), LIST_CHANNEL_DP);
+            for (WidgetRows.Row r : plan.body) views.addView(R.id.widget_rows, rowView(context, r, theme, logos, channel, true));
         }
         views.setTextViewText(R.id.widget_day, headerDay);
         views.setTextViewText(R.id.widget_count, count);
@@ -205,9 +211,11 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
     }
 
     /** ‹ row › for a 1-row widget; the arrows fill the body's height. */
-    private static RemoteViews pager(Context context, int id, WidgetRows.Row row, WidgetTheme theme, boolean logos) {
+    private static RemoteViews pager(Context context, int id, WidgetRows.Row row, WidgetTheme theme, boolean logos,
+                                     boolean channel) {
         RemoteViews pager = new RemoteViews(context.getPackageName(), R.layout.widget_pager);
-        pager.addView(R.id.pager_row, rowView(context, row, theme, logos));
+        // Narrow pager: the chip goes too (the arrows take its room); the team logos stay.
+        pager.addView(R.id.pager_row, rowView(context, row, theme, logos, channel, channel || row.kind != WidgetRows.Kind.GAME));
         pager.setOnClickPendingIntent(R.id.pager_prev, pageIntent(context, id, -1));
         pager.setOnClickPendingIntent(R.id.pager_next, pageIntent(context, id, 1));
         theme.muted(pager, R.id.pager_prev, R.id.pager_next);
@@ -221,7 +229,8 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    private static RemoteViews rowView(Context context, WidgetRows.Row r, WidgetTheme theme, boolean logos) {
+    private static RemoteViews rowView(Context context, WidgetRows.Row r, WidgetTheme theme, boolean logos,
+                                       boolean channel, boolean chip) {
         String pkg = context.getPackageName();
         if (r.kind == WidgetRows.Kind.DAY) {
             RemoteViews day = new RemoteViews(pkg, R.layout.widget_day);
@@ -240,6 +249,8 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         row.setTextViewText(R.id.row_away, game ? r.away : r.teams);
         row.setTextViewText(R.id.row_home, r.home);
         row.setTextViewText(R.id.row_channel, r.channel);
+        row.setViewVisibility(R.id.row_channel, channel ? View.VISIBLE : View.GONE);
+        row.setViewVisibility(R.id.row_league, chip ? View.VISIBLE : View.GONE);
         if (game && logos) {
             WidgetLogos.apply(context, row, R.id.row_away_logo, r.awayLogo, theme);
             WidgetLogos.apply(context, row, R.id.row_home_logo, r.homeLogo, theme);
@@ -260,11 +271,17 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         return row;
     }
 
-    /** Height left for rows (portrait = max height); 3 game rows' worth when unknown. */
+    /** True when the portrait width (= min width) is at least {@code dp}, or unknown. */
+    private static boolean roomFor(Bundle options, int dp) {
+        int w = options == null ? 0 : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0);
+        return w <= 0 || w >= dp;
+    }
+
+    /** Height left for rows (portrait = max height); the list's 2-row size when unknown. */
     private static int budgetDp(Bundle options) {
         int h = options == null ? 0 : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0);
         if (h <= 0 && options != null) h = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
-        if (h <= 0) return 3 * WidgetRows.GAME_DP + WidgetRows.DAY_DP;
+        if (h <= 0) return WidgetRows.ONE_ROW_BUDGET_DP + WidgetRows.GAME_DP;
         return h - CHROME_DP;
     }
 }

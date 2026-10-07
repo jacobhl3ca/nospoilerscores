@@ -25,6 +25,11 @@ final class WidgetRows {
     // Heights in dp, kept in step with widget_row.xml and widget_day.xml.
     static final int GAME_DP = 22;
     static final int DAY_DP = 18;
+    /**
+     * Row room (widget height minus the 44 dp header) under this = a 1-row
+     * widget: always the ‹ › pager. A Pixel 1-row widget leaves 60 dp, 2 rows 180 dp.
+     */
+    static final int ONE_ROW_BUDGET_DP = 106;
     /** A tapped page returns to the soonest game this long after the last tap. */
     static final long PAGE_HOLD_MS = 30 * 60 * 1000L;
 
@@ -164,8 +169,9 @@ final class WidgetRows {
     }
 
     /**
-     * The list when at least 2 rows fit (or there is only 1 item), else the
-     * pager. The first day header moves up next to 🙈 and costs no height.
+     * The pager on a 1-row widget (or when under 2 rows fit) with more than 1
+     * item, else the list. The first day header moves up next to 🙈 and costs
+     * no height.
      */
     static Plan plan(List<Row> items, int budgetDp, Page page) {
         List<Row> all = new ArrayList<>();
@@ -177,7 +183,8 @@ final class WidgetRows {
         List<Row> body = fit(lifted ? items.subList(1, items.size()) : items, budgetDp);
         int shown = 0;
         for (Row r : body) if (r.kind != Kind.DAY) shown++;
-        if (shown >= 2 || all.size() <= 1) return new Plan(false, head, body, 0, all);
+        boolean oneRow = budgetDp < ONE_ROW_BUDGET_DP;
+        if (all.size() <= 1 || (!oneRow && shown >= 2)) return new Plan(false, head, body, 0, all);
 
         int idx = pageIndex(all, page);
         Row r = all.get(idx);

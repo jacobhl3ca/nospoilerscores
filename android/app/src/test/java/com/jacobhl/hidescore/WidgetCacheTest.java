@@ -205,15 +205,17 @@ public class WidgetCacheTest {
     }
 
     @Test
-    public void pagerOnlyWhenUnderTwoRowsFitAndThereIsMoreThanOne() throws Exception {
-        // Same-day games: 2 rows in 44 dp, no pager.
+    public void oneRowWidgetAlwaysPagesBiggerSizesList() throws Exception {
+        // Pixel: 1 row leaves 60 dp, room for 2 same-day games. Jacob 10/7: arrows anyway.
         List<WidgetRows.Row> sameDay = WidgetRows.items(cache(false, MON_730, MON_9), NY, NOW);
-        assertFalse(WidgetRows.plan(sameDay, 44, null).paged);
-        assertTrue(WidgetRows.plan(sameDay, 43, null).paged);
-        // Next game on another day needs its header too: 62 dp.
-        List<WidgetRows.Row> twoDays = WidgetRows.items(cache(false, MON_730, TUE_7), NY, NOW);
-        assertTrue(WidgetRows.plan(twoDays, 61, null).paged);
-        assertFalse(WidgetRows.plan(twoDays, 62, null).paged);
+        assertTrue(WidgetRows.plan(sameDay, 60, null).paged);
+        assertTrue(WidgetRows.plan(sameDay, WidgetRows.ONE_ROW_BUDGET_DP - 1, null).paged);
+        // 2 rows and up: the list.
+        assertFalse(WidgetRows.plan(sameDay, WidgetRows.ONE_ROW_BUDGET_DP, null).paged);
+        WidgetRows.Plan big = WidgetRows.plan(WidgetRows.items(cache(true, MON_730, TUE_7), NY, NOW), 180, null);
+        assertFalse(big.paged);
+        assertEquals(4, big.body.size());  // game, Tomorrow, game, MLB mask
+        assertEquals(WidgetRows.Kind.MASK, big.body.get(3).kind);
         // A single game never pages, however small.
         WidgetRows.Plan one = WidgetRows.plan(WidgetRows.items(cache(false, MON_730), NY, NOW), 0, null);
         assertFalse(one.paged);
