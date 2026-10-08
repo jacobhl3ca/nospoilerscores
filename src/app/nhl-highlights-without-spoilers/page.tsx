@@ -130,6 +130,7 @@ export const metadata: Metadata = {
 export default function NhlHighlightsWithoutSpoilersPage() {
   return (
     <SeoLandingPage
+      teamLeague="nhl"
       h1="NHL highlights without spoilers"
       intro={[
         "Yes, you can see upcoming and finished NHL games without seeing earlier scores: HideScore never prints a result at all, and can rate each game for excitement.",

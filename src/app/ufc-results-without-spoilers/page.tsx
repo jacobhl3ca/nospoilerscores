@@ -33,9 +33,13 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // post. On a LIVE card it is still there, and an ESPN fightcenter page prints
 // the prelim results that have already happened. So the honest claim is that
 // the board records no result, NOT that nothing can reach one.
-const TITLE = "UFC Results Without Spoilers: Watch the Card Before You Know | HideScore";
+// Retitled 2026-10-07. GSC 9/9–10/6: "ufc no spoilers" = 154 impressions, 1
+// click, position 6.6. The query's own words were not at the front of the
+// title. Same query-first fix as the NHL retitle (#171). Not "hidden until you
+// tap": no result is ever printed, so there is nothing to tap (see above).
+const TITLE = "UFC No Spoilers: Watch the Fights Before You Know | HideScore";
 const DESC =
-  "Follow a UFC fight card without seeing who won. Every bout is listed with no result printed anywhere, and highlights open with the title masked. Free.";
+  "UFC results with no spoilers: every bout on the card is listed with no winner printed anywhere, and highlights open with the title masked. Free, no account.";
 const CANONICAL = "/ufc-results-without-spoilers";
 
 const FAQ = [

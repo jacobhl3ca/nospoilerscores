@@ -109,6 +109,7 @@ export const metadata: Metadata = {
 export default function NbaHighlightsWithoutSpoilersPage() {
   return (
     <SeoLandingPage
+      teamLeague="nba"
       h1="NBA highlights without spoilers"
       intro={[
         "Yes, you can watch NBA highlights without spoilers: open the recap from its card on HideScore instead of from a search results page, and the final never reaches you on the way in.",

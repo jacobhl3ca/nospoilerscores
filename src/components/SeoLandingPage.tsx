@@ -4,6 +4,8 @@ import DocTopBar from "@/components/DocTopBar";
 import FeedbackBox from "@/components/FeedbackBox";
 import type { ReactNode } from "react";
 import { formatUpdated, routeFirstPublished, routeLastModified } from "@/lib/routeLastModified";
+import type { TeamPageLeague } from "@/lib/teamPages";
+import { leagueMeta, teamPagePath, teamsInLeague } from "@/lib/teamPageLeagues";
 
 type FaqItem = {
   q: string;
@@ -73,6 +75,10 @@ type SeoLandingPageProps = {
   // before the refs above were added — Google merges the graph either way, but
   // an unlinked list is not attributed to the page it describes.
   mainEntityId?: string;
+  // League whose team pages get a "Follow a team" link grid after the FAQ.
+  // Added 2026-10-07: the 144 team pages sat on page 2 in Search with no link
+  // from their own league page (only one "NFL teams" link to the /teams hub).
+  teamLeague?: TeamPageLeague;
 };
 
 export default function SeoLandingPage({
@@ -93,7 +99,10 @@ export default function SeoLandingPage({
   about,
   extraSchema = [],
   mainEntityId,
+  teamLeague,
 }: SeoLandingPageProps) {
+  const teamMeta = teamLeague ? leagueMeta(teamLeague) : undefined;
+  const teamList = teamLeague ? teamsInLeague(teamLeague) : [];
   // The date this page's own copy last changed, shown under the h1 and sent as
   // dateModified (2026-09-24, for the freshness signal answer engines read).
   // Skipped on a page with a live `lead` panel: the MLB playoff pages change
@@ -260,6 +269,34 @@ export default function SeoLandingPage({
           </div>
         ))}
       </section>
+
+      {teamMeta && teamList.length > 0 ? (
+        <section aria-labelledby="doc-teams-title">
+          <h2 id="doc-teams-title" className="text-xl font-bold tracking-tight mt-9 mb-2">
+            Follow a team
+          </h2>
+          <p className="mb-3" style={body}>
+            Each {teamMeta.label} team has its own page: its last five and next five games, with no score, record or standings shown.
+          </p>
+          <ul className="grid gap-2 grid-cols-2 sm:grid-cols-3 text-sm">
+            {teamList.map((t) => (
+              <li key={t.slug}>
+                <Link
+                  href={teamPagePath(t)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 font-semibold"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                >
+                  {t.logo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={t.logo} alt="" width={20} height={20} loading="lazy" decoding="async" className="h-5 w-5 shrink-0 object-contain" />
+                  )}
+                  <span className="min-w-0 flex-1">{t.name}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <aside
         className="mt-10 rounded-xl px-4 py-4 text-sm"

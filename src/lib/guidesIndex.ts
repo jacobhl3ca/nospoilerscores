@@ -13,6 +13,8 @@ export const GUIDE_GROUPS: GuideGroup[] = [
     sport: "Football",
     guides: [
       { href: "/nfl-highlights-without-spoilers", label: "NFL highlights without spoilers" },
+      { href: "/nfl-playoff-picture", label: "NFL playoff picture" },
+      { href: "/nfl-standings", label: "NFL standings" },
       { href: "/college-football-highlights-without-spoilers", label: "College football highlights without spoilers" },
       { href: "/cfl-without-spoilers", label: "CFL without spoilers" },
     ],
