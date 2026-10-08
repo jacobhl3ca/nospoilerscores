@@ -6,10 +6,12 @@ import {
   championOf,
   cleanName,
   cleanPicks,
+  effectivePicks,
   isComplete,
   maxPoints,
   nameKey,
   NAME_MAX,
+  openKeysAt,
   pickedCount,
   rankEntries,
   scorePicks,
@@ -21,6 +23,7 @@ import {
   type PickTeam,
   type Picks,
   type SeriesResult,
+  type SeriesStart,
 } from "@/lib/bracketPicks";
 import {
   DEVICE_KEY,
@@ -34,6 +37,8 @@ import {
   type Sent,
 } from "@/lib/picksAccount";
 import { shadeFor } from "@/lib/playoffPicture";
+import { cachedAuthState, getAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, type AuthState } from "@/lib/prefsSync";
+import { trackSoon } from "@/lib/umamiTrack";
 import { getApiBase } from "@/lib/youtube";
 import { getTimeZone } from "@/lib/etDay";
 
@@ -53,6 +58,11 @@ import { getTimeZone } from "@/lib/etDay";
 // entry per device and per name, and before the lock hands back names only.
 // Signed in, the account carries the device token and the submitted picks, so
 // every device on it shows and edits the same entry (lib/picksAccount).
+//
+// After the lock a device with no bracket can still send a late one, until
+// World Series Game 1. It picks only the series that have not started; the
+// rest hold the real winners, score nothing, and need results revealed to
+// show (lib/bracketPicks "Late brackets"). Late brackets play for fun.
 
 /** The prize rule, word for word. */
 export const PRIZE_RULE = "Perfect bracket OR first place: HideScore grants one wish (within reason).";
@@ -176,7 +186,7 @@ function PickSeat({ team, label, picked, faded, status, disabled, onPick, round 
   );
 }
 
-function PickCard({ m, bracket, picks, locked, status, onPick, round }: {
+function PickCard({ m, bracket, picks, locked, status, onPick, round, started }: {
   m: PickMatchup;
   bracket: PickBracket;
   picks: Picks;
@@ -184,9 +194,11 @@ function PickCard({ m, bracket, picks, locked, status, onPick, round }: {
   status: PickStatus | null;
   onPick: (key: string, teamId: string) => void;
   round: string;
+  /** A late bracket's started series: not pickable, and shows no pick. */
+  started?: boolean;
 }) {
   const [a, b] = sidesFor(bracket, picks, m.key);
-  const pick = picks[m.key];
+  const pick = started ? undefined : picks[m.key];
   const seat = (t: PickTeam | null, i: 0 | 1) => (
     <PickSeat
       team={t}
@@ -194,7 +206,7 @@ function PickCard({ m, bracket, picks, locked, status, onPick, round }: {
       picked={!!t && pick === t.id}
       faded={!!t && !!pick && pick !== t.id}
       status={status}
-      disabled={locked || !t || !(a && b)}
+      disabled={locked || !!started || !t || !(a && b)}
       onPick={() => t && onPick(m.key, t.id)}
       round={round}
     />
@@ -202,8 +214,9 @@ function PickCard({ m, bracket, picks, locked, status, onPick, round }: {
   return (
     <div
       data-pick-card={m.key}
+      data-pick-started={started ? "" : undefined}
       className="rounded-lg p-0.5 w-[124px] md:w-[140px]"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)", opacity: started ? 0.6 : undefined }}
     >
       {seat(a, 0)}
       <div className="mx-1.5 h-px" style={{ background: "var(--border)", opacity: 0.6 }} />
@@ -233,6 +246,7 @@ function ResultsCover({ covered, onReveal, children }: { covered: boolean; onRev
         data-results-body
         style={covered ? { filter: "blur(7px)", pointerEvents: "none", userSelect: "none" } : undefined}
         aria-hidden={covered ? true : undefined}
+        inert={covered || undefined}
       >
         {children}
       </div>
@@ -255,11 +269,34 @@ function ResultsCover({ covered, onReveal, children }: { covered: boolean; onRev
   );
 }
 
+// The cover's pill on its own, for a view whose covered state already hides
+// every result and only needs the way to show them.
+function RevealButton({ onReveal }: { onReveal: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onReveal}
+      className="self-start text-xs font-medium px-3 py-1.5 rounded-full cursor-pointer"
+      style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }}
+      aria-label="Show results (reveals which series have been won)"
+    >
+      Show results (spoilers)
+    </button>
+  );
+}
+
 // ── Tab ──────────────────────────────────────────────────────────────────────
 
 type View = "mine" | "board";
 
-export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, results, note }: {
+/** Set while a sign-in started from the Picks prompt is out, so the tab can say
+ *  "Linked to your account." when the reader comes back signed in. */
+const LINK_FLAG = "hs-picks-link";
+
+const onlyKeys = (p: Picks, keys: ReadonlySet<string>): Picks =>
+  Object.fromEntries(Object.entries(p).filter(([k]) => keys.has(k)));
+
+export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, results, starts = [], lateClose = null, note }: {
   bracket: PickBracket;
   /** Column heading for a round in one half (null for the final). */
   roundHeading: (round: number, half: string | null) => string;
@@ -267,6 +304,10 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
   /** The lock is a stand-in time until the first game's start is set. */
   lockTbd: boolean;
   results: SeriesResult[];
+  /** When each series starts: which ones a late bracket can still pick. */
+  starts?: SeriesStart[];
+  /** Late brackets close here (World Series Game 1); null = not listed yet. */
+  lateClose?: Date | null;
   /** One line under the rules, e.g. why seeds can still move. */
   note?: string;
 }) {
@@ -274,10 +315,13 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
   const [saved, setSaved] = useState<Saved>(() => readSaved(id));
   const [seen, setSeen] = useState<number>(() => readSeen(id));
   const [view, setView] = useState<View>("mine");
+  const [viewing, setViewing] = useState<BoardEntry | null>(null);
   const [post, setPost] = useState<Post>({ state: "idle" });
   const [board, setBoard] = useState<Board>({ state: "loading" });
   const [boardTick, setBoardTick] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  const [auth, setAuth] = useState<AuthState | null>(() => cachedAuthState());
+  const [linked, setLinked] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -285,6 +329,7 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
   }, []);
 
   const locked = !!lockAt && now >= lockAt.getTime();
+  const closed = locked && !!lateClose && now >= lateClose.getTime();
 
   // Signed in, pick up the bracket this account submitted on another device,
   // on open and whenever the app comes back to the front.
@@ -300,6 +345,24 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
     };
   }, [id]);
 
+  // Sign-in state for the "keep this bracket on your account" prompt. Back
+  // from a sign-in the prompt started, wait for the account sync, then say so.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const a = await getAuthState();
+      if (!alive) return;
+      setAuth(a);
+      let flagged = false;
+      try { flagged = window.sessionStorage.getItem(LINK_FLAG) === "1"; } catch {}
+      if (!a.signedIn || !flagged) return;
+      await syncPicksWithAccount();
+      try { window.sessionStorage.removeItem(LINK_FLAG); } catch {}
+      if (alive) setLinked(true);
+    })();
+    return () => { alive = false; };
+  }, []);
+
   useEffect(() => {
     const ctrl = new AbortController();
     (async () => {
@@ -312,7 +375,9 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
         if (!r.ok) { setBoard({ state: "error" }); return; }
         const j = (await r.json()) as { locked?: boolean; count?: number; names?: unknown; entries?: unknown };
         if (j.locked && Array.isArray(j.entries)) {
-          const entries = (j.entries as BoardEntry[]).filter((e) => e && typeof e.name === "string" && isPicks(e.picks));
+          const entries = (j.entries as BoardEntry[])
+            .filter((e) => e && typeof e.name === "string" && isPicks(e.picks))
+            .map((e) => (e.late ? { name: e.name, picks: e.picks, late: true, lateAt: typeof e.lateAt === "string" ? e.lateAt : undefined } : { name: e.name, picks: e.picks }));
           setBoard({ state: "locked", entries });
         } else {
           const names = Array.isArray(j.names) ? (j.names as unknown[]).filter((n): n is string => typeof n === "string") : [];
@@ -330,24 +395,55 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
     writeSaved(id, next);
   }, [id]);
 
-  const draft = useMemo(() => cleanPicks(bracket, saved.draft).picks, [bracket, saved.draft]);
+  // The series a late bracket's open picks are judged on: the ones not
+  // started when it first came in. Null for an on-time bracket.
+  const lateOpen = useCallback((e: { lateAt?: string } | null | undefined): Set<string> | null => {
+    const t = e?.lateAt ? Date.parse(e.lateAt) : NaN;
+    return Number.isFinite(t) ? openKeysAt(bracket, results, starts, t) : null;
+  }, [bracket, results, starts]);
+
+  // This device's own late bracket, if it sent one: the leaderboard's word
+  // first (an account copy from another device carries no lateAt), then the
+  // lateAt this device kept when it sent it.
+  const boardMine = saved.sent && board.state === "locked"
+    ? board.entries.find((e) => nameKey(e.name) === nameKey(saved.sent!.name))
+    : undefined;
+  const myLateAt = saved.sent ? (boardMine ? boardMine.lateAt ?? null : saved.sent.lateAt ?? null) : null;
+  const myOpen = useMemo(() => lateOpen(myLateAt ? { lateAt: myLateAt } : null), [lateOpen, myLateAt]);
+  // Late mode: locked, still before World Series Game 1, and no on-time
+  // bracket on this device (an on-time bracket never changes after the lock).
+  const lateMode = locked && !closed && (!saved.sent || !!myLateAt);
+  const openNow = useMemo(() => (lateMode ? openKeysAt(bracket, results, starts, now) : null), [lateMode, bracket, results, starts, now]);
+
+  const draft = useMemo(
+    () => (openNow ? onlyKeys(effectivePicks(bracket, saved.draft, results, openNow), openNow) : cleanPicks(bracket, saved.draft).picks),
+    [bracket, saved.draft, results, openNow],
+  );
   const sentClean = useMemo(() => (saved.sent ? cleanPicks(bracket, saved.sent.picks) : null), [bracket, saved.sent]);
-  const mine = locked ? sentClean?.picks ?? {} : draft;
+  const mine = openNow
+    ? effectivePicks(bracket, draft, results, openNow)
+    : locked
+      ? myOpen && saved.sent ? effectivePicks(bracket, saved.sent.picks, results, myOpen) : sentClean?.picks ?? {}
+      : draft;
 
   const covered = results.length > seen;
   const marksShown = results.length > 0 && !covered;
-  const myScore = useMemo(() => (saved.sent ? scorePicks(bracket, saved.sent.picks, results) : null), [bracket, saved.sent, results]);
+  const myScore = useMemo(() => (saved.sent ? scorePicks(bracket, saved.sent.picks, results, myOpen) : null), [bracket, saved.sent, results, myOpen]);
 
   const onPick = useCallback((key: string, teamId: string) => {
-    if (locked) return;
+    if (locked && !openNow) return;
+    if (openNow && !openNow.has(key)) return;
+    // A late draft holds only its open picks; the real winners fill the rest
+    // so a pick into a seat a finished series fed survives the clean.
+    const base = openNow ? effectivePicks(bracket, draft, results, openNow) : draft;
     const cur = draft[key];
     // A second tap on the picked side clears it, so a pick can be undone.
     const next = cur === teamId
-      ? cleanPicks(bracket, Object.fromEntries(Object.entries(draft).filter(([k]) => k !== key))).picks
-      : applyPick(bracket, draft, key, teamId);
-    save({ ...saved, draft: next });
+      ? cleanPicks(bracket, Object.fromEntries(Object.entries(base).filter(([k]) => k !== key))).picks
+      : applyPick(bracket, base, key, teamId);
+    save({ ...saved, draft: openNow ? onlyKeys(next, openNow) : next });
     if (post.state !== "sending") setPost({ state: "idle" });
-  }, [bracket, draft, locked, post.state, save, saved]);
+  }, [bracket, draft, locked, openNow, post.state, results, save, saved]);
 
   const reveal = () => {
     setSeen(results.length);
@@ -356,15 +452,20 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
 
   const name = cleanName(saved.name);
   const complete = isComplete(bracket, draft);
-  const total = bracket.matchups.length;
-  const picked = pickedCount(bracket, draft);
-  const unsent = !saved.sent || saved.sent.name !== name || !samePicks(saved.sent.picks, draft);
-  const canSubmit = !!lockAt && !locked && complete && !!name && post.state !== "sending" && (unsent || !saved.posted);
-  const champion = championOf(bracket, mine);
+  const total = openNow ? openNow.size : bracket.matchups.length;
+  const picked = openNow ? Object.keys(draft).length : pickedCount(bracket, draft);
+  const sentCompare = saved.sent ? (openNow ? onlyKeys(saved.sent.picks, openNow) : saved.sent.picks) : null;
+  const unsent = !saved.sent || saved.sent.name !== name || !sentCompare || !samePicks(sentCompare, draft);
+  const canSubmit = openNow
+    ? !!name && picked > 0 && post.state !== "sending" && (unsent || !saved.posted)
+    : !!lockAt && !locked && complete && !!name && post.state !== "sending" && (unsent || !saved.posted);
+  const signedIn = !!auth?.signedIn;
 
   const submit = async () => {
     if (!canSubmit || !name) return;
-    const sent: Sent = { name, picks: draft, at: new Date().toISOString() };
+    const late = !!openNow;
+    const at = new Date().toISOString();
+    const sent: Sent = { name, picks: draft, at, ...(late ? { lateAt: myLateAt ?? at } : {}) };
     const next: Saved = { ...saved, name, sent, posted: false };
     save(next);
     setPost({ state: "sending" });
@@ -376,9 +477,18 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
         body: JSON.stringify({ board: id, name, token: deviceToken(), picks: draft }),
       });
       if (r.ok) {
-        save({ ...next, posted: true });
+        // A late bracket comes back as the server kept it: started series
+        // dropped, earlier picks on series that started since kept.
+        const j = (await r.json().catch(() => ({}))) as { picks?: unknown; lateAt?: unknown };
+        const kept: Sent = late && isPicks(j.picks)
+          ? { ...sent, picks: j.picks, lateAt: typeof j.lateAt === "string" ? j.lateAt : sent.lateAt }
+          : sent;
+        save({ ...next, sent: kept, posted: true });
         void syncPicksWithAccount();
-        msg = { state: "ok", msg: "Submitted. You can change your picks until they lock." };
+        trackSoon("picks-submit", { late: String(late), signedIn: String(signedIn) });
+        msg = late
+          ? { state: "ok", msg: "Submitted as a late bracket. You can change picks on series that have not started." }
+          : { state: "ok", msg: "Submitted. You can change your picks until they lock." };
       } else if (r.status === 409) {
         msg = { state: "warn", msg: "Someone already has that name on the leaderboard. Try another name." };
       } else if (r.status === 423) {
@@ -386,7 +496,7 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
       } else if (r.status === 429) {
         msg = { state: "warn", msg: "Too many tries. Wait a few minutes, then submit again." };
       } else if (r.status === 400) {
-        msg = { state: "warn", msg: "That did not save. Check your name and picks." };
+        msg = { state: "warn", msg: late ? "That did not save. Pick at least one series that has not started." : "That did not save. Check your name and picks." };
       } else {
         msg = { state: "ok", msg: "Saved on this device. The shared leaderboard is not on yet." };
       }
@@ -400,28 +510,79 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
   const halfName = (h: 0 | 1) => bracket.halves[h];
   const finalRound = bracket.matchups.find((m) => m.key === bracket.final)?.round ?? bracket.rounds.length - 1;
   const earlyRounds = Array.from({ length: finalRound }, (_, r) => r);
-  const statusOf = (key: string): PickStatus | null => (marksShown && myScore && locked ? myScore.status[key] ?? null : null);
+  const finalMatchup = bracket.matchups.find((m) => m.key === bracket.final);
 
-  const column = (round: number, half: 0 | 1 | null, ms: PickMatchup[]) => {
-    const r = bracket.rounds[round];
-    const title = roundHeading(round, half == null ? null : halfName(half));
+  // One round grid for every bracket the tab shows: the reader's own (editable
+  // before the lock or as a late bracket) and anyone's from the leaderboard.
+  const grid = ({ picks, editable, statusOf, open, label, championLabel }: {
+    picks: Picks;
+    editable: boolean;
+    statusOf: (key: string) => PickStatus | null;
+    /** A late bracket's open keys: every other card shows as started. */
+    open: ReadonlySet<string> | null;
+    label: string;
+    championLabel: string;
+  }) => {
+    const champ = championOf(bracket, picks);
+    const card = (m: PickMatchup, round: string) => (
+      <PickCard
+        key={m.key}
+        m={m}
+        bracket={bracket}
+        picks={picks}
+        locked={!editable}
+        status={statusOf(m.key)}
+        onPick={onPick}
+        round={round}
+        started={!!open && !open.has(m.key)}
+      />
+    );
+    const column = (round: number, half: 0 | 1 | null, ms: PickMatchup[]) => {
+      const r = bracket.rounds[round];
+      const title = roundHeading(round, half == null ? null : halfName(half));
+      return (
+        <div key={`${half}-${round}`} className="flex flex-col shrink-0">
+          <RoundHead title={title} bestOf={r?.bestOf ?? null} weight={r?.weight ?? 0} />
+          <div className="flex-1 flex flex-col justify-around gap-3">
+            {ms.map((m) => card(m, title))}
+          </div>
+        </div>
+      );
+    };
+    const half = (h: 0 | 1) => (
+      <div className={`flex items-stretch gap-2 md:gap-3 ${h === 1 ? "flex-row md:flex-row-reverse" : "flex-row"}`}>
+        {earlyRounds.map((r) => column(r, h, bracket.matchups.filter((m) => m.half === h && m.round === r)))}
+      </div>
+    );
     return (
-      <div key={`${half}-${round}`} className="flex flex-col shrink-0">
-        <RoundHead title={title} bestOf={r?.bestOf ?? null} weight={r?.weight ?? 0} />
-        <div className="flex-1 flex flex-col justify-around gap-3">
-          {ms.map((m) => (
-            <PickCard key={m.key} m={m} bracket={bracket} picks={mine} locked={locked} status={statusOf(m.key)} onPick={onPick} round={title} />
-          ))}
+      <div className="overflow-x-auto pb-1" tabIndex={0} role="group" aria-label={label}>
+        <div className="flex flex-col items-center gap-4 w-max mx-auto md:flex-row md:items-stretch md:gap-2">
+          {half(0)}
+          {finalMatchup ? (
+            <div className="flex flex-col shrink-0">
+              <RoundHead title={roundHeading(finalMatchup.round, null)} bestOf={bracket.rounds[finalMatchup.round]?.bestOf ?? null} weight={bracket.rounds[finalMatchup.round]?.weight ?? 0} />
+              <div className="flex-1 flex flex-col justify-center items-center gap-2">
+                {card(finalMatchup, roundHeading(finalMatchup.round, null))}
+                <div data-pick-champion className="flex items-center gap-1.5 text-[11px]" style={{ color: champ ? "var(--text)" : "var(--text-muted)" }}>
+                  {champ ? <TeamLogo team={champ} size={22} /> : null}
+                  <span className={champ ? "font-bold" : "italic"}>{champ ? `${champ.name}` : championLabel}</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {half(1)}
         </div>
       </div>
     );
   };
-  const half = (h: 0 | 1) => (
-    <div className={`flex items-stretch gap-2 md:gap-3 ${h === 1 ? "flex-row md:flex-row-reverse" : "flex-row"}`}>
-      {earlyRounds.map((r) => column(r, h, bracket.matchups.filter((m) => m.half === h && m.round === r)))}
-    </div>
-  );
-  const finalMatchup = bracket.matchups.find((m) => m.key === bracket.final);
+
+  // A late bracket's grid shows the real winners of the series it did not
+  // pick, so while results are covered the whole grid sits behind the cover.
+  const coverIfLate = (late: boolean, node: React.ReactNode) =>
+    late && results.length > 0 ? <ResultsCover covered={covered} onReveal={reveal}>{node}</ResultsCover> : node;
+
+  const myStatusOf = (key: string): PickStatus | null =>
+    marksShown && myScore && locked && !openNow ? myScore.status[key] ?? null : null;
 
   const scoring = bracket.rounds.map((r) => `${r.label} ${r.weight}`).join(" · ");
   // The date is the one thing a reader needs off this line, so it is bold.
@@ -429,11 +590,14 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
   const firstGame = `first pitch of the first ${bracket.rounds[0]?.label ?? ""} game`;
   const lockLine = !lockAt
     ? "Picks open once the postseason schedule is out."
-    : locked
-      ? <>Picks locked {lockDate}.</>
-      : lockTbd
-        ? <>Picks lock at {firstGame}. That time is not set yet, so for now picks lock {lockDate}.</>
-        : <>Picks lock at {firstGame}: {lockDate}.</>;
+    : closed && lateClose
+      ? <>Picks locked <b data-lock-date style={{ color: "var(--text)" }}>{fmtLock(lateClose)}</b>.</>
+      : locked
+        // Late brackets are open until World Series Game 1 (Jacob 10/1).
+        ? <>Picks locked <s data-lock-struck className="font-normal" style={{ color: "var(--text-muted)" }}>{fmtLock(lockAt)}.</s> never - that&rsquo;s no fun</>
+        : lockTbd
+          ? <>Picks lock at {firstGame}. That time is not set yet, so for now picks lock {lockDate}.</>
+          : <>Picks lock at {firstGame}: {lockDate}.</>;
   const dropped = !locked && sentClean ? sentClean.dropped.length : 0;
 
   const pill = (v: View, label: string) => {
@@ -442,7 +606,7 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
       <button
         type="button"
         aria-pressed={active}
-        onClick={() => setView(v)}
+        onClick={() => { setView(v); setViewing(null); }}
         className="text-[11px] px-2.5 py-0.5 rounded-full cursor-pointer"
         style={{
           background: active ? "var(--bg-card)" : "transparent",
@@ -455,10 +619,33 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
     );
   };
 
+  // Signed out, the bracket lives on this device only, and a signed-out
+  // winner of the one wish can't be reached. Signed in: nothing to say.
+  const hasEntry = !!saved.posted && !!saved.sent;
+  const accountLine = linked
+    ? <p data-picks-linked className="m-0 text-[11px]" style={{ color: "var(--text-secondary)" }}>Linked to your account.</p>
+    : auth && !auth.signedIn
+      ? <SignInPrompt auth={auth} text={hasEntry
+          ? "Sign in to keep this bracket on your account, and so we can reach you if you win"
+          : "Sign in to keep your bracket on all your devices"} />
+      : null;
+  const editing = !locked || !!openNow;
+
+  const viewed = viewing ? (() => {
+    const open = viewing.late ? lateOpen(viewing) : null;
+    const score = scorePicks(bracket, viewing.picks, results, open);
+    return {
+      open,
+      picks: effectivePicks(bracket, viewing.picks, results, open),
+      statusOf: (key: string): PickStatus | null => (marksShown ? score.status[key] ?? null : null),
+    };
+  })() : null;
+
   return (
     <div data-picks className="flex flex-col gap-3">
       <div className="rounded-lg px-3 py-2 text-xs" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}>
         <p data-prize className="m-0 font-bold">🏆 {PRIZE_RULE}</p>
+        {locked ? <p data-prize-late className="m-0 text-[11px]" style={{ color: "var(--text-secondary)" }}>Late brackets play for fun.</p> : null}
         <p className="m-0 mt-1 text-[11px]" style={{ color: "var(--text-secondary)" }}>
           Pick the winner of every series. Each right pick scores its round&rsquo;s points: {scoring} (max {maxPoints(bracket)}).
         </p>
@@ -478,48 +665,46 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
               The seeds moved since you submitted: {dropped} pick{dropped === 1 ? "" : "s"} cleared. Re-pick and submit again.
             </p>
           ) : null}
-          {!locked ? (
-            <label className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text)" }}>
-              Your name or initials
-              <input
-                type="text"
-                value={saved.name}
-                maxLength={NAME_MAX}
-                autoComplete="nickname"
-                onChange={(e) => save({ ...saved, name: e.target.value })}
-                className="text-xs px-2 py-1 rounded-md w-40"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-              />
-              {saved.name.trim() && !name ? (
-                <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Letters, numbers, spaces and . &apos; - only.</span>
-              ) : null}
-            </label>
+          {openNow ? (
+            <p data-late-intro className="m-0 text-xs font-medium" style={{ color: "var(--text)" }}>
+              Missed the lock? Pick the series that have not started.
+            </p>
+          ) : null}
+          {editing ? (
+            <div className="flex flex-col gap-1">
+              <label className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text)" }}>
+                Your name or initials
+                <input
+                  type="text"
+                  value={saved.name}
+                  maxLength={NAME_MAX}
+                  autoComplete="nickname"
+                  onChange={(e) => save({ ...saved, name: e.target.value })}
+                  className="text-xs px-2 py-1 rounded-md w-40"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                />
+                {saved.name.trim() && !name ? (
+                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Letters, numbers, spaces and . &apos; - only.</span>
+                ) : null}
+              </label>
+              {!hasEntry ? accountLine : null}
+            </div>
           ) : saved.sent ? (
-            <p className="m-0 text-xs" style={{ color: "var(--text)" }}>Your bracket, as <b>{saved.sent.name}</b>.</p>
+            <p className="m-0 text-xs" style={{ color: "var(--text)" }}>Your bracket, as <b>{saved.sent.name}</b>{myOpen ? " (late)" : ""}.</p>
           ) : (
             <p className="m-0 text-xs" style={{ color: "var(--text-muted)" }}>You did not submit a bracket on this device.</p>
           )}
 
-          <div className="overflow-x-auto pb-1" tabIndex={0} role="group" aria-label="Your bracket picks">
-            <div className="flex flex-col items-center gap-4 w-max mx-auto md:flex-row md:items-stretch md:gap-2">
-              {half(0)}
-              {finalMatchup ? (
-                <div className="flex flex-col shrink-0">
-                  <RoundHead title={roundHeading(finalMatchup.round, null)} bestOf={bracket.rounds[finalMatchup.round]?.bestOf ?? null} weight={bracket.rounds[finalMatchup.round]?.weight ?? 0} />
-                  <div className="flex-1 flex flex-col justify-center items-center gap-2">
-                    <PickCard m={finalMatchup} bracket={bracket} picks={mine} locked={locked} status={statusOf(finalMatchup.key)} onPick={onPick} round={roundHeading(finalMatchup.round, null)} />
-                    <div data-pick-champion className="flex items-center gap-1.5 text-[11px]" style={{ color: champion ? "var(--text)" : "var(--text-muted)" }}>
-                      {champion ? <TeamLogo team={champion} size={22} /> : null}
-                      <span className={champion ? "font-bold" : "italic"}>{champion ? `${champion.name}` : "Your champion"}</span>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-              {half(1)}
-            </div>
-          </div>
+          {coverIfLate(!!openNow || !!myOpen, grid({
+            picks: mine,
+            editable: editing,
+            statusOf: myStatusOf,
+            open: openNow ?? myOpen,
+            label: "Your bracket picks",
+            championLabel: "Your champion",
+          }))}
 
-          {!locked ? (
+          {editing ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <button
                 type="button"
@@ -536,7 +721,7 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
                 {post.state === "sending" ? "Submitting…" : saved.sent ? "Update picks" : "Submit picks"}
               </button>
               <span className="text-[11px] tabular-nums" style={{ color: "var(--text-muted)" }}>
-                {picked} of {total} picked{!name ? " · add your name" : ""}
+                {picked} of {total} {openNow ? "open series " : ""}picked{!name ? " · add your name" : ""}
                 {saved.sent && !unsent && saved.posted ? " · submitted" : saved.sent && unsent ? " · changes not submitted" : ""}
               </span>
               {post.msg ? (
@@ -546,6 +731,7 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
               ) : null}
             </div>
           ) : null}
+          {hasEntry ? accountLine : null}
 
           {locked && myScore && results.length > 0 ? (
             <ResultsCover covered={covered} onReveal={reveal}>
@@ -566,6 +752,34 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
             </ResultsCover>
           ) : null}
         </>
+      ) : viewing && viewed ? (
+        <>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-board-back
+              onClick={() => setViewing(null)}
+              className="text-[11px] px-2 py-0.5 rounded-full cursor-pointer"
+              style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+            >
+              ◂ Leaderboard
+            </button>
+            <p data-viewing className="m-0 text-xs font-bold truncate" style={{ color: "var(--text)" }}>
+              {viewing.name}&rsquo;s bracket{viewing.late ? <LateTag /> : null}
+            </p>
+          </div>
+          {coverIfLate(!!viewed.open, grid({
+            picks: viewed.picks,
+            editable: false,
+            statusOf: viewed.statusOf,
+            open: viewed.open,
+            label: `${viewing.name}'s bracket picks`,
+            championLabel: "No champion picked",
+          }))}
+          {/* Picks are no spoiler, so an on-time bracket shows while results
+              are covered; only its ✓/✗ marks wait for this. */}
+          {!viewed.open && covered && results.length > 0 ? <RevealButton onReveal={reveal} /> : null}
+        </>
       ) : (
         <Leaderboard
           bracket={bracket}
@@ -574,21 +788,76 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
           results={results}
           covered={covered}
           onReveal={reveal}
-          mine={saved.sent}
+          mine={saved.sent ? { ...saved.sent, late: !!myLateAt, lateAt: myLateAt ?? undefined } : null}
+          openKeysOf={(e) => (e.late ? lateOpen(e) : null)}
+          onOpen={setViewing}
         />
       )}
     </div>
   );
 }
 
-function Leaderboard({ bracket, board, locked, results, covered, onReveal, mine }: {
+function LateTag() {
+  return (
+    <span data-late-tag className="ml-1 text-[10px] font-normal" style={{ color: "var(--text-muted)" }}>late</span>
+  );
+}
+
+// The sign-in the Settings Account section offers, behind one line: tap it for
+// the same Apple / Google buttons (lib/prefsSync), which come back to this page.
+function SignInPrompt({ auth, text }: { auth: AuthState; text: string }) {
+  const [open, setOpen] = useState(false);
+  // The Picks tab only renders after its feeds land, so never on the server.
+  const [canUseGoogle] = useState(() => {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    return !cap?.isNativePlatform?.() || hasNativeGoogleBridge();
+  });
+  const go = (fn: (returnTo?: string) => void) => {
+    try { window.sessionStorage.setItem(LINK_FLAG, "1"); } catch {}
+    fn(window.location.pathname + window.location.search);
+  };
+  const btn = "text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer";
+  return (
+    <div data-picks-signin className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="text-left text-[11px] cursor-pointer p-0"
+        style={{ color: "var(--text-secondary)", background: "none", border: 0 }}
+      >
+        {text} ▸
+      </button>
+      {open ? (
+        <div className="flex flex-wrap gap-2">
+          {auth.providers?.apple !== false ? (
+            <button type="button" className={btn} onClick={() => go(signInWithApple)}
+              style={{ background: "var(--text)", color: "var(--bg)" }}>
+              Sign in with Apple
+            </button>
+          ) : null}
+          {auth.providers?.google && canUseGoogle ? (
+            <button type="button" className={btn} onClick={() => go(signInWithGoogle)}
+              style={{ background: "#fff", color: "#1f1f1f", border: "1px solid #dadce0" }}>
+              Sign in with Google
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Leaderboard({ bracket, board, locked, results, covered, onReveal, mine, openKeysOf, onOpen }: {
   bracket: PickBracket;
   board: Board;
   locked: boolean;
   results: SeriesResult[];
   covered: boolean;
   onReveal: () => void;
-  mine: Sent | null;
+  mine: (Sent & { late: boolean }) | null;
+  openKeysOf: (e: BoardEntry) => ReadonlySet<string> | null;
+  onOpen: (e: BoardEntry) => void;
 }) {
   const muted = { color: "var(--text-muted)" } as const;
   if (board.state === "loading") {
@@ -619,13 +888,15 @@ function Leaderboard({ bracket, board, locked, results, covered, onReveal, mine 
   // never got it (worker off, or the POST failed) — so a player always sees
   // themselves ranked against whatever the board holds.
   const entries: BoardEntry[] = board.state === "locked" ? [...board.entries] : [];
-  if (mine && !entries.some((e) => nameKey(e.name) === nameKey(mine.name))) entries.push({ name: mine.name, picks: mine.picks });
+  if (mine && !entries.some((e) => nameKey(e.name) === nameKey(mine.name))) {
+    entries.push(mine.late ? { name: mine.name, picks: mine.picks, late: true, lateAt: mine.lateAt } : { name: mine.name, picks: mine.picks });
+  }
   const marks = results.length > 0 && !covered;
   // Covered, the rows go alphabetical with no rank: a blurred table still
   // shows its order, and the order is the result.
   const rows = marks || results.length === 0
-    ? rankEntries(bracket, entries, results)
-    : rankEntries(bracket, entries, []).sort((a, b) => a.name.localeCompare(b.name));
+    ? rankEntries(bracket, entries, results, openKeysOf)
+    : rankEntries(bracket, entries, [], openKeysOf).sort((a, b) => a.name.localeCompare(b.name));
 
   const table = (
     <table className="w-full border-separate text-xs" style={{ borderSpacing: "0 2px" }}>
@@ -646,7 +917,20 @@ function Leaderboard({ bracket, board, locked, results, covered, onReveal, mine 
             <tr key={r.name} data-board-row style={{ background: "var(--bg-card)" }}>
               <td className="px-1 py-1 text-center tabular-nums font-bold" style={{ color: "var(--text)" }}>{marks || results.length === 0 ? r.rank : "–"}</td>
               <td className="px-1 py-1 max-w-0">
-                <span className={`block truncate ${isMe ? "font-bold" : ""}`} style={{ color: isMe ? "var(--accent)" : "var(--text)" }} title={r.name}>{r.name}</span>
+                {/* Upright + ▸: tapping opens that bracket (the subtitle
+                    affordance rule). */}
+                <button
+                  type="button"
+                  data-board-open={r.name}
+                  onClick={() => onOpen(r.entry)}
+                  className="flex items-baseline gap-1 max-w-full cursor-pointer text-left p-0"
+                  style={{ background: "none", border: 0 }}
+                  title={`Open ${r.name}'s bracket`}
+                >
+                  <span className={`truncate ${isMe ? "font-bold" : ""}`} style={{ color: isMe ? "var(--accent)" : "var(--text)" }}>{r.name}</span>
+                  {r.late ? <LateTag /> : null}
+                  <span aria-hidden="true" className="shrink-0 text-[10px]" style={muted}>▸</span>
+                </button>
               </td>
               <td
                 className="px-1 py-1 text-right tabular-nums"
@@ -673,8 +957,14 @@ function Leaderboard({ bracket, board, locked, results, covered, onReveal, mine 
   return (
     <div className="flex flex-col gap-1.5">
       {offLine ? <p className="m-0 text-xs" style={muted}>{offLine}</p> : null}
+      {/* Covered, the table holds no result: no rank, no %, no busted
+          champion, and alphabetical order. So it stays readable and every
+          name stays tappable; only the reveal sits above it. */}
       {rows.length ? (
-        results.length > 0 ? <ResultsCover covered={covered} onReveal={onReveal}>{table}</ResultsCover> : table
+        <>
+          {results.length > 0 && covered ? <RevealButton onReveal={onReveal} /> : null}
+          {table}
+        </>
       ) : (
         <p className="m-0 text-xs" style={muted}>No brackets were submitted.</p>
       )}

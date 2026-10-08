@@ -14,7 +14,7 @@ import { join } from "node:path";
 
 test.describe.configure({ mode: "serial" });
 
-const fx = (y: number) => readFileSync(join(__dirname, "..", "fixtures", `mlb-postseason-${y}.json`), "utf8");
+const fx = (y: number | string) => readFileSync(join(__dirname, "..", "fixtures", `mlb-postseason-${y}.json`), "utf8");
 
 type Row = [number, string, string, number, number, boolean?];
 // [id, name, abbrev, wins, losses, divisionLeader]
@@ -51,8 +51,8 @@ const PERFECT = {
 const CLE_RUN = { ...PERFECT, "AL:wc-a": "114", "AL:ds-a": "114", "AL:cs": "114", ws: "114" };
 const ORDER = ["AL:wc-a", "AL:wc-b", "NL:wc-a", "NL:wc-b", "AL:ds-a", "AL:ds-b", "NL:ds-a", "NL:ds-b", "AL:cs", "NL:cs", "ws"];
 
-async function stub(page: Page, postseasonYear: number, picksApi: (method: string, body: string | null) => { status: number; json: unknown }) {
-  await page.route("**/statsapi.mlb.com/api/v1/standings**", (r) => r.fulfill({ json: standings }));
+async function stub(page: Page, postseasonYear: number | string, picksApi: (method: string, body: string | null) => { status: number; json: unknown }, table: unknown = standings) {
+  await page.route("**/statsapi.mlb.com/api/v1/standings**", (r) => r.fulfill({ json: table }));
   await page.route("**/statsapi.mlb.com/api/v1/schedule/postseason/series**", (r) =>
     r.fulfill({ body: fx(postseasonYear), contentType: "application/json" }));
   await page.route("**/site.web.api.espn.com/apis/v2/sports/baseball/mlb/standings**", (r) => r.fulfill({ json: {} }));
@@ -237,4 +237,147 @@ test("signed in: the phone shows the bracket the account submitted on the PC, an
   const put = JSON.parse(puts[puts.length - 1]);
   expect(put.token).toBe(TOKEN);
   expect(put.boards["mlb-2026"].picks.ws).not.toBe(PERFECT.ws);
+});
+
+// ── Open another bracket, late brackets, the account prompt (10/1) ──────────
+
+test("after the lock: tap a leaderboard name to open that bracket; covered, its marks wait", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.clock.setFixedTime(new Date("2026-10-30T12:00:00-04:00"));
+  await stub(page, 2025, () => ({
+    status: 200,
+    json: { board: "mlb-2026", locked: true, count: 2, entries: [{ name: "Jacob", picks: PERFECT }, { name: "Wrongfellow", picks: CLE_RUN }] },
+  }));
+  const dialog = await openPicks(page);
+  await dialog.getByRole("button", { name: "Leaderboard" }).click();
+  // Covered: the names still open, the bracket shows, its marks do not.
+  await dialog.locator('[data-board-open="Wrongfellow"]').click();
+  await expect(dialog.locator("[data-viewing]")).toHaveText("Wrongfellow’s bracket");
+  await expect(dialog.locator("[data-pick-seat][aria-pressed=true]")).toHaveCount(11);
+  await expect(dialog.locator("[data-pick-champion]")).toContainText("Cleveland");
+  await expect(dialog.locator("[data-pick-mark]")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/picks-viewing-covered.png" });
+  // Revealed: the marks come in.
+  await dialog.getByRole("button", { name: /Show results/ }).click();
+  await expect(dialog.locator('[data-pick-mark="wrong"]').first()).toBeVisible();
+  await expect(dialog.locator('[data-pick-mark="correct"]').first()).toBeVisible();
+  await page.screenshot({ path: "test-results/picks-viewing-revealed.png" });
+  await dialog.locator("[data-board-back]").click();
+  await expect(dialog.locator("[data-board-row]")).toHaveCount(2);
+  await expect(dialog.locator("[data-board-row]").nth(0)).toContainText("100%");
+});
+
+test("late: no bracket on this device after the lock → pick the series that have not started", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.clock.setFixedTime(new Date("2026-10-01T08:00:00-04:00"));
+  const posts: string[] = [];
+  await stub(page, "2026-10-01", (method, body) => {
+    if (method === "POST") {
+      posts.push(body ?? "");
+      const picks = JSON.parse(body ?? "{}").picks;
+      return { status: 200, json: { ok: true, late: true, lateAt: "2026-10-01T12:00:00.000Z", picks } };
+    }
+    return { status: 200, json: { board: "mlb-2026", locked: true, count: 0, entries: [] } };
+  });
+  await page.addInitScript(() => {
+    (window as unknown as { umami: unknown }).umami = {
+      track: (name: string, data: unknown) => ((window as unknown as { __ev: unknown[] }).__ev ||= []).push([name, data]),
+    };
+  });
+  const dialog = await openPicks(page);
+  await expect(dialog.locator("[data-lock-struck]")).toHaveText(/^Tue, Sep 29.*\.$/);
+  await expect(dialog.locator("[data-lock-struck]")).toHaveCSS("font-weight", "400");
+  await expect(dialog.locator("[data-lock-line]")).toContainText("never - that’s no fun");
+  await expect(dialog.locator("[data-prize-late]")).toHaveText("Late brackets play for fun.");
+  await expect(dialog.locator("[data-late-intro]")).toHaveText("Missed the lock? Pick the series that have not started.");
+  // The grid shows real wild-card winners, so it waits behind the results cover.
+  await dialog.getByRole("button", { name: /Show results/ }).click();
+  await expect(dialog.locator("[data-pick-started]")).toHaveCount(4);
+  await expect(dialog.locator('[data-pick-card="AL:wc-a"] button[data-pick-seat]').first()).toBeDisabled();
+  await expect(dialog.locator('[data-pick-card="AL:wc-a"] [aria-pressed=true]')).toHaveCount(0);
+  // MIL vs the real 4/5 winner (SD) is open.
+  await dialog.locator('[data-pick-card="NL:ds-b"] button[data-pick-seat]').first().click();
+  await expect(dialog.getByText(/1 of 7 open series picked/)).toBeVisible();
+  await dialog.getByLabel("Your name or initials").fill("Late Larry");
+  await dialog.getByRole("button", { name: "Submit picks" }).click();
+  await expect(dialog.getByText(/Submitted as a late bracket/)).toBeVisible();
+  await page.screenshot({ path: "test-results/picks-late.png" });
+  const sent = JSON.parse(posts[0]);
+  expect(Object.keys(sent.picks)).toEqual(["NL:ds-b"]);
+  const ev = await page.evaluate(() => (window as unknown as { __ev: unknown[] }).__ev);
+  expect(ev).toEqual([["picks-submit", { late: "true", signedIn: "false" }]]);
+});
+
+test("late brackets close at World Series Game 1: the lock line names that date", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-10-30T12:00:00-04:00"));
+  await stub(page, 2025, () => ({ status: 200, json: { board: "mlb-2026", locked: true, count: 0, entries: [] } }));
+  const dialog = await openPicks(page);
+  await expect(dialog.locator("[data-lock-struck]")).toHaveCount(0);
+  await expect(dialog.locator("[data-lock-line]")).toHaveText(/^Picks locked .+\.$/);
+  await expect(dialog.locator("[data-late-intro]")).toHaveCount(0);
+});
+
+test("signed out with a sent bracket: the account prompt shows and opens the sign-in buttons", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-25T12:00:00-04:00"));
+  await stub(page, 2026, () => ({ status: 200, json: { board: "mlb-2026", locked: false, count: 1, names: ["Jacob"] } }));
+  await page.route("**/api/me", (r) => r.fulfill({ json: { signedIn: false, email: null, providers: { apple: true, google: true, email: true } } }));
+  await page.addInitScript((v) => {
+    localStorage.setItem("picks-mlb-2026", JSON.stringify({ name: "Jacob", draft: v, sent: { name: "Jacob", picks: v, at: "2026-09-24T00:00:00Z" }, posted: true }));
+  }, PERFECT);
+  const dialog = await openPicks(page);
+  const prompt = dialog.getByRole("button", { name: "Sign in to keep this bracket on your account, and so we can reach you if you win ▸" });
+  await expect(prompt).toBeVisible();
+  await prompt.click();
+  await expect(dialog.getByRole("button", { name: "Sign in with Apple" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
+});
+
+test("signed out with no bracket yet: the shorter prompt sits under the name field", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-25T12:00:00-04:00"));
+  await stub(page, 2026, () => ({ status: 200, json: { board: "mlb-2026", locked: false, count: 0, names: [] } }));
+  await page.route("**/api/me", (r) => r.fulfill({ json: { signedIn: false, email: null } }));
+  const dialog = await openPicks(page);
+  await expect(dialog.getByRole("button", { name: "Sign in to keep your bracket on all your devices ▸" })).toBeVisible();
+});
+
+test("back from the prompt's sign-in: no prompt, the bracket goes up once, then Linked", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-25T12:00:00-04:00"));
+  await stub(page, 2026, () => ({ status: 200, json: { board: "mlb-2026", locked: false, count: 1, names: ["Jacob"] } }));
+  await page.route("**/api/me", (r) => r.fulfill({ json: { signedIn: true, email: "j@example.com", uid: "u1", provider: "apple" } }));
+  await page.route("**/api/prefs", (r) => r.fulfill({ json: r.request().method() === "GET" ? { prefs: null } : { ok: true } }));
+  const puts: string[] = [];
+  await page.route("**/api/picks/account", (r) => {
+    if (r.request().method() === "PUT") {
+      puts.push(r.request().postData() ?? "");
+      return r.fulfill({ json: { ok: true, picks: JSON.parse(r.request().postData() ?? "{}") } });
+    }
+    // The account holds this device's bracket after the first PUT.
+    const body = puts.length ? JSON.parse(puts[puts.length - 1]) : null;
+    return r.fulfill({ json: { picks: body } });
+  });
+  await page.addInitScript((v) => {
+    localStorage.setItem("hidescore-picks-device", "dddddddddddddddddddddddd");
+    localStorage.setItem("picks-mlb-2026", JSON.stringify({ name: "Jacob", draft: v, sent: { name: "Jacob", picks: v, at: "2026-09-24T00:00:00Z" }, posted: true }));
+    sessionStorage.setItem("hs-picks-link", "1");
+  }, PERFECT);
+  const dialog = await openPicks(page);
+  await expect(dialog.locator("[data-picks-linked]")).toHaveText("Linked to your account.");
+  await expect(dialog.locator("[data-picks-signin]")).toHaveCount(0);
+  expect(puts).toHaveLength(1);
+  expect(JSON.parse(puts[0]).boards["mlb-2026"].name).toBe("Jacob");
+});
+
+test("the picture footer shows until the field is set, then goes", async ({ page }) => {
+  const open = structuredClone(standings);
+  open.records[0].teamRecords[0].clinched = false;
+  await stub(page, 2026, () => ({ status: 503, json: { disabled: true } }), open);
+  await page.goto("/mlb-playoff-picture");
+  await expect(page.locator("[data-picture-footer]")).toHaveCount(1);
+  await expect(page.locator("[data-picture-footer]")).toContainText("Seeds 1–3 are the division winners");
+
+  const page2 = await page.context().newPage();
+  await stub(page2, 2026, () => ({ status: 503, json: { disabled: true } }));
+  await page2.goto("/mlb-playoff-picture");
+  await expect(page2.getByRole("tab", { name: "Bracket" })).toBeVisible();
+  await expect(page2.locator("[data-picture-footer]")).toHaveCount(0);
 });

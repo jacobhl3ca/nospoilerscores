@@ -98,15 +98,73 @@ test("a name belongs to the device that took it; that device can edit and rename
   });
 });
 
-test("after the lock: POST is refused and GET returns every bracket", async () => {
+test("after the lock: an on-time bracket can't change, and GET returns every bracket", async () => {
   const store = kv();
   await withWorld({ now: BEFORE }, () => post(store, { board: "mlb-2026", name: "Jacob", token: TOKEN_A, picks: PICKS }));
   await withWorld({ now: AFTER }, async () => {
-    const r = await post(store, { board: "mlb-2026", name: "Late", token: TOKEN_B, picks: PICKS }, "9.9.9.9");
-    assert.equal(r.status, 423);
+    // Same device, same name or a new one: 423.
+    assert.equal((await post(store, { board: "mlb-2026", name: "Jacob", token: TOKEN_A, picks: { ws: "119" } }, "9.9.9.1")).status, 423);
+    assert.equal((await post(store, { board: "mlb-2026", name: "Jacob 2", token: TOKEN_A, picks: { ws: "119" } }, "9.9.9.2")).status, 423);
     const g = await (await get(store)).json();
     assert.equal(g.locked, true);
     assert.deepEqual(g.entries, [{ name: "Jacob", picks: PICKS }]);
+  });
+});
+
+// Late brackets. The 2026 fixture lists every game TBD, so a series "starts"
+// at noon ET on its first date: wild card 9/29, division series 10/3,
+// World Series Game 1 10/23.
+const LATE = "2026-10-01T12:00:00Z";
+
+test("late: a POST after the lock is kept with its started series dropped", async () => {
+  const store = kv();
+  await withWorld({ now: BEFORE }, () => post(store, { board: "mlb-2026", name: "Jacob", token: TOKEN_A, picks: PICKS }));
+  await withWorld({ now: LATE }, async () => {
+    const r = await post(store, { board: "mlb-2026", name: "Wrongfellow", token: TOKEN_B, picks: { "AL:wc-a": "136", "AL:ds-a": "136", ws: "147" } }, "9.9.9.3");
+    assert.equal(r.status, 200);
+    const j = await r.json();
+    assert.equal(j.late, true);
+    assert.equal(j.lateAt, "2026-10-01T12:00:00.000Z");
+    assert.deepEqual(j.picks, { "AL:ds-a": "136", ws: "147" });
+    const g = await (await get(store)).json();
+    assert.deepEqual(g.entries, [
+      { name: "Jacob", picks: PICKS },
+      { name: "Wrongfellow", picks: { "AL:ds-a": "136", ws: "147" }, late: true, lateAt: "2026-10-01T12:00:00.000Z" },
+    ]);
+    // Nothing left once the started series go: refused.
+    const none = await post(store, { board: "mlb-2026", name: "Nobody", token: "cccccccccccccccccccccccc", picks: { "AL:wc-a": "136" } }, "9.9.9.4");
+    assert.equal(none.status, 400);
+  });
+});
+
+test("late: an update keeps picks on series that started since, and lateAt stays", async () => {
+  const store = kv();
+  await withWorld({ now: LATE }, () =>
+    post(store, { board: "mlb-2026", name: "Late", token: TOKEN_B, picks: { "AL:ds-a": "136", ws: "147" } }, "9.9.9.5"));
+  await withWorld({ now: "2026-10-04T12:00:00Z" }, async () => {
+    const r = await post(store, { board: "mlb-2026", name: "Late", token: TOKEN_B, picks: { "AL:ds-a": "141", ws: "119" } }, "9.9.9.6");
+    assert.equal(r.status, 200);
+    const j = await r.json();
+    assert.deepEqual(j.picks, { "AL:ds-a": "136", ws: "119" });
+    assert.equal(j.lateAt, "2026-10-01T12:00:00.000Z");
+  });
+});
+
+test("late: a name another device holds is still 409", async () => {
+  const store = kv();
+  await withWorld({ now: BEFORE }, () => post(store, { board: "mlb-2026", name: "Jacob", token: TOKEN_A, picks: PICKS }));
+  await withWorld({ now: LATE }, async () => {
+    const r = await post(store, { board: "mlb-2026", name: "jacob", token: TOKEN_B, picks: { ws: "119" } }, "9.9.9.7");
+    assert.equal(r.status, 409);
+  });
+});
+
+test("late: closed once World Series Game 1 starts", async () => {
+  const store = kv();
+  await withWorld({ now: "2026-10-23T16:00:01Z" }, async () => {
+    const r = await post(store, { board: "mlb-2026", name: "Too Late", token: TOKEN_B, picks: { ws: "119" } }, "9.9.9.8");
+    assert.equal(r.status, 423);
+    assert.equal((await r.json()).closed, true);
   });
 });
 
