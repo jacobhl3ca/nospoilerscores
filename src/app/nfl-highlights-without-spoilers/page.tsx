@@ -91,6 +91,7 @@ export const metadata: Metadata = {
 export default function NflHighlightsWithoutSpoilersPage() {
   return (
     <SeoLandingPage
+      teamLeague="nfl"
       h1="NFL highlights without spoilers"
       intro={[
         "Yes, you can watch NFL highlights without spoilers: HideScore shows every game with no score printed on it and an optional excitement rating, so you choose a game first and learn the result from the highlight itself.",
@@ -136,6 +137,8 @@ export default function NflHighlightsWithoutSpoilersPage() {
       ctaHref="/yesterday"
       links={[
         { href: "/teams#nfl", label: "NFL teams" },
+        { href: "/nfl-playoff-picture", label: "NFL playoff picture" },
+        { href: "/nfl-standings", label: "NFL standings" },
         { href: "/nhl-highlights-without-spoilers", label: "NHL highlights" },
         { href: "/nba-scores-without-spoilers", label: "NBA" },
         { href: "/mlb-highlights-without-spoilers", label: "MLB highlights" },

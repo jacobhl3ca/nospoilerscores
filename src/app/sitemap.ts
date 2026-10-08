@@ -15,6 +15,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // MLB playoff panel, so what a crawler renders changes every game day from
     // September through the World Series. Demand is in each route's header.
     "/mlb-playoff-bracket", "/mlb-playoff-picture", "/mlb-wild-card-standings",
+    // Added 2026-10-07, same reason: live NFL standings panel, changes weekly
+    // from now through Week 18 (Jan 9-10 2027).
+    "/nfl-playoff-picture", "/nfl-standings",
   ];
   // Trimmed to the index page on 2026-09-20. The 48 per-team routes
   // (/worldcup/teams/<slug>) stay LIVE and stay linked from /worldcup/teams —

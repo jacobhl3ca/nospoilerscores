@@ -112,6 +112,7 @@ export const metadata: Metadata = {
 export default function NbaScoresWithoutSpoilersPage() {
   return (
     <SeoLandingPage
+      teamLeague="nba"
       h1="NBA scores without spoilers"
       intro={[
         "Yes, you can follow NBA scores without spoilers: HideScore shows every game without printing the result at all, and can rate it for excitement, so you pick a game before you learn who won.",

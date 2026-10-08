@@ -63,8 +63,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const meta = leagueMeta(league);
   if (!team || !meta) return {};
 
-  const title = `${team.name} Games Without Spoilers: Schedule, No Scores | HideScore`;
-  const description = `${team.name} ${meta.label} schedule without spoilers: recent and upcoming games with no score, record or standings shown, spoiler-safe highlights and opt-in ratings.`;
+  // Query-first title 2026-10-07. GSC 9/9–10/6: the team pages sat on page 2
+  // (position 12–16) for team-score searches ("bruins score" 57 impressions at
+  // 11.5), and the old title never said "score". The description keeps the
+  // promise that no score is shown, so the click is an honest one. H1 unchanged.
+  const title = `${team.name} Score & Schedule Without Spoilers | HideScore`;
+  const description = `Follow ${team.name} games without seeing the score: the ${meta.label} schedule, recent and upcoming games with no score, record or standings shown, spoiler-safe highlights and opt-in ratings.`;
   const canonical = teamPagePath(team);
 
   return {
@@ -72,6 +76,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description,
     keywords: [
       `${team.name} games without spoilers`,
+      `${team.name} score without spoilers`,
       `${team.name} no spoilers`,
       `${team.name} highlights without spoilers`,
       `${team.name} schedule`,

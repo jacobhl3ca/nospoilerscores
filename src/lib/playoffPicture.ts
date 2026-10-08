@@ -239,18 +239,25 @@ export function buildPicture(records: StatsApiRecord[], season: number): Playoff
 const STANDINGS = (season: number) =>
   `https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${season}&standingsTypes=byDivision&hydrate=team`;
 
-export async function fetchPlayoffPicture(signal?: AbortSignal, now: Date = new Date()): Promise<PlayoffPicture | null> {
-  // MLB seasons are named for the calendar year they're played in, so the
-  // current year is always the right season to ask for.
-  const season = now.getUTCFullYear();
+async function pictureFor(season: number, signal?: AbortSignal): Promise<PlayoffPicture | null> {
   const r = await fetch(STANDINGS(season), { signal });
   if (!r.ok) throw new Error(`mlb standings → ${r.status}`);
   const data = (await r.json()) as { records?: StatsApiRecord[] };
   const picture = buildPicture(data.records ?? [], season);
-  // Before opening day there are no records to seed from; say nothing rather
-  // than render six empty rows.
   if (picture.leagues.every((l) => !l.seeded.length)) return null;
   return picture;
+}
+
+export async function fetchPlayoffPicture(signal?: AbortSignal, now: Date = new Date()): Promise<PlayoffPicture | null> {
+  // MLB seasons are named for the calendar year they're played in, so the
+  // current year is the first season to ask for.
+  const season = now.getUTCFullYear();
+  const current = await pictureFor(season, signal);
+  if (current) return current;
+  // Before opening day the new season has no records (StatsAPI answers
+  // `records: []`). From January 1 to opening day, show the last season's
+  // final field instead of an error on the playoff pages (2026-10-07).
+  return pictureFor(season - 1, signal);
 }
 
 // ── Playoff odds ─────────────────────────────────────────────────────────────
@@ -597,6 +604,34 @@ export const BROADCAST: Record<number, {
     worldSeries: "FOX",
   },
 };
+
+/**
+ * When each round is scheduled, per season, from StatsAPI
+ * /schedule/postseason/series (read 2026-10-07): first game to the last
+ * possible game. Baked, NOT read live: the live feed drops a series' unplayed
+ * games once it ends and flips "if necessary" flags as it goes, so a live end
+ * date would tell a viewer on delay that a series was a sweep.
+ */
+export const SERIES_DATES: Record<number, {
+  wildCard: Record<LeagueKey, string>;
+  divisionSeries: Record<LeagueKey, string>;
+  championship: Record<LeagueKey, string>;
+  worldSeries: string;
+}> = {
+  2026: {
+    wildCard: { AL: "Sep 29 – Oct 1", NL: "Sep 29 – Oct 1" },
+    divisionSeries: { AL: "Oct 3 – 10", NL: "Oct 3 – 9" },
+    championship: { AL: "Oct 12 – 20", NL: "Oct 11 – 19" },
+    worldSeries: "Oct 23 – 31",
+  },
+};
+
+export function seriesDatesFor(season: number, round: BracketRound, league: LeagueKey): string | null {
+  const year = SERIES_DATES[season];
+  if (!year) return null;
+  if (round === "worldSeries") return year.worldSeries;
+  return year[round][league] ?? null;
+}
 
 export function broadcastFor(season: number, round: BracketRound, league: LeagueKey): string | null {
   const year = BROADCAST[season];
