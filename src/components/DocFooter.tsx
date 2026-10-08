@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SupportLine from "@/components/SupportLine";
 
 // Bottom links for every page that renders DocTopBar (2026-09-28). The same
 // row as the homepage footer (About · FAQ · Guides · Contact · Feedback ·
@@ -50,6 +51,7 @@ export default function DocFooter({ route }: { route: string }) {
           HideScore is not affiliated with, endorsed by, or sponsored by any league, team or broadcaster.
         </p>
       )}
+      <SupportLine />
     </>
   );
 }

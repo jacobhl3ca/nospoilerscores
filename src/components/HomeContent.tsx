@@ -58,6 +58,7 @@ import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
+import SupportLine from "@/components/SupportLine";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -5156,19 +5157,8 @@ export default function HomeContent({
           </div>
         )}
 
-        {/* Tip jar — temporarily hidden 2026-06-24; restore by un-commenting:
-        <a
-          href="https://ko-fi.com/jacobhl"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-flex items-center gap-1.5 text-xs transition-opacity hover:opacity-80"
-          style={{ color: "var(--text-muted)" }}
-          aria-label="Support HideScore on Ko-fi"
-        >
-          <span aria-hidden="true">☕</span>
-          HideScore is free &amp; ad-free — support it
-        </a>
-        */}
+        {/* Support line: date-gated to Dec 15 2026, web only (lib/supportLinks.ts). */}
+        <SupportLine />
       </footer>
 
       {showFavToast && (
