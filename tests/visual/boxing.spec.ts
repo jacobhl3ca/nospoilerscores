@@ -1,4 +1,68 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+// The MLB column is only here as the height reference, so its slate is mocked:
+// a live ESPN fetch for a past date is slow/flaky in CI and blocked in sandboxes,
+// and a dead feed renders "Schedule unavailable" with no card to measure.
+function finishedMlbGame(date: string) {
+  const team = (id: string, name: string, abbr: string, score: string) => ({
+    id, displayName: name, shortDisplayName: name, abbreviation: abbr, score, logo: "", color: "666666",
+  });
+  const home = team("nyy", "Yankees", "NYY", "5");
+  const away = team("bos", "Red Sox", "BOS", "3");
+  return JSON.stringify({
+    events: [{
+      id: "700101",
+      date,
+      name: `${away.displayName} at ${home.displayName}`,
+      shortName: `${away.abbreviation} @ ${home.abbreviation}`,
+      season: { type: 2 },
+      status: { displayClock: "0:00", period: 9, type: { name: "STATUS_FINAL", state: "post", detail: "Final", shortDetail: "Final", completed: true } },
+      competitions: [{
+        date,
+        competitors: [
+          { homeAway: "home", team: home, score: home.score, winner: true, records: [{ summary: "60-55" }] },
+          { homeAway: "away", team: away, score: away.score, winner: false, records: [{ summary: "55-60" }] },
+        ],
+        broadcasts: [], headlines: [], notes: [],
+      }],
+    }],
+  });
+}
+
+// The player is the YouTube IFrame API, which builds the embed iframe itself.
+// Stub it (same shape as the modal specs) so the iframe does not depend on the
+// real www.youtube.com script loading.
+const FAKE_YT_API = `
+(function () {
+  function FakePlayer(el, config) {
+    var mount = typeof el === "string" ? document.getElementById(el) : el;
+    var iframe = document.createElement("iframe");
+    iframe.id = "yt-player";
+    iframe.src = "https://www.youtube.com/embed/" + config.videoId + "?fake=1";
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
+    mount.replaceWith(iframe);
+    this._iframe = iframe;
+    setTimeout(function () { config.events.onReady && config.events.onReady({ target: this }); }.bind(this), 0);
+  }
+  var noop = function () {};
+  FakePlayer.prototype = {
+    playVideo: noop, pauseVideo: noop, mute: noop, unMute: noop, setPlaybackQuality: noop,
+    getIframe: function () { return this._iframe; }, getPlayerState: function () { return -1; },
+    getDuration: function () { return 30; }, getCurrentTime: function () { return 0; },
+    getAvailableQualityLevels: function () { return []; },
+    getVideoData: function () { return { title: "Highlights" }; },
+    destroy: function () { this._iframe && this._iframe.remove(); },
+  };
+  window.YT = { Player: FakePlayer, PlayerState: { ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5, UNSTARTED: -1 } };
+  if (window.onYouTubeIframeAPIReady) window.onYouTubeIframeAPIReady();
+})();
+`;
+
+async function stubYouTubePlayer(page: Page) {
+  await page.route("https://www.youtube.com/iframe_api", (route) => route.fulfill({ status: 200, contentType: "application/javascript", body: FAKE_YT_API }));
+  await page.route("https://www.youtube.com/embed/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<body style='margin:0;background:#111'></body>" }));
+}
 
 test("Boxing yesterday keeps the recent major, matches MLB height, and resolves DAZN strictly", async ({ page }) => {
   let lookupUrl = "";
@@ -7,6 +71,10 @@ test("Boxing yesterday keeps the recent major, matches MLB height, and resolves 
     lookupUrl = route.request().url();
     return route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":"iuofPvxZKtQ"}' });
   });
+  await page.route("**/baseball/mlb/scoreboard**", route => route.fulfill({
+    status: 200, contentType: "application/json", body: finishedMlbGame("2026-08-05T23:05:00Z"),
+  }));
+  await stubYouTubePlayer(page);
   await page.clock.setFixedTime(new Date("2026-08-06T16:00:00-04:00"));
   await page.addInitScript(() => localStorage.setItem("nss-preferences", JSON.stringify({
     favoriteLeagues: ["boxing", "mlb"], favoriteTeams: [], theme: "light", showRatings: false,
