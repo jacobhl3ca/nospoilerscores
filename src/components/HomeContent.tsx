@@ -7,6 +7,7 @@ import { enabledCategories } from "@/lib/sensitiveNews";
 import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
+import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
@@ -2361,6 +2362,24 @@ export default function HomeContent({
     const leagues = switcherOptions.filter((o) => o.sport !== "best");
     return [...leagues.filter((o) => o.sport === "top"), ...leagues.filter((o) => o.sport !== "top")];
   }, [switcherOptions]);
+  // The Add more… sheet's "Previously removed" group, newest first. Only the
+  // leagues still out of the switcher and not struck off the catalog, so a
+  // stale entry never shows.
+  const addMoreRemoved = useMemo(
+    () => (prefs.removedLeagues ?? []).filter((s) =>
+      !switcherOptions.some((o) => o.sport === s) && !prefs.catalogHiddenLeagues?.includes(s)),
+    [prefs.removedLeagues, prefs.catalogHiddenLeagues, switcherOptions],
+  );
+  // The sheet's "Edit list" ×, the same strike as Settings' Edit list: the
+  // league leaves the catalog and every switcher, and the removed group.
+  const hideFromAddMore = (sport: Sport) => {
+    const struck = prefs.catalogHiddenLeagues ?? [];
+    if (struck.includes(sport)) return;
+    updatePrefs({
+      catalogHiddenLeagues: [...struck, sport],
+      ...(prefs.removedLeagues?.includes(sport) ? { removedLeagues: dropRemoved(prefs.removedLeagues, sport) } : {}),
+    });
+  };
 
   // A scores switcher's "Remove from list…" (Jacob 10/8): the picked leagues
   // leave the switcher in one save, the same rule as unticking them in
@@ -2382,6 +2401,7 @@ export default function HomeContent({
     updatePrefs({
       hiddenLeagues: hidden.size ? [...hidden] : undefined,
       shownLeagues: shown.size ? [...shown] : undefined,
+      removedLeagues: noteRemoved(prefs.removedLeagues, sports),
     });
   };
 
@@ -2399,6 +2419,7 @@ export default function HomeContent({
     const unhide: Partial<Preferences> = {
       ...(hidden.includes(sport) ? { hiddenLeagues: hidden.length > 1 ? hidden.filter((s) => s !== sport) : undefined } : {}),
       ...(struck.includes(sport) ? { catalogHiddenLeagues: struck.length > 1 ? struck.filter((s) => s !== sport) : undefined } : {}),
+      ...(prefs.removedLeagues?.includes(sport) ? { removedLeagues: dropRemoved(prefs.removedLeagues, sport) } : {}),
     };
     if (target.kind === "news" && target.slotIdx === 2) {
       const shown = prefs.shownLeagues ?? [];
@@ -2500,6 +2521,7 @@ export default function HomeContent({
       shownLeagues: [...shown],
       hiddenLeagues: hidden.length ? hidden : undefined,
       catalogHiddenLeagues: struck.length ? struck : undefined,
+      removedLeagues: dropRemoved(prefs.removedLeagues, sport),
     });
     setAddLeague(null);
   };
@@ -5260,6 +5282,9 @@ export default function HomeContent({
           showOffseason={!!prefs.showOffseasonInPicker}
           onToggleOffseason={() => updatePrefs({ showOffseasonInPicker: prefs.showOffseasonInPicker ? undefined : true })}
           shownElsewhere={addMoreFor.shownElsewhere}
+          removed={addMoreRemoved}
+          hidden={prefs.catalogHiddenLeagues}
+          onHide={hideFromAddMore}
         />
       )}
 

@@ -7,6 +7,7 @@ import { TEAM_PICKER_SKIP } from "@/lib/teamLogos";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
 import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
+import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { LeagueMark } from "./LeagueMark";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
@@ -592,6 +593,7 @@ export default function SettingsPanel({
       ...(catalogHiddenLeagues.length !== (prefs.catalogHiddenLeagues ?? []).length
         ? { catalogHiddenLeagues: catalogHiddenLeagues.length ? catalogHiddenLeagues : undefined }
         : {}),
+      ...(sport && sport !== "empty" && prefs.removedLeagues?.includes(sport) ? { removedLeagues: dropRemoved(prefs.removedLeagues, sport) } : {}),
     });
   };
 
@@ -751,9 +753,13 @@ export default function SettingsPanel({
           } else if (!on && preferred) {
             hiddenLeagues.add(option.sport);
           }
+          // An untick feeds the Add more… sheet's "Previously removed" group
+          // too; a tick takes the league off it. Same patch, so Undo restores
+          // the list as well.
           updateWithUndo(`${label} ${on ? "on" : "off"}`, {
             hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined,
             shownLeagues: shownLeagues.size ? [...shownLeagues] : undefined,
+            removedLeagues: on ? dropRemoved(prefs.removedLeagues, option.sport) : noteRemoved(prefs.removedLeagues, [option.sport]),
           });
         }}
         onRemove={editing ? () => updateWithUndo(`${label} hidden`, { catalogHiddenLeagues: [...catalogHidden, option.sport] }) : undefined}
@@ -894,6 +900,7 @@ export default function SettingsPanel({
     leagueSwitcherMode: undefined,
     hiddenLeagues: undefined,
     shownLeagues: undefined,
+    removedLeagues: undefined,
     // The spoiler-protection + layout controls the panel also exposes were
     // omitted here, so "Reset all settings to defaults" left them at whatever
     // the user had set — a reset could keep the video title strip revealed,

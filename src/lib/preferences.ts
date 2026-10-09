@@ -341,6 +341,13 @@ export interface Preferences {
   // league leaves every switcher and the board. A league added to the app
   // later is never on it, so it shows. Reset to defaults clears it.
   catalogHiddenLeagues?: Sport[];
+  // Leagues taken out of the switcher, newest first, one per league, capped at
+  // 20 (Jacob 10/8). Written by "Remove from list…" and a Settings untick;
+  // dropped again when the league comes back (Add more…, a Settings tick or
+  // pin, the ESPN front page's Add). Feeds only the Add more… sheet's
+  // "Previously removed" group, which also skips any league in the switcher
+  // now, so a stale entry never shows. Helpers in removedLeagues.ts.
+  removedLeagues?: Sport[];
   // The column switcher's "Add more…" sheet: draw the offseason leagues too.
   // Off by default so the sheet opens on leagues with games; saved so it
   // opens the way it was left (Jacob 9/29). No Settings row — the toggle
