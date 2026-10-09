@@ -79,7 +79,7 @@ export interface BestYesterdayContext {
   maxPerLeague?: number;
 }
 
-// Finished, has a clip, best rating first → the user's league order → bake
+// Finished, not an exhibition, has a clip, best rating first → the user's league order → bake
 // time → id (stable across re-renders). At most `maxPerLeague` per league and
 // `count` in all. The cap is a hard ceiling: a quiet
 // night with only MLB shows three MLB games, not eight.
@@ -100,6 +100,11 @@ export function rankBestYesterday(games: readonly Game[], ctx: BestYesterdayCont
     const key = `${game.sport}:${game.id}`;
     if (seen.has(key)) return false;
     seen.add(key);
+    // An exhibition is never "best of yesterday" (2026-10-09). The NBA's
+    // preseason slate now reaches the app for its opt-in column, and nba is in
+    // every switcher order, so without this a 120–118 exhibition could top the
+    // column for someone who never added NBA Preseason. Same for NFL in August.
+    if (game.isPreseason) return false;
     return isFinishedGame(game) && ctx.hasClip(game);
   });
   pool.sort((a, b) => {
