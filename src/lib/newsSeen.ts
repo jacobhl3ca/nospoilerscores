@@ -1,22 +1,18 @@
 import { useEffect, useId, type RefObject } from "react";
 
-// News "Hide seen" (Jacob 10/6): a post that sat on screen for SEEN_DWELL_MS
-// counts as seen, and the header 👁 toggle drops seen posts from every news
-// surface (Cards, Feed, the aligned strip). Device-local on purpose — what one
-// screen has shown says nothing about another — so it lives in its own
-// localStorage key, outside Preferences and its account sync.
+// News "Hide seen" (Jacob 10/6, 10/8): a post counts as seen when he opens it
+// (the in-app modal, its ‹ prev / next › paging, or the source link), and the
+// header 👁 toggle drops seen posts from every news surface (Cards, Feed, the
+// aligned strip). Scrolling past a post does not count. Device-local on
+// purpose — what one screen has opened says nothing about another — so it
+// lives in its own localStorage key, outside Preferences and its account sync.
 //
 // Key = item.articleUrl || item.id, the same value every card carries as
 // data-news-key, so the tracker below can read it straight off the DOM.
 
 export const NEWS_SEEN_STORAGE_KEY = "hs.newsSeen.v1";
-export const SEEN_DWELL_MS = 1500;
 export const SEEN_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 export const SEEN_MAX_ENTRIES = 3000;
-// Share of the card that must be on screen. A Feed post can be taller than the
-// viewport, so it can never reach this ratio — it counts once it fills the
-// same share of the viewport instead (see the tracker).
-const SEEN_VISIBLE_RATIO = 0.6;
 
 type SeenMap = Record<string, number>;
 
@@ -123,96 +119,31 @@ export function useReportSeenHidden(report: ((id: string, count: number) => void
   useEffect(() => () => report?.(id, 0), [report, id]);
 }
 
-// Watch every [data-news-key] under rootRef and mark a post seen once it has
-// stayed on screen for SEEN_DWELL_MS. One IntersectionObserver for all cards;
-// a MutationObserver picks up cards that mount later (columns fetch after
-// paint, a league swap remounts a column). Nothing counts while the tab is in
-// the background.
+// Mark a post seen when a control inside its card opens it: an <a href> (the
+// source link, plain or cmd/ctrl/shift/middle-click to a new tab) or a button
+// tagged data-news-open (the modal openers). One delegated listener pair on
+// rootRef, capture phase, so card handlers that stopPropagation cannot hide
+// the click. Peek, comments, swap and dismiss buttons carry no tag and do not
+// count. Paging inside the modal is marked by HomeContent's stepVideo.
 export function useNewsSeenTracker(rootRef: RefObject<HTMLElement | null>, enabled: boolean): void {
   useEffect(() => {
     const root = rootRef.current;
-    if (!enabled || !root || typeof IntersectionObserver === "undefined") return;
+    if (!enabled || !root) return;
 
-    const timers = new Map<Element, number>();
-    const onScreen = new Set<Element>();
-
-    const keyOf = (el: Element) => el.getAttribute("data-news-key") || "";
-    const disarm = (el: Element) => {
-      const t = timers.get(el);
-      if (t !== undefined) {
-        window.clearTimeout(t);
-        timers.delete(el);
-      }
-    };
-    const arm = (el: Element) => {
-      if (timers.has(el) || document.hidden) return;
-      const key = keyOf(el);
-      if (!key || isSeen(key)) return;
-      timers.set(el, window.setTimeout(() => {
-        timers.delete(el);
-        if (el.isConnected && onScreen.has(el) && !document.hidden) markSeen(key);
-      }, SEEN_DWELL_MS));
+    const onActivate = (e: MouseEvent) => {
+      if (e.type === "auxclick" && e.button !== 1) return;
+      const target = e.target instanceof Element ? e.target : null;
+      const opener = target?.closest("[data-news-open], a[href]");
+      if (!opener || !root.contains(opener)) return;
+      const key = opener.closest("[data-news-key]")?.getAttribute("data-news-key");
+      if (key) markSeen(key);
     };
 
-    const io = new IntersectionObserver((entries) => {
-      const viewportH = window.innerHeight || document.documentElement.clientHeight;
-      for (const entry of entries) {
-        const visible = entry.isIntersecting && (
-          entry.intersectionRatio >= SEEN_VISIBLE_RATIO
-          || entry.intersectionRect.height >= viewportH * SEEN_VISIBLE_RATIO
-        );
-        if (visible) {
-          onScreen.add(entry.target);
-          arm(entry.target);
-        } else {
-          onScreen.delete(entry.target);
-          disarm(entry.target);
-        }
-      }
-    // Fine steps, not just 0.6: a post taller than the viewport only reaches
-    // its viewport-share test between ratio crossings, so coarse thresholds
-    // would skip it (a 2x-tall post never passes 0.5).
-    }, { threshold: Array.from({ length: 21 }, (_, i) => i / 20) });
-
-    const observeTree = (node: Node) => {
-      if (!(node instanceof Element)) return;
-      if (node.hasAttribute("data-news-key")) io.observe(node);
-      node.querySelectorAll("[data-news-key]").forEach((el) => io.observe(el));
-    };
-    const forgetTree = (node: Node) => {
-      if (!(node instanceof Element)) return;
-      const els = node.hasAttribute("data-news-key") ? [node] : [];
-      node.querySelectorAll("[data-news-key]").forEach((el) => els.push(el));
-      for (const el of els) {
-        io.unobserve(el);
-        onScreen.delete(el);
-        disarm(el);
-      }
-    };
-
-    observeTree(root);
-    const mo = new MutationObserver((records) => {
-      for (const r of records) {
-        r.removedNodes.forEach(forgetTree);
-        r.addedNodes.forEach(observeTree);
-      }
-    });
-    mo.observe(root, { childList: true, subtree: true });
-
-    const onVisibility = () => {
-      if (document.hidden) {
-        for (const el of [...timers.keys()]) disarm(el);
-      } else {
-        onScreen.forEach(arm);
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-
+    root.addEventListener("click", onActivate, true);
+    root.addEventListener("auxclick", onActivate, true);
     return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      mo.disconnect();
-      io.disconnect();
-      for (const el of [...timers.keys()]) disarm(el);
+      root.removeEventListener("click", onActivate, true);
+      root.removeEventListener("auxclick", onActivate, true);
     };
   }, [rootRef, enabled]);
 }

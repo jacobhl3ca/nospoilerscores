@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -22,6 +22,7 @@ import GameCard, { CompactUpcomingCard, PairingRevealAll } from "./GameCard";
 import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
 import { compareRatedLive } from "@/lib/liveSort";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
+import { applyFavoritesFilter, filterLeague } from "@/lib/favoritesFilter";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
@@ -66,6 +67,9 @@ interface LeagueColumnProps {
   // "Add more…" row above Remove col: opens HomeContent's league sheet for
   // this column, where the offseason leagues live now (Jacob 9/29).
   onAddMore?: () => void;
+  // "Remove from list…" row: pick switcher rows, then take them all off the
+  // switcher at once, the same as unticking them in Settings (Jacob 10/8).
+  onRemoveFromList?: (sports: Sport[]) => void;
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
   showSwapChevron?: boolean;
@@ -81,6 +85,13 @@ interface LeagueColumnProps {
   // Favorite-stars next to team names on the cards (Settings can hide them).
   // Suppressed automatically when the column is a single Finals matchup.
   showTeamStars?: boolean;
+  // "Only my teams" (Settings): keep only starred teams' games. Leagues in
+  // `favoritesOnlyStrict` stay empty while no team there is starred; the
+  // callback adds (✕ on the banner) or removes ("Show all") one. See
+  // lib/favoritesFilter.ts.
+  favoritesOnly?: boolean;
+  favoritesOnlyStrict?: readonly Sport[];
+  onSetFavoritesOnlyStrict?: (sport: Sport, on: boolean) => void;
   // Leagues whose upcoming cards show the italic W-L (picked in Settings) —
   // see lib/upcomingRecords.ts.
   upcomingRecordLeagues?: ReadonlySet<RecordLeague>;
@@ -914,8 +925,11 @@ function formatDateCompact(yyyymmdd: string): string {
 // SHORT_LEAGUE_LABELS + HEADER_SHORT_LABEL_MAX_PX moved to lib/leagueLabels
 // so the guard test can import them without pulling JSX through node.
 
+// Stable default, so the filter memo below isn't rebuilt every render.
+const NO_STRICT: readonly Sport[] = [];
+
 export default function LeagueColumn({
-  league,
+  league: rawLeague,
   favoriteTeams,
   onToggleFavoriteTeam,
   showRatings,
@@ -936,10 +950,14 @@ export default function LeagueColumn({
   onSwapLeague,
   onAddLeague,
   onAddMore,
+  onRemoveFromList,
   showSwapChevron,
   switcherMode,
   onCycleLeague,
   showTeamStars,
+  favoritesOnly = false,
+  favoritesOnlyStrict = NO_STRICT,
+  onSetFavoritesOnlyStrict,
   upcomingRecordLeagues,
   shownElsewhere,
   onRetry,
@@ -953,6 +971,14 @@ export default function LeagueColumn({
   onAbbrevReport,
   namesCompact,
 }: LeagueColumnProps) {
+  // "Only my teams": everything below draws `league`, already cut down to the
+  // starred teams' games. Memoised so an unchanged filter keeps the object
+  // (and every effect keyed on it) stable; off = the raw league itself.
+  const fav = useMemo(
+    () => filterLeague(rawLeague, favoriteTeams, favoritesOnly, favoritesOnlyStrict),
+    [rawLeague, favoriteTeams, favoritesOnly, favoritesOnlyStrict],
+  );
+  const league = useMemo(() => applyFavoritesFilter(rawLeague, fav), [rawLeague, fav]);
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
   const [condenseExpanded, setCondenseExpanded] = useState(false); // "Show more" in condensed single-column mode
@@ -1001,6 +1027,11 @@ export default function LeagueColumn({
     return SHORT_LEAGUE_LABELS[label] || label;
   };
   const [swapOpen, setSwapOpen] = useState(false);
+  // "Remove from list…" pick mode in the open switcher, and the rows picked so
+  // far. Nothing saves until "Remove N"; closing the panel drops the picks
+  // (the header tap that reopens it starts clean).
+  const [removeMode, setRemoveMode] = useState(false);
+  const [toRemove, setToRemove] = useState<Sport[]>([]);
   // Panel + measured height cap for the switcher — see the effect below.
   const swapPanelRef = useRef<HTMLDivElement>(null);
   const [swapMaxH, setSwapMaxH] = useState<number>();
@@ -1528,10 +1559,15 @@ export default function LeagueColumn({
   // Final series), so starring can't reorder anything — hide the stars there
   // (Jacob 6/11). Counts the lookahead/lookback slates too, so the upcoming
   // series rows can't sneak a second matchup past the check.
+  // Counted on the UNFILTERED league: with "Only my teams" on, one starred
+  // team's game must still carry the star that un-stars it.
   const distinctMatchups = new Set(
-    [...league.games, ...(league.nextGameDay?.games ?? []), ...(league.previousGameDay?.games ?? [])].map(matchupKey),
+    [...rawLeague.games, ...(rawLeague.nextGameDay?.games ?? []), ...(rawLeague.previousGameDay?.games ?? [])].map(matchupKey),
   ).size;
-  const cardStars = !!showTeamStars && distinctMatchups > 1;
+  // While the "star a team" banner shows, the stars show too — even after they
+  // auto-hid on the third visit (lib/sessionVisits.ts), and even on a single
+  // matchup — because the banner asks for a star, so the card has to offer one.
+  const cardStars = fav.mode === "banner" || (!!showTeamStars && distinctMatchups > 1);
 
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
@@ -1778,8 +1814,10 @@ export default function LeagueColumn({
   // Not-started league on a past tab (empty slate, no recent games, but an
   // upcoming one exists — e.g. the World Cup before kickoff). The header gets a
   // compact "Starts Tomorrow" cue while the body can still show upcoming cards.
+  // The lookback is read off the RAW league: "Only my teams" empties it on any
+  // day no starred team played, which is not the league being unstarted.
   const notStartedDate = isPastDate && league.games.length === 0
-    && !(league.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
+    && !(rawLeague.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
     ? formatDateCompact(league.nextGameDay.date)
     : null;
 
@@ -1977,7 +2015,7 @@ export default function LeagueColumn({
                 <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
                   <button
                     type="button"
-                    onClick={() => setSwapOpen(!swapOpen)}
+                    onClick={() => { setRemoveMode(false); setToRemove([]); setSwapOpen(!swapOpen); }}
                     className="cursor-pointer transition-colors hover:opacity-80 flex items-center justify-center gap-1 w-full"
                     title="Switch league"
                     aria-haspopup="dialog"
@@ -2021,17 +2059,25 @@ export default function LeagueColumn({
                     className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-y-auto overscroll-contain min-w-[100px]"
                     style={{ background: "var(--bg)", border: "1px solid var(--border)", maxHeight: swapMaxH }}
                   >
-                    {/* Auto option — always present so the dropdown is consistent per column */}
-                    <button
-                      type="button"
-                      onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
-                      className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                      style={{ color: "var(--text-muted)" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                    >
-                      Auto
-                    </button>
+                    {/* Auto option — always present so the dropdown is consistent per column.
+                        Pick mode swaps it for a one-line hint: Auto is not a
+                        league, so there is nothing to remove there. */}
+                    {removeMode ? (
+                      <p className="px-3 pt-2 pb-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                        Pick leagues to remove
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
+                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                        style={{ color: "var(--text-muted)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        Auto
+                      </button>
+                    )}
                     {/* Sort leagues already shown in another column to the
                         bottom, just above Empty — they're the least useful to
                         pick again (Jacob 6/9). Stable sort keeps the rest in
@@ -2054,6 +2100,43 @@ export default function LeagueColumn({
                       const isCurrent = opt.sport === league.sport;
                       const elsewhere = isCurrent ? undefined : shownElsewhere?.find((e) => e.sport === opt.sport);
                       const isAutoDefault = opt.sport === autoSport;
+                      if (removeMode) {
+                        // A league on the board stays: taking it off the list
+                        // would also swap out the column showing it. Plain
+                        // text, not a button, so it reads as not pickable.
+                        if (isCurrent || elsewhere) {
+                          return (
+                            <div
+                              key={opt.sport}
+                              className="w-full px-3 py-1.5 text-xs text-left"
+                              style={{ color: "var(--text-muted)" }}
+                              title="On the board. Change that column first"
+                            >
+                              {opt.label}
+                              <em className="font-normal"> · {elsewhere ? `col ${elsewhere.col}` : "this col"}</em>
+                            </div>
+                          );
+                        }
+                        const picked = toRemove.includes(opt.sport);
+                        return (
+                          <button
+                            key={opt.sport}
+                            type="button"
+                            aria-pressed={picked}
+                            onClick={() => setToRemove(picked ? toRemove.filter((s) => s !== opt.sport) : [...toRemove, opt.sport])}
+                            className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                            style={{
+                              color: picked ? "var(--text-muted)" : "var(--text)",
+                              textDecoration: picked ? "line-through" : undefined,
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          >
+                            {opt.label}
+                            {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
+                          </button>
+                        );
+                      }
                       return (
                         <button
                           key={opt.sport}
@@ -2080,10 +2163,44 @@ export default function LeagueColumn({
                         </button>
                       );
                     })}
+                    {/* Pick mode footer: Remove N saves every pick in one go and
+                        leaves the panel open without those rows; Cancel drops
+                        the picks. */}
+                    {removeMode && (
+                      <>
+                        <button
+                          type="button"
+                          data-testid="league-switcher-remove-confirm"
+                          disabled={toRemove.length === 0}
+                          onClick={() => { onRemoveFromList!(toRemove); setToRemove([]); setRemoveMode(false); }}
+                          className="w-full px-3 py-1.5 text-xs text-left cursor-pointer disabled:cursor-default transition-colors"
+                          style={{
+                            color: toRemove.length ? "var(--accent)" : "var(--text-muted)",
+                            fontWeight: 600,
+                            borderTop: "1px solid var(--border)",
+                          }}
+                          onMouseEnter={(e) => { if (toRemove.length) e.currentTarget.style.background = "var(--menu-hover)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          {toRemove.length ? `Remove ${toRemove.length}` : "Remove"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setToRemove([]); setRemoveMode(false); }}
+                          className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                          style={{ color: "var(--text-muted)" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    )}
                     {/* Add more… opens the full league sheet (offseason leagues
-                        behind its toggle). It and Remove col share one rule
-                        above them, so the two read as the list's footer. */}
-                    {onAddMore && (
+                        behind its toggle). It, Remove from list… and Remove col
+                        share one rule above them, so they read as the list's
+                        footer. */}
+                    {!removeMode && onAddMore && (
                       <button
                         type="button"
                         data-testid="league-switcher-add-more"
@@ -2100,21 +2217,44 @@ export default function LeagueColumn({
                         Add more…
                       </button>
                     )}
+                    {/* Remove from list… turns the rows above into picks (Jacob
+                        10/8: "a remove selections button too"). */}
+                    {!removeMode && onRemoveFromList && (
+                      <button
+                        type="button"
+                        data-testid="league-switcher-remove-from-list"
+                        onClick={() => { setToRemove([]); setRemoveMode(true); }}
+                        // nowrap: a footer action on two lines read as two
+                        // rows on a phone, where the panel is narrow.
+                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors whitespace-nowrap"
+                        style={{
+                          color: "var(--text-muted)",
+                          fontWeight: 400,
+                          borderTop: onAddMore ? undefined : "1px solid var(--border)",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        Remove from list…
+                      </button>
+                    )}
                     {/* Remove col — hides the column entirely until switched back. */}
-                    <button
-                      type="button"
-                      onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
-                      className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                      style={{
-                        color: "var(--text-muted)",
-                        fontWeight: 400,
-                        borderTop: onAddMore ? undefined : "1px solid var(--border)",
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                    >
-                      Remove col
-                    </button>
+                    {!removeMode && (
+                      <button
+                        type="button"
+                        onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
+                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                        style={{
+                          color: "var(--text-muted)",
+                          fontWeight: 400,
+                          borderTop: onAddMore || onRemoveFromList ? undefined : "1px solid var(--border)",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        Remove col
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -2163,6 +2303,29 @@ export default function LeagueColumn({
           <div className="absolute inset-x-0 bottom-2">{espnLabelRow(leadLabel!, espnGroups![0].sport)}</div>
         </div>
       ) : topCard}
+      {fav.mode === "banner" && renderUpcoming && !teamViewTeam && (
+        // "Only my teams" is on but nobody in this league is starred: show the
+        // whole slate and say how to narrow it. ✕ = filter this league anyway
+        // (it then shows nothing until a team is starred).
+        <div
+          data-fav-only-banner
+          className="mb-1.5 sm:mb-2 flex items-start gap-1.5 rounded px-2 py-1.5 text-[11px] leading-snug"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+        >
+          <span className="flex-1">★ Showing all {league.label} — star a team to keep only yours</span>
+          {onSetFavoritesOnlyStrict && (
+            <button
+              type="button"
+              onClick={() => onSetFavoritesOnlyStrict(league.sport, true)}
+              aria-label={`Only my teams in ${league.label}`}
+              className="shrink-0 cursor-pointer px-0.5 leading-none hover:opacity-70"
+              style={{ color: "var(--text-muted)" }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
       <PairingRevealAll games={cardGames} className="mb-1.5 sm:mb-2" />
       {teamViewTeam && !league.golfTournament ? (
         section === "finished" ? null : (
@@ -2219,6 +2382,34 @@ export default function LeagueColumn({
                 </button>
               )}
             </div>
+          ) : fav.mode === "strict-empty" ? (
+            // "Only my teams", ✕ pressed on this league, nobody starred yet.
+            <div data-fav-only-strict className="flex flex-col items-center gap-1 py-6 sm:py-8">
+              <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
+                No {league.label} team starred yet
+              </p>
+              {onSetFavoritesOnlyStrict && (
+                <button
+                  type="button"
+                  onClick={() => onSetFavoritesOnlyStrict(league.sport, false)}
+                  className="text-[11px] sm:text-xs underline underline-offset-2 cursor-pointer hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Show all
+                </button>
+              )}
+            </div>
+          ) : fav.mode === "filter" && !league.previousGameDay && (isPastDate ? !notStartedDate : !league.nextGameDay) ? (
+            // "Only my teams" left nothing on this day or either side of it.
+            // The offseason return date still beats a shrug; mid-season that
+            // block is null, and "Upcoming Schedule TBD" would be a lie when
+            // the league is playing, just not the starred teams.
+            seasonOpenerBlock ?? (
+              <div data-fav-only-empty className="flex flex-col items-center gap-0.5 py-6 sm:py-8">
+                <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>No games for your teams</p>
+                <p className="text-center text-[10px] sm:text-xs" style={{ color: "var(--text-muted)", opacity: 0.7 }}>Star more teams in Settings</p>
+              </div>
+            )
           ) : isPastDate ? (
             league.previousGameDay && league.previousGameDay.games.length > 0 ? (
               renderPreviousSlate(league.previousGameDay.games)

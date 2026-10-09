@@ -43,7 +43,7 @@ console.log(`target: ${base}`);
 await new Promise((r) => setTimeout(r, 1200));
 
 const PAGES = [
-  { route: "/mlb-playoff-bracket", h1: "MLB playoff bracket 2026", tab: "bracket", faq: 8 },
+  { route: "/mlb-playoff-bracket", h1: ["MLB playoff bracket 2026", "MLB playoff bracket 2026 → World Series"], tab: "bracket", faq: 10 },
   { route: "/mlb-playoff-picture", h1: "MLB playoff picture 2026", tab: "odds", sort: "playoff", faq: 7 },
   { route: "/mlb-wild-card-standings", h1: "MLB wild card standings 2026", tab: "odds", sort: "seed", faq: 6 },
 ];
@@ -74,7 +74,7 @@ for (const p of PAGES) {
   const { ctx, page } = await openFresh(p.route, { width: 1440, height: 1000 });
 
   const h1 = (await page.locator("h1").allInnerTexts()).map((s) => s.trim());
-  ok(`${p.route} h1`, h1.length === 1 && h1[0] === p.h1, JSON.stringify(h1));
+  ok(`${p.route} h1`, h1.length === 1 && [].concat(p.h1).includes(h1[0]), JSON.stringify(h1));
 
   const canonical = await page.locator('link[rel="canonical"]').getAttribute("href");
   ok(`${p.route} self canonical`, canonical === `https://hidescore.com${p.route}`, canonical ?? "none");

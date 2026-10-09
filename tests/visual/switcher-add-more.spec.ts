@@ -108,11 +108,12 @@ for (const width of [390, 1280]) {
       const header = page.getByRole("button", { name: "WNBA", exact: true });
       await expect(header).toBeVisible(LOAD);
 
-      // 1.
+      // 1. The scores switcher also has Remove from list… (Jacob 10/8)
+      // between Add more… and Remove col.
       await header.click();
       const switcher = page.getByRole("dialog", { name: "Switch league" });
       await expect(switcher).toBeVisible();
-      await expect.poll(async () => (await rowTexts(switcher)).slice(-2)).toEqual(["Add more…", "Remove col"]);
+      await expect.poll(async () => (await rowTexts(switcher)).slice(-3)).toEqual(["Add more…", "Remove from list…", "Remove col"]);
       expect((await rowTexts(switcher)).filter((r) => r.includes("offseason"))).toEqual([]);
 
       // 2.

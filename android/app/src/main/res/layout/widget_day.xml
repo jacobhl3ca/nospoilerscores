@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Day header above the first game of each day: Today, Tomorrow, Thu Oct 8. -->
+<!-- Day header above the first game of each later day: Tomorrow, Thu Oct 8.
+     The first day's label sits in the widget header instead. -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_day"
+    android:id="@+id/row_day"
     android:layout_width="match_parent"
     android:layout_height="18dp"
     android:gravity="bottom"

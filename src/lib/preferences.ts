@@ -4,6 +4,7 @@ import { setServiceTimeZone, getEtServiceDate, toYmd } from "./etDay";
 import { pruneWatchQueue, type WatchQueueEntry } from "./watchQueue";
 import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
 import { setFrontendLinks } from "./frontendLinks";
+import { setListenPrefs } from "./radio";
 import { pushWidgetPrefs } from "./widgetBridge";
 
 const STORAGE_KEY = "nss-preferences";
@@ -299,6 +300,9 @@ export interface Preferences {
   showRatings: boolean;
   skipExplainer: boolean;
   skipNewsExplainer: boolean;
+  // "Don't warn me again" on the box score confirm (BoxScoreDialog). A box
+  // score always shows the score, so the warning is on until the user skips it.
+  skipBoxscoreWarning: boolean;
   showNews: boolean; // persist last view across refreshes
   // "empty" hides the slot (no league rendered for that column).
   thirdLeague?: Sport | "empty"; // user-chosen 3rd league slot override
@@ -341,6 +345,13 @@ export interface Preferences {
   // league leaves every switcher and the board. A league added to the app
   // later is never on it, so it shows. Reset to defaults clears it.
   catalogHiddenLeagues?: Sport[];
+  // Leagues taken out of the switcher, newest first, one per league, capped at
+  // 20 (Jacob 10/8). Written by "Remove from list…" and a Settings untick;
+  // dropped again when the league comes back (Add more…, a Settings tick or
+  // pin, the ESPN front page's Add). Feeds only the Add more… sheet's
+  // "Previously removed" group, which also skips any league in the switcher
+  // now, so a stale entry never shows. Helpers in removedLeagues.ts.
+  removedLeagues?: Sport[];
   // The column switcher's "Add more…" sheet: draw the offseason leagues too.
   // Off by default so the sheet opens on leagues with games; saved so it
   // opens the way it was left (Jacob 9/29). No Settings row — the toggle
@@ -361,6 +372,14 @@ export interface Preferences {
   // sticks — session counting has stopped by then. See STARS_AUTO_HIDE_SESSION
   // in lib/sessionVisits.ts.
   hideTeamStars?: boolean;
+  // "Only my teams" (Settings, Jacob 10/7): a league column keeps only the
+  // games a starred team plays in. Opt-in, undefined = off. A league with no
+  // starred team still shows all its games, with a cell asking the user to
+  // star one — unless the league is in `favoritesOnlyStrict`, where the user
+  // pressed that cell's ✕ and the column shows nothing until a team is
+  // starred. See lib/favoritesFilter.ts.
+  favoritesOnly?: boolean;
+  favoritesOnlyStrict?: Sport[];
   // Games queued with the card's "Later" pill, shown in the Watch queue strip
   // above the board until marked Done (Jacob 9/27). Newest last, at most 20;
   // anything older than 3 days is dropped on load. Syncs like favoriteTeams.
@@ -615,8 +634,8 @@ export interface Preferences {
   // what "start from the bottom" means. Lives next to the funnel in the news
   // header rather than in Settings, since it's a per-session reading choice.
   newsOldestFirst?: boolean;
-  // Drop posts already seen on this screen (Jacob 10/6): a post counts as seen
-  // once it sat on screen for 1.5 s (lib/newsSeen.ts). Only the toggle state
+  // Drop posts already opened on this device (Jacob 10/6, 10/8): a post counts
+  // as seen once he opens it (lib/newsSeen.ts). Only the toggle state
   // lives here; WHICH posts were seen is a device-local store outside
   // Preferences. Toggled by the 👁 button left of ⇅ in the news header.
   newsHideSeen?: boolean;
@@ -636,6 +655,12 @@ export interface Preferences {
   // (Jacob: "idk if 2 checkboxes needed"). A blob with only one of them set
   // still filters exactly as before until the user taps the toggle.
   hideCrashNews?: boolean;
+  // "Listen" links (lib/radio.ts): free live radio for a game, in the "Where
+  // to watch" dialog and the game details. Read as `?? true`.
+  showListenLinks?: boolean;
+  // Show local-only radio links (NFL/MLB flagships play only in the home
+  // market) wherever the visitor is, for VPN users. Read as `?? false`.
+  listenAnywhere?: boolean;
 }
 
 const defaults: Preferences = {
@@ -645,6 +670,7 @@ const defaults: Preferences = {
   showRatings: false,
   skipExplainer: false,
   skipNewsExplainer: false,
+  skipBoxscoreWarning: false,
   showNews: false,
   // Yesterday, not "smart" (2026-08-09, Jacob). A brand-new visitor — most of
   // them arriving from the no-spoiler-scores landing pages — is here to catch
@@ -709,6 +735,7 @@ export function loadPreferences(): Preferences {
     setServiceTimeZone(prefs.timezone);
     setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
     setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
+    setListenPrefs(prefs.showListenLinks, prefs.listenAnywhere);
     // After setServiceTimeZone, so "today" is the user's chosen zone.
     prefs.watchQueue = pruneWatchQueue(prefs.watchQueue, toYmd(getEtServiceDate()));
     return prefs;
@@ -731,6 +758,7 @@ export function savePreferences(prefs: Preferences): void {
   setServiceTimeZone(prefs.timezone);
   setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
   setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
+  setListenPrefs(prefs.showListenLinks, prefs.listenAnywhere);
   // localStorage.setItem can throw — quota exceeded, or storage blocked in a
   // sandboxed/private context — and savePreferences runs straight out of click
   // handlers (e.g. toggling a setting). Mirror loadPreferences' guard so a

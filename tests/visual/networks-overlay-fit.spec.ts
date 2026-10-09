@@ -23,6 +23,9 @@ async function setMlb(page: Page) {
     defaultDateMode: "today",
     defaultLandingView: "scores",
   })));
+  // TV names only: the Listen section has its own fit check
+  // (listen-links.spec.ts), and this one counts the overlay's rows.
+  await page.route("**/radio-stations.json", route => route.fulfill({ status: 404, body: "" }));
   await page.route("**/news/highlights.json", route => route.fulfill({
     status: 200,
     contentType: "application/json",

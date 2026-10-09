@@ -72,6 +72,7 @@ export default function AboutPage() {
           </li>
           <li>Highlights that open from the game card, with titles that give the result away filtered out or masked.</li>
           <li>Watch links that go to the broadcaster, never to a box score or a results page.</li>
+          <li>Listen links go to the station&apos;s own player, for live radio of NFL, MLB, NBA and NHL games.</li>
         </ul>
 
         <h2 className="text-lg font-semibold mt-6">What it never shows</h2>

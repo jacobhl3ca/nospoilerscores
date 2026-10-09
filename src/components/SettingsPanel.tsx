@@ -7,6 +7,7 @@ import { TEAM_PICKER_SKIP } from "@/lib/teamLogos";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
 import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
+import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { LeagueMark } from "./LeagueMark";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
@@ -592,6 +593,7 @@ export default function SettingsPanel({
       ...(catalogHiddenLeagues.length !== (prefs.catalogHiddenLeagues ?? []).length
         ? { catalogHiddenLeagues: catalogHiddenLeagues.length ? catalogHiddenLeagues : undefined }
         : {}),
+      ...(sport && sport !== "empty" && prefs.removedLeagues?.includes(sport) ? { removedLeagues: dropRemoved(prefs.removedLeagues, sport) } : {}),
     });
   };
 
@@ -751,9 +753,13 @@ export default function SettingsPanel({
           } else if (!on && preferred) {
             hiddenLeagues.add(option.sport);
           }
+          // An untick feeds the Add more… sheet's "Previously removed" group
+          // too; a tick takes the league off it. Same patch, so Undo restores
+          // the list as well.
           updateWithUndo(`${label} ${on ? "on" : "off"}`, {
             hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined,
             shownLeagues: shownLeagues.size ? [...shownLeagues] : undefined,
+            removedLeagues: on ? dropRemoved(prefs.removedLeagues, option.sport) : noteRemoved(prefs.removedLeagues, [option.sport]),
           });
         }}
         onRemove={editing ? () => updateWithUndo(`${label} hidden`, { catalogHiddenLeagues: [...catalogHidden, option.sport] }) : undefined}
@@ -852,6 +858,7 @@ export default function SettingsPanel({
     showRatings: false,
     skipExplainer: false,
     skipNewsExplainer: false,
+    skipBoxscoreWarning: false,
     showNews: false,
     firstLeague: undefined,
     secondLeague: undefined,
@@ -874,6 +881,8 @@ export default function SettingsPanel({
     defaultRatings: "auto",
     hideLeagueChevrons: undefined,
     hideTeamStars: undefined,
+    favoritesOnly: undefined,
+    favoritesOnlyStrict: undefined,
     hideWatchLaterPill: undefined,
     watchQueue: undefined,
     upcomingRecordLeagues: undefined,
@@ -892,6 +901,7 @@ export default function SettingsPanel({
     leagueSwitcherMode: undefined,
     hiddenLeagues: undefined,
     shownLeagues: undefined,
+    removedLeagues: undefined,
     // The spoiler-protection + layout controls the panel also exposes were
     // omitted here, so "Reset all settings to defaults" left them at whatever
     // the user had set — a reset could keep the video title strip revealed,
@@ -936,6 +946,9 @@ export default function SettingsPanel({
     newsSingleColumn: undefined,
     hideSensitiveNews: undefined,
     hideCrashNews: undefined,
+    // Listen links: read as `?? true` / `?? false`, so undefined is the default.
+    showListenLinks: undefined,
+    listenAnywhere: undefined,
     timezone: undefined,
     reminderLinkTemplate: undefined,
     smartCutoffHour: 13,
@@ -1542,6 +1555,14 @@ export default function SettingsPanel({
               checked={!prefs.hideTeamStars}
               onChange={(v) => updatePrefs({ hideTeamStars: !v })}
             />
+            <ToggleRow
+              label="Only my teams"
+              hint="Hide games your starred teams aren't in. A league with no starred team still shows all its games until you star one."
+              checked={!!prefs.favoritesOnly}
+              // Off also clears the per-league ✕ list, so turning it back on
+              // starts from the "star a team" banner everywhere.
+              onChange={(v) => updatePrefs(v ? { favoritesOnly: true } : { favoritesOnly: undefined, favoritesOnlyStrict: undefined })}
+            />
             {WATCH_QUEUE_ENABLED ? (
               <ToggleRow
                 label="Show the Later pill on cards"
@@ -1898,6 +1919,12 @@ export default function SettingsPanel({
                 checked={!prefs.skipNewsExplainer}
                 onChange={(v) => updatePrefs({ skipNewsExplainer: !v })}
               />
+              <ToggleRow
+                label="Show box score warning"
+                hint="The 'shows the score' confirm before a box score"
+                checked={!prefs.skipBoxscoreWarning}
+                onChange={(v) => updatePrefs({ skipBoxscoreWarning: !v })}
+              />
             </div>
             {/* Links (Jacob 10/4: was its own section above Account). The
                 user's own front-ends (lib/frontendLinks.ts), the Reminder link
@@ -1909,6 +1936,24 @@ export default function SettingsPanel({
               <h4 className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
                 Links
               </h4>
+              {/* Listen links (lib/radio.ts): free station players in "Where to
+                  watch" and the game details. Most NFL and MLB flagships play
+                  only in the home market, so those show only there unless the
+                  second toggle is on (VPN users). */}
+              <ToggleRow
+                label="Radio links"
+                hint="A Listen section in Where to watch and in game details. Links go to the station's own player."
+                checked={prefs.showListenLinks ?? true}
+                onChange={(v) => updatePrefs({ showListenLinks: v })}
+              />
+              {(prefs.showListenLinks ?? true) && (
+                <ToggleRow
+                  label="Show local-only radio links everywhere (for VPN users)"
+                  hint="Many team stations stream games only inside their home area. Leave off unless you use a VPN."
+                  checked={prefs.listenAnywhere ?? false}
+                  onChange={(v) => updatePrefs({ listenAnywhere: v })}
+                />
+              )}
               <FrontendLinkField
                 label="Reddit links open at"
                 hint="Your own front-end. Leave empty for reddit.com"

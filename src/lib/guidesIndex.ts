@@ -13,6 +13,8 @@ export const GUIDE_GROUPS: GuideGroup[] = [
     sport: "Football",
     guides: [
       { href: "/nfl-highlights-without-spoilers", label: "NFL highlights without spoilers" },
+      { href: "/nfl-playoff-picture", label: "NFL playoff picture" },
+      { href: "/nfl-standings", label: "NFL standings" },
       { href: "/college-football-highlights-without-spoilers", label: "College football highlights without spoilers" },
       { href: "/cfl-without-spoilers", label: "CFL without spoilers" },
     ],
@@ -84,6 +86,7 @@ export const GUIDE_GROUPS: GuideGroup[] = [
   {
     sport: "How-to and compare",
     guides: [
+      { href: "/how-to-avoid-sports-spoilers", label: "How to avoid sports spoilers everywhere else" },
       { href: "/spoiler-free-sports", label: "Spoiler-free sports scores and highlights" },
       { href: "/how-to-watch-sports-highlights-without-spoilers", label: "How to watch sports highlights without spoilers" },
       { href: "/watch-sports-highlights-without-spoilers", label: "Watch sports highlights without spoilers" },

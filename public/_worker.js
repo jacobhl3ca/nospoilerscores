@@ -986,6 +986,29 @@ export default {
       });
     }
 
+    // --- Visitor location for the Listen links (src/lib/radio.ts): most NFL
+    // and MLB flagship streams play only inside the home market, so a
+    // market-locked link shows only when this metro is on its list. Coarse
+    // Cloudflare fields only (country, region code, Nielsen metro code), never
+    // the IP. Not logged, not cached, and the caller only learns its own spot.
+    // No CORS header on purpose: the web app and the native apps (which load
+    // https://hidescore.com, capacitor.config.ts) are same-origin, and no
+    // other site gets to read it.
+    if (url.pathname === "/api/where") {
+      const cf = request.cf || {};
+      const metro = Number(cf.metroCode);
+      return new Response(JSON.stringify({
+        country: typeof cf.country === "string" ? cf.country : null,
+        region: typeof cf.regionCode === "string" ? cf.regionCode : null,
+        metro: Number.isFinite(metro) && metro > 0 ? metro : null,
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
+
     // --- Bracket picks leaderboard (MLB postseason). See picksRoute below.
     if (url.pathname === "/api/picks") return picksRoute(request, env, ctx, url);
     if (url.pathname === "/api/picks/account") return picksAccountRoute(request, env, ctx);
@@ -4868,7 +4891,8 @@ async function googleNativeComplete(request, env) {
 // The client (components/BracketPicks) keeps a player's own picks and score in
 // localStorage; this is the shared half. KV binding PICKS, one key per entry:
 //
-//   e:<board>:<name key>  → { name, picks, owner, at }   (metadata: name, picks)
+//   e:<board>:<name key>  → { name, picks, owner, at, late?, lateAt? }
+//                            (metadata: n name, p picks, l lateAt on a late entry)
 //   d:<board>:<owner>     → the entry key this device owns
 //   rl:<ip hash>          → POST count, expires after 10 minutes
 //
@@ -4885,6 +4909,12 @@ async function googleNativeComplete(request, env) {
 // with the same rule as lib/mlbPicks lockTimeFrom. Before the lock a GET
 // returns names only, so nobody can copy a bracket; after it, everything.
 //
+// Late brackets (Jacob 10/1): after the lock a device with no on-time entry
+// can still send one, until World Series Game 1. It keeps only picks on series
+// that had not started; an update keeps its earlier picks on series that have
+// started since. Stored with `late: true` and `lateAt` (first late send), which
+// the client scores against: only the series open at lateAt count.
+//
 // Inert until the KV namespace is bound: every call answers 503 {disabled}.
 
 const PICKS_BOARD_RE = /^mlb-(\d{4})$/;
@@ -4897,7 +4927,7 @@ const PICKS_TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
 const PICKS_POST_LIMIT = 10;
 const PICKS_POST_WINDOW = 600; // seconds; KV's own floor is 60
 const PICKS_LOCK_TTL = 10 * 60 * 1000;
-const _picksLockCache = new Map();
+const _picksFeedCache = new Map();
 
 function _picksJson(body, status = 200, maxAge = 0) {
   return new Response(JSON.stringify(body), {
@@ -4951,22 +4981,76 @@ function _picksLockFrom(data) {
   return Number.isFinite(lock) ? lock : null;
 }
 
-// undefined = could not ask; null = MLB has no wild-card games listed.
-async function _picksLock(season) {
-  const hit = _picksLockCache.get(season);
-  if (hit && Date.now() - hit.fetched < PICKS_LOCK_TTL) return hit.at;
+// Mirror of lib/mlbPicks gameAt: first pitch, or noon ET on its date while TBD.
+function _picksGameAt(g) {
+  const t = g.gameDate ? Date.parse(g.gameDate) : NaN;
+  if (!g.status?.startTimeTBD && Number.isFinite(t)) return t;
+  return g.officialDate ? Date.parse(`${g.officialDate}T16:00:00Z`) : NaN;
+}
+
+const _PICKS_ROUND = { F: 0, D: 1, L: 2, W: 3 };
+
+// Mirror of lib/mlbPicks seriesStarts, plus each series' league read off its
+// description ("AL Wild Card Series", "NLDS 'A' Game 1"). Keep the two in sync.
+function _picksStartsFrom(data) {
+  const out = [];
+  for (const s of data?.series || []) {
+    const games = s.games || [];
+    const round = _PICKS_ROUND[games[0]?.gameType];
+    if (round == null) continue;
+    const at = Math.min(...games.map(_picksGameAt).filter(Number.isFinite));
+    if (!Number.isFinite(at)) continue;
+    const teams = new Set();
+    for (const g of games) {
+      for (const id of [g.teams?.home?.team?.id, g.teams?.away?.team?.id]) {
+        if (id != null && PICKS_TEAM_RE.test(String(id))) teams.add(String(id));
+      }
+    }
+    const lg = /^(AL|NL)/.exec(games[0]?.seriesDescription || games[0]?.description || "");
+    out.push({ round, league: lg ? lg[1] : null, teams, at });
+  }
+  return out;
+}
+
+// Has the series behind one pick started? Found by the picked club when the
+// feed already lists it in that round; otherwise only once every series of
+// that round (in that league, when the feed says) has. lib/bracketPicks
+// startedKeys is the client's twin, which finds the series by its seats.
+function _picksStarted(starts, key, team, now) {
+  const round = key === "ws" ? 3 : /:wc-/.test(key) ? 0 : /:ds-/.test(key) ? 1 : 2;
+  const league = key === "ws" ? null : key.slice(0, 2);
+  const inRound = starts.filter((s) => s.round === round);
+  const own = inRound.find((s) => s.teams.has(team));
+  if (own) return own.at <= now;
+  const same = inRound.filter((s) => !league || !s.league || s.league === league);
+  return same.length > 0 && same.every((s) => s.at <= now);
+}
+
+// undefined = could not ask. `lock` null = MLB has no wild-card games listed;
+// `close` (World Series Game 1) null = not listed yet.
+async function _picksFeed(season) {
+  const hit = _picksFeedCache.get(season);
+  if (hit && Date.now() - hit.fetched < PICKS_LOCK_TTL) return hit.feed;
   try {
     const res = await fetch(`https://statsapi.mlb.com/api/v1/schedule/postseason/series?sportId=1&season=${season}`, {
       headers: { "User-Agent": "HideScore/1.0 (+https://hidescore.com)", Accept: "application/json" },
     });
     if (!res.ok) throw new Error(String(res.status));
-    const at = _picksLockFrom(await res.json());
-    _picksLockCache.set(season, { at, fetched: Date.now() });
-    return at;
+    const data = await res.json();
+    const starts = _picksStartsFrom(data);
+    const ws = starts.filter((s) => s.round === 3).map((s) => s.at);
+    const feed = { lock: _picksLockFrom(data), close: ws.length ? Math.min(...ws) : null, starts };
+    _picksFeedCache.set(season, { feed, fetched: Date.now() });
+    return feed;
   } catch {
     // A stale answer beats none: the lock time only ever moves by hours.
-    return hit ? hit.at : undefined;
+    return hit ? hit.feed : undefined;
   }
+}
+
+async function _picksLock(season) {
+  const feed = await _picksFeed(season);
+  return feed ? feed.lock : undefined;
 }
 
 async function _picksListEntries(env, board) {
@@ -4976,7 +5060,9 @@ async function _picksListEntries(env, board) {
     const res = await env.PICKS.list({ prefix: `e:${board}:`, cursor });
     for (const k of res.keys) {
       const m = k.metadata;
-      if (m && typeof m.n === "string" && m.p && typeof m.p === "object") out.push({ name: m.n, picks: m.p });
+      if (m && typeof m.n === "string" && m.p && typeof m.p === "object") {
+        out.push(typeof m.l === "string" ? { name: m.n, picks: m.p, late: true, lateAt: m.l } : { name: m.n, picks: m.p });
+      }
     }
     if (res.list_complete || !res.cursor) break;
     cursor = res.cursor;
@@ -5046,9 +5132,13 @@ async function picksRoute(request, env, ctx, url) {
     if (used >= PICKS_POST_LIMIT) return _picksJson({ error: "throttled" }, 429);
     await env.PICKS.put(rlKey, String(used + 1), { expirationTtl: PICKS_POST_WINDOW });
 
-    const lockAt = await _picksLock(bm[1]);
+    const feed = await _picksFeed(bm[1]);
+    const lockAt = feed?.lock;
     if (lockAt == null) return _picksJson({ error: "lock_unknown" }, 503);
-    if (Date.now() >= lockAt) return _picksJson({ error: "locked", lockAt: new Date(lockAt).toISOString() }, 423);
+    const now = Date.now();
+    const lockedBody = { error: "locked", lockAt: new Date(lockAt).toISOString() };
+    const late = now >= lockAt;
+    if (late && feed.close != null && now >= feed.close) return _picksJson({ ...lockedBody, closed: true }, 423);
 
     const owner = await _picksSha(body.token);
     const entryKey = `e:${board}:${encodeURIComponent(name.toLowerCase())}`;
@@ -5057,17 +5147,34 @@ async function picksRoute(request, env, ctx, url) {
 
     const devKey = `d:${board}:${owner}`;
     const prevKey = await env.PICKS.get(devKey);
-    if (prevKey && prevKey !== entryKey) {
-      const prev = await env.PICKS.get(prevKey, "json");
-      if (prev && prev.owner === owner) await env.PICKS.delete(prevKey);
+    const prevRaw = prevKey ? (prevKey === entryKey ? existing : await env.PICKS.get(prevKey, "json")) : null;
+    const prev = prevRaw && prevRaw.owner === owner ? prevRaw : null;
+
+    let stored = { name, picks, owner };
+    let meta = { n: name, p: picks };
+    if (late) {
+      // An on-time bracket never changes after the lock.
+      if ((existing && !existing.late) || (prev && !prev.late)) return _picksJson(lockedBody, 423);
+      const base = prev && prev.picks && typeof prev.picks === "object" ? prev.picks : {};
+      const kept = {};
+      for (const k of new Set([...Object.keys(picks), ...Object.keys(base)])) {
+        if (picks[k] && !_picksStarted(feed.starts, k, picks[k], now)) kept[k] = picks[k];
+        else if (base[k] && _picksStarted(feed.starts, k, base[k], now)) kept[k] = base[k];
+      }
+      if (!Object.keys(kept).length) return _picksJson({ error: "bad_picks" }, 400);
+      const lateAt = typeof prev?.lateAt === "string" ? prev.lateAt : new Date(now).toISOString();
+      stored = { name, picks: kept, owner, late: true, lateAt };
+      meta = { n: name, p: kept, l: lateAt };
     }
+
+    if (prevKey && prevKey !== entryKey && prev) await env.PICKS.delete(prevKey);
     const at = new Date().toISOString();
-    await env.PICKS.put(entryKey, JSON.stringify({ name, picks, owner, at }), { metadata: { n: name, p: picks } });
+    await env.PICKS.put(entryKey, JSON.stringify({ ...stored, at }), { metadata: meta });
     if (prevKey !== entryKey) await env.PICKS.put(devKey, entryKey);
     if (typeof caches !== "undefined") {
       try { await caches.default.delete(new Request(`https://hidescore.com/api/picks?board=${board}`)); } catch { /* best effort */ }
     }
-    return _picksJson({ ok: true, name, at });
+    return _picksJson(late ? { ok: true, name, at, late: true, lateAt: stored.lateAt, picks: stored.picks } : { ok: true, name, at });
   } catch {
     return _picksJson({ error: "unavailable" }, 503);
   }

@@ -20,6 +20,7 @@
     "racetitles:check": "node scripts/check-race-titles.mjs",
     "nfl:check": "node scripts/check-nfl-weeks.mjs",
     "nflchannels:check": "node scripts/check-nfl-team-channels.mjs",
+    "radio:check": "node --experimental-strip-types scripts/check-radio-stations.mjs",
     "coverage:audit": "node scripts/audit-league-coverage.mjs",
     "gaps:audit": "node scripts/audit-highlight-gaps.mjs",
     "ratingorder:audit": "node scripts/audit-rating-order.mjs",

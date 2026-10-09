@@ -4,12 +4,14 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
+import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
+import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
+import { filterLeague } from "@/lib/favoritesFilter";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import { LeaguePickerModal } from "./LeaguePickerModal";
@@ -57,6 +59,7 @@ import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
+import SupportLine from "@/components/SupportLine";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -478,6 +481,10 @@ function kickoffMessage(k: LeagueKickoff): string {
 // was nothing in it to file against.
 const FEEDBACK_LEAGUE_PREFILL = "League request: ";
 
+// Stable stand-in for an unset favoritesOnlyStrict, so each column's filter
+// memo isn't rebuilt on every board render.
+const NO_FAV_STRICT: Sport[] = [];
+
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
   typeof window !== "undefined" && window.matchMedia(WIDE_BOARD_QUERY).matches;
@@ -635,7 +642,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; seenKey?: string | null };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -765,6 +772,7 @@ export default function HomeContent({
     showRatings: false,
     skipExplainer: false,
     skipNewsExplainer: false,
+    skipBoxscoreWarning: false,
     showNews: false,
   });
   // `prefs` above starts as hardcoded defaults and is replaced from
@@ -1325,6 +1333,7 @@ export default function HomeContent({
     body: opts.body || null,
     siblings: opts.siblings || null,
     sibIndex: opts.index ?? null,
+    seenKey: opts.seenKey || null,
   }), []);
   const playNewsVideo = useCallback<PlayHandler>((opts) => {
     clearReopen();
@@ -1337,6 +1346,9 @@ export default function HomeContent({
       return;
     }
     const m = optsToModal(opts);
+    // Opening a news post marks it seen. The card-click tracker already did;
+    // this covers openers outside a card. Idempotent.
+    if (m.seenKey) markSeen(m.seenKey);
     setVideoModal(m);
     // Sync the address bar to the share link for EVERY news item (pics, redd.it
     // videos, NHL embeds — not just YouTube), so copying the URL bar previews the
@@ -1355,6 +1367,8 @@ export default function HomeContent({
       const ni = m.sibIndex + dir;
       if (ni < 0 || ni >= m.siblings.length) return m;
       const nm = optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni });
+      // Paging to a post opens it, so it counts as seen.
+      if (nm.seenKey) markSeen(nm.seenKey);
       if (typeof window !== "undefined") {
         const href = modalShareHref(nm);
         if (href) window.history.replaceState(window.history.state, "", href);
@@ -2349,6 +2363,48 @@ export default function HomeContent({
     const leagues = switcherOptions.filter((o) => o.sport !== "best");
     return [...leagues.filter((o) => o.sport === "top"), ...leagues.filter((o) => o.sport !== "top")];
   }, [switcherOptions]);
+  // The Add more… sheet's "Previously removed" group, newest first. Only the
+  // leagues still out of the switcher and not struck off the catalog, so a
+  // stale entry never shows.
+  const addMoreRemoved = useMemo(
+    () => (prefs.removedLeagues ?? []).filter((s) =>
+      !switcherOptions.some((o) => o.sport === s) && !prefs.catalogHiddenLeagues?.includes(s)),
+    [prefs.removedLeagues, prefs.catalogHiddenLeagues, switcherOptions],
+  );
+  // The sheet's "Edit list" ×, the same strike as Settings' Edit list: the
+  // league leaves the catalog and every switcher, and the removed group.
+  const hideFromAddMore = (sport: Sport) => {
+    const struck = prefs.catalogHiddenLeagues ?? [];
+    if (struck.includes(sport)) return;
+    updatePrefs({
+      catalogHiddenLeagues: [...struck, sport],
+      ...(prefs.removedLeagues?.includes(sport) ? { removedLeagues: dropRemoved(prefs.removedLeagues, sport) } : {}),
+    });
+  };
+
+  // A scores switcher's "Remove from list…" (Jacob 10/8): the picked leagues
+  // leave the switcher in one save, the same rule as unticking them in
+  // Settings. Out of shownLeagues, and into hiddenLeagues when they would
+  // still show (on by default, pinned, or a favorite). As with Settings, a
+  // hidden league is one Auto no longer picks. Add more… or Settings brings
+  // it back.
+  const removeFromSwitcher = (sports: Sport[]) => {
+    const hidden = new Set(prefs.hiddenLeagues ?? []);
+    const shown = new Set(prefs.shownLeagues ?? []);
+    const pinned = [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague];
+    for (const sport of sports) {
+      shown.delete(sport);
+      const preferred = !!thirdLeagueOptions.find((o) => o.sport === sport)?.defaultInSwitcher
+        || pinned.includes(sport)
+        || prefs.favoriteLeagues.includes(sport);
+      if (preferred) hidden.add(sport);
+    }
+    updatePrefs({
+      hiddenLeagues: hidden.size ? [...hidden] : undefined,
+      shownLeagues: shown.size ? [...shown] : undefined,
+      removedLeagues: noteRemoved(prefs.removedLeagues, sports),
+    });
+  };
 
   // A tap in the Add more… sheet does what the dropdown row for that column
   // does. Like pinning in Settings, picking a turned-off league turns it back
@@ -2364,6 +2420,7 @@ export default function HomeContent({
     const unhide: Partial<Preferences> = {
       ...(hidden.includes(sport) ? { hiddenLeagues: hidden.length > 1 ? hidden.filter((s) => s !== sport) : undefined } : {}),
       ...(struck.includes(sport) ? { catalogHiddenLeagues: struck.length > 1 ? struck.filter((s) => s !== sport) : undefined } : {}),
+      ...(prefs.removedLeagues?.includes(sport) ? { removedLeagues: dropRemoved(prefs.removedLeagues, sport) } : {}),
     };
     if (target.kind === "news" && target.slotIdx === 2) {
       const shown = prefs.shownLeagues ?? [];
@@ -2465,6 +2522,7 @@ export default function HomeContent({
       shownLeagues: [...shown],
       hiddenLeagues: hidden.length ? hidden : undefined,
       catalogHiddenLeagues: struck.length ? struck : undefined,
+      removedLeagues: dropRemoved(prefs.removedLeagues, sport),
     });
     setAddLeague(null);
   };
@@ -2717,8 +2775,9 @@ export default function HomeContent({
     () => enabledCategories(prefs.hideSensitiveNews, prefs.hideCrashNews),
     [prefs.hideSensitiveNews, prefs.hideCrashNews],
   );
-  // 👁 Hide seen (Jacob 10/6). The tracker marks a post seen after 1.5 s on
-  // screen, toggle on or off, so flipping it on hides what was already read.
+  // 👁 Hide seen (Jacob 10/6, 10/8). A post is seen once he OPENS it (tap,
+  // source link, or ‹ prev / next › paging in the modal), toggle on or off,
+  // so flipping it on hides what was already read. Scrolling past does not count.
   // The surfaces filter on a SNAPSHOT, not the live store: a post that turns
   // seen while he is looking at it must not vanish under his eyes. A new
   // snapshot is taken only when the toggle flips, the News tab is entered,
@@ -3262,8 +3321,8 @@ export default function HomeContent({
                 onClick={() => updatePrefs({ newsSingleColumn: !prefs.newsSingleColumn })}
               />
             )}
-            {/* 👁 Hide seen, LEFT of ⇅ (Jacob 10/6): drop every post that sat
-                on screen 1.5 s on an earlier look. Same round shape and
+            {/* 👁 Hide seen, LEFT of ⇅ (Jacob 10/6): drop every post he
+                opened on an earlier look. Same round shape and
                 filled-accent = on treatment as ⇅ and the funnel. */}
             {showNews && (
               <button
@@ -3276,9 +3335,9 @@ export default function HomeContent({
                   color: prefs.newsHideSeen ? "white" : "var(--text-muted)",
                 }}
                 title={prefs.newsHideSeen
-                  ? `Hide posts you've seen — tap to show all (${hiddenSeenCount} hidden)`
-                  : "Showing all posts — tap to hide seen"}
-                aria-label={prefs.newsHideSeen ? "Hide seen posts (on)" : "Hide seen posts"}
+                  ? `Hiding posts you opened — tap to show all (${hiddenSeenCount} hidden)`
+                  : "Showing all posts — tap to hide posts you opened"}
+                aria-label={prefs.newsHideSeen ? "Hide posts you opened (on)" : "Hide posts you opened"}
                 aria-pressed={!!prefs.newsHideSeen}
                 data-testid="news-hide-seen"
               >
@@ -4162,13 +4221,21 @@ export default function HomeContent({
           // Feed view (Jacob 7/14): one vertical Reddit-style scroll instead of
           // the multi-column board. Aggregate every visible column's sources into
           // a single stream; NewsFeed fetches + merges + time-sorts them and
-          // renders inline posts with blurred top comments.
+          // renders inline posts with blurred top comments. Each column goes in
+          // as its own group so a post can say which league it is from, and
+          // the refresh key goes in as a prop, not a key: a remount dropped the
+          // list and the scroll position (Jacob 10/8).
           if (prefs.newsFeedView) {
-            const feedSources = focusedEntries.flatMap((e) => renderSourcesFor(e));
+            const feedGroups = focusedEntries.map((e) => ({
+              id: `${e.id}-${e.slotIdx}`,
+              label: e.label,
+              sport: e.sport,
+              sources: renderSourcesFor(e),
+            }));
             return (
               <NewsFeed
-                key={`feed-${newsRefreshKey}`}
-                sources={feedSources}
+                groups={feedGroups}
+                refreshKey={newsRefreshKey}
                 onPlay={playNewsVideo}
                 showTextPosts={!!prefs.showTextPosts}
                 videosOnly={!!prefs.newsVideosOnly}
@@ -4375,11 +4442,23 @@ export default function HomeContent({
         ) : (
           (() => {
             const isPast = selectedDate < getDateString(0);
-            const hasNonFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state !== "post"));
-            const hasFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state === "post"));
+            // "Only my teams" decides the Final split on the games the columns
+            // will actually draw, or a column could show a "Final" header with
+            // no cards under it.
+            const favStrict = prefs.favoritesOnlyStrict ?? NO_FAV_STRICT;
+            const shownGames = (l: LeagueData) => filterLeague(l, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
+            const hasNonFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state !== "post"));
+            const hasFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state === "post"));
             const showFinalSplit = hasNonFinished && hasFinished;
             const commonProps = {
               favoriteTeams: prefs.favoriteTeams,
+              favoritesOnly: !!prefs.favoritesOnly,
+              favoritesOnlyStrict: favStrict,
+              onSetFavoritesOnlyStrict: (sport: Sport, on: boolean) => updatePrefs({
+                favoritesOnlyStrict: on
+                  ? [...favStrict.filter((s) => s !== sport), sport]
+                  : favStrict.filter((s) => s !== sport),
+              }),
               onToggleFavoriteTeam: toggleFavoriteTeam,
               showRatings: prefs.showRatings,
               isPastDate: isPast,
@@ -4498,6 +4577,7 @@ export default function HomeContent({
                   .filter((e) => e.slotIdx !== idx)
                   .map(({ sport, col }) => ({ sport, col })),
               }),
+              onRemoveFromList: removeFromSwitcher,
               // An Auto column that Best of yesterday took over: Auto IS that
               // column today, so it carries the "· default" mark.
               autoSport: selectedSlotLeagues[idx] === undefined
@@ -5139,19 +5219,8 @@ export default function HomeContent({
           </div>
         )}
 
-        {/* Tip jar — temporarily hidden 2026-06-24; restore by un-commenting:
-        <a
-          href="https://ko-fi.com/jacobhl"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-flex items-center gap-1.5 text-xs transition-opacity hover:opacity-80"
-          style={{ color: "var(--text-muted)" }}
-          aria-label="Support HideScore on Ko-fi"
-        >
-          <span aria-hidden="true">☕</span>
-          HideScore is free &amp; ad-free — support it
-        </a>
-        */}
+        {/* Support line: date-gated to Dec 15 2026, web only (lib/supportLinks.ts). */}
+        <SupportLine />
       </footer>
 
       {showFavToast && (
@@ -5222,6 +5291,9 @@ export default function HomeContent({
           showOffseason={!!prefs.showOffseasonInPicker}
           onToggleOffseason={() => updatePrefs({ showOffseasonInPicker: prefs.showOffseasonInPicker ? undefined : true })}
           shownElsewhere={addMoreFor.shownElsewhere}
+          removed={addMoreRemoved}
+          hidden={prefs.catalogHiddenLeagues}
+          onHide={hideFromAddMore}
         />
       )}
 
@@ -5328,6 +5400,8 @@ export default function HomeContent({
           reminderLinkTemplate={prefs.reminderLinkTemplate}
           recordLeagues={recordLeagues}
           isPastDate={selectedDate < getDateString(0)}
+          skipBoxscoreWarning={prefs.skipBoxscoreWarning}
+          onSkipBoxscoreWarning={() => updatePrefs({ skipBoxscoreWarning: true })}
         />
       )}
 

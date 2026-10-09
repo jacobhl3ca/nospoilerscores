@@ -95,6 +95,15 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
         keep scores and winners hidden, check whether the game was worth watching, then open the highlight.
       </p>
 
+      {/* Added 2026-10-07: the steps below assume the phone is already quiet. */}
+      <p className="mb-4" style={{ color: "var(--text-muted)" }}>
+        Lock down your phone first: the guide to{" "}
+        <Link href="/how-to-avoid-sports-spoilers" className="underline underline-offset-2">
+          avoiding sports spoilers everywhere else
+        </Link>{" "}
+        covers score alerts, muted words and blocking ESPN.
+      </p>
+
       <section className="space-y-6 mt-8">
         {STEPS.map((step, index) => (
           <div key={step.name} id={`step-${index + 1}`}>
