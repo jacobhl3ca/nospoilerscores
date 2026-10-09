@@ -63,6 +63,18 @@
   }
 }
 
+/* ESPN layout Reddit bar (Jacob 10/9): pins under the header + the news
+   toolbar like the league titles, and moves up when the toolbar hides. Each
+   sub's header pins under it (--news-titlebar-h on its <section>). */
+.news-reddit-bar {
+  top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px)));
+}
+@media (min-width: 640px) {
+  .news-reddit-bar {
+    top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px)));
+  }
+}
+
 /* SEAM COVER — the permanent guard against "cards slice under the league title".
    Every sticky row below the app header pins at an offset built from
    --header-h, which is *measured* by a ResizeObserver. On the native iOS shell

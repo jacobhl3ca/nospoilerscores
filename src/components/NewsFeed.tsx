@@ -404,7 +404,7 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
             : videosOnly ? "No videos here right now." : "No posts to show."}
           {videosOnly && seenHidden === 0 && (
             <span className="block mt-1" style={{ opacity: 0.8 }}>
-              Turn off Videos only, or widen Source in the filter menu.
+              Set Posts to All, or widen Source in the filter menu.
             </span>
           )}
           {sensitiveHidden > 0 && (

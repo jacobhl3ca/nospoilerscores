@@ -43,7 +43,8 @@ export function useHideOnScroll(enabled: boolean): { hidden: boolean; reveal: ()
 // is wider than the space it has, and off again once that full width fits.
 // `scrollerRef` = the overflow-x box, `rowRef` = its w-max content. `pillsKey`
 // changes when the set of pills changes, which forces a fresh measure.
-export function useToolbarFit(pillsKey: string) {
+// `reserve` = px kept free beside the row (the Reddit bar's label).
+export function useToolbarFit(pillsKey: string, reserve = 0) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const rowRef = useRef<HTMLDivElement | null>(null);
   const fullWidth = useRef(0);
@@ -54,7 +55,7 @@ export function useToolbarFit(pillsKey: string) {
     const row = rowRef.current;
     if (!scroller || !row) return;
     const cs = getComputedStyle(scroller);
-    const room = scroller.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const room = scroller.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - reserve;
     setCompact((was) => {
       if (!was) {
         fullWidth.current = row.offsetWidth;
@@ -62,7 +63,7 @@ export function useToolbarFit(pillsKey: string) {
       }
       return !(fullWidth.current > 0 && fullWidth.current <= room + 0.5);
     });
-  }, []);
+  }, [reserve]);
 
   // A new pill set: render it with labels first so check() measures it.
   // Layout effects run before paint, so the labelled pass never shows.
