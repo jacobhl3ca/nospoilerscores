@@ -490,10 +490,12 @@ function MatchupBox({ matchup, bracket, odds, chasers }: {
   );
 }
 
-// The round header is a fixed height in every column so the connector lines
-// between columns line up with the boxes rather than with the labels. 56px
-// since 2026-10-07: a fourth line carries the round's dates.
-const HEADER_H = "h-[56px]";
+// The round header has the same minimum height in every column so the boxes
+// line up across columns. 56px since 2026-10-07: a fourth line carries the
+// round's dates. A minimum, not a fixed height, since 2026-10-09: text that
+// renders taller (browser minimum font size, zoom) grows the header instead of
+// spilling onto the first box, and pb-1.5 keeps a gap above the boxes.
+const HEADER_H = "min-h-[56px] pb-1.5";
 
 function RoundColumn({ round, league, season, matchups, bracket, odds, chasers }: {
   round: BracketRound;
@@ -513,11 +515,11 @@ function RoundColumn({ round, league, season, matchups, bracket, odds, chasers }
           {roundLabel(round, league)}
         </div>
         {dates ? (
-          <div data-bracket-dates className="text-[9px] leading-tight whitespace-nowrap" style={{ color: "var(--text)" }}>{dates}</div>
+          <div data-bracket-dates className="text-[9px] leading-tight whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{dates}</div>
         ) : null}
         <div className="text-[9px] leading-tight" style={{ color: "var(--text-muted)" }}>Best of {BEST_OF[round]}</div>
         {channel ? (
-          <div data-bracket-channel className="text-[9px] leading-tight" style={{ color: "var(--text-muted)", opacity: 0.85 }}>
+          <div data-bracket-channel className="text-[9px] font-medium leading-tight" style={{ color: "var(--text)" }}>
             {channel}
           </div>
         ) : null}
@@ -572,11 +574,11 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
       <div className={`${HEADER_H} text-center`}>
         <div className="text-[10px] font-bold uppercase tracking-wide leading-tight" style={{ color: "var(--text)" }}>World Series</div>
         {dates ? (
-          <div data-bracket-dates className="text-[9px] leading-tight whitespace-nowrap" style={{ color: "var(--text)" }}>{dates}</div>
+          <div data-bracket-dates className="text-[9px] leading-tight whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{dates}</div>
         ) : null}
         <div className="text-[9px] leading-tight" style={{ color: "var(--text-muted)" }}>Best of {BEST_OF.worldSeries}</div>
         {channel ? (
-          <div data-bracket-channel className="text-[9px] leading-tight" style={{ color: "var(--text-muted)", opacity: 0.85 }}>{channel}</div>
+          <div data-bracket-channel className="text-[9px] font-medium leading-tight" style={{ color: "var(--text)" }}>{channel}</div>
         ) : null}
       </div>
       <div className="flex-1 flex flex-col justify-center">
