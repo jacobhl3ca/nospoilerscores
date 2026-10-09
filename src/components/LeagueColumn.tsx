@@ -1629,10 +1629,12 @@ export default function LeagueColumn({
   // the per-card league chip (off since 9/26), so demo mode drops it too.
   // The label is also the one-tap way to give that league a column of its own
   // (Jacob 9/28): "NFL +" opens the Add popover. The cards stay chip-free.
+  // A league that already has a column on the board shows its plain label (10/9).
   const canAddFromLabel = league.sport === "top" && !!onAddLeague && !isDemoModeActive();
+  const hasOwnColumn = (sport: Sport) => !!shownElsewhere?.some((e) => e.sport === sport);
   const espnLabelRow = (text: string, sport: Sport) => (
     <div className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
-      {canAddFromLabel ? (
+      {canAddFromLabel && !hasOwnColumn(sport) ? (
         <button type="button"
           onClick={(e) => { e.stopPropagation(); onAddLeague!(sport, e.currentTarget.getBoundingClientRect()); }}
           aria-label={`Add ${text} to a column`}
@@ -2323,7 +2325,7 @@ export default function LeagueColumn({
             // instead of riding ~16px higher.
             <span aria-hidden className="text-[9px] sm:text-[10px] mt-0.5 block whitespace-nowrap">{" "}</span>
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : canAddFromLabel && leadLabelSlot === "subtitle" && espnGroups?.length ? () => onAddLeague!(espnGroups[0].sport, columnRef.current!.getBoundingClientRect()) : undefined} fallbackText={lastPlayedLabel ?? (leadLabelSlot === "subtitle" ? leadLabel : undefined)} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : canAddFromLabel && leadLabelSlot === "subtitle" && espnGroups?.length && !hasOwnColumn(espnGroups[0].sport) ? () => onAddLeague!(espnGroups[0].sport, columnRef.current!.getBoundingClientRect()) : undefined} fallbackText={lastPlayedLabel ?? (leadLabelSlot === "subtitle" ? leadLabel : undefined)} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
           )}
         </div>
       )}
