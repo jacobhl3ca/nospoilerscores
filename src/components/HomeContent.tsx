@@ -30,17 +30,10 @@ import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn, { mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
-import GameDetailModal from "@/components/GameDetailModal";
-import EventDetailModal from "@/components/EventDetailModal";
-import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
-import SlamBracketModal from "@/components/SlamBracketModal";
-import PlayoffPictureModal from "@/components/PlayoffPictureModal";
-import MlbSeasonReviewModal from "@/components/MlbSeasonReviewModal";
 import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, MLB_REVIEW_HIDDEN_KEY, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
-import SettingsPanel from "@/components/SettingsPanel";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
@@ -55,11 +48,25 @@ import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
 import { OFFLINE_BOARD_KEY, formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
 import SupportLine from "@/components/SupportLine";
+
+// Modals that are closed on first paint load on first open, so their code is
+// not in the board's first-load bundle. VideoModal stays static: it starts
+// playback from the tap, and an async mount could lose the user gesture.
+const GameDetailModal = dynamic(() => import("@/components/GameDetailModal"));
+const EventDetailModal = dynamic(() => import("@/components/EventDetailModal"));
+const WorldCupGroupsModal = dynamic(() => import("@/components/WorldCupGroupsModal"));
+const SlamBracketModal = dynamic(() => import("@/components/SlamBracketModal"));
+const PlayoffPictureModal = dynamic(() => import("@/components/PlayoffPictureModal"));
+const MlbSeasonReviewModal = dynamic(() => import("@/components/MlbSeasonReviewModal"));
+// SettingsPanel stays mounted but renders null while closed, so the static
+// HTML is the same without SSR, and its code loads after the board hydrates.
+const SettingsPanel = dynamic(() => import("@/components/SettingsPanel"), { ssr: false });
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -5170,7 +5177,7 @@ export default function HomeContent({
               className="inline-block transition-opacity hover:opacity-80"
               data-umami-event="install-appstore-badge"
             >
-              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+              <img src="/app-store-badge.svg" alt="Download on the App Store" width={120} height={40} className="block h-10 w-auto" />
             </a>
             {!(prefsHydrated && prefs.playBadgeDismissed) && (
               /* relative + an absolutely placed dismiss control, the same shape
