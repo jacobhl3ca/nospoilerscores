@@ -11,7 +11,7 @@ import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
 import { LeagueMark } from "@/components/LeagueMark";
 import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
-import { AutoplayVideo, TapForSound } from "@/components/InlineVideoCard";
+import { AutoplayVideo, SoundButton } from "@/components/InlineVideoCard";
 import {
   NewsSource,
   PlayHandler,
@@ -65,7 +65,8 @@ interface NewsFeedProps {
   hideSeenKeys?: Set<string>;
   onSeenHiddenCount?: (id: string, count: number) => void;
   // News Autoplay pill: the video post most in focus plays muted, inside its
-  // media tile (InlineVideoCard). Tap still opens the modal with sound.
+  // media tile (InlineVideoCard). The corner speaker turns sound on in place;
+  // a tap anywhere else on the tile opens the modal.
   autoplay?: boolean;
 }
 
@@ -546,7 +547,10 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
       </button>
 
       {/* Media — tap opens the lightbox (image/video), same as Cards view */}
+      {/* The corner SoundButton is the tile button's sibling, not its child:
+          no button inside a button. */}
       {hasMedia && (
+        <div className="relative" data-sound-scope="">
         <button
           type="button"
           data-news-open=""
@@ -592,7 +596,6 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
             </div>
           )}
           {isVideo && <AutoplayVideo item={item} enabled={autoplay} fit="contain" onPlayingChange={setPlaying} />}
-          {isVideo && playing && <TapForSound />}
           {isVideo && !playing && (
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="flex items-center justify-center w-14 h-14 rounded-full" style={{ background: "rgba(0,0,0,0.55)" }}>
@@ -611,6 +614,8 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
             </span>
           )}
         </button>
+        {isVideo && playing && <SoundButton />}
+        </div>
       )}
 
       {/* Top comments — spoiler-blurred, tap the strip to reveal (Jacob 7/14) */}

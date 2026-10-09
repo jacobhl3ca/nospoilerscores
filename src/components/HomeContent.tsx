@@ -47,7 +47,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, E
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
-import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
+import { onAutoplayBlocked, refocusAutoplay, suspendAutoplay } from "@/components/InlineVideoCard";
 import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
 import { POST_FILTERS, POST_FILTER_NAMES } from "@/lib/postFilter";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
@@ -2911,6 +2911,10 @@ export default function HomeContent({
   useEffect(() => {
     if (showNews && newsAutoplay) refocusAutoplay();
   }, [showNews, newsLayout, prefs.newsEspnBig, newsAutoplay, prefs.revealNewsMedia, prefs.newsCardPrefs]);
+
+  // No inline clip plays, or makes sound, under the video modal. On close the
+  // clip in focus plays again (InlineVideoCard).
+  useEffect(() => { suspendAutoplay(!!videoModal); }, [videoModal]);
 
   // The browser refused muted autoplay (Firefox "Block Audio and Video",
   // Safari "Never Auto-Play", iPhone Low Power Mode): a popup over the refused

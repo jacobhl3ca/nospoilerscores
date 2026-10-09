@@ -7,9 +7,15 @@ import { NewsItem, proxyImage } from "@/lib/news";
 // in focus"). With the toolbar's Autoplay pill on, the ONE clip most in focus
 // plays muted: among clips at least 60% visible, the one whose center is
 // closest to the viewport center. Every other clip pauses, and scrolling hands
-// play to the next one. A tap still opens the shared modal with sound. No
-// autoplay under prefers-reduced-motion, and none for an item with no direct
-// media URL (YouTube-only), which keeps its thumbnail.
+// play to the next one. No autoplay under prefers-reduced-motion, and none for
+// an item with no direct media URL (YouTube-only), which keeps its thumbnail.
+//
+// Sound (Jacob 10/9, the Reddit pattern): the speaker in the playing clip's
+// bottom-right corner (<SoundButton>) turns sound on in place. A tap anywhere
+// else on the card opens the shared modal. Sound then stays on for the next
+// clips until it is tapped off; a clip whose unmuted play the browser refuses
+// plays muted and shows the muted icon. Nothing plays while the modal is open
+// (suspendAutoplay) or the tab is hidden.
 //
 // <AutoplayVideo> is a <video> layer that fills its parent media box, so each
 // surface (ESPN cards, the Cards strip and video cards, Feed posts) keeps its
@@ -58,6 +64,7 @@ function mediaBlurred(el: Element): boolean {
 
 function pickFocused() {
   frame = 0;
+  if (suspended || document.hidden) return;
   const mid = window.innerHeight / 2;
   const atTop = window.scrollY < TOP_ZONE;
   let best: Entry | null = null;
@@ -75,6 +82,25 @@ function pickFocused() {
 }
 function schedule() {
   if (!frame) frame = requestAnimationFrame(pickFocused);
+}
+function stopCurrent() {
+  current?.stop();
+  current = null;
+}
+
+// While the video modal is open no inline clip plays (or makes sound) under
+// it. On close the clip in focus plays again.
+let suspended = false;
+export function suspendAutoplay(on: boolean) {
+  if (suspended === on) return;
+  suspended = on;
+  if (on) stopCurrent();
+  else if (entries.size) schedule();
+}
+// A clip with sound must not play in a background tab.
+function onVisibility() {
+  if (document.hidden) stopCurrent();
+  else schedule();
 }
 // Scroll picks wait until the scroll settles. A scroll event arrives before
 // the observer's records for the new position, so an immediate pick read
@@ -121,6 +147,23 @@ function useAutoplayBlocked(): boolean {
   return useSyncExternalStore(subscribeBlocked, () => blockedNow, () => false);
 }
 
+// Sound on/off for every inline clip. Off on each page load (never saved), on
+// after a corner tap, until the next corner tap or a refused unmuted play.
+let soundOn = false;
+const soundSubs = new Set<() => void>();
+function setSoundOn(v: boolean) {
+  if (soundOn === v) return;
+  soundOn = v;
+  soundSubs.forEach((fn) => fn());
+}
+function subscribeSound(fn: () => void) {
+  soundSubs.add(fn);
+  return () => { soundSubs.delete(fn); };
+}
+function useSoundOn(): boolean {
+  return useSyncExternalStore(subscribeSound, () => soundOn, () => false);
+}
+
 function register(entry: Entry) {
   if (!io) {
     io = new IntersectionObserver((records) => {
@@ -135,6 +178,7 @@ function register(entry: Entry) {
     // Images and clips loading above a card move it without crossing an
     // intersection threshold. `load` does not bubble, so listen in capture.
     document.addEventListener("load", schedule, true);
+    document.addEventListener("visibilitychange", onVisibility);
     bodyRo = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
     bodyRo?.observe(document.body);
   }
@@ -154,6 +198,7 @@ function unregister(entry: Entry) {
     clearTimeout(scrollTimer);
     window.removeEventListener("resize", schedule);
     document.removeEventListener("load", schedule, true);
+    document.removeEventListener("visibilitychange", onVisibility);
     bodyRo?.disconnect();
     bodyRo = null;
   }
@@ -209,15 +254,25 @@ export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }:
       start: () => {
         void attach().then(() => {
           if (cancelled || current !== entry) return;
-          video.muted = true;
-          video.play().catch((err: unknown) => {
-            // Refused: the thumbnail and play badge stay. AbortError is only a
-            // pause() that beat the start, not a block.
+          video.muted = !soundOn;
+          const play = () => video.play().catch((err: unknown) => {
+            // AbortError is only a pause() that beat the start, not a block.
             if ((err as { name?: string })?.name !== "NotAllowedError") return;
+            if (cancelled || current !== entry) return;
+            // Sound refused (iPhone Safari may allow it only inside a tap):
+            // play muted, and the corner shows the muted icon.
+            if (!video.muted) {
+              video.muted = true;
+              setSoundOn(false);
+              play();
+              return;
+            }
+            // Refused even muted: the thumbnail and play badge stay.
             setBlockedNow(true);
             const box = video.parentElement ?? video;
             blockedListeners.forEach((fn) => fn(box));
           });
+          play();
         });
       },
       stop: () => { if (!video.paused) video.pause(); },
@@ -270,24 +325,25 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
   const canAutoplay = autoplay && !!inlineMediaUrl(item);
 
   const open = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.currentTarget.querySelector("video")?.pause();
+    e.currentTarget.closest("[data-inline-video]")?.querySelector("video")?.pause();
     onOpen();
   };
 
+  // A <div>, not a <button>: the corner SoundButton sits inside it. The
+  // headline is the one open button; its ::after stretches over the whole
+  // card, so a tap anywhere but the corner opens the modal.
   return (
-    <button
-      type="button"
-      onClick={open}
-      aria-label={ariaLabel}
-      className="block w-full text-left cursor-pointer transition-opacity hover:opacity-95"
+    <div
+      className="relative block w-full text-left cursor-pointer transition-opacity hover:opacity-95"
       data-news-key={item.articleUrl || item.id}
       data-inline-video={canAutoplay ? "auto" : "still"}
+      data-sound-scope=""
     >
       {/* Big: cap the clip so it plus its headline fits under the sticky app
           header, toolbar and card header (Jacob 10/8). Width follows from the
           height cap so the box stays 16:9, centered in the card. */}
       <div
-        className="news-media-preview relative w-full aspect-video overflow-hidden mx-auto"
+        className="news-media-preview relative w-full aspect-video overflow-hidden mx-auto rounded-md"
         style={{
           background: "var(--bg-card-hover)",
           maxWidth: large ? BIG_MAX_WIDTH : undefined,
@@ -316,17 +372,30 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
             </div>
           </div>
         )}
-        {playing && <TapForSound />}
+        {playing && <SoundButton />}
       </div>
-      <div className={`news-title px-3 leading-snug line-clamp-3 ${large ? "py-2.5 text-base" : "py-2 text-sm"}`} style={{ color: "var(--text)" }}>
-        {item.headline}
-      </div>
-    </button>
+      <button
+        type="button"
+        onClick={open}
+        aria-label={ariaLabel}
+        className={`${STRETCHED_OPEN} px-1 ${large ? "py-2.5" : "py-2"}`}
+      >
+        <span className={`news-title leading-snug line-clamp-3 ${large ? "text-base" : "text-sm"}`} style={{ color: "var(--text)" }}>
+          {item.headline}
+        </span>
+      </button>
+    </div>
   );
 }
 
+// The card's open control: its ::after covers the whole card (the nearest
+// positioned ancestor), and carries the keyboard focus ring. The corner
+// SoundButton's z-[2] sits above it: .news-media-preview makes no stacking
+// context.
+export const STRETCHED_OPEN = "block w-full text-left cursor-pointer outline-none after:absolute after:inset-0 after:content-[''] after:rounded-md focus-visible:after:outline-2 focus-visible:after:outline-[var(--accent)] focus-visible:after:-outline-offset-2";
+
 // Autoplay is on but the browser refused it: the clip says so itself, in the
-// corner where "Tap for sound" sits while a clip plays. z-index keeps it over
+// corner where the sound button sits while a clip plays. z-index keeps it over
 // each surface's play-badge overlay, which comes later in the DOM.
 function TapToPlay() {
   return (
@@ -336,11 +405,47 @@ function TapToPlay() {
   );
 }
 
-// Muted-autoplay cue: a tap opens the modal with sound.
-export function TapForSound() {
+// The playing clip's corner speaker: turns sound on or off in place, with no
+// modal. 44 px tap area, 32 px chip. The click is a user gesture, so iPhone
+// Safari allows the unmute. The clip is the one autoplay <video> inside the
+// nearest [data-sound-scope].
+export function SoundButton() {
+  const on = useSoundOn();
+  const toggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const video = e.currentTarget.closest("[data-sound-scope]")?.querySelector<HTMLVideoElement>("video[data-autoplay-video]");
+    if (!video) return;
+    const next = !on;
+    video.muted = !next;
+    setSoundOn(next);
+    if (video.paused) void video.play().catch(() => {});
+  };
   return (
-    <span className="absolute right-2 bottom-2 rounded px-1.5 py-0.5 text-[11px] font-semibold pointer-events-none" style={{ background: "rgba(0,0,0,0.6)", color: "white" }}>
-      Tap for sound
-    </span>
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={on ? "Turn sound off" : "Turn sound on"}
+      aria-pressed={on}
+      title={on ? "Sound off" : "Sound on"}
+      className="absolute right-0 bottom-0 z-[2] w-11 h-11 flex items-end justify-end p-1.5 cursor-pointer outline-none group"
+      data-sound-button=""
+    >
+      <span className="w-8 h-8 rounded-full flex items-center justify-center group-focus-visible:outline-2 group-focus-visible:outline-[var(--accent)]" style={{ background: "rgba(0,0,0,0.6)", color: "white" }}>
+        {on ? (
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 5 6 9H2v6h4l5 4z" />
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+          </svg>
+        ) : (
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 5 6 9H2v6h4l5 4z" />
+            <line x1="23" y1="9" x2="17" y2="15" />
+            <line x1="17" y1="9" x2="23" y2="15" />
+          </svg>
+        )}
+      </span>
+    </button>
   );
 }

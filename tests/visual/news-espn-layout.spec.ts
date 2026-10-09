@@ -878,3 +878,182 @@ test("Big: three subs sit in one row of three columns", async ({ page }) => {
     .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(tops).size).toBe(1);
 });
+
+// ── Corner sound + space between clips (Jacob 10/9) ─────────────────────
+// The playing clip's bottom-right speaker turns sound on in place; a tap
+// anywhere else opens the modal. Sound stays on for the next clips.
+const soundButton = (scope: ReturnType<Page["locator"]>) => scope.locator("[data-sound-button]");
+const videoMuted = (scope: ReturnType<Page["locator"]>) =>
+  scope.locator("video[data-autoplay-video]").evaluate((v: HTMLVideoElement) => v.muted);
+const anyDialog = (page: Page) => page.locator('[role="dialog"]');
+
+for (const width of [390, 1280]) {
+  test(`${width}px: the corner speaker turns sound on and off in place, no modal`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
+    await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
+    // Clip 3: near the page top the first clip plays instead (TOP_ZONE).
+    const card = page.locator('[data-inline-video="auto"]').nth(3);
+    await expect(card).toBeAttached(LOAD);
+    await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([3]);
+
+    const btn = soundButton(card);
+    await expect(btn).toHaveAttribute("aria-label", "Turn sound on");
+    await expect(btn).toHaveAttribute("aria-pressed", "false");
+    // It sits in the media box's bottom-right 48 px.
+    const [b, m] = await Promise.all([btn.boundingBox(), card.locator(".news-media-preview").boundingBox()]);
+    expect(b!.x).toBeGreaterThanOrEqual(m!.x + m!.width - 48);
+    expect(b!.y).toBeGreaterThanOrEqual(m!.y + m!.height - 48);
+    expect(b!.x + b!.width).toBeLessThanOrEqual(m!.x + m!.width + 1);
+    expect(b!.y + b!.height).toBeLessThanOrEqual(m!.y + m!.height + 1);
+    expect(b!.width).toBeGreaterThanOrEqual(44);
+
+    await btn.click();
+    expect(await videoMuted(card)).toBe(false);
+    await expect(btn).toHaveAttribute("aria-label", "Turn sound off");
+    await expect(btn).toHaveAttribute("aria-pressed", "true");
+    await page.waitForTimeout(300);
+    await expect(anyDialog(page)).toHaveCount(0);
+    expect(await playing(page)).toEqual([3]);
+
+    await btn.click();
+    expect(await videoMuted(card)).toBe(true);
+    await expect(btn).toHaveAttribute("aria-label", "Turn sound on");
+    await expect(anyDialog(page)).toHaveCount(0);
+  });
+}
+
+test("sound stays on for the next clip in focus", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
+  const cards = page.locator('[data-inline-video="auto"]');
+  await expect(cards.nth(3)).toBeAttached(LOAD);
+  await cards.nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([1]);
+  await soundButton(cards.nth(1)).click();
+  expect(await videoMuted(cards.nth(1))).toBe(false);
+
+  await cards.nth(3).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([3]);
+  expect(await videoMuted(cards.nth(3))).toBe(false);
+  await expect(soundButton(cards.nth(3))).toHaveAttribute("aria-label", "Turn sound off");
+});
+
+test("the browser refuses sound on the next clip: it plays muted, shows the muted icon, no popup", async ({ page }) => {
+  // Muted play works; an unmuted play() outside a tap is refused (iPhone Safari).
+  await page.addInitScript(() => {
+    const real = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      if (!this.muted) return Promise.reject(new DOMException("no sound", "NotAllowedError"));
+      return real.call(this);
+    };
+  });
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
+  const cards = page.locator('[data-inline-video="auto"]');
+  await expect(cards.nth(3)).toBeAttached(LOAD);
+  await cards.nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([1]);
+  await soundButton(cards.nth(1)).click();
+  expect(await videoMuted(cards.nth(1))).toBe(false);
+
+  await cards.nth(3).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([3]);
+  expect(await videoMuted(cards.nth(3))).toBe(true);
+  await expect(soundButton(cards.nth(3))).toHaveAttribute("aria-label", "Turn sound on");
+  await expect(popup(page)).toHaveCount(0);
+  await expect(page.locator("[data-tap-to-play]")).toHaveCount(0);
+});
+
+test("a tap on the clip center opens the modal; nothing plays under it or in a hidden tab", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
+  const card = page.locator('[data-inline-video="auto"]').nth(1);
+  await expect(card).toBeAttached(LOAD);
+  await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([1]);
+
+  // A real pointer tap at the center: the headline's stretched ::after takes it.
+  const m = (await card.locator(".news-media-preview").boundingBox())!;
+  await page.mouse.click(m.x + m.width / 2, m.y + m.height / 2);
+  await expect(page.getByRole("dialog", { name: "Video player" })).toBeVisible(LOAD);
+  await page.waitForTimeout(600);
+  expect(await playingKeys(page)).toEqual([]);
+  await page.keyboard.press("Escape");
+  await expect(anyDialog(page)).toHaveCount(0);
+  await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
+
+  const setHidden = (hidden: boolean) => page.evaluate((h) => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => h });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, hidden);
+  await setHidden(true);
+  await expect.poll(() => playingKeys(page), { timeout: 2000 }).toEqual([]);
+  await page.waitForTimeout(500);
+  expect(await playingKeys(page)).toEqual([]);
+  await setHidden(false);
+  await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
+});
+
+test("Feed: the corner speaker turns sound on with no modal and does not mark the post seen", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsLayout: "feed", newsFeedView: true, newsHideSeen: true });
+  const post = page.locator("article[data-news-key]:has(video[data-autoplay-video])").nth(1);
+  await expect(post).toBeAttached(LOAD);
+  await post.evaluate((el) => el.querySelector("video")!.scrollIntoView({ block: "center" }));
+  const key = (await post.getAttribute("data-news-key"))!;
+  await expect.poll(() => playingKeys(page), { timeout: 2000 }).toEqual([key]);
+
+  await soundButton(post).click();
+  expect(await videoMuted(post)).toBe(false);
+  await expect(soundButton(post)).toHaveAttribute("aria-label", "Turn sound off");
+  await page.waitForTimeout(300);
+  await expect(anyDialog(page)).toHaveCount(0);
+  const seen = () => page.evaluate((k) => Object.keys(JSON.parse(localStorage.getItem(k) || "{}")), SEEN_KEY);
+  expect(await seen()).not.toContain(key);
+
+  // Control: a tap on the media itself opens the post and marks it seen.
+  await post.locator(".news-media-preview").click({ position: { x: 20, y: 20 } });
+  await expect(page.getByRole("dialog", { name: "Video player" })).toBeVisible(LOAD);
+  await expect.poll(seen).toContain(key);
+});
+
+test("Cards: the corner speaker turns sound on with no modal", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsTypeFilters: ["reddit", "topvideos"] });
+  const clips = page.locator("video[data-autoplay-video]");
+  await expect(clips.nth(4)).toBeAttached(LOAD);
+  await clips.nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
+  const scope = page.locator("[data-sound-scope]:has(video[data-autoplay-video])").filter({ has: page.locator("[data-sound-button]") });
+  await expect(scope).toHaveCount(1);
+  await soundButton(scope).click();
+  expect(await videoMuted(scope)).toBe(false);
+  await page.waitForTimeout(300);
+  await expect(anyDialog(page)).toHaveCount(0);
+});
+
+test("no button inside a button or link on the News page, in every layout", async ({ page }) => {
+  const nested = () => page.evaluate(() => document.querySelectorAll("button button, button a, a button").length);
+  await gotoNews(page, { ...PLAY, newsTypeFilters: ["reddit", "topvideos"] });
+  await expect(page.locator("video[data-autoplay-video]").nth(1)).toBeAttached(LOAD);
+  await page.locator("video[data-autoplay-video]").nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
+  expect(await nested()).toBe(0);
+  await pill(page, "Feed").click();
+  await expect(page.locator("article[data-news-key]").first()).toBeVisible(LOAD);
+  await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
+  expect(await nested()).toBe(0);
+  await pill(page, "ESPN").click();
+  await expect(page.locator("[data-inline-video]").first()).toBeVisible(LOAD);
+  await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
+  expect(await nested()).toBe(0);
+});
+
+for (const autoplay of [true, false]) {
+  test(`ESPN 390px: clips sit 12+ px apart with rounded corners (Autoplay ${autoplay ? "on" : "off"})`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: autoplay });
+    const cards = page.locator("[data-inline-video]");
+    await expect(cards).toHaveCount(10, LOAD);
+    const boxes = await cards.evaluateAll((els) => els.slice(0, 4).map((e) => { const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; }));
+    for (let i = 0; i + 1 < boxes.length; i++) expect(boxes[i + 1].top - boxes[i].bottom).toBeGreaterThanOrEqual(12);
+    const radius = await cards.first().locator(".news-media-preview").evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius));
+    expect(radius).toBeGreaterThan(0);
+  });
+}
