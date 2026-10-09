@@ -400,6 +400,10 @@ export interface Preferences {
   // starred. See lib/favoritesFilter.ts.
   favoritesOnly?: boolean;
   favoritesOnlyStrict?: Sport[];
+  // A pinned league between seasons keeps its column, which asks once
+  // "Close this column?" (Jacob 10/9). Keep puts the league here and the
+  // question does not come back for it. Close empties the slot instead.
+  offseasonKeep?: Sport[];
   // Games queued with the card's "Later" pill, shown in the Watch queue strip
   // above the board until marked Done (Jacob 9/27). Newest last, at most 20;
   // anything older than 3 days is dropped on load. Syncs like favoriteTeams.
