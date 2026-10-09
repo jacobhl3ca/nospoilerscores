@@ -11,6 +11,7 @@ import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
 import { LeagueMark } from "@/components/LeagueMark";
 import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
+import { AutoplayVideo, TapForSound } from "@/components/InlineVideoCard";
 import {
   NewsSource,
   PlayHandler,
@@ -63,6 +64,9 @@ interface NewsFeedProps {
   // tooltip count it reports back. undefined = toggle off.
   hideSeenKeys?: Set<string>;
   onSeenHiddenCount?: (id: string, count: number) => void;
+  // News Autoplay pill: the video post most in focus plays muted, inside its
+  // media tile (InlineVideoCard). Tap still opens the modal with sound.
+  autoplay?: boolean;
 }
 
 const keyOf = (item: NewsItem) => item.articleUrl || item.id;
@@ -198,7 +202,7 @@ function useAggregatedFeed(groups: FeedGroup[], refreshKey: number) {
 // new posts wait behind the pill so the page does not move under him.
 const NEAR_TOP_PX = 200;
 
-export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts, videosOnly, oldestFirst, hiddenCategories, hideSeenKeys, onSeenHiddenCount }: NewsFeedProps) {
+export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts, videosOnly, oldestFirst, hiddenCategories, hideSeenKeys, onSeenHiddenCount, autoplay }: NewsFeedProps) {
   const { feed, incoming, applyIncoming } = useAggregatedFeed(groups, refreshKey);
   const items = feed?.items ?? null;
   const groupOf = feed?.groupOf;
@@ -400,7 +404,7 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
             : videosOnly ? "No videos here right now." : "No posts to show."}
           {videosOnly && seenHidden === 0 && (
             <span className="block mt-1" style={{ opacity: 0.8 }}>
-              Turn off Videos only, or widen Source in the filter menu.
+              Set Posts to All, or widen Source in the filter menu.
             </span>
           )}
           {sensitiveHidden > 0 && (
@@ -442,6 +446,7 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
               key={keyOf(it)}
               item={it}
               group={g}
+              autoplay={!!autoplay}
               onOpen={() =>
                 onPlay({ ...newsItemToPlayOpts(it), siblings: playList, index: i })
               }
@@ -459,8 +464,9 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
   );
 }
 
-function FeedPost({ item, group, onOpen }: { item: NewsItem; group?: FeedGroup; onOpen: () => void }) {
+function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: FeedGroup; onOpen: () => void; autoplay: boolean }) {
   const [showComments, setShowComments] = useState(false);
+  const [playing, setPlaying] = useState(false);
   // Stable, SSR-safe id tying the comments disclosure button to the strip it
   // reveals. useId() (not a hard-coded id) keeps every FeedPost in the merged
   // scroll unique — many posts render this toggle at once, so a constant id
@@ -544,7 +550,7 @@ function FeedPost({ item, group, onOpen }: { item: NewsItem; group?: FeedGroup; 
         <button
           type="button"
           data-news-open=""
-          onClick={onOpen}
+          onClick={(e) => { e.currentTarget.querySelector("video")?.pause(); onOpen(); }}
           // min-h keeps this button a tappable black tile even when its only
           // child collapses to zero height — an image post whose proxied
           // thumbnail 404s hides the <img> (onError below), and a video post's
@@ -585,7 +591,9 @@ function FeedPost({ item, group, onOpen }: { item: NewsItem; group?: FeedGroup; 
               Video
             </div>
           )}
-          {isVideo && (
+          {isVideo && <AutoplayVideo item={item} enabled={autoplay} fit="contain" onPlayingChange={setPlaying} />}
+          {isVideo && playing && <TapForSound />}
+          {isVideo && !playing && (
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="flex items-center justify-center w-14 h-14 rounded-full" style={{ background: "rgba(0,0,0,0.55)" }}>
                 <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>

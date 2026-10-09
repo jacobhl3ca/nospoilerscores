@@ -54,7 +54,7 @@
       "path": "/basketball/nba/scoreboard",
       "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=200&h=200&transparent=true",
       "defaultOn": true,
-      "preseasonIsRegular": false,
+      "preseasonIsRegular": true,
       "season": {
         "start": "10-20",
         "end": "06-22",

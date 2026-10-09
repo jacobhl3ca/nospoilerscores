@@ -28,6 +28,7 @@ export const SHORT_LEAGUE_LABELS: Record<string, string> = {
   "NCAA Volleyball": "NCAA VB",   // 15 chars, well past the 99px budget (the sport key stays "ncaavb")
   "NCAAW Soccer": "W. Soccer",    // women's college soccer; the "W. Hockey" house style (the sport key stays "ncaawsoc")
   "NFL Preseason": "NFL Pre",     // 122 → 63
+  "NBA Preseason": "NBA Pre",     // twin of "NFL Pre" (added 2026-10-09)
   "Premier League": "EPL",        // 128 → 31  (matches the sport key, and the UCL/UEL house style)
   "Rugby Nations": "Nations",     // 119 → 63
   "Rugby Tests": "Tests",         // 100 → 45

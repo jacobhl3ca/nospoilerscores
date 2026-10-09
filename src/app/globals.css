@@ -19,9 +19,32 @@
   }
 }
 
-/* The news toolbar (Cards/Feed + toggles) pins directly under the app header. */
+/* The news toolbar (Cards/Feed + toggles) pins directly under the app header.
+   Round 4 (Jacob 10/8): scrolling down slides it up behind the header
+   (data-hidden, HomeContent useHideOnScroll). A transform, never a height or
+   display change, so --header-h, .header-flow-spacer and --news-toolbar-h stay
+   put. While hidden, HomeContent sets --news-toolbar-pin: 0px, and the rows
+   that pin under the toolbar (below) read that instead of --news-toolbar-h. */
 .news-toolbar-sticky {
   top: var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem));
+  transition: transform 200ms ease;
+}
+.news-toolbar-sticky[data-hidden] {
+  transform: translateY(-100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .news-toolbar-sticky { transition: none; }
+}
+/* One pill row: icon-only pills when the labels do not fit (useToolbarFit),
+   then a sideways scroll with no visible scrollbar. */
+.news-toolbar-scroll {
+  scrollbar-width: none;
+}
+.news-toolbar-scroll::-webkit-scrollbar {
+  display: none;
+}
+.news-chip-compact > span {
+  display: none;
 }
 @media (min-width: 640px) {
   .news-toolbar-sticky {
@@ -32,11 +55,23 @@
 /* League titles pin below the header AND the sticky news toolbar (Cards view).
    --news-toolbar-h defaults to 0, so scores view (no toolbar) is unchanged. */
 .league-sticky-top {
-  top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-h, 0px));
+  top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px)));
 }
 @media (min-width: 640px) {
   .league-sticky-top {
-    top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-h, 0px));
+    top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px)));
+  }
+}
+
+/* ESPN layout Reddit bar (Jacob 10/9): pins under the header + the news
+   toolbar like the league titles, and moves up when the toolbar hides. Each
+   sub's header pins under it (--news-titlebar-h on its <section>). */
+.news-reddit-bar {
+  top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px)));
+}
+@media (min-width: 640px) {
+  .news-reddit-bar {
+    top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px)));
   }
 }
 
@@ -79,14 +114,14 @@
   z-index: 35;
   pointer-events: none;
   background: var(--bg);
-  height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-h, 0px) + var(--seam-overlap));
+  height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px)) + var(--seam-overlap));
 }
 .sticky-seam-cover[data-news] {
   --seam-overlap: 0px;
 }
 @media (min-width: 640px) {
   .sticky-seam-cover {
-    height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-h, 0px) + var(--seam-overlap));
+    height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px)) + var(--seam-overlap));
   }
 }
 
@@ -101,7 +136,7 @@
      the app header instead of leaving a 4.5rem gap where scrolled content
      bleeds through and visually clips the rounded top corners.
      --news-toolbar-h adds the sticky news toolbar (0 outside news view). */
-  top: calc(var(--header-h, 0px) + var(--news-toolbar-h, 0px) + var(--news-titlebar-h, 0px));
+  top: calc(var(--header-h, 0px) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px)) + var(--news-titlebar-h, 0px));
 }
 
 /* News headlines (and Reddit selftext bodies) are spoilers — they give away the
@@ -118,17 +153,28 @@
   -webkit-user-select: none;
 }
 html.reveal-news-titles .news-title,
+.news-card-titles-on .news-title,
 .news-title.peek {
   filter: none;
   cursor: auto;
   user-select: auto;
   -webkit-user-select: auto;
 }
+/* ESPN layout (r5): a card's own Headlines button wins over the global one.
+   HomeContent puts .news-card-titles-on/off on each card (NewsColumn
+   CardOverride); a single tapped .peek row still shows. */
+html.reveal-news-titles .news-card-titles-off .news-title:not(.peek) {
+  filter: blur(7px);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
 /* Text-post visibility is independent from headline reveal. .news-textpost
    marks one mixed-source row; .news-card-alltext collapses an all-text source
    card so hiding its rows never leaves a bare header behind. */
-html:not(.show-text-posts) .news-textpost,
-html:not(.show-text-posts) .news-card-alltext {
+html:not(.show-text-posts) .news-textpost:not(.news-card-textposts-on .news-textpost),
+html:not(.show-text-posts) .news-card-alltext,
+.news-card-textposts-off .news-textpost {
   display: none;
 }
 
@@ -158,9 +204,15 @@ html.hs-play-dismissed .hs-play-badge {
 .news-media-preview > * {
   transition: filter 150ms ease, transform 150ms ease;
 }
-html.blur-news-media .news-media-preview > * {
+html.blur-news-media .news-media-preview > *,
+.news-card-media-off .news-media-preview > * {
   filter: blur(12px);
   transform: scale(1.08);
+}
+/* ESPN layout (r5): a card's own Media button wins over the global one. */
+html.blur-news-media .news-card-media-on .news-media-preview > * {
+  filter: none;
+  transform: none;
 }
 @media (prefers-reduced-motion: reduce) {
   /* Apply the blur mask instantly — no animated filter/scale sweep when the

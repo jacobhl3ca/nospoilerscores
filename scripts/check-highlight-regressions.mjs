@@ -122,9 +122,15 @@ check(
   youtube.getCompetitionTitleTokens("nfl").length === 0 &&
     youtube.getCompetitionTitleTokens("nfl", { preseason: false }).length === 0,
 );
+// NBA preseason (2026-10-09) needs no token: the NBA channel puts the date in
+// every title ("KNICKS at 76ERS | NBA PRESEASON FULL GAME HIGHLIGHTS | October
+// 5, 2026"), so the date gate already separates an exhibition from the same
+// pair's regular-season meeting (NY–PHI play Oct 5 AND Oct 20). Probed live on
+// /api/youtube channel=NBA strict=1: 6/6 correct for the Oct 4–8 games.
 check(
   "the preseason flag changes nothing outside the NFL",
   youtube.getCompetitionTitleTokens("ncaaf", { preseason: true }).length === 0 &&
+    youtube.getCompetitionTitleTokens("nba", { preseason: true }).length === 0 &&
     JSON.stringify(youtube.getCompetitionTitleTokens("nationschamp", { preseason: true })) ===
       JSON.stringify(["nations championship"]),
 );
