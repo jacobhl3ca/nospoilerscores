@@ -1,11 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// News 👁 Hide seen (Jacob 10/6): a post that sat on screen for 1.5 s counts
-// as seen (lib/newsSeen.ts), and the header toggle drops seen posts.
-//   1. 2 s on screen → seen; 0.5 s → not seen.
-//   2. Toggle on → the seen posts are gone, the rest stay.
-//   3. Reload → still hidden. Toggle off → back.
-//   4. Reset to defaults clears newsHideSeen.
+// News 👁 Hide seen (Jacob 10/6, 10/8): a post counts as seen when he OPENS it
+// (lib/newsSeen.ts), not when it scrolls past. The header toggle drops seen
+// posts on the next snapshot.
+//   1. Scroll the whole feed, wait → nothing seen, toggle on hides nothing.
+//   2. Open a post (headline → modal → Esc) → toggle on → that post gone.
+//   3. ‹ prev / next › paging inside the modal marks each post it lands on.
+//   4. Cmd-click in Cards view (new tab) counts; survives reload.
+//   5. The comments toggle does not count.
+//   6. Reset to defaults clears newsHideSeen; the toggle fits a phone header.
 // Every news feed is mocked so the run does not depend on the gitignored
 // public/news/*.json files or the live ESPN API. Run against `localhost`.
 
@@ -49,12 +52,17 @@ async function mockFeeds(page: Page) {
       published: new Date(Date.UTC(2026, 9, 6, 18, 0) - (i * 60 + name.length) * 60_000).toISOString(),
       articleUrl: `https://example.com/${name}/${i}`,
       byline: "",
-      section: name,
+      // Post 1 of each feed is a Reddit post with top comments (test 5).
+      section: i === 0 ? "r/nba" : name,
+      ...(i === 0 ? { comments: ["first comment", "second comment"] } : {}),
     }));
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fetchedAt: "2026-10-06T18:00:00Z", items }) });
   });
   await page.route(/site\.api\.espn\.com|site\.web\.api\.espn\.com/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: "{}" }));
+  // Cmd-click opens the source in a new tab: answer it locally.
+  await page.context().route(/example\.com/, (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<p>source</p>" }));
 }
 
 const posts = (page: Page) => page.locator("article[data-news-key]");
@@ -73,74 +81,110 @@ async function settle(page: Page) {
 const seenStore = (page: Page) => page.evaluate((k) => Object.keys(JSON.parse(localStorage.getItem(k) || "{}")), SEEN_KEY);
 const renderedKeys = (page: Page) => posts(page).evaluateAll((els) => els.map((e) => e.getAttribute("data-news-key")!));
 
-test("Hide seen: 1.5 s on screen hides a post, 0.5 s does not; survives reload; toggle off restores", async ({ page }) => {
+const hiddenTitle = (n: number) => new RegExp(`\\(${n} hidden\\)`);
+
+test("Hide seen: scrolling past posts does not count", async ({ page }) => {
   await mockFeeds(page);
   await gotoNews(page);
   const total = await settle(page);
   expect(total).toBeGreaterThan(6);
   await expect(page.locator(TOGGLE)).toHaveAttribute("aria-pressed", "false");
 
-  // Top of the feed, held 2 s → the posts on screen are now seen.
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(2_000);
-  const seenTop = await seenStore(page);
-  expect(seenTop.length).toBeGreaterThan(0);
-  const all = await renderedKeys(page);
-  for (const k of seenTop) expect(all).toContain(k);
+  // Every post on screen, top to bottom, then hold 3 s.
+  for (let i = 0; i < total; i++) {
+    await posts(page).nth(i).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(150);
+  }
+  await page.waitForTimeout(3_000);
+  expect(await seenStore(page)).toEqual([]);
 
-  // The last post on screen for only 0.5 s → not seen.
-  const last = all[all.length - 1];
-  expect(seenTop).not.toContain(last);
-  await posts(page).last().scrollIntoViewIfNeeded();
-  await page.waitForTimeout(500);
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(300);
-  expect(await seenStore(page)).not.toContain(last);
-
-  // Toggle on → the seen posts are gone, the 0.5 s post stays.
-  const seenNow = await seenStore(page);
   await page.locator(TOGGLE).click();
   await expect(page.locator(TOGGLE)).toHaveAttribute("aria-pressed", "true");
-  await expect.poll(async () => (await renderedKeys(page)).filter((k) => seenNow.includes(k)).length, { timeout: 5_000 }).toBe(0);
-  const afterOn = await renderedKeys(page);
-  expect(afterOn).toContain(last);
-  expect(afterOn.length).toBe(all.length - seenNow.filter((k) => all.includes(k)).length);
-  await expect(page.locator(TOGGLE)).toHaveAttribute("title", new RegExp(`\\(${all.length - afterOn.length} hidden\\)`));
-
-  // A post that turns seen while on screen stays until the next snapshot.
-  await page.waitForTimeout(2_000);
-  const seenWhileOn = (await seenStore(page)).filter((k) => !seenNow.includes(k));
-  expect(seenWhileOn.length).toBeGreaterThan(0);
-  const stillThere = await renderedKeys(page);
-  for (const k of seenWhileOn) expect(stillThere).toContain(k);
-
-  // Reload → the pref and the store survive; everything seen so far is hidden.
-  const seenBeforeReload = await seenStore(page);
-  await page.reload();
-  await settle(page);
-  await expect(page.locator(TOGGLE)).toHaveAttribute("aria-pressed", "true");
-  const afterReload = await renderedKeys(page);
-  for (const k of seenBeforeReload) expect(afterReload).not.toContain(k);
-
-  // Toggle off → all posts are back.
-  await page.locator(TOGGLE).click();
-  await expect(page.locator(TOGGLE)).toHaveAttribute("aria-pressed", "false");
-  await expect.poll(async () => (await renderedKeys(page)).length, { timeout: 5_000 }).toBe(all.length);
+  await expect(page.locator(TOGGLE)).toHaveAttribute("title", hiddenTitle(0));
+  expect((await renderedKeys(page)).length).toBe(total);
 });
 
-test("Hide seen: Cards view drops seen posts too", async ({ page }) => {
+test("Hide seen: opening a post hides it on the next snapshot; toggle off restores", async ({ page }) => {
+  await mockFeeds(page);
+  await gotoNews(page);
+  const total = await settle(page);
+  const all = await renderedKeys(page);
+  const key = all[2];
+
+  await posts(page).nth(2).getByRole("button", { name: "Open post" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  expect(await seenStore(page)).toEqual([key]);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  // Still on screen until the snapshot: opening must not yank it.
+  expect(await renderedKeys(page)).toContain(key);
+
+  await page.locator(TOGGLE).click();
+  await expect.poll(async () => (await renderedKeys(page)).includes(key), { timeout: 5_000 }).toBe(false);
+  expect((await renderedKeys(page)).length).toBe(total - 1);
+  await expect(page.locator(TOGGLE)).toHaveAttribute("title", hiddenTitle(1));
+
+  await page.locator(TOGGLE).click();
+  await expect.poll(async () => (await renderedKeys(page)).length, { timeout: 5_000 }).toBe(total);
+});
+
+test("Hide seen: paging next inside the modal marks each post it lands on", async ({ page }) => {
+  await mockFeeds(page);
+  await gotoNews(page);
+  const total = await settle(page);
+  const all = await renderedKeys(page);
+
+  await posts(page).nth(1).getByRole("button", { name: "Open post" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => seenStore(page).then((k) => k.length), { timeout: 3_000 }).toBe(2);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => seenStore(page).then((k) => k.length), { timeout: 3_000 }).toBe(3);
+  expect((await seenStore(page)).sort()).toEqual(all.slice(1, 4).sort());
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  await page.locator(TOGGLE).click();
+  await expect.poll(async () => (await renderedKeys(page)).length, { timeout: 5_000 }).toBe(total - 3);
+  await expect(page.locator(TOGGLE)).toHaveAttribute("title", hiddenTitle(3));
+});
+
+test("Hide seen: cmd-click in Cards view counts and survives reload", async ({ page }) => {
   await mockFeeds(page);
   await gotoNews(page, { newsFeedView: false });
-  const cards = page.locator("main [data-news-key]");
-  await expect(cards.first()).toBeVisible({ timeout: 30_000 });
-  await page.waitForTimeout(2_500);
-  const seen = await seenStore(page);
-  expect(seen.length).toBeGreaterThan(0);
+  const opener = page.locator("main [data-news-key] [data-news-open], main [data-news-open][data-news-key], main [data-news-key] a[href], main a[href][data-news-key]").first();
+  await expect(opener).toBeVisible({ timeout: 30_000 });
+  const key = await opener.evaluate((el) => el.closest("[data-news-key]")!.getAttribute("data-news-key")!);
+
+  const popup = page.waitForEvent("popup");
+  await opener.click({ modifiers: [process.platform === "darwin" ? "Meta" : "Control"] });
+  await (await popup).close();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await seenStore(page)).toEqual([key]);
+
+  const cardKeys = () => page.locator("main [data-news-key]").evaluateAll((els) => els.map((e) => e.getAttribute("data-news-key")!));
   await page.locator(TOGGLE).click();
-  await expect.poll(async () => {
-    const keys = await cards.evaluateAll((els) => els.map((e) => e.getAttribute("data-news-key")!));
-    return keys.filter((k) => seen.includes(k)).length;
-  }, { timeout: 5_000 }).toBe(0);
+  await expect.poll(async () => (await cardKeys()).includes(key), { timeout: 5_000 }).toBe(false);
+
+  await page.reload();
+  await expect(page.locator(TOGGLE)).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+  await expect(page.locator("main [data-news-key]").first()).toBeVisible({ timeout: 30_000 });
+  expect(await cardKeys()).not.toContain(key);
+});
+
+test("Hide seen: the comments toggle does not count", async ({ page }) => {
+  await mockFeeds(page);
+  await gotoNews(page);
+  await settle(page);
+  const toggle = page.getByRole("button", { name: /top comments/ }).first();
+  await toggle.scrollIntoViewIfNeeded();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await page.waitForTimeout(500);
+  expect(await seenStore(page)).toEqual([]);
 });
 
 test("Reset to defaults clears Hide seen", async ({ page }) => {
@@ -175,16 +219,3 @@ for (const width of [390, 360]) {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 }
-
-test("a post twice the viewport tall still counts as seen", async ({ page }) => {
-  await mockFeeds(page);
-  await gotoNews(page);
-  await settle(page);
-  const key = await posts(page).nth(3).evaluate((el) => {
-    (el as HTMLElement).style.minHeight = `${window.innerHeight * 2}px`;
-    return el.getAttribute("data-news-key")!;
-  });
-  await posts(page).nth(3).evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + window.innerHeight * 0.5));
-  await page.waitForTimeout(2_000);
-  expect(await seenStore(page)).toContain(key);
-});

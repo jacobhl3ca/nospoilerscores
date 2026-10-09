@@ -310,6 +310,7 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
           global Headlines chip is what un-blurs the feed where it stands. */}
       <button
         type="button"
+        data-news-open=""
         onClick={onOpen}
         className="block w-full text-left px-4 pt-2 pb-3 cursor-pointer"
         title="Open post"
@@ -327,6 +328,7 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
       {hasMedia && (
         <button
           type="button"
+          data-news-open=""
           onClick={onOpen}
           // min-h keeps this button a tappable black tile even when its only
           // child collapses to zero height — an image post whose proxied

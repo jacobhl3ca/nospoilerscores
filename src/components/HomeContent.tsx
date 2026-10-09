@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
+import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
@@ -640,7 +640,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; seenKey?: string | null };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -1330,6 +1330,7 @@ export default function HomeContent({
     body: opts.body || null,
     siblings: opts.siblings || null,
     sibIndex: opts.index ?? null,
+    seenKey: opts.seenKey || null,
   }), []);
   const playNewsVideo = useCallback<PlayHandler>((opts) => {
     clearReopen();
@@ -1342,6 +1343,9 @@ export default function HomeContent({
       return;
     }
     const m = optsToModal(opts);
+    // Opening a news post marks it seen. The card-click tracker already did;
+    // this covers openers outside a card. Idempotent.
+    if (m.seenKey) markSeen(m.seenKey);
     setVideoModal(m);
     // Sync the address bar to the share link for EVERY news item (pics, redd.it
     // videos, NHL embeds — not just YouTube), so copying the URL bar previews the
@@ -1360,6 +1364,8 @@ export default function HomeContent({
       const ni = m.sibIndex + dir;
       if (ni < 0 || ni >= m.siblings.length) return m;
       const nm = optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni });
+      // Paging to a post opens it, so it counts as seen.
+      if (nm.seenKey) markSeen(nm.seenKey);
       if (typeof window !== "undefined") {
         const href = modalShareHref(nm);
         if (href) window.history.replaceState(window.history.state, "", href);
@@ -2722,8 +2728,9 @@ export default function HomeContent({
     () => enabledCategories(prefs.hideSensitiveNews, prefs.hideCrashNews),
     [prefs.hideSensitiveNews, prefs.hideCrashNews],
   );
-  // 👁 Hide seen (Jacob 10/6). The tracker marks a post seen after 1.5 s on
-  // screen, toggle on or off, so flipping it on hides what was already read.
+  // 👁 Hide seen (Jacob 10/6, 10/8). A post is seen once he OPENS it (tap,
+  // source link, or ‹ prev / next › paging in the modal), toggle on or off,
+  // so flipping it on hides what was already read. Scrolling past does not count.
   // The surfaces filter on a SNAPSHOT, not the live store: a post that turns
   // seen while he is looking at it must not vanish under his eyes. A new
   // snapshot is taken only when the toggle flips, the News tab is entered,
@@ -3267,8 +3274,8 @@ export default function HomeContent({
                 onClick={() => updatePrefs({ newsSingleColumn: !prefs.newsSingleColumn })}
               />
             )}
-            {/* 👁 Hide seen, LEFT of ⇅ (Jacob 10/6): drop every post that sat
-                on screen 1.5 s on an earlier look. Same round shape and
+            {/* 👁 Hide seen, LEFT of ⇅ (Jacob 10/6): drop every post he
+                opened on an earlier look. Same round shape and
                 filled-accent = on treatment as ⇅ and the funnel. */}
             {showNews && (
               <button
@@ -3281,9 +3288,9 @@ export default function HomeContent({
                   color: prefs.newsHideSeen ? "white" : "var(--text-muted)",
                 }}
                 title={prefs.newsHideSeen
-                  ? `Hide posts you've seen — tap to show all (${hiddenSeenCount} hidden)`
-                  : "Showing all posts — tap to hide seen"}
-                aria-label={prefs.newsHideSeen ? "Hide seen posts (on)" : "Hide seen posts"}
+                  ? `Hiding posts you opened — tap to show all (${hiddenSeenCount} hidden)`
+                  : "Showing all posts — tap to hide posts you opened"}
+                aria-label={prefs.newsHideSeen ? "Hide posts you opened (on)" : "Hide posts you opened"}
                 aria-pressed={!!prefs.newsHideSeen}
                 data-testid="news-hide-seen"
               >
