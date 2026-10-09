@@ -70,6 +70,12 @@ interface LeagueColumnProps {
   // "Remove from list…" row: pick switcher rows, then take them all off the
   // switcher at once, the same as unticking them in Settings (Jacob 10/8).
   onRemoveFromList?: (sports: Sport[]) => void;
+  // A pinned league between seasons keeps its column (Jacob 10/9), which asks
+  // inline "Close this column?". Set by HomeContent only for a pinned slot
+  // whose league the user has not kept; the line shows only while the league
+  // is between seasons (seasonOpener).
+  onCloseOffseason?: () => void;
+  onKeepOffseason?: () => void;
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
   showSwapChevron?: boolean;
@@ -951,6 +957,8 @@ export default function LeagueColumn({
   onAddLeague,
   onAddMore,
   onRemoveFromList,
+  onCloseOffseason,
+  onKeepOffseason,
   showSwapChevron,
   switcherMode,
   onCycleLeague,
@@ -2324,6 +2332,25 @@ export default function LeagueColumn({
               ✕
             </button>
           )}
+        </div>
+      )}
+      {seasonOpener && onCloseOffseason && onKeepOffseason && renderUpcoming && !teamViewTeam && (
+        // Pinned league between seasons: one inline question, not a popup.
+        // Close = Remove col; Keep = never ask again for this league.
+        <div
+          data-offseason-pin-prompt
+          className="mb-1.5 sm:mb-2 rounded px-2 py-1.5 text-[11px] leading-snug"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+        >
+          <span>{league.label} is off until {seasonOpener.approximate ? "~" : ""}{seasonOpener.label}. Close this column?</span>
+          <span className="mt-1 flex gap-3">
+            <button type="button" onClick={onCloseOffseason} className="cursor-pointer underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text)" }}>
+              Close column
+            </button>
+            <button type="button" onClick={onKeepOffseason} className="cursor-pointer underline underline-offset-2 hover:opacity-80">
+              Keep
+            </button>
+          </span>
         </div>
       )}
       <PairingRevealAll games={cardGames} className="mb-1.5 sm:mb-2" />

@@ -1159,6 +1159,32 @@ const EVENT_SPORTS: Partial<Record<Sport, true>> = {
   golf: true, tennis: true, fifa: true, euro: true, afcon: true,
 };
 
+// The config in `pool` whose next opening comes soonest after viewDate, or null
+// when none has a window ahead. Shared by getSeasonOpener and fetchAllLeagues'
+// offseason pin, so a pinned golf or tennis column carries the same event its
+// "Returns ~…" line names.
+function nextOpening(pool: LeagueConfig[], viewDate: Date): { config: LeagueConfig; kickoff: Date; daysUntil: number } | null {
+  let best: { config: LeagueConfig; kickoff: Date; daysUntil: number } | null = null;
+  for (const config of pool) {
+    // World Cup / Euro / AFCON are gated to their cycle year, so the next
+    // occurrence of their MM-DD is usually the wrong year and kickoffFor returns
+    // null. Walk forward a cycle at a time instead of giving up — "starts Jun
+    // 2030" is still the answer someone opening the column wants.
+    const maxYears = config.yearCycle ? config.yearCycle.mod : 1;
+    for (let i = 0; i < maxYears; i++) {
+      const probe = new Date(viewDate.getFullYear() + i, viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+      const k = kickoffFor(config, probe);
+      if (!k) continue;
+      const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+      const daysUntil = Math.round((k.kickoff.getTime() - view.getTime()) / DAY_MS);
+      if (daysUntil < 1) continue;
+      if (!best || daysUntil < best.daysUntil) best = { config, kickoff: k.kickoff, daysUntil };
+      break;
+    }
+  }
+  return best;
+}
+
 // Next opener for `sport` on or after viewDate, or null when there is nothing to
 // name: event-driven sports with no season window (UFC, boxing, chess), or a
 // league already inside its window (an in-season gap is a schedule hole, not an
@@ -1179,24 +1205,7 @@ export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): Se
   // Wimbledon's date instead of going silent.
   if (pool.some((l) => isLeagueActive(l, viewDate))) return null;
 
-  let best: { config: LeagueConfig; kickoff: Date; daysUntil: number } | null = null;
-  for (const config of pool) {
-    // World Cup / Euro / AFCON are gated to their cycle year, so the next
-    // occurrence of their MM-DD is usually the wrong year and kickoffFor returns
-    // null. Walk forward a cycle at a time instead of giving up — "starts Jun
-    // 2030" is still the answer someone opening the column wants.
-    const maxYears = config.yearCycle ? config.yearCycle.mod : 1;
-    for (let i = 0; i < maxYears; i++) {
-      const probe = new Date(viewDate.getFullYear() + i, viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
-      const k = kickoffFor(config, probe);
-      if (!k) continue;
-      const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
-      const daysUntil = Math.round((k.kickoff.getTime() - view.getTime()) / DAY_MS);
-      if (daysUntil < 1) continue;
-      if (!best || daysUntil < best.daysUntil) best = { config, kickoff: k.kickoff, daysUntil };
-      break;
-    }
-  }
+  const best = nextOpening(pool, viewDate);
   if (!best) return null;
 
   const { config, kickoff, daysUntil } = best;
@@ -6285,11 +6294,13 @@ export async function fetchAllLeagues(
     // describes; the fix has to be here as well as in the options list.)
     const upcomingConfig = configs.find((l) => isLeagueUpcoming(l, viewDate));
     if (upcomingConfig) return upcomingConfig;
-    // NBA is the deliberate offseason exception: it stays manually pinnable
-    // for league news and the trade board, but the auto-picker above still
-    // uses isLeagueActive() and therefore never forces an empty NBA column on
-    // people between the Finals and opening night.
-    return sport === "nba" ? configs[0] : null;
+    // A pinned league between seasons keeps its column (Jacob 10/9; was NBA
+    // only): the column says when it returns, its news stays, and the column
+    // offers to close. An Auto column never lands here — the auto-picker above
+    // uses isLeagueActive(). Several configs (golf majors, tennis Slams, NFL
+    // preseason) → the one that opens next, as getSeasonOpener names it.
+    const windowed = configs.filter((l) => !l.hidden && !l.backfillOnly && l.startDate && l.endDate);
+    return nextOpening(windowed, viewDate)?.config ?? configs[0];
   };
   const slot1Cfg = resolveSlot(slotOverrides?.first);
   const slot2Cfg = resolveSlot(slotOverrides?.second);

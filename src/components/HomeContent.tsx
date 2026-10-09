@@ -5054,6 +5054,20 @@ export default function HomeContent({
                 </p>
               </div>
             ) : null;
+            // A pinned league between seasons keeps its column and asks once
+            // whether to close it (Jacob 10/9). Close = Remove col; Keep stops
+            // the question for that league. The column shows the line only
+            // while the league is between seasons.
+            const offseasonPromptFor = (idx: number) => {
+              const pin = selectedSlotLeagues[idx];
+              if (pin === undefined || pin === "empty") return {};
+              if ((prefs.offseasonKeep ?? []).includes(pin)) return {};
+              if (!slotEntries.some((e) => e.slotIdx === idx && e.league.sport === pin)) return {};
+              return {
+                onCloseOffseason: () => setSlotLeague(idx, "empty"),
+                onKeepOffseason: () => updatePrefs({ offseasonKeep: [...(prefs.offseasonKeep ?? []), pin] }),
+              };
+            };
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
               // `idx` is the raw slot (0-4), but empty slots collapse, so the
@@ -5073,6 +5087,7 @@ export default function HomeContent({
                   .map(({ sport, col }) => ({ sport, col })),
               }),
               onRemoveFromList: removeFromSwitcher,
+              ...offseasonPromptFor(idx),
               // An Auto column that Best of yesterday took over: Auto IS that
               // column today, so it carries the "· default" mark.
               autoSport: selectedSlotLeagues[idx] === undefined
