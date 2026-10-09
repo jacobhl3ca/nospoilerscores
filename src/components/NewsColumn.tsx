@@ -11,6 +11,7 @@ import { frontendHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
+import InlineVideoCard from "@/components/InlineVideoCard";
 
 export interface NewsSource {
   label: string;
@@ -169,6 +170,9 @@ interface NewsColumnProps {
   // Show the subtle × remove-column control on this column's title (see
   // NewsColumnTitle.removable) — set only when more than one column is visible.
   removable?: boolean;
+  // Video sources render as large cards that play muted while on screen
+  // (InlineVideoCard) — the ESPN layout's "Big" mode.
+  bigVideos?: boolean;
 }
 
 // Sticky league title (with optional swap dropdown for the 3rd column).
@@ -990,7 +994,45 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys, onHiddenItems, hideSeenKeys, onSeenHidden }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; restoredKeys?: Set<string>; onHiddenItems?: (label: string, items: NewsItem[]) => void; hideSeenKeys?: Set<string>; onSeenHidden?: (label: string, count: number) => void }) {
+// The ESPN layout's "Big" mode: one large muted-autoplay card per clip. Only
+// the first BIG_AUTOPLAY_CAP cards autoplay, to cap data use; the rest keep
+// a still thumbnail that opens the modal.
+const BIG_AUTOPLAY_CAP = 8;
+function BigVideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null }) {
+  if (loading || items.length === 0) {
+    return <VideoSourceCard label={label} logoUrl={logoUrl} items={items} loading={loading} onPlay={onPlay} siblings={siblings} baseIndex={baseIndex} />;
+  }
+  return (
+    <div className="rounded-lg overflow-clip" style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)" }}>
+      <SourceHeader label={label} logoUrl={logoUrl} />
+      <div className="flex flex-col">
+        {items.map((item, idx) => (
+          <div key={item.id} style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)" }}>
+            <InlineVideoCard
+              item={item}
+              autoplay={idx < BIG_AUTOPLAY_CAP}
+              ariaLabel={`Play highlight: ${item.headline}`}
+              onOpen={() => {
+                if (onPlay) {
+                  onPlay({
+                    ...newsItemToPlayOpts(item),
+                    sourceLabel: null,
+                    siblings: siblings ?? undefined,
+                    index: baseIndex != null ? baseIndex + idx : idx,
+                  });
+                } else if (item.articleUrl) {
+                  window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
+                }
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys, onHiddenItems, hideSeenKeys, onSeenHidden, bigVideos }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; restoredKeys?: Set<string>; onHiddenItems?: (label: string, items: NewsItem[]) => void; hideSeenKeys?: Set<string>; onSeenHidden?: (label: string, count: number) => void; bigVideos?: boolean }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1073,8 +1115,9 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   if (hidden) return null;
 
   if (source.variant === "video") {
+    const Card = bigVideos ? BigVideoSourceCard : VideoSourceCard;
     return (
-      <VideoSourceCard
+      <Card
         label={source.label}
         logoUrl={source.logoUrl}
         items={shown}
@@ -1111,6 +1154,7 @@ export default function NewsColumn({
   hiddenCategories,
   hideSeenKeys,
   onSeenHiddenCount,
+  bigVideos,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
 
@@ -1252,6 +1296,7 @@ export default function NewsColumn({
             onHiddenItems={handleHiddenItems}
             hideSeenKeys={hideSeenKeys}
             onSeenHidden={handleSeenHidden}
+            bigVideos={bigVideos}
           />
         ))}
         {allFiltered && (

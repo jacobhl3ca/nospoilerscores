@@ -6,7 +6,7 @@ import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "
 import { enabledCategories } from "@/lib/sensitiveNews";
 import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
-import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
+import { Preferences, Theme, NewsLayout, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
@@ -41,7 +41,7 @@ import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
@@ -2532,6 +2532,8 @@ export default function HomeContent({
   // newsSourceOrder values from the removed drag-reorder UI: otherwise an old
   // local preference can silently bury a newly added source forever.
   const ALL_NEWS_SOURCE_TYPES: NewsSourceType[] = ["topvideos", "reddit", "espn", "homepage"];
+  // Cards / Feed / ESPN (the toolbar pill). Old blobs carry only newsFeedView.
+  const newsLayout: NewsLayout = newsLayoutOf(prefs);
   const legacyNewsTypeFilter = prefs.newsTypeFilter ?? "reddit";
   const savedNewsTypeFilters = prefs.newsTypeFilters?.filter(
     (value): value is NewsSourceType => ALL_NEWS_SOURCE_TYPES.includes(value as NewsSourceType),
@@ -2740,7 +2742,7 @@ export default function HomeContent({
   useNewsSeenTracker(mainRef, showNews && prefsHydrated);
   const [seenSnapshot, setSeenSnapshot] = useState<Set<string>>(() => new Set());
   const seenSnapshotTrigger = [
-    showNews, prefs.newsHideSeen, prefs.newsFeedView, newsTypeFilters.join(","), newsRefreshKey,
+    showNews, prefs.newsHideSeen, newsLayout, prefs.newsEspnBig, newsTypeFilters.join(","), newsRefreshKey,
     prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague,
     prefs.newsThirdLeague, prefs.newsTopNews, prefs.newsFocusLeague, prefs.newsSingleColumn,
     prefs.newsVideosOnly, prefs.showTextPosts, prefs.hideSensitiveNews, prefs.hideCrashNews,
@@ -3482,25 +3484,40 @@ export default function HomeContent({
         <div ref={newsToolbarRef} className="news-toolbar-sticky sticky z-[36]" style={{ background: "var(--bg)" }}>
           <div className="max-w-6xl mx-auto px-4 flex justify-center flex-wrap items-center gap-2 pt-2 pb-2">
             <div className="inline-flex rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-              {([["Cards", false], ["Feed", true]] as const).map(([label, on]) => (
+              {([["Cards", "cards"], ["Feed", "feed"], ["ESPN", "espn"]] as const).map(([label, layout]) => (
                 <button
                   type="button"
                   key={label}
-                  onClick={() => updatePrefs({ newsFeedView: on })}
-                  className="px-4 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+                  // newsFeedView is kept in step so an older build reading the
+                  // same synced blob still lands on Feed vs Cards correctly.
+                  onClick={() => updatePrefs({ newsLayout: layout, newsFeedView: layout === "feed" })}
+                  className="px-3 sm:px-4 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
                   // Neutral selected segment, not a solid blue pill (Jacob 7/16):
                   // a subtle raised fill + regular text reads as selected without
                   // the loud accent-blue chip on the top row.
                   style={{
-                    background: !!prefs.newsFeedView === on ? "var(--bg-card-hover)" : "transparent",
-                    color: !!prefs.newsFeedView === on ? "var(--text)" : "var(--text-muted)",
+                    background: newsLayout === layout ? "var(--bg-card-hover)" : "transparent",
+                    color: newsLayout === layout ? "var(--text)" : "var(--text-muted)",
                   }}
-                  aria-pressed={!!prefs.newsFeedView === on}
+                  aria-pressed={newsLayout === layout}
                 >
                   {label}
                 </button>
               ))}
             </div>
+            {/* ESPN layout only: Big = one wide column of large clips that play
+                muted while on screen (Jacob 10/8). */}
+            {newsLayout === "espn" && (
+              <NewsToggleChip
+                active={!!prefs.newsEspnBig}
+                onClick={() => updatePrefs({ newsEspnBig: !prefs.newsEspnBig })}
+                title="One wide column of big ESPN clips that play muted while on screen"
+                ariaLabel="Toggle big ESPN videos"
+              >
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m10 9 5 3-5 3z" /></svg>
+                <span>Big</span>
+              </NewsToggleChip>
+            )}
             <NewsToggleChip
               active={!!prefs.revealNewsTitles}
               onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
@@ -4176,7 +4193,117 @@ export default function HomeContent({
           // the multi-column board. Aggregate every visible column's sources into
           // a single stream; NewsFeed fetches + merges + time-sorts them and
           // renders inline posts with blurred top comments.
-          if (prefs.newsFeedView) {
+          // ESPN layout (Jacob 10/8): ESPN Videos left, ESPN Top Headlines
+          // right, then one Reddit column per scores-board league with a sub
+          // (capped at 3, a shared sub like r/soccer only once). The layout
+          // owns its columns, so the source funnel, Focus league and the
+          // single-column toggle do not apply; the toolbar chips do.
+          if (newsLayout === "espn") {
+            const usedSubs = new Set<string>();
+            const redditCols: { id: string; label: string; cascade: ColumnSource[] }[] = [];
+            for (const sport of scoreSlotSports) {
+              if (!sport || sport === "top" || sport === "best") continue;
+              const cascade = redditSourcesFor(sport).filter((s) => !usedSubs.has(s.key));
+              if (cascade.length === 0) continue;
+              cascade.forEach((s) => usedSubs.add(s.key));
+              redditCols.push({ id: sport, label: leagueLabelFor(sport), cascade });
+            }
+            if (redditCols.length === 0) {
+              redditCols.push({ id: "general", label: "Sports", cascade: [GENERAL_REDDIT_SOURCE] });
+            }
+            const redditShown = redditCols.slice(0, 3);
+            const big = !!prefs.newsEspnBig;
+            const filterProps = {
+              onPlayVideo: playNewsVideo,
+              videosOnly: !!prefs.newsVideosOnly,
+              showTextPosts: !!prefs.showTextPosts,
+              oldestFirst: !!prefs.newsOldestFirst,
+              hiddenCategories: hiddenNewsCategories,
+              hideSeenKeys,
+              onSeenHiddenCount: reportSeenHidden,
+            };
+            const k = `espn-${newsRefreshKey}`;
+            if (isMobile) {
+              // Phones: one stacked column, Videos → Headlines → each sub.
+              return (
+                <div className="flex flex-col items-center" data-testid="news-espn-layout">
+                  <NewsColumn
+                    key={`${k}-mobile`}
+                    title=""
+                    hideTitle
+                    sources={cascadeToSources([ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)])}
+                    widthClassName={wideCol}
+                    bigVideos={big}
+                    {...filterProps}
+                  />
+                </div>
+              );
+            }
+            const redditWidth = redditShown.length >= 3 ? narrowCol : "flex-1 min-w-0 max-w-[360px]";
+            return (
+              <div className="flex flex-col gap-6" data-testid="news-espn-layout">
+                {big ? (
+                  // Big: one wide column of large muted-autoplay clips, the
+                  // headlines under it.
+                  <div className="flex flex-col items-center gap-4" data-testid="news-espn-row1">
+                    <NewsColumn
+                      key={`${k}-videos-big`}
+                      title="ESPN Videos"
+                      sources={cascadeToSources([ESPN_LAYOUT_VIDEOS])}
+                      widthClassName="w-full max-w-[720px]"
+                      titleMeasureRef={newsTitleRowRef}
+                      bigVideos
+                      {...filterProps}
+                    />
+                    <NewsColumn
+                      key={`${k}-headlines-big`}
+                      title="Top Headlines"
+                      sources={cascadeToSources([ESPN_LAYOUT_HEADLINES])}
+                      widthClassName="w-full max-w-[720px]"
+                      {...filterProps}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-row justify-center items-start gap-4" data-testid="news-espn-row1">
+                    <NewsColumn
+                      key={`${k}-videos`}
+                      title="ESPN Videos"
+                      sources={cascadeToSources([ESPN_LAYOUT_VIDEOS])}
+                      widthClassName="flex-1 min-w-0 max-w-[520px] xl:max-w-[560px]"
+                      titleMeasureRef={newsTitleRowRef}
+                      {...filterProps}
+                    />
+                    <NewsColumn
+                      key={`${k}-headlines`}
+                      title="Top Headlines"
+                      sources={cascadeToSources([ESPN_LAYOUT_HEADLINES])}
+                      widthClassName="flex-1 min-w-0 max-w-[520px] xl:max-w-[560px]"
+                      {...filterProps}
+                    />
+                  </div>
+                )}
+                <section aria-labelledby="news-espn-reddit-h" data-testid="news-espn-reddit">
+                  <h2 id="news-espn-reddit-h" className="text-center text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                    Your leagues on Reddit
+                  </h2>
+                  {/* Big: a 2-column grid under the 720px clip column. */}
+                  <div className={big ? "grid grid-cols-2 items-start gap-4 max-w-[720px] mx-auto" : "flex flex-row justify-center items-start gap-2 sm:gap-4"}>
+                    {redditShown.map((c) => (
+                      <NewsColumn
+                        key={`${k}-reddit-${c.id}`}
+                        title={c.label}
+                        sources={cascadeToSources(c.cascade)}
+                        widthClassName={big ? "min-w-0" : redditWidth}
+                        {...filterProps}
+                      />
+                    ))}
+                  </div>
+                </section>
+              </div>
+            );
+          }
+
+          if (newsLayout === "feed") {
             const feedSources = focusedEntries.flatMap((e) => renderSourcesFor(e));
             return (
               <NewsFeed
