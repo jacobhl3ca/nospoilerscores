@@ -6,7 +6,7 @@ import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "
 import { enabledCategories } from "@/lib/sensitiveNews";
 import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
-import { Preferences, Theme, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
+import { Preferences, Theme, NewsLayout, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
@@ -39,13 +39,15 @@ import MlbSeasonReviewModal from "@/components/MlbSeasonReviewModal";
 import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, MLB_REVIEW_HIDDEN_KEY, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
-import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
+import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts, type CardOverride } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
+import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
+import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
@@ -535,8 +537,70 @@ function SingleColToggle({ active, onClick, compact }: { active: boolean; onClic
 // posts while Videos only is on). It renders dimmed + aria-disabled but still
 // toggles, so the pref can be pre-set for when the override lifts — a real
 // disabled button would trap the user in the override.
-function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, children }: {
+// News chip icons shared by the toolbar and the ESPN card headers (r5):
+// Autoplay = a play triangle in a circle (lucide circle-play), Big = two
+// diagonal arrows (lucide maximize-2), so there is only one play icon.
+// Autoplay off = the same circle-play crossed out (Jacob 10/9 r6), like the
+// Headlines eye / eye-off.
+function AutoplayIcon({ on, size = 16 }: { on: boolean; size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-autoplay-icon={on ? "on" : "off"}><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" />{!on && <line x1="1" y1="1" x2="23" y2="23" data-slash="" />}</svg>;
+}
+function BigIcon({ size = 16 }: { size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>;
+}
+function HeadlinesIcon({ on, size = 16 }: { on: boolean; size?: number }) {
+  return on
+    ? <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
+    : <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>;
+}
+function MediaIcon({ size = 16 }: { size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>;
+}
+function VideosOnlyIcon({ size = 16 }: { size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>;
+}
+function TextPostsIcon({ size = 16 }: { size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>;
+}
+
+// ESPN layout card-header button (r5): icon only, same look as
+// NewsToggleChip, sized to the header bar.
+function CardChip({ active, onClick, title, ariaLabel, disabled, children }: {
   active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean; children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={ariaLabel}
+      aria-pressed={active}
+      aria-disabled={disabled || undefined}
+      data-card-chip=""
+      className="inline-flex shrink-0 items-center justify-center w-7 h-7 rounded-full transition-colors cursor-pointer"
+      style={{
+        background: active ? "var(--accent)" : "var(--bg-card)",
+        border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+        color: active ? "white" : "var(--text-muted)",
+        opacity: disabled ? 0.45 : undefined,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Autoplay chip titles (toolbar + ESPN Videos header).
+const AUTOPLAY_TITLE = "Play the video in focus, muted. Tap it for sound.";
+const AUTOPLAY_PAUSED_TITLE = "Paused while Media is blurred. Turn Media on to play clips.";
+
+// Set once the "browser blocks autoplay" note has shown (r4): it shows once ever.
+const AUTOPLAY_BLOCKED_NOTE_KEY = "hs.autoplayBlockedNote.v1";
+
+function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, children }: {
+  active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean;
+  // Icon only (the toolbar row is too narrow for labels): see useToolbarFit.
+  compact?: boolean; children: ReactNode;
 }) {
   return (
     <button
@@ -552,7 +616,7 @@ function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, children 
       // icon-button convention used elsewhere (e.g. SingleColToggle above).
       aria-label={ariaLabel}
       aria-pressed={active}
-      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+      className={`news-chip inline-flex shrink-0 items-center gap-1.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${compact ? "news-chip-compact px-2.5" : "px-3.5"}`}
       style={{
         background: active ? "var(--accent)" : "var(--bg-card)",
         border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
@@ -2578,6 +2642,12 @@ export default function HomeContent({
   // newsSourceOrder values from the removed drag-reorder UI: otherwise an old
   // local preference can silently bury a newly added source forever.
   const ALL_NEWS_SOURCE_TYPES: NewsSourceType[] = ["topvideos", "reddit", "espn", "homepage"];
+  // Cards / Feed / ESPN (the toolbar pill). Old blobs carry only newsFeedView.
+  const newsLayout: NewsLayout = newsLayoutOf(prefs);
+  // News Autoplay pill (every layout): the video most in focus plays muted.
+  // Unset = on in every layout (Jacob 10/8 r4: off in Feed read as "autoplay
+  // is broken"). A saved choice wins.
+  const newsAutoplay = prefs.newsAutoplay ?? true;
   const legacyNewsTypeFilter = prefs.newsTypeFilter ?? "reddit";
   const savedNewsTypeFilters = prefs.newsTypeFilters?.filter(
     (value): value is NewsSourceType => ALL_NEWS_SOURCE_TYPES.includes(value as NewsSourceType),
@@ -2728,6 +2798,39 @@ export default function HomeContent({
     newsToolbarRoRef.current = ro;
   }, []);
 
+  // Round 4 (Jacob 10/8): the pill row is ONE row (icon-only pills when the
+  // labels do not fit, then a sideways scroll) and it slides up out of view on
+  // scroll down. The slide is a transform, so the toolbar keeps its height:
+  // --header-h, .header-flow-spacer and --news-toolbar-h never change (see
+  // .github/workflows/sticky-guard.yml). Only --news-toolbar-pin goes to 0, so
+  // the rows that pin under the toolbar move up into the freed band.
+  const toolbarFit = useToolbarFit(`${showNews}-${newsLayout === "espn"}`);
+  const { hidden: newsToolbarHidden, reveal: revealNewsToolbar } = useHideOnScroll(showNews);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    if (newsToolbarHidden) root.style.setProperty("--news-toolbar-pin", "0px");
+    else root.style.removeProperty("--news-toolbar-pin");
+  }, [newsToolbarHidden]);
+
+  // A layout, Big or Autoplay change moves cards without a scroll: pick the
+  // clip in focus again (r4: Feed → ESPN did not start the first clip). A
+  // Media tap does too: blurred clips do not play (r6).
+  useEffect(() => {
+    if (showNews && newsAutoplay) refocusAutoplay();
+  }, [showNews, newsLayout, prefs.newsEspnBig, newsAutoplay, prefs.revealNewsMedia, prefs.newsCardPrefs]);
+
+  // The browser refused muted autoplay (Firefox "Block Audio and Video",
+  // Safari Low Power Mode): one small note under the toolbar, shown once ever.
+  const [autoplayBlockedNote, setAutoplayBlockedNote] = useState(false);
+  useEffect(() => onAutoplayBlocked(() => {
+    try {
+      if (localStorage.getItem(AUTOPLAY_BLOCKED_NOTE_KEY)) return;
+      localStorage.setItem(AUTOPLAY_BLOCKED_NOTE_KEY, "1");
+    } catch { return; }
+    setAutoplayBlockedNote(true);
+  }), []);
+
   useEffect(() => {
     const onScroll = () => {
       setShowScrollTop(window.scrollY > 400);
@@ -2786,7 +2889,7 @@ export default function HomeContent({
   useNewsSeenTracker(mainRef, showNews && prefsHydrated);
   const [seenSnapshot, setSeenSnapshot] = useState<Set<string>>(() => new Set());
   const seenSnapshotTrigger = [
-    showNews, prefs.newsHideSeen, prefs.newsFeedView, newsTypeFilters.join(","), newsRefreshKey,
+    showNews, prefs.newsHideSeen, newsLayout, prefs.newsEspnBig, newsTypeFilters.join(","), newsRefreshKey,
     prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague,
     prefs.newsThirdLeague, prefs.newsTopNews, prefs.newsFocusLeague, prefs.newsSingleColumn,
     prefs.newsVideosOnly, prefs.showTextPosts, prefs.hideSensitiveNews, prefs.hideCrashNews,
@@ -3525,56 +3628,86 @@ export default function HomeContent({
           paints its own opaque var(--bg), so sitting above the cover — and still
           below the z-40 app header — keeps the seam sealed either way. */}
       {showNews && (
-        <div ref={newsToolbarRef} className="news-toolbar-sticky sticky z-[36]" style={{ background: "var(--bg)" }}>
-          <div className="max-w-6xl mx-auto px-4 flex justify-center flex-wrap items-center gap-2 pt-2 pb-2">
-            <div className="inline-flex rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-              {([["Cards", false], ["Feed", true]] as const).map(([label, on]) => (
+        <div
+          ref={newsToolbarRef}
+          className="news-toolbar-sticky sticky z-[36]"
+          data-hidden={newsToolbarHidden ? "" : undefined}
+          onFocus={revealNewsToolbar}
+          style={{ background: "var(--bg)" }}
+        >
+          <div ref={toolbarFit.scrollerRef} className="news-toolbar-scroll max-w-6xl mx-auto px-4 overflow-x-auto" data-compact={toolbarFit.compact ? "" : undefined}>
+          <div ref={toolbarFit.rowRef} className="w-max mx-auto flex flex-nowrap items-center gap-2 pt-2 pb-2">
+            <div className="inline-flex shrink-0 rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              {([["Cards", "cards"], ["Feed", "feed"], ["ESPN", "espn"]] as const).map(([label, layout]) => (
                 <button
                   type="button"
                   key={label}
-                  onClick={() => updatePrefs({ newsFeedView: on })}
-                  className="px-4 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+                  // newsFeedView is kept in step so an older build reading the
+                  // same synced blob still lands on Feed vs Cards correctly.
+                  onClick={() => {
+                    // A new layout starts at the top. Firefox scroll anchoring
+                    // otherwise kept the old position and landed ~2,500px down,
+                    // past every clip (r4).
+                    if (layout !== newsLayout) window.scrollTo(0, 0);
+                    updatePrefs({ newsLayout: layout, newsFeedView: layout === "feed" });
+                  }}
+                  className="px-3 sm:px-4 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
                   // Neutral selected segment, not a solid blue pill (Jacob 7/16):
                   // a subtle raised fill + regular text reads as selected without
                   // the loud accent-blue chip on the top row.
                   style={{
-                    background: !!prefs.newsFeedView === on ? "var(--bg-card-hover)" : "transparent",
-                    color: !!prefs.newsFeedView === on ? "var(--text)" : "var(--text-muted)",
+                    background: newsLayout === layout ? "var(--bg-card-hover)" : "transparent",
+                    color: newsLayout === layout ? "var(--text)" : "var(--text-muted)",
                   }}
-                  aria-pressed={!!prefs.newsFeedView === on}
+                  aria-pressed={newsLayout === layout}
                 >
                   {label}
                 </button>
               ))}
             </div>
+            {/* ESPN layout (r5): the toolbar keeps only the layout switch;
+                every option button sits in its card's header (espnCardOverride). */}
+            {newsLayout !== "espn" && (<>
+            {/* Autoplay first (Jacob 10/9 r6). It dims while Media is blurred:
+                blurred clips do not play, so an on-looking chip with nothing
+                playing would read as broken. It still toggles. */}
             <NewsToggleChip
-              active={!!prefs.revealNewsTitles}
-              onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
-              title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
-              ariaLabel="Toggle headline reveal"
+              compact={toolbarFit.compact}
+              active={newsAutoplay}
+              onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
+              title={newsAutoplay && prefs.revealNewsMedia !== true ? AUTOPLAY_PAUSED_TITLE : AUTOPLAY_TITLE}
+              ariaLabel="Toggle news autoplay"
+              disabled={newsAutoplay && prefs.revealNewsMedia !== true}
             >
-              {prefs.revealNewsTitles ? (
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
-              ) : (
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
-              )}
-              <span>Headlines</span>
+              <AutoplayIcon on={newsAutoplay} />
+              <span>Autoplay</span>
             </NewsToggleChip>
-            {/* Media sits directly after Headlines (Jacob 8/9): the two
-                spoiler-reveal toggles belong next to each other — they do the
-                same job to the two halves of a post — while Videos/Text posts
-                are content FILTERS. Grouping them by what they do is most of
-                what makes this row readable. */}
+            {/* Media and Headlines sit together (Jacob 8/9): the two
+                spoiler-reveal toggles do the same job to the two halves of a
+                post, while Videos/Text posts are content FILTERS. Media comes
+                first (Jacob 10/9 r6). */}
             <NewsToggleChip
+              compact={toolbarFit.compact}
               active={prefs.revealNewsMedia === true}
               onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
               title="Show or spoiler-blur news image and video previews"
               ariaLabel="Toggle media reveal"
             >
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
+              <MediaIcon />
               <span>Media</span>
             </NewsToggleChip>
             <NewsToggleChip
+              compact={toolbarFit.compact}
+              active={!!prefs.revealNewsTitles}
+              onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
+              title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
+              ariaLabel="Toggle headline reveal"
+            >
+              <HeadlinesIcon on={!!prefs.revealNewsTitles} />
+              <span>Headlines</span>
+            </NewsToggleChip>
+            <NewsToggleChip
+              compact={toolbarFit.compact}
               active={!!prefs.newsVideosOnly}
               onClick={() => updatePrefs({ newsVideosOnly: !prefs.newsVideosOnly })}
               title="Show only video posts (highlights + Reddit clips)"
@@ -3587,6 +3720,7 @@ export default function HomeContent({
                 clip, so it can never pass the Videos filter. Dim this chip while
                 that's the case so its state doesn't read as a lie. */}
             <NewsToggleChip
+              compact={toolbarFit.compact}
               active={!!prefs.showTextPosts}
               onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
               title={prefs.newsVideosOnly ? "Off while Videos only is on" : "Show or hide headline-only text posts"}
@@ -3596,7 +3730,25 @@ export default function HomeContent({
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
               <span>Text posts</span>
             </NewsToggleChip>
+            </>)}
           </div>
+          </div>
+          {autoplayBlockedNote && (
+            <div role="status" data-testid="autoplay-blocked-note" className="max-w-6xl mx-auto px-4 pb-2 flex justify-center">
+              <p className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+                Your browser blocks autoplay. Tap a video to play.
+                <button
+                  type="button"
+                  onClick={() => setAutoplayBlockedNote(false)}
+                  aria-label="Dismiss autoplay note"
+                  className="text-base leading-none cursor-pointer transition-opacity hover:opacity-70"
+                  style={{ color: "var(--text-muted)", background: "none", border: "none" }}
+                >
+                  ×
+                </button>
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -3847,6 +3999,7 @@ export default function HomeContent({
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
               label: c.label,
+              key: c.key,
               logoUrl: c.logoUrl,
               variant: c.variant,
               fetch: c.kind === "espn-league" && c.sport
@@ -4221,11 +4374,214 @@ export default function HomeContent({
           // Feed view (Jacob 7/14): one vertical Reddit-style scroll instead of
           // the multi-column board. Aggregate every visible column's sources into
           // a single stream; NewsFeed fetches + merges + time-sorts them and
-          // renders inline posts with blurred top comments. Each column goes in
-          // as its own group so a post can say which league it is from, and
-          // the refresh key goes in as a prop, not a key: a remount dropped the
-          // list and the scroll position (Jacob 10/8).
-          if (prefs.newsFeedView) {
+          // renders inline posts with blurred top comments.
+          // ESPN layout (Jacob 10/8): ESPN Videos left, ESPN Top Headlines
+          // right, then one Reddit column per scores-board league with a sub
+          // (capped at 3, a shared sub like r/soccer only once). The layout
+          // owns its columns, so the source funnel, Focus league and the
+          // single-column toggle do not apply; the toolbar chips do.
+          if (newsLayout === "espn") {
+            const usedSubs = new Set<string>();
+            const redditCols: { id: string; label: string; cascade: ColumnSource[] }[] = [];
+            for (const sport of scoreSlotSports) {
+              if (!sport || sport === "top" || sport === "best") continue;
+              const cascade = redditSourcesFor(sport).filter((s) => !usedSubs.has(s.key));
+              if (cascade.length === 0) continue;
+              cascade.forEach((s) => usedSubs.add(s.key));
+              redditCols.push({ id: sport, label: leagueLabelFor(sport), cascade });
+            }
+            if (redditCols.length === 0) {
+              redditCols.push({ id: "general", label: "Sports", cascade: [GENERAL_REDDIT_SOURCE] });
+            }
+            const redditShown = redditCols.slice(0, 3);
+            const big = !!prefs.newsEspnBig;
+            // Each card's header carries its own buttons (Jacob 10/8 r5, order
+            // 10/9 r6): ESPN Videos = Autoplay, Big, Media, Headlines; Top
+            // Headlines = Media, Headlines; each subreddit = Media, Headlines,
+            // Videos only, Text posts. Media / Headlines / Videos only / Text
+            // posts act on that card only (newsCardPrefs, falling back to the
+            // global pref); Big and Autoplay stay global. Autoplay dims while
+            // this card's Media is blurred.
+            const cardPrefs = prefs.newsCardPrefs ?? {};
+            const setCardPref = (key: string, patch: Partial<NonNullable<typeof cardPrefs[string]>>) =>
+              updatePrefs({ newsCardPrefs: { ...cardPrefs, [key]: { ...cardPrefs[key], ...patch } } });
+            const espnCardOverride = (source: NewsSource): CardOverride => {
+              const key = source.key ?? source.label;
+              const cp = cardPrefs[key] ?? {};
+              const isVideos = key === ESPN_LAYOUT_VIDEOS.key;
+              const isEspn = isVideos || key === ESPN_LAYOUT_HEADLINES.key;
+              const titles = cp.revealTitles ?? !!prefs.revealNewsTitles;
+              const media = cp.revealMedia ?? prefs.revealNewsMedia === true;
+              // Videos only and Text posts do not apply to the ESPN cards.
+              const vOnly = isEspn ? false : cp.videosOnly ?? !!prefs.newsVideosOnly;
+              const text = isEspn ? true : cp.textPosts ?? !!prefs.showTextPosts;
+              const name = source.label;
+              return {
+                className: `news-card-titles-${titles ? "on" : "off"} news-card-media-${media ? "on" : "off"} news-card-textposts-${text ? "on" : "off"}`,
+                videosOnly: vOnly,
+                showTextPosts: text,
+                controls: (
+                  <>
+                    {isVideos && (
+                      <CardChip
+                        active={newsAutoplay}
+                        onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
+                        title={newsAutoplay && !media ? AUTOPLAY_PAUSED_TITLE : AUTOPLAY_TITLE}
+                        ariaLabel="Toggle news autoplay"
+                        disabled={newsAutoplay && !media}
+                      >
+                        <AutoplayIcon on={newsAutoplay} size={14} />
+                      </CardChip>
+                    )}
+                    {isVideos && (
+                      <CardChip
+                        active={big}
+                        onClick={() => { window.scrollTo(0, 0); updatePrefs({ newsEspnBig: !big }); }}
+                        title="One wide column of big ESPN clips"
+                        ariaLabel="Toggle big ESPN videos"
+                      >
+                        <BigIcon size={14} />
+                      </CardChip>
+                    )}
+                    <CardChip
+                      active={media}
+                      onClick={() => setCardPref(key, { revealMedia: !media })}
+                      title={`Show or blur the images and videos in ${name}`}
+                      ariaLabel={`Toggle media reveal: ${name}`}
+                    >
+                      <MediaIcon size={14} />
+                    </CardChip>
+                    <CardChip
+                      active={titles}
+                      onClick={() => setCardPref(key, { revealTitles: !titles })}
+                      title={`Show or blur the headlines in ${name}`}
+                      ariaLabel={`Toggle headline reveal: ${name}`}
+                    >
+                      <HeadlinesIcon on={titles} size={14} />
+                    </CardChip>
+                    {!isEspn && (
+                      <CardChip
+                        active={vOnly}
+                        onClick={() => setCardPref(key, { videosOnly: !vOnly })}
+                        title={`Show only video posts in ${name}`}
+                        ariaLabel={`Toggle videos-only filter: ${name}`}
+                      >
+                        <VideosOnlyIcon size={14} />
+                      </CardChip>
+                    )}
+                    {!isEspn && (
+                      <CardChip
+                        active={text}
+                        onClick={() => setCardPref(key, { textPosts: !text })}
+                        title={vOnly ? "Off while Videos only is on" : `Show or hide headline-only text posts in ${name}`}
+                        ariaLabel={`Toggle text posts: ${name}`}
+                        disabled={vOnly}
+                      >
+                        <TextPostsIcon size={14} />
+                      </CardChip>
+                    )}
+                  </>
+                ),
+              };
+            };
+            // No column titles (Jacob 10/8): each card's own header already
+            // says ESPN Videos / ESPN Top Headlines / r/<sub>, and the titles
+            // pushed Big's first clip half a screen down. Rows hug their
+            // content: there is no cross-column alignment to keep here.
+            const columnProps = {
+              hideTitle: true,
+              hugRows: true,
+              autoplayVideos: newsAutoplay,
+              onPlayVideo: playNewsVideo,
+              videosOnly: !!prefs.newsVideosOnly,
+              showTextPosts: !!prefs.showTextPosts,
+              oldestFirst: !!prefs.newsOldestFirst,
+              hiddenCategories: hiddenNewsCategories,
+              hideSeenKeys,
+              onSeenHiddenCount: reportSeenHidden,
+              cardOverride: espnCardOverride,
+            };
+            const k = `espn-${newsRefreshKey}`;
+            if (isMobile) {
+              // Phones: one stacked column, Videos → Headlines → each sub.
+              return (
+                <div className="flex flex-col items-center pt-2" data-testid="news-espn-layout">
+                  <NewsColumn
+                    key={`${k}-mobile`}
+                    title=""
+                    sources={cascadeToSources([ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)])}
+                    widthClassName={wideCol}
+                    bigVideos={big}
+                    {...columnProps}
+                  />
+                </div>
+              );
+            }
+            const redditWidth = redditShown.length >= 3 ? narrowCol : "flex-1 min-w-0 max-w-[360px]";
+            return (
+              <div className="flex flex-col gap-6 pt-2" data-testid="news-espn-layout">
+                {big ? (
+                  // Big: one wide column of large clips, the headlines under it.
+                  <div className="flex flex-col items-center gap-4" data-testid="news-espn-row1">
+                    <NewsColumn
+                      key={`${k}-videos-big`}
+                      title="ESPN Videos"
+                      sources={cascadeToSources([ESPN_LAYOUT_VIDEOS])}
+                      widthClassName="w-full max-w-[720px]"
+                      bigVideos
+                      {...columnProps}
+                    />
+                    <NewsColumn
+                      key={`${k}-headlines-big`}
+                      title="Top Headlines"
+                      sources={cascadeToSources([ESPN_LAYOUT_HEADLINES])}
+                      widthClassName="w-full max-w-[720px]"
+                      {...columnProps}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-row justify-center items-start gap-4" data-testid="news-espn-row1">
+                    <NewsColumn
+                      key={`${k}-videos`}
+                      title="ESPN Videos"
+                      sources={cascadeToSources([ESPN_LAYOUT_VIDEOS])}
+                      widthClassName="flex-1 min-w-0 max-w-[520px] xl:max-w-[560px]"
+                      {...columnProps}
+                    />
+                    <NewsColumn
+                      key={`${k}-headlines`}
+                      title="Top Headlines"
+                      sources={cascadeToSources([ESPN_LAYOUT_HEADLINES])}
+                      widthClassName="flex-1 min-w-0 max-w-[520px] xl:max-w-[560px]"
+                      {...columnProps}
+                    />
+                  </div>
+                )}
+                <section aria-labelledby="news-espn-reddit-h" data-testid="news-espn-reddit" className="flex flex-col gap-2">
+                  <h2 id="news-espn-reddit-h" className="text-center text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                    Your leagues on Reddit
+                  </h2>
+                  {/* Big: a 2-column grid under the 720px clip column. */}
+                  <div className={big ? "grid grid-cols-2 items-start gap-4 w-full max-w-[720px] mx-auto" : "flex flex-row justify-center items-start gap-2 sm:gap-4"}>
+                    {redditShown.map((c) => (
+                      <NewsColumn
+                        key={`${k}-reddit-${c.id}`}
+                        title={c.label}
+                        sources={cascadeToSources(c.cascade)}
+                        widthClassName={big ? "min-w-0" : redditWidth}
+                        {...columnProps}
+                      />
+                    ))}
+                  </div>
+                </section>
+              </div>
+            );
+          }
+
+          // Feed: each column goes in as its own group so a post can say which
+          // league it is from, and the refresh key goes in as a prop, not a
+          // key: a remount dropped the list and the scroll position (Jacob 10/8).
+          if (newsLayout === "feed") {
             const feedGroups = focusedEntries.map((e) => ({
               id: `${e.id}-${e.slotIdx}`,
               label: e.label,
@@ -4242,6 +4598,7 @@ export default function HomeContent({
                 oldestFirst={!!prefs.newsOldestFirst}
                 hiddenCategories={hiddenNewsCategories}
                 hideSeenKeys={hideSeenKeys}
+                autoplay={newsAutoplay}
                 onSeenHiddenCount={reportSeenHidden}
               />
             );
@@ -4298,6 +4655,7 @@ export default function HomeContent({
                     hiddenCategories={hiddenNewsCategories}
                     oldestFirst={!!prefs.newsOldestFirst}
                     hideSeenKeys={hideSeenKeys}
+                    autoplay={newsAutoplay}
                     onSeenHiddenCount={reportSeenHidden}
                   />
                 </>
@@ -4326,6 +4684,7 @@ export default function HomeContent({
                     oldestFirst={!!prefs.newsOldestFirst}
                     hiddenCategories={hiddenNewsCategories}
                     hideSeenKeys={hideSeenKeys}
+                    autoplayVideos={newsAutoplay}
                     onSeenHiddenCount={reportSeenHidden}
                   />
                 ) : renderedEntries.map((entry, idx) => {
@@ -4356,6 +4715,7 @@ export default function HomeContent({
                       oldestFirst={!!prefs.newsOldestFirst}
                       hiddenCategories={hiddenNewsCategories}
                       hideSeenKeys={hideSeenKeys}
+                      autoplayVideos={newsAutoplay}
                       onSeenHiddenCount={reportSeenHidden}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).

@@ -936,6 +936,10 @@ export default function SettingsPanel({
     // surviving a reset; it has no non-undefined default either. Same for
     // newsHideSeen (the 👁 control).
     newsFeedView: undefined,
+    newsLayout: undefined,
+    newsEspnBig: undefined,
+    newsAutoplay: undefined,
+    newsCardPrefs: undefined,
     newsVideosOnly: undefined,
     newsOldestFirst: undefined,
     newsHideSeen: undefined,
