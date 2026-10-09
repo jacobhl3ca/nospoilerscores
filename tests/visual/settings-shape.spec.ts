@@ -116,9 +116,11 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
   // = My leagues only, no helper line, no news hint, Reset in the bottom row)
   // took it to 2,095, measured 10/1. The 10/4 round (Links into More
   // settings, Time zone up into Default view, Records as direct toggles) took
-  // it to 2,009, measured 10/4. Nothing else may grow it.
+  // it to 2,009, measured 10/4. The 10/9 "Show team ranks and seeds" toggle
+  // under Records (Jacob 9/30) adds one row: 2,057, measured 10/9. Nothing
+  // else may grow it.
   const height = await dialog.locator(".overflow-y-auto").first().evaluate((el) => el.scrollHeight);
-  expect(height).toBeLessThanOrEqual(2010);
+  expect(height).toBeLessThanOrEqual(2058);
   expect(errors).toEqual([]);
 });
 

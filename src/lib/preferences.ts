@@ -135,6 +135,7 @@ export function encodeFavorites(
   flag("sc", extras?.singleColumn);
   flag("sx", extras?.scrollColumns);
   flag("ts", extras?.hideTeamStars);
+  flag("hr", extras?.hideRanks);
   if (extras?.hiddenLeagues || extras?.shownLeagues) {
     params.set("xl", sportList(extras.hiddenLeagues));
     params.set("ol", sportList(extras.shownLeagues));
@@ -154,7 +155,7 @@ const RECORD_SOCCER_SHORT = "soc";
 
 // The params that make HomeContent apply a settings link. "s" (slots) never
 // did on its own, and still does not.
-export const SHARE_PARAM_KEYS = ["f", "l", "fl", "t", "th", "dd", "dv", "dr", "n", "hn", "mt", "yp", "sc", "sx", "ts", "xl", "ol", "cx", "rl"] as const;
+export const SHARE_PARAM_KEYS = ["f", "l", "fl", "t", "th", "dd", "dv", "dr", "n", "hn", "mt", "yp", "sc", "sx", "ts", "hr", "xl", "ol", "cx", "rl"] as const;
 
 export interface ShareExtras {
   theme?: Theme;
@@ -169,6 +170,7 @@ export interface ShareExtras {
   singleColumn?: boolean;
   scrollColumns?: boolean;
   hideTeamStars?: boolean;
+  hideRanks?: boolean;
   hiddenLeagues?: Sport[];
   shownLeagues?: Sport[];
   catalogHiddenLeagues?: Sport[];
@@ -193,6 +195,7 @@ export function shareExtrasFromPrefs(p: Preferences): ShareExtras {
     singleColumn: p.singleColumn,
     scrollColumns: p.scrollColumns,
     hideTeamStars: p.hideTeamStars,
+    hideRanks: p.hideRanks,
     hiddenLeagues: p.hiddenLeagues,
     shownLeagues: p.shownLeagues,
     catalogHiddenLeagues: p.catalogHiddenLeagues,
@@ -212,6 +215,7 @@ export function sharedExtrasPatch(d: DecodedShare): Partial<Preferences> {
   if (d.singleColumn !== undefined) out.singleColumn = d.singleColumn;
   if (d.scrollColumns !== undefined) out.scrollColumns = d.scrollColumns;
   if (d.hideTeamStars !== undefined) out.hideTeamStars = d.hideTeamStars;
+  if (d.hideRanks !== undefined) out.hideRanks = d.hideRanks;
   if (d.hiddenLeagues !== undefined) out.hiddenLeagues = d.hiddenLeagues.length ? d.hiddenLeagues : undefined;
   if (d.shownLeagues !== undefined) out.shownLeagues = d.shownLeagues.length ? d.shownLeagues : undefined;
   if (d.catalogHiddenLeagues !== undefined) out.catalogHiddenLeagues = d.catalogHiddenLeagues.length ? d.catalogHiddenLeagues : undefined;
@@ -276,6 +280,7 @@ export function decodeFavorites(params: URLSearchParams): DecodedShare {
   result.singleColumn = flag("sc");
   result.scrollColumns = flag("sx");
   result.hideTeamStars = flag("ts");
+  result.hideRanks = flag("hr");
   // Only as a pair, the way the encoder writes them.
   const xl = sportList("xl");
   const ol = sportList("ol");
@@ -392,6 +397,11 @@ export interface Preferences {
   // sticks — session counting has stopped by then. See STARS_AUTO_HIDE_SESSION
   // in lib/sessionVisits.ts.
   hideTeamStars?: boolean;
+  // Hide the "#8" rank chip next to team names on game cards (FIFA ranking,
+  // college poll, league standing) and the seed numbers in the bracket and
+  // playoff panels (Jacob 9/30). Undefined = shown, as before the toggle
+  // existed. Read through useHideRanks() in components/HideRanksContext.tsx.
+  hideRanks?: boolean;
   // "Only my teams" (Settings, Jacob 10/7): a league column keeps only the
   // games a starred team plays in. Opt-in, undefined = off. A league with no
   // starred team still shows all its games, with a cell asking the user to

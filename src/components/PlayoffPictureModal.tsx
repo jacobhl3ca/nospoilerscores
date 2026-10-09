@@ -36,6 +36,7 @@ import {
 } from "@/lib/playoffPicture";
 import { fetchMlbPostseason, mlbPickBracket, mlbRoundHeading, type MlbPostseason } from "@/lib/mlbPicks";
 import BracketPicks from "@/components/BracketPicks";
+import { useHideRanks } from "@/components/HideRanksContext";
 import { getTimeZone } from "@/lib/etDay";
 
 // The MLB playoff picture, behind one reveal.
@@ -193,10 +194,12 @@ function TeamRow({ team, seed, odds, showGamesBack }: {
 }) {
   const status = statusFor(team, showGamesBack);
   const row = odds?.[team.abbrev] ?? null;
+  // Settings' "Show team ranks and seeds" off: the cell stays, empty.
+  const hideRanks = useHideRanks();
   return (
     <tr style={{ background: "var(--bg-card)" }}>
       <td className="text-[11px] w-11 text-center tabular-nums font-bold px-1 py-1" style={{ color: seed ? "var(--text)" : "var(--text-muted)", opacity: seed ? 1 : 0.5 }}>
-        {seed ?? "—"}
+        {hideRanks ? "" : seed ?? "—"}
       </td>
       {/* max-w-0 is what lets the name truncate instead of widening the column:
           it gives the cell a zero min-content so the flex child can shrink. */}
@@ -369,6 +372,7 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
   // Both seats of the card are empty: no logo gutter, label centred.
   compact?: boolean;
 }) {
+  const hideRanks = useHideRanks();
   const t = slot.team;
   if (!t) {
     if (compact) {
@@ -403,8 +407,9 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
         title={outcome === "won" ? `${t.name} won the series` : outcome === "lost" ? `${t.name} lost the series` : t.name}
       >
         {slot.seed ?? t.seed ? (
-          <span className="text-[9px] font-bold tabular-nums w-2 shrink-0" style={{ color: "var(--text-muted)" }}>
-            {slot.seed ?? t.seed}
+          // Hidden seeds keep the w-2 slot, so the logos still line up.
+          <span data-bracket-seed className="text-[9px] font-bold tabular-nums w-2 shrink-0" style={{ color: "var(--text-muted)" }}>
+            {hideRanks ? null : slot.seed ?? t.seed}
           </span>
         ) : null}
         {/* eslint-disable-next-line @next/next/no-img-element */}

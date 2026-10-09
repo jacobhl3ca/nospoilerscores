@@ -21,6 +21,7 @@ import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports
 import { fromYmd, etSlateYmd, nextYmd, getTimeZone } from "@/lib/etDay";
 import { WATCH_QUEUE_ENABLED, toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
 import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
+import { HideRanksContext } from "@/components/HideRanksContext";
 import GameCard from "@/components/GameCard";
 import { closeHiddenPins, closeUnseenAutoSlots, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
@@ -3207,6 +3208,7 @@ export default function HomeContent({
 
   return (
     <WatchQueueContext.Provider value={watchQueueApi}>
+    <HideRanksContext.Provider value={!!prefs.hideRanks}>
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Keyboard skip link (WCAG 2.4.1) — visually hidden until focused, then
           jumps a Tab user past the sticky header / date nav straight to the
@@ -5891,6 +5893,7 @@ export default function HomeContent({
         <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} />
       </div>
     </div>
+    </HideRanksContext.Provider>
     </WatchQueueContext.Provider>
   );
 }
