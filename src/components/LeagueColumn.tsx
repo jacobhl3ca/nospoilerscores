@@ -12,7 +12,7 @@ import { displayShortName, loadBigInningSchedule, getSeasonOpener, sportDisplayL
 import { handleExternalClick, watchLinkProps } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
-import { playoffSubtitleTiers } from "@/lib/playoffSubtitle";
+import { playoffSubtitleTiers, subtitleCarriesGameNumber } from "@/lib/playoffSubtitle";
 import { pairingSpoilsEarlierRound } from "@/lib/pairingMask";
 import { etWallToUtc, formatInZone, getWhiparoundShow, parseEtTime, whiparoundStartsLater, whiparoundSubtitle } from "@/lib/whiparound";
 import { isDemoModeActive } from "@/lib/demoMode";
@@ -167,6 +167,9 @@ interface SubtitleResult {
   // A whip-around show's name. When it is on the TV channel links list the
   // link opens that stream in the reader's player instead of `href`.
   watchName?: string;
+  // The playoff line carries the day's game number ("NLWC · Game 3"), so the
+  // cards below it leave out their own "Game 3" line.
+  gameNumber?: boolean;
 }
 
 // Promo link to the trade board, appended to the MLB/NBA column subtitle.
@@ -480,7 +483,7 @@ function getPlayoffSubtitle(
   if (diff <= 0) {
     const labels = (games ?? []).map((g) => g.playoffLabel).filter(Boolean) as string[];
     const tiers = playoffSubtitleTiers(labels, config.label);
-    return tiers.length ? { tiers } : null;
+    return tiers.length ? { tiers, gameNumber: subtitleCarriesGameNumber(labels) } : null;
   }
 
   if (sport === "mlb" && bigInningSchedule) {
@@ -1531,6 +1534,17 @@ export default function LeagueColumn({
   // games first within each state (Jacob 9/26).
   // Every other column keeps its live / upcoming / final sections below.
   const espnGroups = league.sport === "top" ? groupEspnFrontPage(sortedGames, league.espnFeatured) : null;
+  // The header subtitle already reads "NLWC · Game 3" for every game in the
+  // column, so each pre-game card skips its own "Game 3" line. Same games the
+  // subtitle reads (see the PlayoffSubtitle call below). A mixed column (ESPN
+  // front page) has no playoff subtitle, so its cards keep the line, and so do
+  // cards under a subtitle that dropped the number (Game 2 + Game 3 on one day).
+  const hideSeriesNote = !league.eventCard && !!getPlayoffSubtitle(
+    league.sport,
+    selectedDate,
+    league.games.length ? league.games : (league.previousGameDay?.games ?? []),
+    null,
+  )?.gameNumber;
   const sorted = espnGroups ? espnGroups.flatMap((g) => g.games) : sortedGames;
   // The label over an ESPN front page league block: "NFL", or its short form
   // on a narrow column.
@@ -1682,6 +1696,7 @@ export default function LeagueColumn({
         onShowDetails={onShowDetails}
         showStars={cardStars}
         upcomingRecordLeagues={upcomingRecordLeagues}
+        hideSeriesNote={hideSeriesNote}
       />
     );
     return (
@@ -1761,6 +1776,7 @@ export default function LeagueColumn({
           onShowDetails={onShowDetails}
           showStars={cardStars}
           upcomingRecordLeagues={upcomingRecordLeagues}
+          hideSeriesNote={hideSeriesNote}
         />
       );
     });
@@ -1805,6 +1821,7 @@ export default function LeagueColumn({
             onShowDetails={onShowDetails}
             showStars={cardStars}
             upcomingRecordLeagues={upcomingRecordLeagues}
+            hideSeriesNote={hideSeriesNote}
           />
         ))}
       </div>
@@ -2472,6 +2489,7 @@ export default function LeagueColumn({
               onShowDetails={onShowDetails}
               showStars={cardStars}
               upcomingRecordLeagues={upcomingRecordLeagues}
+              hideSeriesNote={hideSeriesNote}
             />
           ))}
         </div>
@@ -2494,6 +2512,7 @@ export default function LeagueColumn({
               onShowDetails={onShowDetails}
               showStars={cardStars}
               upcomingRecordLeagues={upcomingRecordLeagues}
+              hideSeriesNote={hideSeriesNote}
             />
           ))}
           {renderUpcoming && preGames.map((game) => (
@@ -2513,6 +2532,7 @@ export default function LeagueColumn({
               onShowDetails={onShowDetails}
               showStars={cardStars}
               upcomingRecordLeagues={upcomingRecordLeagues}
+              hideSeriesNote={hideSeriesNote}
             />
           ))}
           {/* Upcoming future-day games shown alongside today's slate (NBA/NHL
@@ -2547,6 +2567,7 @@ export default function LeagueColumn({
               onShowDetails={onShowDetails}
               showStars={cardStars}
               upcomingRecordLeagues={upcomingRecordLeagues}
+              hideSeriesNote={hideSeriesNote}
             />
           ))}
         </div>
