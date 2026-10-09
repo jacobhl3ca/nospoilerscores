@@ -38,6 +38,14 @@ const full = JSON.parse(readFileSync(join(__dirname, "..", "fixtures", "mlb-post
   series: { games: { gameType: string }[] }[];
 };
 const feed = { series: full.series.filter((s) => ["F", "D"].includes(s.games[0]?.gameType)) };
+// The Wild Card round alone: all four series final, and the first two only
+// (a tap made while the other two were still in play).
+const wcAll = { series: full.series.filter((s) => s.games[0]?.gameType === "F") };
+const wcHalf = { series: wcAll.series.slice(0, 2) };
+
+// Serve this feed from now on (a later route wins over the stub's).
+const serveFeed = (page: Page, json: unknown) =>
+  page.route("**/statsapi.mlb.com/api/v1/schedule/postseason/series**", (r) => r.fulfill({ json }));
 
 async function stub(page: Page) {
   await page.route("**/statsapi.mlb.com/api/v1/standings**", (r) => r.fulfill({ json: standings }));
@@ -126,6 +134,53 @@ for (const vp of [
       await again.locator("[data-bracket-results-toggle]").click();
       await expect(advanced(again, "championship")).toHaveCount(4);
       await expect(again.locator("[data-bracket-results-toggle]")).toHaveCount(0);
+    });
+
+    test("a Wild Card tap with 2 of 4 final never shows the 2 that end later", async ({ page }) => {
+      expect(wcAll.series).toHaveLength(4);
+      await serveFeed(page, wcHalf);
+      const dialog = await openBoard(page);
+      const toggle = dialog.locator("[data-bracket-results-toggle]");
+      await expect(toggle).toHaveText("Show Wild Card results");
+      await expect(advanced(dialog, "divisionSeries")).toHaveCount(0);
+      await toggle.click();
+      await expect(advanced(dialog, "divisionSeries")).toHaveCount(2);
+      await expect(toggle).toHaveCount(0);
+
+      // Come back once all four Wild Card series are final.
+      await serveFeed(page, wcAll);
+      const again = await openBoard(page, true);
+      await expect(again.locator("[data-bracket-results-toggle]")).toHaveText("Show Wild Card results");
+      await expect(advanced(again, "divisionSeries")).toHaveCount(2);
+      await expect(again.locator('[data-bracket-round="wildCard"] [data-bracket-outcome="won"]')).toHaveCount(2);
+      await page.screenshot({ path: `test-results/round-covers-board-${vp.name}-wc-late.png` });
+
+      // A second tap shows the two new winners.
+      await again.locator("[data-bracket-results-toggle]").click();
+      await expect(advanced(again, "divisionSeries")).toHaveCount(4);
+      await expect(again.locator("[data-bracket-results-toggle]")).toHaveCount(0);
+
+      // The search page reads the same stored series.
+      const region = await openPage(page);
+      await expect(advanced(region, "divisionSeries")).toHaveCount(4);
+      await expect(region.locator("[data-bracket-results-toggle]")).toHaveCount(0);
+    });
+
+    test("a stored round number from the old format keeps every cover", async ({ page }) => {
+      await page.addInitScript(() => localStorage.setItem("mlb-bracket-rounds-revealed-2026", "1"));
+      const region = await openPage(page);
+      await expect(region.locator("[data-bracket-results-toggle]")).toHaveText("Show Wild Card results");
+      await expect(region.locator("[data-bracket-outcome]")).toHaveCount(0);
+      await expect(advanced(region, "divisionSeries")).toHaveCount(0);
+    });
+
+    test("both cover buttons are at least 44px high", async ({ page }) => {
+      const region = await openPage(page);
+      for (const sel of ["[data-bracket-results-toggle]", "[data-bracket-results-always]"]) {
+        const box = await region.locator(sel).boundingBox();
+        expect(box, sel).not.toBeNull();
+        expect(box!.height, sel).toBeGreaterThanOrEqual(44);
+      }
     });
 
     test("Always show results shows every round and survives a reload", async ({ page }) => {

@@ -26,8 +26,9 @@ import PlayoffPictureModal from "@/components/PlayoffPictureModal";
 // UNCOVERED (Jacob chose "no cover"): seeds, odds and pairings show at once.
 // Series winners from MLB's postseason feed move up the Bracket tab
 // (playBracket), but they wait behind one tap per round ("Show Wild Card
-// results", …), here and on the board alike. The highest tapped round is
-// stored per season, so the next round's winners always get their own tap;
+// results", …), here and on the board alike. A tap stores the series that were
+// final at that moment, per season, so a series that ends later (in the same
+// round or the next) always gets its own tap;
 // "Always show results" turns the covers off (2026-10-09). On the board the
 // panel also keeps its one cover, remembered per season (REVEAL_KEY), and the
 // pages never write it.
@@ -88,7 +89,7 @@ const FAQ = [
   },
   {
     q: "Will looking at the bracket spoil a game I recorded?",
-    a: "The seeds can, because their order is worked out from every result so far. Series winners stay hidden round by round. Each round has its own Show results button, and a tap shows that round only, so the next round's winners wait for their own tap. On HideScore's main board the whole panel also sits under a cover.",
+    a: "The seeds can, because their order is worked out from every result so far. Series winners stay hidden round by round. Each round has its own Show results button, and a tap shows only the series that had ended when you tapped. A series that ends later, in that round or the next, waits for a new tap. On HideScore's main board the whole panel also sits under a cover.",
   },
 ];
 
@@ -154,7 +155,7 @@ export default function MlbPlayoffBracketPage() {
         },
         {
           h: "Series winners, one tap per round",
-          p: "When a series ends, MLB's postseason feed names the winner, and that club moves into the seat its pairing feeds while the loser stays on its card, dimmed. On this page those results wait behind one button per round, such as Show Wild Card results, because a winner is exactly the thing a viewer on delay is avoiding. A tap shows that round only, so coming back after the next round never shows its winners to you unasked. If you would rather see every result at once, tap Always show results. A seed can give something away too. If your club dropped from the 4 seed to the 5 overnight, the bracket just told you how last night's game ended, which is why HideScore's main board keeps this whole panel under a cover."
+          p: "When a series ends, MLB's postseason feed names the winner, and that club moves into the seat its pairing feeds while the loser stays on its card, dimmed. On this page those results wait behind one button per round, such as Show Wild Card results, because a winner is exactly the thing a viewer on delay is avoiding. A tap shows only the series of that round that had ended when you tapped, so coming back after the next series ends never shows its winner to you unasked. If you would rather see every result at once, tap Always show results. A seed can give something away too. If your club dropped from the 4 seed to the 5 overnight, the bracket just told you how last night's game ended, which is why HideScore's main board keeps this whole panel under a cover."
         },
         {
           h: "Pick the whole bracket before it locks",

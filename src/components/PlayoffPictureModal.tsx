@@ -14,9 +14,10 @@ import {
   fetchPlayoffPicture,
   fieldIsSet,
   loadResultsAlways,
-  loadRoundsRevealed,
+  loadSeenSeries,
   nextCoveredRound,
   playBracket,
+  revealRound,
   roundLabel,
   settledTab,
   shadeFor,
@@ -603,26 +604,27 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
 
 // Series winners come from MLB's postseason feed and move up the bracket as
 // each series ends. Each round's winners wait behind their own tap ("Show Wild
-// Card results", …), on the board and on the search pages alike. The highest
-// tapped round is stored per season, so a reload keeps what was shown, but the
-// next round with results gets a fresh cover: a tap never reveals a later
-// round. The first cover also offers "Always show results", a device flag that
+// Card results", …), on the board and on the search pages alike. A tap stores
+// the series that were final in that round at the time (lib/playoffPicture,
+// revealRound), per season, so a reload keeps what was shown, and any series
+// that ends later gets a fresh cover, in the same round or the next: a tap never
+// reveals a result the reader did not see. The first cover also offers "Always show results", a device flag that
 // turns the covers off (Settings turns it back on). On the board these covers
 // sit inside the panel's own cover.
 const NO_RESULTS: BracketResult[] = [];
 
-function BracketView({ picture, odds, fieldSet, results, revealedRound, always, onShowRound, onAlways }: {
+function BracketView({ picture, odds, fieldSet, results, seen, always, onShowRound, onAlways }: {
   picture: PlayoffPicture;
   odds: PlayoffOdds | null;
   fieldSet: boolean;
   results: BracketResult[];
-  revealedRound: number;
+  seen: ReadonlySet<string>;
   always: boolean;
   onShowRound: (round: number) => void;
   onAlways: () => void;
 }) {
-  const covered = nextCoveredRound(results, revealedRound, always);
-  const played = useMemo(() => visibleResults(results, revealedRound, always), [results, revealedRound, always]);
+  const covered = nextCoveredRound(results, seen, always);
+  const played = useMemo(() => visibleResults(results, seen, always), [results, seen, always]);
   const al = picture.leagues.find((l) => l.key === "AL");
   const nl = picture.leagues.find((l) => l.key === "NL");
   const alB = useMemo(() => (al ? playBracket(buildBracket(al), played) : null), [al, played]);
@@ -638,17 +640,17 @@ function BracketView({ picture, odds, fieldSet, results, revealedRound, always, 
             data-bracket-results-toggle
             data-bracket-cover-round={covered}
             onClick={() => onShowRound(covered)}
-            className="text-xs font-medium px-3 py-1.5 rounded-full cursor-pointer"
+            className="text-xs font-medium px-4 min-h-11 rounded-full cursor-pointer"
             style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
           >
             {BRACKET_ROUND_SHOW_LABELS[covered] ?? "Show series results"}
           </button>
-          {revealedRound < 0 ? (
+          {seen.size === 0 ? (
             <button
               type="button"
               data-bracket-results-always
               onClick={onAlways}
-              className="text-xs px-3 py-1.5 rounded-full cursor-pointer"
+              className="text-xs px-4 min-h-11 rounded-full cursor-pointer"
               style={{ background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border)" }}
             >
               Always show results
@@ -778,7 +780,7 @@ export default function PlayoffPictureModal({
   const season = picture?.season ?? null;
   const [post, setPost] = useState<MlbPostseason | null>(null);
   const [postFailed, setPostFailed] = useState(false);
-  const [roundOverride, setRoundOverride] = useState<number | null>(null);
+  const [seenOverride, setSeenOverride] = useState<Set<string> | null>(null);
   const [alwaysOverride, setAlwaysOverride] = useState<boolean | null>(null);
   useEffect(() => {
     if (season == null) return;
@@ -932,15 +934,18 @@ export default function PlayoffPictureModal({
   const revealed = override || savedReveal || inline;
 
   // Per-round result covers (see BracketView), derived the same way.
-  const savedRound = useMemo(() => (picture ? loadRoundsRevealed(picture.season) : -1), [picture]);
+  const savedSeen = useMemo(() => (picture ? loadSeenSeries(picture.season) : new Set<string>()), [picture]);
   const savedAlways = useMemo(() => (picture ? loadResultsAlways() : false), [picture]);
-  const revealedRound = Math.max(savedRound, roundOverride ?? -1);
+  const seenSeries = seenOverride ?? savedSeen;
   const resultsAlways = alwaysOverride ?? savedAlways;
 
+  // Stores the series final in this round now, never the round number: a
+  // series that ends after the tap stays covered.
   const showRound = (round: number) => {
-    setRoundOverride(round);
+    const next = revealRound(post?.results ?? NO_RESULTS, seenSeries, round);
+    setSeenOverride(next);
     if (picture) {
-      try { window.localStorage.setItem(BRACKET_ROUNDS_REVEALED_KEY(picture.season), String(round)); } catch {}
+      try { window.localStorage.setItem(BRACKET_ROUNDS_REVEALED_KEY(picture.season), JSON.stringify([...next])); } catch {}
     }
   };
 
@@ -1083,7 +1088,7 @@ export default function PlayoffPictureModal({
                     odds={odds}
                     fieldSet={fieldSet}
                     results={post?.results ?? NO_RESULTS}
-                    revealedRound={revealedRound}
+                    seen={seenSeries}
                     always={resultsAlways}
                     onShowRound={showRound}
                     onAlways={alwaysShowResults}
