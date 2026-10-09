@@ -4,7 +4,7 @@
   "mlb:2": [
    {
     "name": "WEEI 93.7",
-    "url": "https://www.audacy.com/stations/weei",
+    "url": "https://tunein.com/radio/WEEI-937-s22262/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -14,8 +14,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "mlb:3": [
@@ -84,7 +84,7 @@
   "mlb:6": [
    {
     "name": "97.1 The Ticket",
-    "url": "https://www.audacy.com/stations/971theticket",
+    "url": "https://tunein.com/971theticket/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -94,14 +94,14 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "mlb:7": [
    {
     "name": "96.5 The Fan",
-    "url": "https://www.audacy.com/stations/965thefan",
+    "url": "https://tunein.com/radio/965-The-Fan-s28141/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -111,8 +111,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "mlb:8": [],
@@ -135,7 +135,7 @@
   "mlb:10": [
    {
     "name": "WFAN 101.9 FM / 660 AM",
-    "url": "https://www.audacy.com/stations/wfan",
+    "url": "https://tunein.com/wfan660/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -145,8 +145,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "1280 WADO",
@@ -201,7 +201,7 @@
   "mlb:13": [
    {
     "name": "105.3 The Fan",
-    "url": "https://www.audacy.com/stations/1053thefan",
+    "url": "https://tunein.com/radio/1053-The-Fan-s47360/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -211,8 +211,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "1270 KFLC",
@@ -250,7 +250,7 @@
   "mlb:16": [
    {
     "name": "104.3 The Score",
-    "url": "https://www.audacy.com/stations/thescorechicago",
+    "url": "https://tunein.com/radio/1043-The-Score-s22732/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -260,8 +260,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "mlb:17": [
@@ -330,7 +330,7 @@
   "mlb:20": [
    {
     "name": "106.7 The Fan",
-    "url": "https://www.audacy.com/stations/thefandc",
+    "url": "https://tunein.com/radio/1067-The-Fan-s29821/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -340,14 +340,14 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "mlb:21": [
    {
     "name": "Mets Radio",
-    "url": "https://www.audacy.com/stations/metsradio",
+    "url": "https://tunein.com/radio/Mets-Radio-s27760/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -357,14 +357,14 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "mlb:22": [
    {
     "name": "SportsRadio 94WIP",
-    "url": "https://www.audacy.com/stations/94wip",
+    "url": "https://tunein.com/radio/SportsRadio-94WIP-941-s116135/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -374,8 +374,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "La Unika WTTM 1680",
@@ -396,7 +396,7 @@
   "mlb:23": [
    {
     "name": "93.7 The Fan",
-    "url": "https://www.audacy.com/stations/937thefan",
+    "url": "https://tunein.com/937thefan/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -406,14 +406,14 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "mlb:24": [
    {
     "name": "104.1 FM KMOX",
-    "url": "https://www.audacy.com/stations/kmox",
+    "url": "https://tunein.com/radio/NewsRadio-1120-KMOX-1041-s34110/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -423,8 +423,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "La Tremenda WIJR 880",
@@ -508,7 +508,7 @@
   "mlb:28": [
    {
     "name": "104.3 WQAM",
-    "url": "https://www.audacy.com/stations/wqam",
+    "url": "https://tunein.com/radio/FM-1043-WQAM-560-s22112/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -518,8 +518,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Station page lists article headlines that can include scores"
+    "checked": "2026-10-09",
+    "note": "TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "Radio Mambi 710 (WAQI)",
@@ -572,7 +572,7 @@
   "nba:1": [
    {
     "name": "92.9 The Game",
-    "url": "https://www.audacy.com/stations/929thegame",
+    "url": "https://tunein.com/radio/92-9-The-Game-929-s24348/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -582,14 +582,14 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Hawks flagship, extended through 2029; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Hawks flagship, extended through 2029; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:2": [
    {
     "name": "98.5 The Sports Hub",
-    "url": "https://www.audacy.com/stations/985thesportshub",
+    "url": "https://tunein.com/985thesportshub/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -599,14 +599,14 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Celtics flagship since 2013, renewed 2023; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Celtics flagship since 2013, renewed 2023; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:3": [
    {
     "name": "WWL",
-    "url": "https://www.audacy.com/stations/wwl",
+    "url": "https://tunein.com/radio/WWL-870-s23790/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -616,8 +616,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Pelicans flagship WWL 870 AM / 105.3 FM; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Pelicans flagship WWL 870 AM / 105.3 FM; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "Latino Mix KGLA 830",
@@ -635,7 +635,7 @@
   "nba:4": [
    {
     "name": "104.3 The Score",
-    "url": "https://www.audacy.com/stations/thescorechicago",
+    "url": "https://tunein.com/radio/1043-The-Score-s22732/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -645,8 +645,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Bulls flagship WSCR (670 AM / 104.3 FM), extension June 2026; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Bulls flagship WSCR (670 AM / 104.3 FM), extension June 2026; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:5": [
@@ -666,7 +666,7 @@
   "nba:6": [
    {
     "name": "105.3 The Fan",
-    "url": "https://www.audacy.com/stations/1053thefan",
+    "url": "https://tunein.com/radio/1053-The-Fan-s47360/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -676,8 +676,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Mavericks new flagship from 2026-27, announced 2026-09-03; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Mavericks new flagship from 2026-27, announced 2026-09-03; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:7": [
@@ -697,7 +697,7 @@
   "nba:8": [
    {
     "name": "97.1 The Ticket",
-    "url": "https://www.audacy.com/stations/971theticket",
+    "url": "https://tunein.com/971theticket/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -707,14 +707,14 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Pistons flagship WXYT-FM; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Pistons flagship WXYT-FM; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:9": [
    {
     "name": "95.7 The Game",
-    "url": "https://www.audacy.com/stations/957thegame",
+    "url": "https://tunein.com/radio/957-THE-GAME-s26838/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -724,8 +724,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Warriors flagship, extension Oct 2025; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Warriors flagship, extension Oct 2025; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:10": [
@@ -799,7 +799,7 @@
   "nba:14": [
    {
     "name": "FM 104.3 WQAM",
-    "url": "https://www.audacy.com/stations/wqam",
+    "url": "https://tunein.com/radio/FM-1043-WQAM-560-s22112/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -809,8 +809,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Heat flagship WQAM 560 AM / 104.3 FM; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Heat flagship WQAM 560 AM / 104.3 FM; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:15": [
@@ -844,7 +844,7 @@
   "nba:17": [
    {
     "name": "WFAN",
-    "url": "https://www.audacy.com/stations/wfan",
+    "url": "https://tunein.com/wfan660/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -854,14 +854,14 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Nets flagship (WFAN AM 66 / FM 101.9); Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Nets flagship (WFAN AM 66 / FM 101.9); Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:18": [
    {
     "name": "ESPN New York 880",
-    "url": "https://www.audacy.com/stations/espnnewyork880",
+    "url": "https://tunein.com/radio/ESPN-New-York-880-s22469/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -871,8 +871,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Knicks flagship WHSQ 880 AM since Aug 2024; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Knicks flagship WHSQ 880 AM since Aug 2024; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:19": [
@@ -892,7 +892,7 @@
   "nba:20": [
    {
     "name": "97.5 The Fanatic",
-    "url": "https://www.audacy.com/stations/975thefanatic",
+    "url": "https://tunein.com/radio/975-The-Fanatic-s22060/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -902,8 +902,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "76ers flagship WPEN; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "76ers flagship WPEN; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:21": [
@@ -992,7 +992,7 @@
   "nba:27": [
    {
     "name": "106.7 The Fan",
-    "url": "https://www.audacy.com/stations/thefandc",
+    "url": "https://tunein.com/radio/1067-The-Fan-s29821/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1002,8 +1002,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Wizards flagship WJFK-FM, extension Oct 2025; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Wizards flagship WJFK-FM, extension Oct 2025; Audacy app listing: play-by-play audio only available within the team's DMA TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nba:28": [
@@ -1033,8 +1033,8 @@
      ],
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Grizzlies flagship WMFS-FM; Audacy app listing: play-by-play audio only available within the team's DMA"
+    "checked": "2026-10-09",
+    "note": "Grizzlies flagship WMFS-FM; Audacy app listing: play-by-play audio only available within the team's DMA Kept on Audacy: station not on iHeart or TuneIn (2026-10-09). Audacy station page lists article headlines that can include scores."
    }
   ],
   "nba:30": [
@@ -1054,7 +1054,7 @@
   "nfl:1": [
    {
     "name": "92-9 The Game",
-    "url": "https://www.audacy.com/stations/929thegame",
+    "url": "https://tunein.com/radio/92-9-The-Game-929-s24348/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1065,8 +1065,8 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Falcons flagship WZGC (team site lists 92.9 FM The Game). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "Falcons flagship WZGC (team site lists 92.9 FM The Game). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nfl:2": [
@@ -1174,7 +1174,7 @@
   "nfl:5": [
    {
     "name": "92.3 The Fan",
-    "url": "https://www.audacy.com/stations/923thefan",
+    "url": "https://tunein.com/923thefan/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1185,12 +1185,12 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Browns flagship (Audacy/Good Karma renewal 2025). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "Browns flagship (Audacy/Good Karma renewal 2025). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "98.5 WNCX",
-    "url": "https://www.audacy.com/stations/wncx",
+    "url": "https://tunein.com/radio/985-WNCX-s21393/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1201,14 +1201,14 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Browns flagship group (Audacy). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "Browns flagship group (Audacy). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nfl:6": [
    {
     "name": "105.3 The Fan",
-    "url": "https://www.audacy.com/stations/1053thefan",
+    "url": "https://tunein.com/radio/1053-The-Fan-s47360/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1219,12 +1219,12 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "KRLD-FM, Cowboys flagship since 2009. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "KRLD-FM, Cowboys flagship since 2009. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "La Grande 107.5 FM",
-    "url": "https://www.audacy.com/stations/lagrande1075",
+    "url": "https://tunein.com/radio/La-Grande-1075-FM-s34420/",
     "lang": "es",
     "access": {
      "cost": "free",
@@ -1235,8 +1235,8 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "KMVK, listed as Cowboys Spanish flagship (Wikipedia; Audacy 2026 market doc). No 2026 team announcement found. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "KMVK, listed as Cowboys Spanish flagship (Wikipedia; Audacy 2026 market doc). No 2026 team announcement found. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nfl:7": [
@@ -1260,7 +1260,7 @@
   "nfl:8": [
    {
     "name": "97.1 The Ticket",
-    "url": "https://www.audacy.com/stations/971theticket",
+    "url": "https://tunein.com/971theticket/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1271,8 +1271,8 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Lions flagship, multi-year extension Feb 2026. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "Lions flagship, multi-year extension Feb 2026. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nfl:9": [
@@ -1349,7 +1349,7 @@
   "nfl:12": [
    {
     "name": "96.5 The Fan",
-    "url": "https://www.audacy.com/stations/965thefan",
+    "url": "https://tunein.com/radio/965-The-Fan-s28141/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1360,8 +1360,8 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "KFNZ, Chiefs flagship (Audacy). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "KFNZ, Chiefs flagship (Audacy). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nfl:13": [
@@ -1433,7 +1433,7 @@
    },
    {
     "name": "93.1 Jack FM",
-    "url": "https://www.audacy.com/stations/931jackfm",
+    "url": "https://tunein.com/radio/931-Jack-FM-s31956/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1444,8 +1444,8 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Rams FM simulcast partner, regular season. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "Rams FM simulcast partner, regular season. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "1330 La Primera",
@@ -1535,7 +1535,7 @@
   "nfl:17": [
    {
     "name": "98.5 The Sports Hub",
-    "url": "https://www.audacy.com/stations/985thesportshub",
+    "url": "https://tunein.com/985thesportshub/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1546,14 +1546,14 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Patriots flagship. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "Patriots flagship. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nfl:18": [
    {
     "name": "WWL 870 AM / 105.3 FM",
-    "url": "https://www.audacy.com/stations/wwl",
+    "url": "https://tunein.com/radio/WWL-870-s23790/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1564,14 +1564,14 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Saints flagship since 1995, extended 2026. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "Saints flagship since 1995, extended 2026. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nfl:19": [
    {
     "name": "WFAN 101.9 FM / 660 AM",
-    "url": "https://www.audacy.com/stations/wfan",
+    "url": "https://tunein.com/wfan660/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1582,8 +1582,8 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Giants flagship (extended July 2025). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "Giants flagship (extended July 2025). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "1280 WADO",
@@ -1623,7 +1623,7 @@
   "nfl:21": [
    {
     "name": "SportsRadio 94WIP",
-    "url": "https://www.audacy.com/stations/94wip",
+    "url": "https://tunein.com/radio/SportsRadio-94WIP-941-s116135/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1634,8 +1634,8 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Eagles flagship through 2028. Audacy Eagles FAQ: within 100 miles of Lincoln Financial Field."
+    "checked": "2026-10-09",
+    "note": "Eagles flagship through 2028. Audacy Eagles FAQ: within 100 miles of Lincoln Financial Field. TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nfl:22": [
@@ -1885,7 +1885,7 @@
   "nfl:34": [
    {
     "name": "100.3 The Bull",
-    "url": "https://www.audacy.com/stations/thebull",
+    "url": "https://tunein.com/radio/1003-The-Bull-s33157/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1896,12 +1896,12 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Texans flagship KILT-FM (Audacy FAQ page: Texans games here; 100-mile radius of NRG Stadium)."
+    "checked": "2026-10-09",
+    "note": "Texans flagship KILT-FM (Audacy FAQ page: Texans games here; 100-mile radius of NRG Stadium). TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "95.7 The Fan",
-    "url": "https://www.audacy.com/stations/957thefan",
+    "url": "https://tunein.com/radio/957-The-Fan-610-s33156/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1912,12 +1912,12 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "Texans flagship SportsRadio 610; audacy.com/stations/sportsradio610 (the stream the Texans FAQ names) now redirects here. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "Texans flagship SportsRadio 610; audacy.com/stations/sportsradio610 (the stream the Texans FAQ names) now redirects here. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    },
    {
     "name": "Mega 101 Houston",
-    "url": "https://www.audacy.com/stations/klol",
+    "url": "https://tunein.com/radio/Mega-101-Houston-1011-s33820/",
     "lang": "es",
     "access": {
      "cost": "free",
@@ -1928,14 +1928,14 @@
      "vpnOk": "unknown",
      "signIn": false
     },
-    "checked": "2026-10-08",
-    "note": "KLOL, Texans Spanish flagship (texans.com, through 2027). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+    "checked": "2026-10-09",
+    "note": "KLOL, Texans Spanish flagship (texans.com, through 2027). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles). TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nhl:1": [
    {
     "name": "98.5 The Sports Hub",
-    "url": "https://www.audacy.com/stations/985thesportshub",
+    "url": "https://tunein.com/985thesportshub/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -1945,22 +1945,22 @@
       506
      ]
     },
-    "checked": "2026-10-08",
-    "note": "Audacy Bruins guide (2024-25): coverage within 75 miles of Boston"
+    "checked": "2026-10-09",
+    "note": "Audacy Bruins guide (2024-25): coverage within 75 miles of Boston TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nhl:2": [
    {
     "name": "WGR 550",
-    "url": "https://www.audacy.com/stations/wgr550",
+    "url": "https://tunein.com/radio/WGR-Sports-Radio-Buffalo-550-s29127/",
     "lang": "en",
     "access": {
      "cost": "free",
      "geo": "none",
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Audacy Sabres guide: available nationwide on desktop; mobile radius not stated"
+    "checked": "2026-10-09",
+    "note": "Audacy Sabres guide: available nationwide on desktop; mobile radius not stated TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nhl:3": [
@@ -1994,7 +1994,7 @@
   "nhl:5": [
    {
     "name": "97.1 The Ticket",
-    "url": "https://www.audacy.com/stations/971theticket",
+    "url": "https://tunein.com/971theticket/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -2004,8 +2004,8 @@
       505
      ]
     },
-    "checked": "2026-10-08",
-    "note": "Audacy Red Wings guide (2024-25): coverage within 500 miles of Detroit"
+    "checked": "2026-10-09",
+    "note": "Audacy Red Wings guide (2024-25): coverage within 500 miles of Detroit TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nhl:6": [
@@ -2039,15 +2039,15 @@
   "nhl:8": [
    {
     "name": "ESPN LA 710",
-    "url": "https://www.audacy.com/stations/espnla",
+    "url": "https://tunein.com/radio/ESPN-LA-710-s32301/",
     "lang": "en",
     "access": {
      "cost": "free",
      "geo": "none",
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Kings: some games on air, all in ESPN LA app per 2024 deal; 2026-27 count unconfirmed. Audacy help: play-by-play depends on device location and each team's streaming contract; NHL not named."
+    "checked": "2026-10-09",
+    "note": "Kings: some games on air, all in ESPN LA app per 2024 deal; 2026-27 count unconfirmed. Audacy help: play-by-play depends on device location and each team's streaming contract; NHL not named. TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nhl:9": [
@@ -2093,15 +2093,15 @@
   "nhl:11": [
    {
     "name": "WFAN",
-    "url": "https://www.audacy.com/stations/wfan",
+    "url": "https://tunein.com/wfan660/",
     "lang": "en",
     "access": {
      "cost": "free",
      "geo": "none",
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Audacy WFAN page; Devils on WFAN per 2026-27 media guide, team page not yet updated. Audacy help: play-by-play depends on device location and each team's streaming contract; NHL not named."
+    "checked": "2026-10-09",
+    "note": "Audacy WFAN page; Devils on WFAN per 2026-27 media guide, team page not yet updated. Audacy help: play-by-play depends on device location and each team's streaming contract; NHL not named. TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nhl:12": [
@@ -2161,15 +2161,15 @@
   "nhl:15": [
    {
     "name": "97.5 The Fanatic",
-    "url": "https://www.audacy.com/stations/975thefanatic",
+    "url": "https://tunein.com/radio/975-The-Fanatic-s22060/",
     "lang": "en",
     "access": {
      "cost": "free",
      "geo": "none",
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Audacy help: play-by-play depends on device location and each team's streaming contract; NHL not named."
+    "checked": "2026-10-09",
+    "note": "Audacy help: play-by-play depends on device location and each team's streaming contract; NHL not named. TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nhl:16": [
@@ -2260,7 +2260,7 @@
   "nhl:23": [
    {
     "name": "106.7 The Fan",
-    "url": "https://www.audacy.com/stations/thefandc",
+    "url": "https://tunein.com/radio/1067-The-Fan-s29821/",
     "lang": "en",
     "access": {
      "cost": "free",
@@ -2270,8 +2270,8 @@
       511
      ]
     },
-    "checked": "2026-10-08",
-    "note": "Audacy Capitals guide (2024-25): coverage within 500 miles of Washington DC"
+    "checked": "2026-10-09",
+    "note": "Audacy Capitals guide (2024-25): coverage within 500 miles of Washington DC TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nhl:25": [
@@ -2291,15 +2291,15 @@
   "nhl:26": [
    {
     "name": "WQAM",
-    "url": "https://www.audacy.com/stations/wqam",
+    "url": "https://tunein.com/radio/FM-1043-WQAM-560-s22112/",
     "lang": "en",
     "access": {
      "cost": "free",
      "geo": "none",
      "vpnOk": "unknown"
     },
-    "checked": "2026-10-08",
-    "note": "Audacy Panthers guide: available nationwide on desktop/mobile"
+    "checked": "2026-10-09",
+    "note": "Audacy Panthers guide: available nationwide on desktop/mobile TuneIn page (was audacy.com, whose station pages list score headlines)."
    }
   ],
   "nhl:27": [
