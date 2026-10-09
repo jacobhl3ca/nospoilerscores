@@ -469,6 +469,65 @@ export interface BracketResult { round: number; winner: string; loser: string }
 
 const ROUND_INDEX: Record<BracketRound, number> = { wildCard: 0, divisionSeries: 1, championship: 2, worldSeries: 3 };
 
+// ── Per-round result covers ──────────────────────────────────────────────────
+//
+// Each round's series winners sit behind their own tap (Jacob 10/9: one tap
+// for the whole postseason let every later winner show unasked). The highest
+// round the reader has tapped is stored per season; a result from a later
+// round is dropped before playBracket, so its winner never moves up and its
+// loser never dims. "Always show results" turns the covers off on this device.
+
+export const BRACKET_ROUNDS_REVEALED_KEY = (season: number) => `mlb-bracket-rounds-revealed-${season}`;
+export const BRACKET_RESULTS_ALWAYS_KEY = "mlb-bracket-results-always";
+
+/** The tap that lifts a round's cover. Index = round. */
+export const BRACKET_ROUND_SHOW_LABELS = [
+  "Show Wild Card results",
+  "Show Division Series results",
+  "Show LCS results",
+  "Show World Series result",
+];
+
+/** The results a reader who has revealed rounds 0..`revealedRound` may see. */
+export function visibleResults(results: BracketResult[], revealedRound: number, always = false): BracketResult[] {
+  return always ? results : results.filter((r) => r.round <= revealedRound);
+}
+
+/**
+ * The round whose cover shows next: the lowest round past `revealedRound` with
+ * at least one result. Null when nothing is covered. A tap reveals this round
+ * only, so a later round always waits for its own tap.
+ */
+export function nextCoveredRound(results: BracketResult[], revealedRound: number, always = false): number | null {
+  if (always) return null;
+  let next: number | null = null;
+  for (const r of results) {
+    if (r.round > revealedRound && (next == null || r.round < next)) next = r.round;
+  }
+  return next;
+}
+
+/** Stored highest revealed round for a season; -1 when none. SSR-safe. */
+export function loadRoundsRevealed(season: number): number {
+  if (typeof window === "undefined") return -1;
+  try {
+    const v = Number.parseInt(window.localStorage.getItem(BRACKET_ROUNDS_REVEALED_KEY(season)) ?? "", 10);
+    return Number.isFinite(v) && v >= 0 ? v : -1;
+  } catch {
+    return -1;
+  }
+}
+
+/** Whether "Always show results" is on for this device. SSR-safe. */
+export function loadResultsAlways(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(BRACKET_RESULTS_ALWAYS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The finished series between these two clubs in this round. Matched on the
  * round AND both clubs, so a result can only ever move a club out of the one

@@ -3,6 +3,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   BEST_OF,
+  BRACKET_RESULTS_ALWAYS_KEY,
+  BRACKET_ROUND_SHOW_LABELS,
+  BRACKET_ROUNDS_REVEALED_KEY,
   broadcastFor,
   seriesDatesFor,
   buildBracket,
@@ -10,12 +13,16 @@ import {
   fetchPlayoffOdds,
   fetchPlayoffPicture,
   fieldIsSet,
+  loadResultsAlways,
+  loadRoundsRevealed,
+  nextCoveredRound,
   playBracket,
   roundLabel,
   settledTab,
   shadeFor,
   sortTeams,
   teamLogo,
+  visibleResults,
   withoutSettledOdds,
   worldSeriesOf,
   type BracketMatchup,
@@ -507,7 +514,7 @@ function RoundColumn({ round, league, season, matchups, bracket, odds, chasers }
   const channel = broadcastFor(season, round, league);
   const dates = seriesDatesFor(season, round, league);
   return (
-    <div className="flex flex-col shrink-0">
+    <div data-bracket-round={round} className="flex flex-col shrink-0">
       <div className={`${HEADER_H} text-center px-0.5 sm:px-1`}>
         <div className="text-[10px] font-bold uppercase tracking-wide leading-tight" style={{ color: "var(--text)" }}>
           {roundLabel(round, league)}
@@ -568,7 +575,7 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
   const outcome = (team: PlayoffTeam | null) => (winner == null || !team ? null : team.id === winner ? "won" as const : "lost" as const);
   const compact = !al && !nl;
   return (
-    <div className="flex flex-col shrink-0">
+    <div data-bracket-round="worldSeries" className="flex flex-col shrink-0">
       <div className={`${HEADER_H} text-center`}>
         <div className="text-[10px] font-bold uppercase tracking-wide leading-tight" style={{ color: "var(--text)" }}>World Series</div>
         {dates ? (
@@ -595,23 +602,27 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
 }
 
 // Series winners come from MLB's postseason feed and move up the bracket as
-// each series ends. `coverResults` is for the search pages, which show the
-// panel with no cover: seeds are open there, but a series winner is a result,
-// so it waits behind one tap. The tap lasts for this visit only, so coming back
-// after the next series never shows its winner unasked. On the board the whole
-// panel is already behind its own cover, and results show once that is lifted.
+// each series ends. Each round's winners wait behind their own tap ("Show Wild
+// Card results", …), on the board and on the search pages alike. The highest
+// tapped round is stored per season, so a reload keeps what was shown, but the
+// next round with results gets a fresh cover: a tap never reveals a later
+// round. The first cover also offers "Always show results", a device flag that
+// turns the covers off (Settings turns it back on). On the board these covers
+// sit inside the panel's own cover.
 const NO_RESULTS: BracketResult[] = [];
 
-function BracketView({ picture, odds, fieldSet, results, coverResults, onShowResults }: {
+function BracketView({ picture, odds, fieldSet, results, revealedRound, always, onShowRound, onAlways }: {
   picture: PlayoffPicture;
   odds: PlayoffOdds | null;
   fieldSet: boolean;
   results: BracketResult[];
-  coverResults: boolean;
-  onShowResults: () => void;
+  revealedRound: number;
+  always: boolean;
+  onShowRound: (round: number) => void;
+  onAlways: () => void;
 }) {
-  const hideResults = coverResults && results.length > 0;
-  const played = hideResults ? NO_RESULTS : results;
+  const covered = nextCoveredRound(results, revealedRound, always);
+  const played = useMemo(() => visibleResults(results, revealedRound, always), [results, revealedRound, always]);
   const al = picture.leagues.find((l) => l.key === "AL");
   const nl = picture.leagues.find((l) => l.key === "NL");
   const alB = useMemo(() => (al ? playBracket(buildBracket(al), played) : null), [al, played]);
@@ -620,17 +631,29 @@ function BracketView({ picture, odds, fieldSet, results, coverResults, onShowRes
   const ws = worldSeriesOf(alB, nlB, played);
   return (
     <div>
-      {hideResults ? (
-        <div className="flex justify-center mb-2">
+      {covered != null ? (
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
           <button
             type="button"
             data-bracket-results-toggle
-            onClick={onShowResults}
+            data-bracket-cover-round={covered}
+            onClick={() => onShowRound(covered)}
             className="text-xs font-medium px-3 py-1.5 rounded-full cursor-pointer"
             style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
           >
-            Show series results (spoilers)
+            {BRACKET_ROUND_SHOW_LABELS[covered] ?? "Show series results"}
           </button>
+          {revealedRound < 0 ? (
+            <button
+              type="button"
+              data-bracket-results-always
+              onClick={onAlways}
+              className="text-xs px-3 py-1.5 rounded-full cursor-pointer"
+              style={{ background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border)" }}
+            >
+              Always show results
+            </button>
+          ) : null}
         </div>
       ) : null}
       {/* One DOM for both widths: the halves sit side by side with the World
@@ -707,7 +730,7 @@ function PicksView({ picture, post, failed }: { picture: PlayoffPicture; post: M
 
 // `variant="page"` renders the same panel in the document flow instead of as a
 // dialog: no backdrop, no ✕, no Escape, no focus grab, and no cover over the
-// seeds and odds (series winners still wait behind one tap). It exists for the MLB
+// seeds and odds (series winners still wait behind one tap per round). It exists for the MLB
 // search landing pages (/mlb-playoff-bracket and friends), which put the panel
 // straight under their h1 so a visitor from search sees the bracket first and
 // never meets the board's first-run league picker. `initialTab` and
@@ -755,7 +778,8 @@ export default function PlayoffPictureModal({
   const season = picture?.season ?? null;
   const [post, setPost] = useState<MlbPostseason | null>(null);
   const [postFailed, setPostFailed] = useState(false);
-  const [resultsShown, setResultsShown] = useState(false);
+  const [roundOverride, setRoundOverride] = useState<number | null>(null);
+  const [alwaysOverride, setAlwaysOverride] = useState<boolean | null>(null);
   useEffect(() => {
     if (season == null) return;
     const ctrl = new AbortController();
@@ -903,9 +927,27 @@ export default function PlayoffPictureModal({
   );
   // The search pages open uncovered (Jacob, 9/23): a visitor who searched for
   // the bracket asked to see it. Nothing is written to REVEAL_KEY, so the
-  // board's copy of this panel keeps its cover. Series winners keep a cover of
-  // their own on those pages; see BracketView.
+  // board's copy of this panel keeps its cover. Series winners keep covers of
+  // their own, one per round, on the pages and the board; see BracketView.
   const revealed = override || savedReveal || inline;
+
+  // Per-round result covers (see BracketView), derived the same way.
+  const savedRound = useMemo(() => (picture ? loadRoundsRevealed(picture.season) : -1), [picture]);
+  const savedAlways = useMemo(() => (picture ? loadResultsAlways() : false), [picture]);
+  const revealedRound = Math.max(savedRound, roundOverride ?? -1);
+  const resultsAlways = alwaysOverride ?? savedAlways;
+
+  const showRound = (round: number) => {
+    setRoundOverride(round);
+    if (picture) {
+      try { window.localStorage.setItem(BRACKET_ROUNDS_REVEALED_KEY(picture.season), String(round)); } catch {}
+    }
+  };
+
+  const alwaysShowResults = () => {
+    setAlwaysOverride(true);
+    try { window.localStorage.setItem(BRACKET_RESULTS_ALWAYS_KEY, "1"); } catch {}
+  };
 
   const reveal = () => {
     setOverride(true);
@@ -1041,8 +1083,10 @@ export default function PlayoffPictureModal({
                     odds={odds}
                     fieldSet={fieldSet}
                     results={post?.results ?? NO_RESULTS}
-                    coverResults={inline && !resultsShown}
-                    onShowResults={() => setResultsShown(true)}
+                    revealedRound={revealedRound}
+                    always={resultsAlways}
+                    onShowRound={showRound}
+                    onAlways={alwaysShowResults}
                   />
                 ) : (
                   <PicksView picture={picture} post={post} failed={postFailed} />

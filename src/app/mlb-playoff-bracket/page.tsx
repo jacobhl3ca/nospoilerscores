@@ -25,9 +25,12 @@ import PlayoffPictureModal from "@/components/PlayoffPictureModal";
 // ⚠️ WHAT THE PANEL ACTUALLY DOES (9/23 pm). On these pages the panel opens
 // UNCOVERED (Jacob chose "no cover"): seeds, odds and pairings show at once.
 // Series winners from MLB's postseason feed move up the Bracket tab
-// (playBracket), but on these pages they wait behind a "Show series results"
-// tap that lasts for the visit only. On the board the panel keeps its one
-// cover, remembered per season (REVEAL_KEY), and the pages never write it.
+// (playBracket), but they wait behind one tap per round ("Show Wild Card
+// results", …), here and on the board alike. The highest tapped round is
+// stored per season, so the next round's winners always get their own tap;
+// "Always show results" turns the covers off (2026-10-09). On the board the
+// panel also keeps its one cover, remembered per season (REVEAL_KEY), and the
+// pages never write it.
 //
 // 2026-10-07: "mlb playoff schedule" has 1.9x the demand of "mlb playoff
 // picture" and no page answered it, so each bracket column now carries its
@@ -85,7 +88,7 @@ const FAQ = [
   },
   {
     q: "Will looking at the bracket spoil a game I recorded?",
-    a: "The seeds can, because their order is worked out from every result so far. Series winners stay hidden until you tap Show series results, and that tap lasts only for your visit. On HideScore's main board the whole panel sits under a cover.",
+    a: "The seeds can, because their order is worked out from every result so far. Series winners stay hidden round by round. Each round has its own Show results button, and a tap shows that round only, so the next round's winners wait for their own tap. On HideScore's main board the whole panel also sits under a cover.",
   },
 ];
 
@@ -150,8 +153,8 @@ export default function MlbPlayoffBracketPage() {
           p: "While a seat has not been clinched, its card lists the clubs outside the six that can still take it, under a small Chasing this spot label, each with its own chance of making the playoffs. A club chases one seat, the division lead when that is its likelier road and otherwise the last wild card still open. A clinched club carries a check mark, and its seat takes no chasers. Empty seats further on say where they are filled from, such as the winner of a named wild-card pair.",
         },
         {
-          h: "Series winners, one tap away",
-          p: "When a series ends, MLB's postseason feed names the winner, and that club moves into the seat its pairing feeds while the loser stays on its card, dimmed. On this page those results wait behind a Show series results button, because a winner is exactly the thing a viewer on delay is avoiding. The tap counts for this visit only, so coming back after the next series never shows it to you unasked. A seed can give something away too. If your club dropped from the 4 seed to the 5 overnight, the bracket just told you how last night's game ended, which is why HideScore's main board keeps this whole panel under a cover."
+          h: "Series winners, one tap per round",
+          p: "When a series ends, MLB's postseason feed names the winner, and that club moves into the seat its pairing feeds while the loser stays on its card, dimmed. On this page those results wait behind one button per round, such as Show Wild Card results, because a winner is exactly the thing a viewer on delay is avoiding. A tap shows that round only, so coming back after the next round never shows its winners to you unasked. If you would rather see every result at once, tap Always show results. A seed can give something away too. If your club dropped from the 4 seed to the 5 overnight, the bracket just told you how last night's game ended, which is why HideScore's main board keeps this whole panel under a cover."
         },
         {
           h: "Pick the whole bracket before it locks",
