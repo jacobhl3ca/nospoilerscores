@@ -13,8 +13,9 @@ const espn = await jiti.import<{
   parseGame: (event: unknown, sport: string) => G;
   aflFinalsLabel: (headline: string) => string;
 }>("../src/lib/espn.ts");
-const { pairingSpoilsEarlierRound } = await jiti.import<{
+const { pairingSpoilsEarlierRound, pairingRoundLabel } = await jiti.import<{
   pairingSpoilsEarlierRound: (g: G) => boolean;
+  pairingRoundLabel: (g: Pick<G, "playoffLabel" | "stage">) => string;
 }>("../src/lib/pairingMask.ts");
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
@@ -172,6 +173,19 @@ test("MLS: the Wild Card shows, Round One through MLS Cup masks", () => {
   stageCase("mls", "western-conference-playoffs---play-in", "West Playoffs", true);
 });
 
+test("MLS, NWSL, Libertadores: a postseason game with an unknown round is covered", () => {
+  stageCase("mls", "mls-cup-playoffs---round-two", "Playoffs", true);
+  stageCase("nwsl", "nwsl-championship", "Playoffs", true);
+  stageCase("libertadores", "fourth-stage", null, true);
+  for (const sport of ["mls", "nwsl", "libertadores"]) {
+    assert.equal(pairingSpoilsEarlierRound({ sport, isPlayoff: true, playoffLabel: null, stage: null }), true, sport);
+  }
+  for (const sport of ["mls", "nwsl"]) {
+    assert.equal(pairingSpoilsEarlierRound({ sport, isPlayoff: false, playoffLabel: null, stage: null }), false, `${sport} regular season`);
+  }
+  stageCase("epl", "mls-cup-playoffs---round-two", null, false);
+});
+
 test("NWSL: the quarterfinals show, the semifinals and Championship mask", () => {
   stageCase("nwsl", "playoffs---quarterfinals", "Quarterfinal", false);
   stageCase("nwsl", "playoffs---semifinals", "Semifinal", true);
@@ -179,13 +193,34 @@ test("NWSL: the quarterfinals show, the semifinals and Championship mask", () =>
   stageCase("nwsl", "regular-season", null, false);
 });
 
-test("Libertadores: the group stage shows, the Round of 16 through the Final masks", () => {
+test("Libertadores: the group stage and first two stages show, the Third Stage through the Final masks", () => {
+  stageCase("libertadores", "first-stage", "First Stage", false);
+  stageCase("libertadores", "second-stage", "Second Stage", false);
+  stageCase("libertadores", "third-stage", "Third Stage", true);
   stageCase("libertadores", "group-stage", "Group Stage", false);
+  stageCase("libertadores", "", "Group B", false, "CONMEBOL Libertadores, Group B");
   stageCase("libertadores", "round-of-16", "Round of 16", true);
   stageCase("libertadores", "quarterfinals", "Quarterfinals", true);
   stageCase("libertadores", "semifinals", "Semifinals", true);
   stageCase("libertadores", "final", "Final", true);
-  stageCase("libertadores", "third-stage", null, false);
+});
+
+test("a cover names the round: ESPN's headline, else the soccer stage", () => {
+  const label = (stage: string | null, playoffLabel: string | null = null) => pairingRoundLabel({ stage, playoffLabel });
+  assert.equal(label(null, "NLDS - Game 1"), "NLDS · Game 1");
+  assert.equal(label("East Round One"), "Round One");
+  assert.equal(label("West Semifinal"), "Conference Semifinal");
+  assert.equal(label("East Final"), "Conference Final");
+  assert.equal(label("MLS Cup"), "MLS Cup");
+  assert.equal(label("West Playoffs"), "Playoffs");
+  assert.equal(label("Semifinal"), "Semifinal");
+  assert.equal(label("Championship"), "Championship");
+  assert.equal(label("Third Stage"), "Third Stage");
+  assert.equal(label("Round of 16"), "Round of 16");
+  assert.equal(label("Quarterfinals"), "Quarterfinal");
+  assert.equal(label("Semifinals"), "Semifinal");
+  assert.equal(label("Final"), "Final");
+  assert.equal(label(null), "Finals");
 });
 
 // Real ESPN notes headlines, read 2026-10-03.
@@ -198,6 +233,8 @@ test("NCAA volleyball: the NCAA First Round shows, every other tournament round 
   assert.equal(pairingSpoilsEarlierRound(g("NCAA Women's Volleyball Championship")), true);
   assert.equal(pairingSpoilsEarlierRound(g("Big East Women's Volleyball Championship - Semifinal")), true);
   assert.equal(pairingSpoilsEarlierRound(g("Big East Women's Volleyball Championship - Final")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("SEC Women's Volleyball Tournament - First Round")), true, "a conference First Round masks");
+  assert.equal(pairingSpoilsEarlierRound(g("Big Sky Women's Volleyball Championship - First Round")), true, "a conference First Round masks");
   assert.equal(pairingSpoilsEarlierRound(g("SEC Women's Volleyball Tournament - Second Round")), true);
   assert.equal(pairingSpoilsEarlierRound(g("NCAA Women's Volleyball Championship - Second Round", false)), false);
 });

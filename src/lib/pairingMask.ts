@@ -35,17 +35,20 @@
 // The NWSL quarterfinals are seeded 1v8 off the table, so they show; the
 // semifinals and the Championship mask.
 //
-// Libertadores (stage read 2026-10-03): the group stage shows, every knockout
-// round from the Round of 16 to the Final masks. The qualifying stages have no
-// stage and stay as they are.
+// Libertadores (stage read 2026-10-03): the group stage and the first two
+// qualifying stages show. The Third Stage masks (Jacob 2026-10-09, "hide"): its
+// pairings come from the Second Stage winners. Every knockout round from the
+// Round of 16 to the Final masks.
 //
 // NCAA women's volleyball (notes headlines read 2026-10-03): only the NCAA
 // tournament's First Round shows. Conference tournaments mask from their first
-// listed round, because some give byes into the quarterfinals.
+// listed round, "First Round" included, because some give byes into the
+// quarterfinals.
 
 import { useCallback, useSyncExternalStore } from "react";
 import type { Game, Sport } from "@/lib/types";
 import { isPlaceholderTeam } from "./teamLogos";
+import { shortenPlayoffLabel } from "./playoffSubtitle";
 
 // Rounds that are safe to show, per league. Anything else in that league's
 // finals masks. Labels come from parseGame (NRL_FINALS_WEEKS, the AFL note
@@ -68,25 +71,43 @@ const LADDER_SEEDED_ROUND: Partial<Record<Sport, RegExp>> = {
   // The Pro Bowl is filed as postseason too; it is AFC v NFC, not a pairing.
   nfl: /\bwild ?card\b|\bpro bowl\b/i,
   // "NCAA Women's Volleyball Championship - First Round"; conference
-  // tournaments ("SEC Women's Volleyball Tournament - Second Round") mask.
-  ncaavb: /\bfirst round\b/i,
+  // tournaments ("SEC Women's Volleyball Tournament - First Round") mask.
+  ncaavb: /^NCAA\b.*\bfirst round\b/i,
 };
 
 // Leagues ESPN files without a playoff flag, keyed on parseGame's stage. A
 // non-null stage puts the game in a round; the regex lists the rounds that
-// show and any other stage masks, so an unknown future slug fails closed.
+// show and any other stage masks. A postseason game with no stage masks too,
+// so an unknown future slug fails closed: MLS and NWSL by ESPN's playoff flag
+// (deriveStage gives any playoff slug a stage), Libertadores always, because
+// it has no regular season. An MLS or NWSL regular-season game shows.
 const STAGE_SEEDED_ROUND: Partial<Record<Sport, RegExp>> = {
   mls: /\bwild card\b/i,
   nwsl: /^quarterfinal\b/i,
-  libertadores: /^group\b/i,
+  libertadores: /^(?:group\b|first stage$|second stage$)/i,
 };
+const CUP_ONLY = new Set<Sport>(["libertadores"]);
 
 export function pairingSpoilsEarlierRound(game: Pick<Game, "sport" | "isPlayoff" | "playoffLabel" | "stage">): boolean {
   const rule = STAGE_SEEDED_ROUND[game.sport];
-  if (rule) return game.stage != null && !rule.test(game.stage);
+  if (rule) return game.stage != null ? !rule.test(game.stage) : game.isPlayoff || CUP_ONLY.has(game.sport);
   const seeded = LADDER_SEEDED_ROUND[game.sport];
   if (!seeded || !game.isPlayoff) return false;
   return !seeded.test(game.playoffLabel ?? "");
+}
+
+// The round a cover names, in its text and its button's aria-label. ESPN's
+// headline for the leagues that have one ("NLDS - Game 1" -> "NLDS · Game 1");
+// the soccer leagues have none, so their stage names it: "East Round One" ->
+// "Round One", "West Semifinal" -> "Conference Semifinal", "Quarterfinals" ->
+// "Quarterfinal". The side is dropped, as in the examples the owner approved.
+export function pairingRoundLabel(game: Pick<Game, "playoffLabel" | "stage">): string {
+  if (game.playoffLabel) return shortenPlayoffLabel(game.playoffLabel);
+  const stage = game.stage?.trim();
+  if (!stage) return "Finals";
+  const conf = /^(?:East|West) (.+)$/.exec(stage);
+  const round = (conf ? conf[1] : stage).replace(/^(quarter|semi)-?finals$/i, "$1final");
+  return conf && /^(?:semifinal|final)$/i.test(round) ? `Conference ${round}` : round;
 }
 
 // --- reveal store -------------------------------------------------------------

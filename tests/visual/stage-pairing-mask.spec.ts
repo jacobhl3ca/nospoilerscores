@@ -49,9 +49,11 @@ async function openBoard(page: Page) {
   await page.goto("/");
 }
 
+// cover: the round the cover names (src/lib/pairingMask.ts pairingRoundLabel);
+// round: the stage line in the modal.
 const CASES = [
-  { league: "MLS", ev: MLS, round: "West Semifinal", matchup: /Canyon SC at Harbor FC/ },
-  { league: "Libertadores", ev: LIB, round: "Semifinals", matchup: /Club Sur at Club Norte/ },
+  { league: "MLS", ev: MLS, cover: "Conference Semifinal", round: "West Semifinal", matchup: /Canyon SC at Harbor FC/ },
+  { league: "Libertadores", ev: LIB, cover: "Semifinal", round: "Semifinals", matchup: /Club Sur at Club Norte/ },
 ];
 
 for (const width of [390, 1440]) {
@@ -66,7 +68,8 @@ for (const width of [390, 1440]) {
         await expect(mask).toBeVisible({ timeout: 20_000 });
         await expect(page.getByRole("button", { name: c.matchup })).toHaveCount(0);
 
-        await mask.getByRole("button", { name: /^Show teams for the / }).click();
+        await expect(mask.getByText(c.cover, { exact: true })).toBeVisible();
+        await mask.getByRole("button", { name: `Show teams for the ${c.cover} (reveals who advanced)` }).click();
         await expect(mask).toHaveCount(0);
         const card = page.getByRole("button", { name: c.matchup }).first();
         await expect(card).toBeVisible();

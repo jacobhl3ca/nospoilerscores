@@ -2617,7 +2617,7 @@ export function buildTennisGames(events: TennisScoreboardEvent[], when?: string 
 // competition.notes — for finished cup ties ESPN puts the RESULT there
 // ("Paris Saint-Germain win 4-3 on penalties"). Returns null for league play
 // so regular-season games show no stage line.
-function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
+function deriveStage(altGameNote?: string, seasonSlug?: string, sport?: Sport): string | null {
   const seg = (altGameNote ?? "").split(",").map((s) => s.trim()).filter(Boolean).pop() ?? "";
   // Cup rounds (FA Cup / Copa del Rey / DFB-Pokal / Conference League, read
   // 2026-09-14): altGameNote is "English FA Cup, Third Round", "German Cup,
@@ -2644,6 +2644,11 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     const round: Record<string, string> = { quarterfinals: "Quarterfinal", semifinals: "Semifinal", championship: "Championship" };
     return round[nwsl[1]] ?? "Playoffs";
   }
+  // Any other MLS or NWSL slug that names the postseason ("mls-cup-playoffs
+  // ---round-two", "nwsl-championship") is still a playoff round, so it gets a
+  // stage and pairingMask covers it. Scoped to the two leagues: deriveStage
+  // runs for every sport.
+  if ((sport === "mls" || sport === "nwsl") && /play-?offs?|mls-cup|championship/.test(slug)) return "Playoffs";
   const slugMap: Record<string, string> = {
     "group-stage": "Group Stage",
     "round-of-32": "Round of 32",
@@ -2668,6 +2673,11 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     "fourth-round": "Fourth Round",
     "fifth-round": "Fifth Round",
     "league-phase": "League Phase",
+    // Libertadores qualifying (pairingMask covers the Third Stage: its
+    // pairings come from the Second Stage winners).
+    "first-stage": "First Stage",
+    "second-stage": "Second Stage",
+    "third-stage": "Third Stage",
     "knockout-round-playoffs": "Knockout Round Playoffs",
     "knockout-round-play-offs": "Knockout Round Playoffs",
     // Nations League (read 2026-09-26 off the 2024-25 knockouts): the altGameNote
@@ -3035,7 +3045,7 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   const awayProbable = sport === "mlb" ? probablePitcher(away) : null;
 
   const cricketInfo = sport === "cricketintl" ? cricketMatchInfo(event as CricketEventLike) : null;
-  const stage = cricketInfo ? cricketInfo.stage : deriveStage(competition?.altGameNote, event.season?.slug);
+  const stage = cricketInfo ? cricketInfo.stage : deriveStage(competition?.altGameNote, event.season?.slug, sport);
 
   // Penalty shootout: a soccer knockout decided (or being decided) by spot
   // kicks — level after extra time, the pure tune-in moment. ESPN tags it via a

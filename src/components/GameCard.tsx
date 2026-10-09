@@ -17,8 +17,7 @@ import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/w
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
-import { revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/pairingMask";
-import { shortenPlayoffLabel } from "@/lib/playoffSubtitle";
+import { pairingRoundLabel, revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/pairingMask";
 import { shouldShowRating } from "@/lib/ratingGate";
 import { useWatchQueue } from "@/components/WatchQueueContext";
 
@@ -360,8 +359,8 @@ export function PairingRevealAll({ games, className = "" }: { games: Game[]; cla
 }
 
 function PairingMaskCard({ game, nextGameDate, leagueTag, showRatings, onReveal }: { game: Game; nextGameDate?: string; leagueTag?: string; showRatings: boolean; onReveal: () => void }) {
-  // ESPN's raw headline ("NLDS - Game 1") in the column subtitle's form ("NLDS · Game 1").
-  const round = game.playoffLabel ? shortenPlayoffLabel(game.playoffLabel) : "Finals";
+  // "NLDS · Game 1" off ESPN's headline; a soccer round ("Round One") off its stage.
+  const round = pairingRoundLabel(game);
   let time = game.state === "in" ? "Live" : game.state === "post" ? "Final" : "";
   // A series slot with no start time yet sits at local midnight in the feed
   // ("TBD @ LAD", 10/3 04:00Z) — startTimeLabel reads ESPN's "TBD" for it.
