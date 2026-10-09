@@ -17,15 +17,22 @@ async function catchPosts(page: Page) {
   return bodies;
 }
 
-test("/contact lists what shipped from requests, newest first", async ({ page }) => {
+test("/contact lists what shipped from requests, grouped by person", async ({ page }) => {
   await page.goto("/contact");
   await expect(page.getByRole("heading", { level: 2, name: "Built from your requests" })).toBeVisible();
   const shown = page.getByTestId("requested-builds").locator("li");
   const first = Math.min(REQUESTED_BUILDS.length, REQUESTED_BUILDS_SHOWN);
   await expect(shown).toHaveCount(first);
-  await expect(shown.first()).toContainText(REQUESTED_BUILDS[0].title);
   await expect(shown.first()).toContainText(REQUESTED_BUILDS[0].kind);
-  for (let i = 0; i < first; i++) await expect(shown.nth(i)).toBeVisible();
+  // Rows render in the data file's order: each person's rows together, rows
+  // with no initials last, and a credited row ends with its thanks.
+  for (let i = 0; i < first; i++) {
+    const r = REQUESTED_BUILDS[i];
+    await expect(shown.nth(i)).toBeVisible();
+    await expect(shown.nth(i)).toContainText(r.title);
+    if (r.by.length) await expect(shown.nth(i)).toContainText(`thanks ${r.by.join(", ")}`);
+    else await expect(shown.nth(i)).not.toContainText("thanks");
+  }
 
   const more = page.getByTestId("requested-builds-more").locator("li");
   if (REQUESTED_BUILDS.length > REQUESTED_BUILDS_SHOWN) {

@@ -54,7 +54,11 @@ function RequestedBuildRow({ r }: { r: RequestedBuild }) {
       {" · "}
       {r.title}
       {r.by.length > 0 && (
-        <span style={{ color: "var(--text-muted)" }}>{` · thanks ${r.by.join(", ")}`}</span>
+        <>
+          {" · "}
+          {/* nowrap keeps "thanks K.K." on one line at 390 px. */}
+          <span className="whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{`thanks ${r.by.join(", ")}`}</span>
+        </>
       )}
     </li>
   );
@@ -97,7 +101,8 @@ export default function ContactPage() {
         </div>
 
         {/* Added 2026-10-09. What shipped because someone asked, so a note
-            sent from here visibly goes somewhere. Data: src/lib/requestedBuilds.ts.
+            sent from here visibly goes somewhere. Data: src/lib/requestedBuilds.ts,
+            rendered in its order (grouped by person, newest first in a group).
             The overflow is a native <details>, so the page stays free of JS. */}
         <h2 id="built" className="text-lg font-semibold mt-6">Built from your requests</h2>
         <p>Every item below started as a note from someone using HideScore.</p>
