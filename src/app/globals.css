@@ -791,7 +791,47 @@ iframe#yt-player {
    used, adding the inset on top of the same 2.5rem of breathing room. */
 .doc-page {
   padding-top: calc(env(safe-area-inset-top, 0px) + 2.5rem);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem);
+  /* + the floating controls' offset and height (DocFloatingControls,
+     2026-10-09), so they never cover the last line. */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem + var(--doc-float-gap) + var(--doc-float-size));
+  --doc-float-size: 2.75rem;
+  --doc-float-gap: 1rem;
+}
+
+/* Floating ✕ pill (bottom centre) and scroll arrow (bottom right) on the doc
+   pages, 2026-10-09. z-45 clears the pinned top bar (40) and the progress
+   line (41) and stays under the feedback modal (70). */
+.doc-float {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--doc-float-gap));
+  z-index: 45;
+  height: var(--doc-float-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-hover);
+  border-radius: 9999px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.doc-float:hover { border-color: var(--accent); }
+.doc-float-close {
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 1.5rem;
+}
+.doc-float-arrow {
+  right: calc(env(safe-area-inset-right, 0px) + 1rem);
+  width: var(--doc-float-size);
+  font-size: 0.875rem;
+}
+@media print {
+  .doc-float { display: none !important; }
 }
 
 /* Doc-page top bar (DocTopBar), pinned on scroll 2026-09-25.

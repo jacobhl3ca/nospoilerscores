@@ -57,9 +57,9 @@ export default function ContactPage() {
 
         <h2 className="text-lg font-semibold mt-6">Email</h2>
         <p>
-          <EmailLink />. A real
-          person reads every message.
+          <EmailLink pill />
         </p>
+        <p>A real person reads every message.</p>
 
         <h2 id="feedback" className="text-lg font-semibold mt-6 scroll-mt-4">Send feedback</h2>
         <p>
