@@ -148,6 +148,16 @@ test("ncaaf: a MAC home game reaches the MAC channel, title-masked with its own 
   assert.ok(NCAAF.maskTitle?.includes("Get Some MACtion"));
 });
 
+test("ncaaf: a Pac-12 game reaches the Pac-12 channel last, title-masked, on its own game tokens", () => {
+  // Arizona (12, Big 12) at Washington State (265, Pac-12) on CBS, 2026-09-26.
+  // Pac-12 titles name the winner ("Cougs Battle in Loss") and carry no
+  // "football" ("… | FULL Game Highlights (9/26/2026)", "GAME RECAP: …").
+  const chain = buildCollegeFallbackChain(NCAAF, PRIMARY, { id: "ncaaf-265", conferenceId: "9" }, { id: "ncaaf-12", conferenceId: "4" }, ["CBS"]);
+  assert.deepEqual(chain.map((f) => f.channel), ["Big 12 Conference", "CBS Sports College Football", "Pac-12"]);
+  assert.deepEqual(chain[2], { channel: "Pac-12", titleTokens: ["game highlights", "game recap"], ownTokens: true });
+  assert.ok(NCAAF.maskTitle?.includes("Pac-12"));
+});
+
 test("ncaaf: a school channel is the last link, after conference and network", () => {
   // Gardner-Webb (2241, Big South-OVC) at Marshall (276, Sun Belt), ESPN+ only.
   const espnPlus = buildCollegeFallbackChain(NCAAF, PRIMARY, { id: "ncaaf-276", conferenceId: "37" }, { id: "ncaaf-2241", conferenceId: "179" }, ["ESPN+"]);
@@ -156,4 +166,36 @@ test("ncaaf: a school channel is the last link, after conference and network", (
   // Away side too, and after the network.
   const onCbs = buildCollegeFallbackChain(NCAAF, PRIMARY, { id: "ncaaf-2", conferenceId: "8" }, { id: "ncaaf-276", conferenceId: "37" }, ["CBS"]);
   assert.deepEqual(onCbs.map((f) => f.channel), ["SEC", "Sun Belt Conference", "CBS Sports College Football", "Marshall Thundering Herd"]);
+});
+
+test("college soccer: each school's conference channel, ESPN soccer ids, soccer tokens (2026-10-03)", () => {
+  const W = CONFIG.ncaawsoc;
+  const M = CONFIG.ncaamsoc;
+  assert.equal(W.primaryFromChain, true);
+  assert.equal(M.primaryFromChain, true);
+  // Florida (20499, SEC) hosts LSU (20536, SEC): one channel.
+  assert.deepEqual(buildCollegeFallbackChain(W, null, { id: "ncaawsoc-20499" }, { id: "ncaawsoc-20536" }, ["SECN+"]).map((f) => f.channel), ["SEC"]);
+  // Boston College (20316, ACC) hosts SMU (20327, ACC); Kansas State (20504) is Big 12.
+  assert.deepEqual(buildCollegeFallbackChain(W, null, { id: "ncaawsoc-20316" }, { id: "ncaawsoc-20504" }, []).map((f) => f.channel), ["ACC Digital Network", "Big 12 Conference"]);
+  // East Texas A&M (21654) hosts Lamar (20617): no channel conference, no lookups.
+  assert.deepEqual(buildCollegeFallbackChain(W, null, { id: "ncaawsoc-21654" }, { id: "ncaawsoc-20617" }, []), []);
+  // Every ACC, Big 12 and SEC women's id, and every ACC men's id, maps once.
+  const counts = (cfg: CollegeHighlightConfig) => Object.values(cfg.teamConferences ?? {}).reduce<Record<string, number>>((n, c) => ({ ...n, [c]: (n[c] ?? 0) + 1 }), {});
+  assert.deepEqual(counts(W), { acc: 17, big12: 16, sec: 16 });
+  assert.deepEqual(counts(M), { acc: 15 });
+  assert.deepEqual(M.conferences, { acc: "ACC Digital Network" });
+});
+
+test("college soccer tokens: the men's token cannot match a women's cut", () => {
+  const fold = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const accWomen = fold("Virginia Tech vs. NC State Match Highlights | 2026 ACC Women's Soccer");
+  const accMen = fold("SMU vs. Virginia Tech Match Highlights | 2026 ACC Men's Soccer");
+  const big12 = fold("Kansas vs. Baylor Highlights (10.2.26) | 2026 Big 12 Women's Soccer");
+  const sec = fold("Texas Longhorns vs. Ole Miss Rebels | Game Highlights | 2026 SEC Soccer");
+  const has = (title: string, tokens: string[]) => tokens.map(fold).some((t) => title.includes(t));
+  for (const title of [accWomen, big12, sec]) assert.ok(has(title, CONFIG.ncaawsoc.titleTokens), title);
+  assert.ok(!has(accMen, CONFIG.ncaawsoc.titleTokens));
+  assert.ok(has(accMen, CONFIG.ncaamsoc.titleTokens));
+  assert.ok(!has(accWomen, CONFIG.ncaamsoc.titleTokens));
+  assert.ok(accWomen.includes("men s soccer"), "why the men's token carries the ACC prefix");
 });

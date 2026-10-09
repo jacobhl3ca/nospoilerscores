@@ -60,12 +60,12 @@ test("both feeds are opt-in leagues in the soccer group with mid-Aug to mid-Dec 
   assert.equal(espn.espnGameUrl({ sport: "ncaawsoc", id: "401889830" }), "https://www.espn.com/soccer/match/_/gameId/401889830");
 });
 
-test("short codes, labels and the dark highlight state", () => {
+test("short codes, labels and the lit highlight state (conference chains, 2026-10-03)", () => {
   assert.ok(PREFS_SRC.includes('ncaawsoc: "ws", ncaamsoc: "ms"'));
   const codes = PREFS_SRC.match(/const SPORT_TO_SHORT[^\n]*/)![0].match(/: "([a-z]+)"/g)!;
   assert.equal(new Set(codes).size, codes.length, "every short code is unique");
   assert.equal(SHORT_LEAGUE_LABELS["NCAAW Soccer"], "W. Soccer");
   const yt = readFileSync(new URL("../src/lib/youtube.ts", import.meta.url), "utf8");
   const dark = yt.slice(yt.indexOf("const NO_HIGHLIGHT_FALLBACK = new Set(["), yt.indexOf("export function hasNoTrustedHighlightSource"));
-  assert.ok(dark.includes('"ncaawsoc"') && dark.includes('"ncaamsoc"'));
+  assert.ok(!dark.includes('"ncaawsoc"') && !dark.includes('"ncaamsoc"'));
 });

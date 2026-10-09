@@ -535,15 +535,46 @@ check(
       !youtube.channelAlwaysMasksTitle(["CBS Sports Golazo - Europe"]),
   );
 }
-// NCAA women's and men's soccer (added 2026-09-26) are dark: the only cut
-// found for the 9/10 Penn State–Ohio State women's game was on a fan channel,
-// and no conference channel has been probed. Never scanned.
+// NCAA women's and men's soccer (lit 2026-10-03) resolve like ncaavb: the
+// first channel of each match's conference chain (ACC, Big 12, SEC) is the
+// official one, behind the soccer tokens. The monitor does not model chains.
 check(
-  "NCAA soccer (both feeds) stays dark and unmonitored",
-  youtube.hasNoTrustedHighlightSource("ncaawsoc") === true &&
-    youtube.hasNoTrustedHighlightSource("ncaamsoc") === true &&
+  "prebaker bakes NCAA soccer (both feeds) from each match's conference chain behind the soccer tokens, and reads the conference uploads feeds for soccer only",
+  prebake.includes('{ sport: "ncaawsoc",') &&
+    prebake.includes('{ sport: "ncaamsoc",') &&
+    prebake.includes(`ncaawsoc: ["women's soccer", "sec soccer"]`) &&
+    prebake.includes(`ncaamsoc: ["acc men's soccer"]`) &&
+    youtube.highlightPrimaryFromChain("ncaawsoc") &&
+    youtube.highlightPrimaryFromChain("ncaamsoc") &&
+    JSON.stringify(youtube.getCompetitionTitleTokens("ncaamsoc")) === JSON.stringify(["acc men's soccer"]) &&
+    youtube.highlightTeamName("ncaawsoc", "Alcorn St", "Alcorn State") === "Alcorn State" &&
+    prebake.includes("!channelSearchServesSport(channel, sport)) return null;") &&
+    prebake.includes("womensGame: isWomensSport(sport),") &&
     !monitor.includes("usa.ncaa.w.1") &&
     !monitor.includes("usa.ncaa.m.1"),
+);
+check(
+  "prebaker's own channel search clears the league's match gates (home first, duration floor) like every other id",
+  prebake.includes("hlChannelSearchOfficial(key, c.channel, away, home, item.date, c.tokens, [prevExtended], week, gates)") &&
+    prebake.includes("const minSec = Math.max(channelSearchMinSec(channel), gates?.minSec ?? 0);") &&
+    prebake.includes("hlVideoMatchesTeams(videoId, away, home, homeFirst)") &&
+    prebake.includes("titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home) && homeFirstOk(title),"),
+);
+check(
+  "SEC volleyball cuts open on the Watch on YouTube card, warn that the description gives the result, and bake through the watch page",
+  youtube.sportChannelBlocksEmbeds("ncaavb", "SEC") === true &&
+    youtube.sportChannelBlocksEmbeds("ncaawsoc", "SEC") === false &&
+    youtube.leadChannelBlocksEmbeds(["SEC"]) === false &&
+    gameHighlights.includes("sportChannelBlocksEmbeds(game.sport, channel) ? `${url}&nss_embed_blocked=1&nss_desc_result=1` : url;") &&
+    gameHighlights.includes("const secondaryModalFallbackUrl = channelModalFallbackUrl(secondaryChannel);") &&
+    !/modalFallbackUrl\(\[(?:primaryChannel|officialFallback\.channel|fb\.channel|secondaryChannel)\]/.test(gameHighlights) &&
+    videoModal.includes('fallbackFlag(fallbackUrl, "nss_desc_result")') &&
+    prebake.includes("hlNoteEmbedOff(lg.sport, officialChannel, prevOfficial);") &&
+    prebake.includes("hlNoteEmbedOff(lg.sport, primaryChannel, official);") &&
+    prebake.includes("hlNoteEmbedOff(lg.sport, fb.channel, id);") &&
+    prebake.includes("hlNoteEmbedOff(sport, channel, videoId);") &&
+    prebake.includes("channelSearchNeedsEmbed(channel, sport)") &&
+    prebake.includes("if (owner?.channelId !== channelId || parseWatchPagePlayable(html) !== true) {"),
 );
 check(
   "prebaker bakes NCAA volleyball from each match's conference chain behind the volleyball token",
