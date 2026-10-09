@@ -1,4 +1,5 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout, ClimbRound } from "./types";
+import { abortOwn } from "./abort";
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
@@ -3236,7 +3237,7 @@ function hasPrimeBroadcast(game: Game): boolean {
 // timeout/error rather than throwing, so callers fall back to empty data.
 async function fetchTimed(url: string, timeoutMs = 8000): Promise<Response | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => abortOwn(controller), timeoutMs);
   try {
     return await fetch(url, { cache: "no-store", signal: controller.signal });
   } catch {
@@ -3249,7 +3250,7 @@ async function fetchTimed(url: string, timeoutMs = 8000): Promise<Response | nul
 async function fetchWithRetry(url: string, retries = 2, timeoutMs = 10000): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => abortOwn(controller), timeoutMs);
     try {
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timer);
@@ -5907,7 +5908,7 @@ async function fetchMlbVideos(date: string): Promise<MlbVideoEntry[]> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const timer = setTimeout(() => abortOwn(ctrl), 8000);
       const res = await fetch(`${getApiBase()}/api/mlb-videos?date=${date}`, { signal: ctrl.signal });
       clearTimeout(timer);
       if (!res.ok) continue;

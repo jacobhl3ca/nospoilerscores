@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { abortOwn } from "@/lib/abort";
 import {
   NFL_CLINCH_TEXT,
   NFL_PLAYOFF_DATES,
@@ -262,7 +263,7 @@ export default function NflPlayoffPanel({ initialTab = "seeds" }: { initialTab?:
         if (!ctrl.signal.aborted) setFailed(true);
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, []);
 
   const onTabKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {

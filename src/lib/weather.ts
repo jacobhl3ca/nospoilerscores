@@ -5,6 +5,8 @@
 // conditions and the rain-through-the-day timeline. Forecast horizon is ~15
 // days — games further out just resolve to null (no weather shown).
 
+import { getDeviceTimeZone } from "./etDay";
+
 export interface WeatherHour {
   hour24: number; // 0-23 local
   label: string; // "3 PM"
@@ -235,7 +237,7 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
   // (wrong temp/rain/condition), or the day shifted near midnight. Pin the API
   // to the same effective zone so both sides always agree; a real IANA tz keeps
   // the request byte-identical to before (geo.tz already equals the auto zone).
-  const apiTz = tz ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York");
+  const apiTz = tz ?? getDeviceTimeZone();
   const localDate = start.toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
   // % 24 guards the "24" some ICU builds emit for midnight (same guard as
   // etDay/DateNav). Open-meteo's hourly times run 0–23, so an unguarded "24"

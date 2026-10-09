@@ -10,6 +10,7 @@ import { buildKeyLegend } from "@/lib/modalKeyLegend";
 import ModalKeyHints from "@/components/ModalKeyHints";
 import { shareCardUrl, buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
+import { exitDocumentFullscreen, requestElementFullscreen } from "@/lib/mediaSafe";
 import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
 import { noteHighlightWatched } from "@/lib/rateApp";
 
@@ -527,7 +528,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const fsEl = document.fullscreenElement;
     const host = fsHostRef.current;
     if (!fsEl || !host || fsEl === host || !host.contains(fsEl)) return;
-    host.requestFullscreen?.().catch(() => {});
+    requestElementFullscreen(host);
   }, []);
   const goPrev = useCallback(() => { if (!onPrev) return; carryFullscreen(); onPrev(); }, [onPrev, carryFullscreen]);
   const goNext = useCallback(() => { if (!onNext) return; carryFullscreen(); onNext(); }, [onNext, carryFullscreen]);
@@ -1174,26 +1175,22 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // have no spoiler title and want the browser's own native player chrome.
   const toggleFullscreen = useCallback(() => {
     if (hlsMode || embedMode) {
-      if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
-      const el = (hlsMode ? videoRef.current : iframeRef.current) as
-        (HTMLElement & { webkitEnterFullscreen?: () => void; webkitRequestFullscreen?: () => void }) | null;
+      if (document.fullscreenElement) { exitDocumentFullscreen(); return; }
+      const el = hlsMode ? videoRef.current : iframeRef.current;
       if (!el) return;
-      if (typeof el.requestFullscreen === "function") el.requestFullscreen().catch(() => {});
-      else if (typeof el.webkitEnterFullscreen === "function") el.webkitEnterFullscreen();
-      else if (typeof el.webkitRequestFullscreen === "function") el.webkitRequestFullscreen();
+      // Through requestElementFullscreen, never bare: iPhone's
+      // webkitEnterFullscreen() THROWS InvalidStateError on a <video> that has
+      // no metadata yet (GitHub #245). A failed request leaves the clip inline.
+      requestElementFullscreen(el);
       return;
     }
     if (fakeFs) { setFakeFs(false); return; }
-    if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
-    const host = fsHostRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
+    if (document.fullscreenElement) { exitDocumentFullscreen(); return; }
+    const host = fsHostRef.current;
     if (!host) return;
-    if (typeof host.requestFullscreen === "function") {
-      host.requestFullscreen().catch(() => setFakeFs(true));
-    } else if (typeof host.webkitRequestFullscreen === "function") {
-      host.webkitRequestFullscreen();
-    } else {
-      setFakeFs(true); // iOS Safari / WKWebView — no element fullscreen
-    }
+    // No element fullscreen (iOS Safari / WKWebView), a refusal, or a throw
+    // all land on the CSS-overlay fallback.
+    requestElementFullscreen(host, () => setFakeFs(true));
   }, [hlsMode, embedMode, fakeFs]);
 
   // ── Double-tap-to-seek on the video surface (mobile) ──────────────────
