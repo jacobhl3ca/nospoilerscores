@@ -2362,6 +2362,29 @@ export default function HomeContent({
     return [...leagues.filter((o) => o.sport === "top"), ...leagues.filter((o) => o.sport !== "top")];
   }, [switcherOptions]);
 
+  // A scores switcher's "Remove from list…" (Jacob 10/8): the picked leagues
+  // leave the switcher in one save, the same rule as unticking them in
+  // Settings. Out of shownLeagues, and into hiddenLeagues when they would
+  // still show (on by default, pinned, or a favorite). As with Settings, a
+  // hidden league is one Auto no longer picks. Add more… or Settings brings
+  // it back.
+  const removeFromSwitcher = (sports: Sport[]) => {
+    const hidden = new Set(prefs.hiddenLeagues ?? []);
+    const shown = new Set(prefs.shownLeagues ?? []);
+    const pinned = [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague];
+    for (const sport of sports) {
+      shown.delete(sport);
+      const preferred = !!thirdLeagueOptions.find((o) => o.sport === sport)?.defaultInSwitcher
+        || pinned.includes(sport)
+        || prefs.favoriteLeagues.includes(sport);
+      if (preferred) hidden.add(sport);
+    }
+    updatePrefs({
+      hiddenLeagues: hidden.size ? [...hidden] : undefined,
+      shownLeagues: shown.size ? [...shown] : undefined,
+    });
+  };
+
   // A tap in the Add more… sheet does what the dropdown row for that column
   // does. Like pinning in Settings, picking a turned-off league turns it back
   // on — otherwise the column would show the next league instead. News
@@ -4523,6 +4546,7 @@ export default function HomeContent({
                   .filter((e) => e.slotIdx !== idx)
                   .map(({ sport, col }) => ({ sport, col })),
               }),
+              onRemoveFromList: removeFromSwitcher,
               // An Auto column that Best of yesterday took over: Auto IS that
               // column today, so it carries the "· default" mark.
               autoSport: selectedSlotLeagues[idx] === undefined

@@ -67,6 +67,9 @@ interface LeagueColumnProps {
   // "Add more…" row above Remove col: opens HomeContent's league sheet for
   // this column, where the offseason leagues live now (Jacob 9/29).
   onAddMore?: () => void;
+  // "Remove from list…" row: pick switcher rows, then take them all off the
+  // switcher at once, the same as unticking them in Settings (Jacob 10/8).
+  onRemoveFromList?: (sports: Sport[]) => void;
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
   showSwapChevron?: boolean;
@@ -947,6 +950,7 @@ export default function LeagueColumn({
   onSwapLeague,
   onAddLeague,
   onAddMore,
+  onRemoveFromList,
   showSwapChevron,
   switcherMode,
   onCycleLeague,
@@ -1023,6 +1027,11 @@ export default function LeagueColumn({
     return SHORT_LEAGUE_LABELS[label] || label;
   };
   const [swapOpen, setSwapOpen] = useState(false);
+  // "Remove from list…" pick mode in the open switcher, and the rows picked so
+  // far. Nothing saves until "Remove N"; closing the panel drops the picks
+  // (the header tap that reopens it starts clean).
+  const [removeMode, setRemoveMode] = useState(false);
+  const [toRemove, setToRemove] = useState<Sport[]>([]);
   // Panel + measured height cap for the switcher — see the effect below.
   const swapPanelRef = useRef<HTMLDivElement>(null);
   const [swapMaxH, setSwapMaxH] = useState<number>();
@@ -2006,7 +2015,7 @@ export default function LeagueColumn({
                 <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
                   <button
                     type="button"
-                    onClick={() => setSwapOpen(!swapOpen)}
+                    onClick={() => { setRemoveMode(false); setToRemove([]); setSwapOpen(!swapOpen); }}
                     className="cursor-pointer transition-colors hover:opacity-80 flex items-center justify-center gap-1 w-full"
                     title="Switch league"
                     aria-haspopup="dialog"
@@ -2050,17 +2059,25 @@ export default function LeagueColumn({
                     className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-y-auto overscroll-contain min-w-[100px]"
                     style={{ background: "var(--bg)", border: "1px solid var(--border)", maxHeight: swapMaxH }}
                   >
-                    {/* Auto option — always present so the dropdown is consistent per column */}
-                    <button
-                      type="button"
-                      onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
-                      className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                      style={{ color: "var(--text-muted)" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                    >
-                      Auto
-                    </button>
+                    {/* Auto option — always present so the dropdown is consistent per column.
+                        Pick mode swaps it for a one-line hint: Auto is not a
+                        league, so there is nothing to remove there. */}
+                    {removeMode ? (
+                      <p className="px-3 pt-2 pb-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                        Pick leagues to remove
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
+                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                        style={{ color: "var(--text-muted)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        Auto
+                      </button>
+                    )}
                     {/* Sort leagues already shown in another column to the
                         bottom, just above Empty — they're the least useful to
                         pick again (Jacob 6/9). Stable sort keeps the rest in
@@ -2083,6 +2100,43 @@ export default function LeagueColumn({
                       const isCurrent = opt.sport === league.sport;
                       const elsewhere = isCurrent ? undefined : shownElsewhere?.find((e) => e.sport === opt.sport);
                       const isAutoDefault = opt.sport === autoSport;
+                      if (removeMode) {
+                        // A league on the board stays: taking it off the list
+                        // would also swap out the column showing it. Plain
+                        // text, not a button, so it reads as not pickable.
+                        if (isCurrent || elsewhere) {
+                          return (
+                            <div
+                              key={opt.sport}
+                              className="w-full px-3 py-1.5 text-xs text-left"
+                              style={{ color: "var(--text-muted)" }}
+                              title="On the board. Change that column first"
+                            >
+                              {opt.label}
+                              <em className="font-normal"> · {elsewhere ? `col ${elsewhere.col}` : "this col"}</em>
+                            </div>
+                          );
+                        }
+                        const picked = toRemove.includes(opt.sport);
+                        return (
+                          <button
+                            key={opt.sport}
+                            type="button"
+                            aria-pressed={picked}
+                            onClick={() => setToRemove(picked ? toRemove.filter((s) => s !== opt.sport) : [...toRemove, opt.sport])}
+                            className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                            style={{
+                              color: picked ? "var(--text-muted)" : "var(--text)",
+                              textDecoration: picked ? "line-through" : undefined,
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          >
+                            {opt.label}
+                            {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
+                          </button>
+                        );
+                      }
                       return (
                         <button
                           key={opt.sport}
@@ -2109,10 +2163,44 @@ export default function LeagueColumn({
                         </button>
                       );
                     })}
+                    {/* Pick mode footer: Remove N saves every pick in one go and
+                        leaves the panel open without those rows; Cancel drops
+                        the picks. */}
+                    {removeMode && (
+                      <>
+                        <button
+                          type="button"
+                          data-testid="league-switcher-remove-confirm"
+                          disabled={toRemove.length === 0}
+                          onClick={() => { onRemoveFromList!(toRemove); setToRemove([]); setRemoveMode(false); }}
+                          className="w-full px-3 py-1.5 text-xs text-left cursor-pointer disabled:cursor-default transition-colors"
+                          style={{
+                            color: toRemove.length ? "var(--accent)" : "var(--text-muted)",
+                            fontWeight: 600,
+                            borderTop: "1px solid var(--border)",
+                          }}
+                          onMouseEnter={(e) => { if (toRemove.length) e.currentTarget.style.background = "var(--menu-hover)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          {toRemove.length ? `Remove ${toRemove.length}` : "Remove"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setToRemove([]); setRemoveMode(false); }}
+                          className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                          style={{ color: "var(--text-muted)" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    )}
                     {/* Add more… opens the full league sheet (offseason leagues
-                        behind its toggle). It and Remove col share one rule
-                        above them, so the two read as the list's footer. */}
-                    {onAddMore && (
+                        behind its toggle). It, Remove from list… and Remove col
+                        share one rule above them, so they read as the list's
+                        footer. */}
+                    {!removeMode && onAddMore && (
                       <button
                         type="button"
                         data-testid="league-switcher-add-more"
@@ -2129,21 +2217,44 @@ export default function LeagueColumn({
                         Add more…
                       </button>
                     )}
+                    {/* Remove from list… turns the rows above into picks (Jacob
+                        10/8: "a remove selections button too"). */}
+                    {!removeMode && onRemoveFromList && (
+                      <button
+                        type="button"
+                        data-testid="league-switcher-remove-from-list"
+                        onClick={() => { setToRemove([]); setRemoveMode(true); }}
+                        // nowrap: a footer action on two lines read as two
+                        // rows on a phone, where the panel is narrow.
+                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors whitespace-nowrap"
+                        style={{
+                          color: "var(--text-muted)",
+                          fontWeight: 400,
+                          borderTop: onAddMore ? undefined : "1px solid var(--border)",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        Remove from list…
+                      </button>
+                    )}
                     {/* Remove col — hides the column entirely until switched back. */}
-                    <button
-                      type="button"
-                      onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
-                      className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                      style={{
-                        color: "var(--text-muted)",
-                        fontWeight: 400,
-                        borderTop: onAddMore ? undefined : "1px solid var(--border)",
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                    >
-                      Remove col
-                    </button>
+                    {!removeMode && (
+                      <button
+                        type="button"
+                        onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
+                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                        style={{
+                          color: "var(--text-muted)",
+                          fontWeight: 400,
+                          borderTop: onAddMore || onRemoveFromList ? undefined : "1px solid var(--border)",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        Remove col
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
