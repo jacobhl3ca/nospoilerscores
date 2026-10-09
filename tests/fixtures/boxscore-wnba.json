@@ -1,0 +1,297 @@
+{
+ "header": {
+  "competitions": [
+   {
+    "id": "401918019",
+    "competitors": [
+     {
+      "homeAway": "home",
+      "score": "75",
+      "linescores": [
+       {
+        "displayValue": "17"
+       },
+       {
+        "displayValue": "18"
+       },
+       {
+        "displayValue": "23"
+       },
+       {
+        "displayValue": "17"
+       }
+      ],
+      "team": {
+       "id": "16",
+       "abbreviation": "WSH",
+       "displayName": "Washington Mystics",
+       "logos": [
+        {
+         "href": "https://a.espncdn.com/i/teamlogos/wnba/500/wsh.png"
+        }
+       ]
+      }
+     },
+     {
+      "homeAway": "away",
+      "score": "93",
+      "linescores": [
+       {
+        "displayValue": "24"
+       },
+       {
+        "displayValue": "17"
+       },
+       {
+        "displayValue": "24"
+       },
+       {
+        "displayValue": "28"
+       }
+      ],
+      "team": {
+       "id": "20",
+       "abbreviation": "ATL",
+       "displayName": "Atlanta Dream",
+       "logos": [
+        {
+         "href": "https://a.espncdn.com/i/teamlogos/wnba/500/atl.png"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "boxscore": {
+  "players": [
+   {
+    "team": {
+     "id": "20",
+     "abbreviation": "ATL"
+    },
+    "statistics": [
+     {
+      "labels": [
+       "MIN",
+       "PTS",
+       "FG",
+       "3PT",
+       "FT",
+       "REB",
+       "AST",
+       "TO",
+       "STL",
+       "BLK",
+       "OREB",
+       "DREB",
+       "PF",
+       "+/-"
+      ],
+      "totals": [
+       "",
+       "93",
+       "30-67",
+       "13-32",
+       "20-22",
+       "27",
+       "23",
+       "8",
+       "10",
+       "4",
+       "7",
+       "20",
+       "26",
+       ""
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "4398915",
+         "shortName": "N. Hillmon",
+         "displayName": "Naz Hillmon"
+        },
+        "stats": [
+         "33",
+         "10",
+         "4-9",
+         "2-6",
+         "0-0",
+         "3",
+         "0",
+         "2",
+         "0",
+         "0",
+         "2",
+         "1",
+         "3",
+         "+18"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "4433402",
+         "shortName": "A. Reese",
+         "displayName": "Angel Reese"
+        },
+        "stats": [
+         "28",
+         "15",
+         "4-8",
+         "0-4",
+         "7-8",
+         "7",
+         "2",
+         "1",
+         "0",
+         "3",
+         "1",
+         "6",
+         "4",
+         "+26"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "3058901",
+         "shortName": "A. Gray",
+         "displayName": "Allisha Gray"
+        },
+        "stats": [
+         "35",
+         "22",
+         "8-18",
+         "3-6",
+         "3-3",
+         "1",
+         "3",
+         "1",
+         "4",
+         "0",
+         "0",
+         "1",
+         "3",
+         "+15"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "team": {
+     "id": "16",
+     "abbreviation": "WSH"
+    },
+    "statistics": [
+     {
+      "labels": [
+       "MIN",
+       "PTS",
+       "FG",
+       "3PT",
+       "FT",
+       "REB",
+       "AST",
+       "TO",
+       "STL",
+       "BLK",
+       "OREB",
+       "DREB",
+       "PF",
+       "+/-"
+      ],
+      "totals": [
+       "",
+       "75",
+       "22-58",
+       "7-22",
+       "24-28",
+       "42",
+       "13",
+       "19",
+       "3",
+       "1",
+       "12",
+       "30",
+       "27",
+       ""
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "4282173",
+         "shortName": "M. Onyenwere",
+         "displayName": "Michaela Onyenwere"
+        },
+        "stats": [
+         "18",
+         "12",
+         "3-8",
+         "1-3",
+         "5-5",
+         "2",
+         "0",
+         "2",
+         "0",
+         "0",
+         "2",
+         "0",
+         "4",
+         "-4"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "4898384",
+         "shortName": "K. Iriafen",
+         "displayName": "Kiki Iriafen"
+        },
+        "stats": [
+         "35",
+         "15",
+         "5-12",
+         "0-2",
+         "5-6",
+         "16",
+         "3",
+         "3",
+         "0",
+         "0",
+         "4",
+         "12",
+         "4",
+         "-17"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "4398911",
+         "shortName": "S. Austin",
+         "displayName": "Shakira Austin"
+        },
+        "stats": [
+         "33",
+         "9",
+         "3-9",
+         "1-1",
+         "2-2",
+         "3",
+         "1",
+         "4",
+         "1",
+         "0",
+         "2",
+         "1",
+         "3",
+         "-13"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

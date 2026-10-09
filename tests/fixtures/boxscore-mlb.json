@@ -1,0 +1,517 @@
+{
+ "header": {
+  "competitions": [
+   {
+    "id": "401908015",
+    "competitors": [
+     {
+      "homeAway": "home",
+      "score": "1",
+      "linescores": [
+       {
+        "displayValue": "0",
+        "hits": 0,
+        "errors": 1
+       },
+       {
+        "displayValue": "0",
+        "hits": 1,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 0,
+        "errors": 1
+       },
+       {
+        "displayValue": "0",
+        "hits": 1,
+        "errors": 0
+       },
+       {
+        "displayValue": "1",
+        "hits": 2,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 0,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 0,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 0,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 1,
+        "errors": 0
+       }
+      ],
+      "team": {
+       "id": "15",
+       "abbreviation": "ATL",
+       "displayName": "Atlanta Braves",
+       "logos": [
+        {
+         "href": "https://a.espncdn.com/i/teamlogos/mlb/500/atl.png"
+        }
+       ]
+      }
+     },
+     {
+      "homeAway": "away",
+      "score": "3",
+      "linescores": [
+       {
+        "displayValue": "0",
+        "hits": 1,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 1,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 2,
+        "errors": 0
+       },
+       {
+        "displayValue": "3",
+        "hits": 3,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 0,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 1,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 0,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 0,
+        "errors": 0
+       },
+       {
+        "displayValue": "0",
+        "hits": 0,
+        "errors": 0
+       }
+      ],
+      "team": {
+       "id": "19",
+       "abbreviation": "LAD",
+       "displayName": "Los Angeles Dodgers",
+       "logos": [
+        {
+         "href": "https://a.espncdn.com/i/teamlogos/mlb/500/lad.png"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "boxscore": {
+  "players": [
+   {
+    "team": {
+     "id": "19",
+     "abbreviation": "LAD"
+    },
+    "statistics": [
+     {
+      "type": "batting",
+      "labels": [
+       "H-AB",
+       "AB",
+       "R",
+       "H",
+       "RBI",
+       "HR",
+       "BB",
+       "K",
+       "#P",
+       "AVG",
+       "OBP",
+       "SLG"
+      ],
+      "totals": [
+       "8-36",
+       "36",
+       "3",
+       "8",
+       "3",
+       "2",
+       "2",
+       "12",
+       "164",
+       "",
+       "",
+       ""
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "33039",
+         "shortName": "M. Betts",
+         "displayName": "Mookie Betts"
+        },
+        "stats": [
+         "2-5",
+         "5",
+         "0",
+         "2",
+         "0",
+         "0",
+         "0",
+         "1",
+         "29",
+         ".300",
+         ".462",
+         ".300"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "30193",
+         "shortName": "F. Freeman",
+         "displayName": "Freddie Freeman"
+        },
+        "stats": [
+         "1-4",
+         "4",
+         "1",
+         "1",
+         "1",
+         "1",
+         "1",
+         "1",
+         "19",
+         ".364",
+         ".462",
+         ".909"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "33377",
+         "shortName": "T. Hern\u00e1ndez",
+         "displayName": "Teoscar Hernandez"
+        },
+        "stats": [
+         "0-4",
+         "4",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "11",
+         ".167",
+         ".167",
+         ".417"
+        ]
+       }
+      ]
+     },
+     {
+      "type": "pitching",
+      "labels": [
+       "IP",
+       "H",
+       "R",
+       "ER",
+       "BB",
+       "K",
+       "HR",
+       "PC-ST",
+       "ERA",
+       "PC"
+      ],
+      "totals": [
+       "9.0",
+       "5",
+       "1",
+       "1",
+       "2",
+       "12",
+       "0",
+       "136-87",
+       "",
+       "136"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "4872587",
+         "shortName": "Y. Yamamoto",
+         "displayName": "Yoshinobu Yamamoto"
+        },
+        "stats": [
+         "7.0",
+         "4",
+         "1",
+         "1",
+         "1",
+         "10",
+         "0",
+         "98-62",
+         "1.29",
+         "98"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "35135",
+         "shortName": "T. Scott",
+         "displayName": "Tanner Scott"
+        },
+        "stats": [
+         "1.0",
+         "0",
+         "0",
+         "0",
+         "1",
+         "2",
+         "0",
+         "19-12",
+         "10.80",
+         "19"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "35394",
+         "shortName": "E. Diaz",
+         "displayName": "Edwin Diaz"
+        },
+        "stats": [
+         "1.0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "19-13",
+         "0.00",
+         "19"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "team": {
+     "id": "15",
+     "abbreviation": "ATL"
+    },
+    "statistics": [
+     {
+      "type": "batting",
+      "labels": [
+       "H-AB",
+       "AB",
+       "R",
+       "H",
+       "RBI",
+       "HR",
+       "BB",
+       "K",
+       "#P",
+       "AVG",
+       "OBP",
+       "SLG"
+      ],
+      "totals": [
+       "5-32",
+       "32",
+       "1",
+       "5",
+       "1",
+       "0",
+       "2",
+       "12",
+       "136",
+       "",
+       "",
+       ""
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "4810190",
+         "shortName": "D. Baldwin",
+         "displayName": "Drake Baldwin"
+        },
+        "stats": [
+         "0-4",
+         "4",
+         "0",
+         "0",
+         "1",
+         "0",
+         "0",
+         "2",
+         "15",
+         ".130",
+         ".231",
+         ".174"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "36185",
+         "shortName": "R. Acuna Jr.",
+         "displayName": "Ronald Acuna Jr."
+        },
+        "stats": [
+         "0-3",
+         "3",
+         "0",
+         "0",
+         "0",
+         "0",
+         "1",
+         "1",
+         "16",
+         ".143",
+         ".308",
+         ".143"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "32767",
+         "shortName": "M. Olson",
+         "displayName": "Matt Olson"
+        },
+        "stats": [
+         "1-4",
+         "4",
+         "0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "2",
+         "18",
+         ".174",
+         ".231",
+         ".304"
+        ]
+       }
+      ]
+     },
+     {
+      "type": "pitching",
+      "labels": [
+       "IP",
+       "H",
+       "R",
+       "ER",
+       "BB",
+       "K",
+       "HR",
+       "PC-ST",
+       "ERA",
+       "PC"
+      ],
+      "totals": [
+       "9.0",
+       "8",
+       "3",
+       "3",
+       "2",
+       "12",
+       "2",
+       "164-105",
+       "",
+       "164"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "30948",
+         "shortName": "C. Sale",
+         "displayName": "Chris Sale"
+        },
+        "stats": [
+         "5.0",
+         "7",
+         "3",
+         "3",
+         "0",
+         "7",
+         "2",
+         "95-62",
+         "4.26",
+         "95"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "4416462",
+         "shortName": "D. Dodd",
+         "displayName": "Dylan Dodd"
+        },
+        "stats": [
+         "1.0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "2",
+         "0",
+         "17-11",
+         "1.93",
+         "17"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "41455",
+         "shortName": "D. Lee",
+         "displayName": "Dylan Lee"
+        },
+        "stats": [
+         "1.0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "1",
+         "0",
+         "9-7",
+         "5.40",
+         "9"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

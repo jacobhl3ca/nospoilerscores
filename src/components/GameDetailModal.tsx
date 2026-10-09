@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Game } from "@/lib/types";
-import { handleExternalClick, liveWatchUrl, openLiveWatch, watchLinkProps } from "@/lib/openExternal";
+import { handleExternalClick, liveWatchUrl, openExternal, openLiveWatch, watchLinkProps } from "@/lib/openExternal";
 import { gameRef } from "@/lib/tvChannelLinks";
 import { espnGameUrl, networkStreamUrl, sportGroup, sportStreamFallback } from "@/lib/espn";
 import { formatGameProgress } from "@/lib/liveProgress";
@@ -11,6 +11,10 @@ import { type ShareCardMeta } from "@/lib/shareCard";
 import { getDateString } from "@/components/DateNav";
 import { fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
+import BoxScore from "@/components/BoxScore";
+import BoxScoreDialog from "@/components/BoxScoreDialog";
+import { BOXSCORE_SPORTS } from "@/lib/boxscore";
+import { isDemoModeActive } from "@/lib/demoMode";
 import CalendarButtons from "@/components/CalendarButtons";
 import { buildCalendarEvent } from "@/lib/calendarLink";
 import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
@@ -70,6 +74,8 @@ export default function GameDetailModal({
   reminderLinkTemplate,
   recordLeagues,
   isPastDate = false,
+  skipBoxscoreWarning = false,
+  onSkipBoxscoreWarning,
 }: {
   game: Game;
   showRatings: boolean;
@@ -85,6 +91,11 @@ export default function GameDetailModal({
   recordLeagues?: ReadonlySet<RecordLeague>;
   // The board is on a past date — cards hide records there, so the popup does too.
   isPastDate?: boolean;
+  // Settings → "Show box score warning" off. The Box score button then goes
+  // straight to the box score; onSkipBoxscoreWarning is the dialog's
+  // "Don't warn me again".
+  skipBoxscoreWarning?: boolean;
+  onSkipBoxscoreWarning?: () => void;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -234,6 +245,22 @@ export default function GameDetailModal({
   // day here would drift from the service day in that window and make the modal
   // disagree with the card on isToday (GameHighlights must "just match" the card).
   const isToday = etSlateYmd(game.date) === getDateString(0);
+
+  // Box score — live or final only, from ESPN's own boxscore link, and never in
+  // demo mode (a capture must not leak a real score). Leagues in
+  // BOXSCORE_SPORTS render it here; the rest open ESPN. Either way the score
+  // reaches the page only after the warning (BoxScoreDialog) or its skip.
+  const [demo] = useState(isDemoModeActive);
+  const boxscoreUrl = (isLive || isFinal) && !demo ? game.boxscoreUrl ?? null : null;
+  const boxscoreHere = BOXSCORE_SPORTS.has(game.sport);
+  const [boxWarnOpen, setBoxWarnOpen] = useState(false);
+  const [boxShown, setBoxShown] = useState(false);
+  const openBoxscoreEspn = () => { if (boxscoreUrl) openExternal(boxscoreUrl); };
+  const onBoxscoreTap = () => {
+    if (!skipBoxscoreWarning) setBoxWarnOpen(true);
+    else if (boxscoreHere) setBoxShown(true);
+    else openBoxscoreEspn();
+  };
 
   // Start time / status WITHOUT score. For live we add the same period/clock
   // the card shows ("In progress · Q2 - 5:32") — statusDetail/clock/period
@@ -582,6 +609,30 @@ export default function GameDetailModal({
           >
             Watch live
           </button>
+        ) : null}
+
+        {/* Box score — sits above the highlights. The button gives way to the
+            box score once shown. */}
+        {boxscoreUrl && !boxShown ? (
+          <button
+            type="button"
+            onClick={onBoxscoreTap}
+            className="mt-4 w-full py-2 rounded-lg text-sm font-medium cursor-pointer"
+            style={{ background: "transparent", color: "var(--accent)", border: "1px solid var(--accent)" }}
+          >
+            Box score
+          </button>
+        ) : null}
+        {boxscoreUrl && boxShown ? <BoxScore game={game} espnUrl={boxscoreUrl} /> : null}
+        {boxscoreUrl && boxWarnOpen ? (
+          <BoxScoreDialog
+            isLive={isLive}
+            showHere={boxscoreHere}
+            onShowHere={() => { setBoxWarnOpen(false); setBoxShown(true); }}
+            onOpenEspn={() => { setBoxWarnOpen(false); openBoxscoreEspn(); }}
+            onCancel={() => setBoxWarnOpen(false)}
+            onSkipWarning={() => onSkipBoxscoreWarning?.()}
+          />
         ) : null}
 
         {/* Highlights — the SAME official + top-search buttons the score card

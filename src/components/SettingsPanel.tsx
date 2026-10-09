@@ -858,6 +858,7 @@ export default function SettingsPanel({
     showRatings: false,
     skipExplainer: false,
     skipNewsExplainer: false,
+    skipBoxscoreWarning: false,
     showNews: false,
     firstLeague: undefined,
     secondLeague: undefined,
@@ -1914,6 +1915,12 @@ export default function SettingsPanel({
                 hint="The 'FULL OF SPOILERS' confirm before opening news"
                 checked={!prefs.skipNewsExplainer}
                 onChange={(v) => updatePrefs({ skipNewsExplainer: !v })}
+              />
+              <ToggleRow
+                label="Show box score warning"
+                hint="The 'shows the score' confirm before a box score"
+                checked={!prefs.skipBoxscoreWarning}
+                onChange={(v) => updatePrefs({ skipBoxscoreWarning: !v })}
               />
             </div>
             {/* Links (Jacob 10/4: was its own section above Account). The

@@ -36,7 +36,7 @@ import {
 // against production: every column went from "Schedule unavailable" to a full
 // slate. If you ever move this back, load /today in a real browser and watch
 // the console — the scripts will not tell you.
-const BASE_URL = "https://site.web.api.espn.com/apis/site/v2/sports";
+export const BASE_URL = "https://site.web.api.espn.com/apis/site/v2/sports";
 
 // Origin for the worker-served leagues (today: cfl). getApiBase() is "" on the
 // web build, so `new URL("" + "/api/cfl")` would throw — fall through to the
@@ -65,7 +65,7 @@ function standingsUrl(sport: Sport): string {
 const EVENT_FETCH_EMPTY: EventFetchResult = { card: null, failed: false };
 const EVENT_FETCH_FAILED: EventFetchResult = { card: null, failed: true };
 
-const SPORT_PATHS: Record<Sport, string> = {
+export const SPORT_PATHS: Record<Sport, string> = {
   // Chess + boxing have NO ESPN path — they are served by worker routes
   // (/api/chess, /api/boxing). Poker comes from the curated major-events file.
   // The empty string is never fetched: all three are
@@ -2990,6 +2990,10 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
       break;
     }
   }
+  // The box score page sits in the same links array (rel ["boxscore",
+  // "desktop", "event"]). Pre-game events carry none.
+  const boxscoreUrl: string | null =
+    (event.links ?? []).find((link) => link.rel?.includes("boxscore"))?.href ?? null;
 
   // Venue location + indoor flag (the address object sits next to fullName).
   // ESPN's address.city is usually "City"/"City, State"; state/country round it
@@ -3071,6 +3075,7 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     playoffLabel,
     seriesStatus,
     recapUrl,
+    boxscoreUrl,
     streamUrl: null, // populated after fetch for supported sports
     primeStreamUrl: null, // populated from /prime-asins.json when matchup matches
     noHitterPitchingTeam: null, // MLB only — populated from MLB Stats API linescore
