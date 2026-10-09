@@ -42,6 +42,7 @@ export function LeaguePickerModal({
   onToggleOffseason,
   demoLabels,
   shownElsewhere,
+  removed,
   trackPrefix,
 }: {
   title: string;
@@ -66,6 +67,9 @@ export function LeaguePickerModal({
   // single only: leagues in the other columns, tagged "· col N" like the
   // dropdown rows.
   shownElsewhere?: { sport: Sport; col: number }[];
+  // single only: leagues taken out of the switcher, newest first. They leave
+  // the main grid and sit in a "Previously removed" group at the bottom.
+  removed?: Sport[];
   // Umami events `<prefix>-shown`, then one of -done / -defaults / -backdrop /
   // -escape (2026-10-01). Shown minus those = left with the sheet open.
   // Unset = no events.
@@ -95,9 +99,20 @@ export function LeaguePickerModal({
   const core = options.filter((o) => o.defaultInSwitcher !== false);
   const rest = options.filter((o) => o.defaultInSwitcher === false);
   const canCollapse = multi && core.length > 0 && rest.length > 0;
+  // "Previously removed" (Jacob 10/8): its own group, newest first, and
+  // drawn whatever the offseason toggle says. It is his own short list, and
+  // hiding an entry there would make a removal look lost. The column's own
+  // league never moves.
+  const removedOptions = multi
+    ? []
+    : (removed ?? []).flatMap((sport) => {
+        const o = options.find((x) => x.sport === sport);
+        return o && !selected.includes(sport) ? [o] : [];
+      });
+  const isRemoved = (sport: Sport) => removedOptions.some((o) => o.sport === sport);
   const shown = multi
     ? (!canCollapse || expanded ? [...core, ...rest] : [...core, ...rest.filter((o) => selected.includes(o.sport))])
-    : showOffseason ? options : options.filter((o) => !o.offseason || selected.includes(o.sport));
+    : (showOffseason ? options : options.filter((o) => !o.offseason || selected.includes(o.sport))).filter((o) => !isRemoved(o.sport));
 
   // Escape closes the sheet too — same as tapping its backdrop. Brings it in
   // line with the ratings/news explainers and every other modal in the app,
@@ -172,6 +187,64 @@ export function LeaguePickerModal({
     };
   }, []);
 
+  const renderPill = (o: LeaguePickerOption) => {
+    const idx = selected.indexOf(o.sport);
+    const on = idx >= 0;
+    const demoOption = demoLabels?.get(o.sport);
+    // Single mode: the column's own league is marked, never filled —
+    // a filled pill reads as "picked", and nothing is picked until a tap.
+    const current = !multi && on;
+    const elsewhere = multi || current ? undefined : shownElsewhere?.find((e) => e.sport === o.sport);
+    const full = multi && selected.length >= max && !on;
+    return (
+      <button
+        key={o.sport}
+        type="button"
+        disabled={full}
+        onClick={() => onPick(o.sport)}
+        // Multi-select toggle: expose the picked state to assistive
+        // tech, since it's otherwise conveyed only by the accent
+        // background (and a "1. " number prefix). Matches the
+        // aria-pressed pattern every other toggle pill in the app
+        // already uses (view tabs, the news reveal/text-post pills,
+        // the World Cup groups band/day pills) — this picker was the
+        // lone group missing it.
+        aria-pressed={multi ? on : undefined}
+        aria-current={current ? "true" : undefined}
+        // The Settings league chip's look (Jacob 10/1: one chip
+        // everywhere): rounded-md, 11px, uppercase name.
+        className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+        style={multi && on
+          ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
+          : {
+              background: "var(--bg-card)",
+              color: current ? "var(--accent)" : !multi && o.offseason ? "var(--text-muted)" : "var(--text)",
+              border: `1px solid ${current ? "var(--accent)" : "var(--border)"}`,
+            }}
+      >
+        {/* Fixed 1rem slot, reserved whether or not this pill is
+            picked, so selecting one never changes any pill's width. */}
+        {multi && (
+          <span aria-hidden className="inline-block w-3 shrink-0 text-center text-[11px] font-bold tabular-nums">
+            {on ? idx + 1 : ""}
+          </span>
+        )}
+        {/* No white plate (Jacob 10/1), the same mark as the
+            Settings chips: ESPN's dark-theme copy in dark mode and on
+            the accent fill, a sport emoji for a league with none. */}
+        <LeagueMark sport={o.sport} src={demoOption?.logo} tone={multi && on ? "dark" : "auto"} className="-my-0.5" />
+        <span className="uppercase tracking-wide">{demoOption?.label ?? o.label}</span>
+        {/* Start dates dropped here on purpose (Jacob 8/9): six
+            "· starts Aug 21" tails made the grid unreadable and are
+            noise at signup. The kickoff banner still announces them
+            and the column switcher still shows them. "offseason"
+            stays — that one changes whether the column has games. */}
+        {o.offseason && <em className="font-normal text-[11px]" style={{ color: multi && on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
+        {elsewhere && <em className="font-normal text-[11px]" style={{ color: "var(--text-muted)" }}>· col {elsewhere.col}</em>}
+      </button>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { track("backdrop"); onClose(); }}>
       <div className="absolute inset-0 bg-black/50" />
@@ -223,64 +296,22 @@ export function LeaguePickerModal({
             size and the cap above does nothing), and the negative-margin /
             padding pair keeps the pills' focus rings from being clipped by
             the new overflow box. */}
-        <div className={`flex flex-wrap justify-center gap-2 mb-4 overflow-y-auto min-h-0 -mx-1 px-1${subtitle ? "" : " mt-3"}`}>
-          {shown.map((o) => {
-            const idx = selected.indexOf(o.sport);
-            const on = idx >= 0;
-            const demoOption = demoLabels?.get(o.sport);
-            // Single mode: the column's own league is marked, never filled —
-            // a filled pill reads as "picked", and nothing is picked until a tap.
-            const current = !multi && on;
-            const elsewhere = multi || current ? undefined : shownElsewhere?.find((e) => e.sport === o.sport);
-            const full = multi && selected.length >= max && !on;
-            return (
-              <button
-                key={o.sport}
-                type="button"
-                disabled={full}
-                onClick={() => onPick(o.sport)}
-                // Multi-select toggle: expose the picked state to assistive
-                // tech, since it's otherwise conveyed only by the accent
-                // background (and a "1. " number prefix). Matches the
-                // aria-pressed pattern every other toggle pill in the app
-                // already uses (view tabs, the news reveal/text-post pills,
-                // the World Cup groups band/day pills) — this picker was the
-                // lone group missing it.
-                aria-pressed={multi ? on : undefined}
-                aria-current={current ? "true" : undefined}
-                // The Settings league chip's look (Jacob 10/1: one chip
-                // everywhere): rounded-md, 11px, uppercase name.
-                className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                style={multi && on
-                  ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
-                  : {
-                      background: "var(--bg-card)",
-                      color: current ? "var(--accent)" : !multi && o.offseason ? "var(--text-muted)" : "var(--text)",
-                      border: `1px solid ${current ? "var(--accent)" : "var(--border)"}`,
-                    }}
+        <div data-testid="league-picker-grid" className={`flex flex-wrap justify-center gap-2 mb-4 overflow-y-auto min-h-0 -mx-1 px-1${subtitle ? "" : " mt-3"}`}>
+          {shown.map(renderPill)}
+          {removedOptions.length > 0 && (
+            <>
+              {/* Full width, so the group starts on its own line under a
+                  rule. Pills inside look and tap like the rest. */}
+              <div
+                data-testid="league-picker-removed"
+                className="basis-full mt-2 pt-2 text-center text-[11px] font-semibold"
+                style={{ color: "var(--text-muted)", borderTop: "1px solid var(--border)" }}
               >
-                {/* Fixed 1rem slot, reserved whether or not this pill is
-                    picked, so selecting one never changes any pill's width. */}
-                {multi && (
-                  <span aria-hidden className="inline-block w-3 shrink-0 text-center text-[11px] font-bold tabular-nums">
-                    {on ? idx + 1 : ""}
-                  </span>
-                )}
-                {/* No white plate (Jacob 10/1), the same mark as the
-                    Settings chips: ESPN's dark-theme copy in dark mode and on
-                    the accent fill, a sport emoji for a league with none. */}
-                <LeagueMark sport={o.sport} src={demoOption?.logo} tone={multi && on ? "dark" : "auto"} className="-my-0.5" />
-                <span className="uppercase tracking-wide">{demoOption?.label ?? o.label}</span>
-                {/* Start dates dropped here on purpose (Jacob 8/9): six
-                    "· starts Aug 21" tails made the grid unreadable and are
-                    noise at signup. The kickoff banner still announces them
-                    and the column switcher still shows them. "offseason"
-                    stays — that one changes whether the column has games. */}
-                {o.offseason && <em className="font-normal text-[11px]" style={{ color: multi && on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
-                {elsewhere && <em className="font-normal text-[11px]" style={{ color: "var(--text-muted)" }}>· col {elsewhere.col}</em>}
-              </button>
-            );
-          })}
+                Previously removed
+              </div>
+              {removedOptions.map(renderPill)}
+            </>
+          )}
           {/* Last in the grid, outline and no mark, like the Settings chip. */}
           {canCollapse && (
             <button
