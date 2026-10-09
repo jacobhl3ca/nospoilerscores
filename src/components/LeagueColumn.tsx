@@ -21,6 +21,7 @@ import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard, PairingRevealAll } from "./GameCard";
 import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
 import { compareRatedLive } from "@/lib/liveSort";
+import { compareRankedMatchups } from "@/lib/rankedMatchupSort";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 import { applyFavoritesFilter, filterLeague } from "@/lib/favoritesFilter";
 import GolfLeaderboard from "./GolfLeaderboard";
@@ -1519,9 +1520,15 @@ export default function LeagueColumn({
 
     // Pre-game: sort by matchup quality
     if (a.state === "pre" && b.state === "pre") {
-      const tierDiff = getMatchupTier(a) - getMatchupTier(b);
-      if (tierDiff !== 0) return tierDiff;
-      return getCombinedWins(b) - getCombinedWins(a);
+      const byRecord = (x: Game, y: Game) => {
+        const tierDiff = getMatchupTier(x) - getMatchupTier(y);
+        if (tierDiff !== 0) return tierDiff;
+        return getCombinedWins(y) - getCombinedWins(x);
+      };
+      // College football: ranked matchups first, by combined poll rank
+      // (lib/rankedMatchupSort.ts). Unranked games keep the record order.
+      if (league.sport === "ncaaf") return compareRankedMatchups(a, b, byRecord);
+      return byRecord(a, b);
     }
 
     return chronoMs(a.date) - chronoMs(b.date);
