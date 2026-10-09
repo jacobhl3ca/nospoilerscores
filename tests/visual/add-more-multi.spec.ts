@@ -102,6 +102,93 @@ for (const width of [390, 1440]) {
       await expect(switcher.getByRole("button", { name: /^Bundesliga/ })).toBeVisible();
     });
 
+    // PR #314 review, finding 1: Serie A + NBA + UFL, with NBA and UFL in
+    // their offseason on 9/29. The dropdown lists in-season leagues only, so
+    // the sheet names the two that wait, and both are saved for their season.
+    test("offseason picks: the sheet says they wait, and they are saved", async ({ page }) => {
+      await seedPrefs(page);
+      await page.goto("/");
+      const sheet = await openAddMore(page);
+      await sheet.getByRole("button", { name: "Show offseason leagues" }).click();
+      const grid = sheet.getByTestId("league-picker-grid");
+      for (const name of [/^Serie A/, /^NBA/, /^UFL/]) await grid.getByRole("button", { name }).click();
+      await expect(grid.getByRole("button", { name: /^NBA/ })).toContainText("offseason");
+      await expect(grid.getByRole("button", { name: /^UFL/ })).toContainText("offseason");
+
+      const add = sheet.getByTestId("league-picker-add");
+      await expect(add).toHaveText("Add 1");
+      await expect(sheet.getByTestId("league-picker-later")).toHaveText(
+        "NBA, UFL: offseason. They join this column's list when their seasons start.",
+      );
+
+      await add.click();
+      await expect(sheet).toHaveCount(0);
+      const prefs = await saved(page);
+      expect(prefs.thirdLeague).toBe("seriea");
+      // UFL is opt-in: saved so it lists when its season starts. NBA is on by
+      // default and lists then with nothing saved.
+      expect(prefs.shownLeagues).toEqual(["ufl"]);
+      expect(prefs.hiddenLeagues ?? []).not.toContain("nba");
+    });
+
+    // Finding 1, all offseason: a column pinned to an offseason league takes
+    // its Auto league, so the column stays as it is and the note names both.
+    test("all picks offseason: the column stays, the sheet says why", async ({ page }) => {
+      await seedPrefs(page);
+      await page.goto("/");
+      const sheet = await openAddMore(page);
+      await sheet.getByRole("button", { name: "Show offseason leagues" }).click();
+      const grid = sheet.getByTestId("league-picker-grid");
+      await grid.getByRole("button", { name: /^UFL/ }).click();
+      const add = sheet.getByTestId("league-picker-add");
+      await expect(add).toHaveText("Add");
+      await expect(add).toBeEnabled();
+      await expect(sheet.getByTestId("league-picker-later")).toHaveText(
+        "UFL: offseason. It joins this column's list when its season starts.",
+      );
+      await add.click();
+      await expect(sheet).toHaveCount(0);
+      const prefs = await saved(page);
+      expect(prefs.thirdLeague).toBe("wnba");
+      expect(prefs.shownLeagues).toEqual(["ufl"]);
+      await expect(page.locator('[data-league-column="wnba"]')).toBeVisible(LOAD);
+    });
+
+    // Finding 2: "Add N" counts the leagues the board shows after Add.
+    test("Add N matches the picks the column and its dropdown show", async ({ page }) => {
+      await seedPrefs(page);
+      await page.goto("/");
+      const sheet = await openAddMore(page);
+      await sheet.getByRole("button", { name: "Show offseason leagues" }).click();
+      const grid = sheet.getByTestId("league-picker-grid");
+      const picks = [/^Serie A/, /^NBA/, /^Bundesliga/, /^UFL/];
+      for (const name of picks) await grid.getByRole("button", { name }).click();
+      await expect(sheet.getByTestId("league-picker-add")).toHaveText("Add 2");
+      await sheet.getByTestId("league-picker-add").click();
+      await expect(sheet).toHaveCount(0);
+
+      const column = page.locator('[data-league-column="seriea"]');
+      await expect(column).toBeVisible(LOAD);
+      await column.locator('button[title="Switch league"]').click();
+      const switcher = page.getByRole("dialog", { name: "Switch league" });
+      await expect(switcher).toBeVisible();
+      let listed = 0;
+      for (const name of picks) listed += await switcher.getByRole("button", { name }).count();
+      expect(listed).toBe(2);
+    });
+
+    // Finding 4: the ✕ and Add are the sheet's two controls in this mode.
+    test("✕ and Add are at least 44px tap targets", async ({ page }) => {
+      await seedPrefs(page);
+      await page.goto("/");
+      const sheet = await openAddMore(page);
+      for (const control of [sheet.getByRole("button", { name: "Close", exact: true }), sheet.getByTestId("league-picker-add")]) {
+        const box = await control.boundingBox();
+        expect(box!.width).toBeGreaterThanOrEqual(44);
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+      }
+    });
+
     test("✕ with pills lit adds nothing", async ({ page }) => {
       await seedPrefs(page);
       await page.goto("/");

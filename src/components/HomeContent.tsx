@@ -2482,18 +2482,21 @@ export default function HomeContent({
   };
 
   // The Add more… sheet's Add (Jacob 10/1: "multi select", "add btn"). The
-  // first pick does what the dropdown row for that column does; the rest
+  // sheet splits the picks (planAddMorePicks). The column's pick (`now[0]`) does
+  // what the dropdown row for that column does; the other in-season picks
   // join the column's league list, so its ‹ › arrows and dropdown reach them.
-  // No column opens. Like pinning in Settings, every pick comes back on if it
-  // was turned off — otherwise the column would show the next league instead.
-  // News column 3 only keeps a pick that is in the news switcher, so a first
-  // pick from outside it (an opt-in or offseason one) is added to
-  // shownLeagues too.
-  const addFromAddMore = (picks: Sport[]) => {
+  // The other offseason picks show nowhere until their season starts, so
+  // they are only saved (the sheet's note says so). No column opens. Like pinning in
+  // Settings, every pick comes back on if it was turned off — otherwise the
+  // column would show the next league instead. News column 3 only keeps a
+  // pick that is in the news switcher, so a first pick from outside it (an
+  // opt-in one) is added to shownLeagues too.
+  const addFromAddMore = (now: Sport[], later: Sport[]) => {
     const target = addMoreFor;
     setAddMoreFor(null);
-    const first = picks[0];
-    if (!target || !first) return;
+    const picks = [...now, ...later];
+    const first = now[0];
+    if (!target || !picks.length) return;
     const pinned = savedSlotPrefs();
     // In the switcher once its hides are lifted (switcherOptions' own rule).
     const listedWhenShown = (sport: Sport) =>
@@ -2506,6 +2509,10 @@ export default function HomeContent({
       removedLeagues: prefs.removedLeagues,
       shownLeagues: prefs.shownLeagues,
     };
+    if (!first) {
+      updatePrefs(mergeAddMorePicks(picks, lists, listedWhenShown));
+      return;
+    }
     if (target.kind === "news" && target.slotIdx === 2) {
       const patch = mergeAddMorePicks(picks, lists, (s) =>
         s === first ? newsSwitcherOptions.some((o) => o.sport === s) : listedWhenShown(s));
@@ -5664,6 +5671,9 @@ export default function HomeContent({
           mode="add"
           selected={addMoreFor.current ? [addMoreFor.current] : []}
           onAdd={addFromAddMore}
+          // resolveSlot keeps NBA as the one offseason slot pin; news column
+          // 3 keeps any pick through shownLeagues.
+          columnTakes={(s) => (addMoreFor.kind === "news" && addMoreFor.slotIdx === 2) || s === "nba"}
           onClose={() => setAddMoreFor(null)}
           showOffseason={!!prefs.showOffseasonInPicker}
           onToggleOffseason={() => updatePrefs({ showOffseasonInPicker: prefs.showOffseasonInPicker ? undefined : true })}

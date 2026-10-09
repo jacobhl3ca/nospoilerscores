@@ -39,3 +39,32 @@ export function mergeAddMorePicks(
   if (toShow.length) patch.shownLeagues = [...shown, ...toShow];
   return patch;
 }
+
+// What one Add does with the lit pills (PR #314 review). The dropdown lists
+// in-season leagues only (inSeasonSwitcherOptions), and a scores column
+// pinned to an offseason league other than NBA takes its Auto league
+// (resolveSlot in espn.ts). So the column takes the first pick it can show
+// (`columnTakes`: always true for an in-season pick), the other in-season
+// picks join its dropdown, and the other offseason picks are saved like the
+// rest and show when their season starts. The sheet's "Add N" counts `now`,
+// and a note names `later`.
+export interface AddMorePlan {
+  // The column's league first, then the other in-season picks, in tap order.
+  now: Sport[];
+  // The offseason picks past the column's, in tap order.
+  later: Sport[];
+}
+
+export function planAddMorePicks(
+  picks: Sport[],
+  offseason: (sport: Sport) => boolean,
+  columnTakes: (sport: Sport) => boolean,
+): AddMorePlan {
+  const unique = picks.filter((s, i) => picks.indexOf(s) === i);
+  const column = unique.find((s) => !offseason(s) || columnTakes(s));
+  const rest = unique.filter((s) => s !== column);
+  return {
+    now: [...(column ? [column] : []), ...rest.filter((s) => !offseason(s))],
+    later: rest.filter((s) => offseason(s)),
+  };
+}

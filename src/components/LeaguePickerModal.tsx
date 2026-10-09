@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Sport } from "@/lib/types";
+import { planAddMorePicks } from "@/lib/addMorePicks";
 import { LeagueMark } from "./LeagueMark";
 
 export interface LeaguePickerOption {
@@ -30,8 +31,9 @@ function trackSoon(name: string, data?: Record<string, string>, tries = 20) {
 //   offseason ones are one tap away.
 // - "add": a column switcher's "Add more…" (Jacob 10/1: "multi select", "add
 //   btn"). The "single" sheet, but a tap lights a pill and a second tap puts
-//   it out; one "Add N" button hands the lit pills, in tap order, to onAdd.
-//   ✕, Escape and the backdrop add nothing.
+//   it out; one "Add N" button hands the lit pills to onAdd. N counts the
+//   leagues the board shows now; a note names offseason picks that wait for
+//   their season. ✕, Escape and the backdrop add nothing.
 export function LeaguePickerModal({
   title,
   subtitle,
@@ -41,6 +43,7 @@ export function LeaguePickerModal({
   max = Infinity,
   onPick,
   onAdd,
+  columnTakes,
   onConfirm,
   onClose,
   showOffseason,
@@ -62,8 +65,13 @@ export function LeaguePickerModal({
   max?: number;
   // multi, single: a pill tap. add: unused (the sheet keeps its own picks).
   onPick?: (sport: Sport) => void;
-  // add only: the Add button, with the lit pills in tap order.
-  onAdd?: (picks: Sport[]) => void;
+  // add only: the Add button, with the lit pills split by planAddMorePicks:
+  // the ones the board shows now (the column's first) and the offseason ones
+  // that wait for their season.
+  onAdd?: (now: Sport[], later: Sport[]) => void;
+  // add only: an offseason league the column can still show (NBA, or any
+  // league in news column 3). Default none.
+  columnTakes?: (sport: Sport) => boolean;
   // multi only: the confirm button.
   onConfirm?: () => void;
   // Escape, the backdrop, and the left button (multi "Use defaults", single
@@ -108,6 +116,10 @@ export function LeaguePickerModal({
   const [picks, setPicks] = useState<Sport[]>([]);
   const togglePick = (sport: Sport) =>
     setPicks((p) => (p.includes(sport) ? p.filter((s) => s !== sport) : [...p, sport]));
+  // add only: "Add N" counts the picks the board shows now; an offseason
+  // pick past the column's waits for its season, and the note says so.
+  const plan = planAddMorePicks(picks, (s) => !!options.find((o) => o.sport === s)?.offseason, columnTakes ?? (() => false));
+  const laterNames = plan.later.map((s) => options.find((o) => o.sport === s)?.label ?? s);
   const titleId = multi ? "league-picker-title" : "league-add-more-title";
   // The column's own league stays even when offseason, so the sheet always
   // shows where you are.
@@ -357,7 +369,7 @@ export function LeaguePickerModal({
             onClick={onClose}
             aria-label="Close"
             title="Close"
-            className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full cursor-pointer hover:opacity-80"
+            className="absolute top-1 right-1 w-11 h-11 flex items-center justify-center rounded-full cursor-pointer hover:opacity-80"
             style={{ color: "var(--text-muted)" }}
           >
             <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 5l14 14M19 5L5 19" /></svg>
@@ -469,6 +481,12 @@ export function LeaguePickerModal({
             </button>
           </div>
         ) : (
+          <>
+          {add && plan.later.length > 0 && (
+            <p data-testid="league-picker-later" role="status" className="text-xs mb-2 shrink-0" style={{ color: "var(--text-secondary)" }}>
+              {laterNames.join(", ")}: offseason. {plan.later.length > 1 ? "They join" : "It joins"} this column&apos;s list when {plan.later.length > 1 ? "their seasons start" : "its season starts"}.
+            </p>
+          )}
           <div className="flex items-center justify-between gap-2 shrink-0">
             {/* Off by default so the sheet opens on leagues with games; the
                 choice is saved (showOffseasonInPicker) so it opens the way
@@ -491,11 +509,11 @@ export function LeaguePickerModal({
                 type="button"
                 data-testid="league-picker-add"
                 disabled={picks.length === 0}
-                onClick={() => onAdd?.(picks)}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={() => onAdd?.(plan.now, plan.later)}
+                className="px-4 py-2 min-h-11 rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }}
               >
-                {picks.length ? `Add ${picks.length}` : "Add"}
+                {plan.now.length ? `Add ${plan.now.length}` : "Add"}
               </button>
             ) : (
               <button
@@ -510,6 +528,7 @@ export function LeaguePickerModal({
               </button>
             )}
           </div>
+          </>
         )}
       </div>
     </div>
