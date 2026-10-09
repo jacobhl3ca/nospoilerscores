@@ -4220,13 +4220,21 @@ export default function HomeContent({
           // Feed view (Jacob 7/14): one vertical Reddit-style scroll instead of
           // the multi-column board. Aggregate every visible column's sources into
           // a single stream; NewsFeed fetches + merges + time-sorts them and
-          // renders inline posts with blurred top comments.
+          // renders inline posts with blurred top comments. Each column goes in
+          // as its own group so a post can say which league it is from, and
+          // the refresh key goes in as a prop, not a key: a remount dropped the
+          // list and the scroll position (Jacob 10/8).
           if (prefs.newsFeedView) {
-            const feedSources = focusedEntries.flatMap((e) => renderSourcesFor(e));
+            const feedGroups = focusedEntries.map((e) => ({
+              id: `${e.id}-${e.slotIdx}`,
+              label: e.label,
+              sport: e.sport,
+              sources: renderSourcesFor(e),
+            }));
             return (
               <NewsFeed
-                key={`feed-${newsRefreshKey}`}
-                sources={feedSources}
+                groups={feedGroups}
+                refreshKey={newsRefreshKey}
                 onPlay={playNewsVideo}
                 showTextPosts={!!prefs.showTextPosts}
                 videosOnly={!!prefs.newsVideosOnly}
