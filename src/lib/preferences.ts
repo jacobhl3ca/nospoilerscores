@@ -299,6 +299,9 @@ export interface Preferences {
   showRatings: boolean;
   skipExplainer: boolean;
   skipNewsExplainer: boolean;
+  // "Don't warn me again" on the box score confirm (BoxScoreDialog). A box
+  // score always shows the score, so the warning is on until the user skips it.
+  skipBoxscoreWarning: boolean;
   showNews: boolean; // persist last view across refreshes
   // "empty" hides the slot (no league rendered for that column).
   thirdLeague?: Sport | "empty"; // user-chosen 3rd league slot override
@@ -660,6 +663,7 @@ const defaults: Preferences = {
   showRatings: false,
   skipExplainer: false,
   skipNewsExplainer: false,
+  skipBoxscoreWarning: false,
   showNews: false,
   // Yesterday, not "smart" (2026-08-09, Jacob). A brand-new visitor — most of
   // them arriving from the no-spoiler-scores landing pages — is here to catch

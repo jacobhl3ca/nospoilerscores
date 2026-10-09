@@ -772,6 +772,7 @@ export default function HomeContent({
     showRatings: false,
     skipExplainer: false,
     skipNewsExplainer: false,
+    skipBoxscoreWarning: false,
     showNews: false,
   });
   // `prefs` above starts as hardcoded defaults and is replaced from
@@ -5399,6 +5400,8 @@ export default function HomeContent({
           reminderLinkTemplate={prefs.reminderLinkTemplate}
           recordLeagues={recordLeagues}
           isPastDate={selectedDate < getDateString(0)}
+          skipBoxscoreWarning={prefs.skipBoxscoreWarning}
+          onSkipBoxscoreWarning={() => updatePrefs({ skipBoxscoreWarning: true })}
         />
       )}
 
