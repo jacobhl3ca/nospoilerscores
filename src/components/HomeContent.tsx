@@ -47,7 +47,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, E
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
-import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
+import { onAutoplayBlocked, refocusAutoplay, suspendAutoplay } from "@/components/InlineVideoCard";
 import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
 import { POST_FILTERS, POST_FILTER_NAMES } from "@/lib/postFilter";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
@@ -2912,6 +2912,10 @@ export default function HomeContent({
     if (showNews && newsAutoplay) refocusAutoplay();
   }, [showNews, newsLayout, prefs.newsEspnBig, newsAutoplay, prefs.revealNewsMedia, prefs.newsCardPrefs]);
 
+  // No inline clip plays, or makes sound, under the video modal. On close the
+  // clip in focus plays again (InlineVideoCard).
+  useEffect(() => { suspendAutoplay(!!videoModal); }, [videoModal]);
+
   // The browser refused muted autoplay (Firefox "Block Audio and Video",
   // Safari "Never Auto-Play", iPhone Low Power Mode): a popup over the refused
   // clip, shown once ever (Jacob 10/9, it replaced the note under the toolbar).
@@ -3883,8 +3887,12 @@ export default function HomeContent({
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid #f59e0b" }}
           >
             <p className="text-sm" style={{ color: "var(--text)" }}>
-              <span aria-hidden="true">⚠️ </span>
-              <strong>News is full of spoilers.</strong>{" "}Headlines and images give away results, player performance, and outcomes. That&apos;s why they start blurred — tap one to reveal it, or use the Headlines toggle to un-blur everything.
+              <span className="block">
+                <span aria-hidden="true">⚠️ </span>
+                <strong>News is full of spoilers.</strong>
+              </span>
+              <span className="block">Headlines and images give away results, player performance, and outcomes.</span>
+              <span className="block">That&apos;s why they start blurred — tap one to reveal it, or use the Headlines toggle to un-blur everything.</span>
             </p>
             <button
               type="button"

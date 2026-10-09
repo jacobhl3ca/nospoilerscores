@@ -8,7 +8,7 @@ import { frontendHref } from "@/lib/frontendLinks";
 import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
-import { AutoplayVideo, TapForSound } from "@/components/InlineVideoCard";
+import { AutoplayVideo, SoundButton, STRETCHED_OPEN } from "@/components/InlineVideoCard";
 
 interface Props {
   sources: NewsSource[];
@@ -344,7 +344,7 @@ function SkeletonRow({ isFirst }: { isFirst: boolean }) {
 
 function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings: PlayOpts[]; index: number; autoplay?: boolean }) {
   const [playing, setPlaying] = useState(false);
-  const body = (
+  const media = (
     <>
       {item.imageUrl && (
         <div className="news-media-preview relative w-full aspect-video" style={{ background: "var(--bg-card-hover)" }}>
@@ -369,7 +369,7 @@ function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: 
           />
           {/* News Autoplay: the clip most in focus plays muted (InlineVideoCard). */}
           <AutoplayVideo item={item} enabled={!!autoplay} onPlayingChange={setPlaying} />
-          {playing ? <TapForSound /> : (
+          {playing ? <SoundButton /> : (
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
             style={{ background: "linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.4))" }}
@@ -383,18 +383,30 @@ function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: 
           )}
         </div>
       )}
-      {/* Un-clamped — subgrid sizes the row to the tallest headline at that
-          row across cols, so a 3-line title in col 3 makes col 1+2 the same
-          row height with align-self: start anchoring shorter cells up top. */}
-      <div className="news-title px-3 py-2 text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
-        {item.headline}
-      </div>
     </>
   );
-  const commonCls = "block w-full text-left transition-opacity hover:opacity-90 cursor-pointer";
-  const commonStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", alignSelf: "start" as const };
+  // Un-clamped — subgrid sizes the row to the tallest headline at that
+  // row across cols, so a 3-line title in col 3 makes col 1+2 the same
+  // row height with align-self: start anchoring shorter cells up top.
+  const headline = (
+    <span className="news-title block text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
+      {item.headline}
+    </span>
+  );
+  // The row is a <div> so the corner SoundButton is not a button inside a
+  // button. The headline is the open control; its ::after stretches over the
+  // whole row, so a tap anywhere but the corner opens it (InlineVideoCard).
+  const openCls = `${STRETCHED_OPEN} px-3 py-2`;
+  const rowProps = {
+    className: "relative block w-full text-left transition-opacity hover:opacity-90 cursor-pointer",
+    style: { borderTop: isFirst ? "none" : "1px solid var(--border)", alignSelf: "start" as const },
+    "data-news-key": item.articleUrl || item.id,
+    "data-sound-scope": "",
+  };
   if (onPlay) {
     return (
+      <div {...rowProps}>
+      {media}
       <button
         type="button"
         data-news-open=""
@@ -417,18 +429,20 @@ function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: 
         // headline is kept inside the label so "Label in Name" (WCAG 2.5.3) still
         // holds and voice users can say the visible title to activate it.
         aria-label={`Play highlight: ${item.headline}`}
-        className={commonCls}
-        style={commonStyle}
-        data-news-key={item.articleUrl || item.id}
+        className={openCls}
       >
-        {body}
+        {headline}
       </button>
+      </div>
     );
   }
   return (
-    <a key={item.id} href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle} data-news-key={item.articleUrl || item.id}>
-      {body}
-    </a>
+    <div key={item.id} {...rowProps}>
+      {media}
+      <a href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={openCls}>
+        {headline}
+      </a>
+    </div>
   );
 }
 

@@ -1028,8 +1028,10 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-// A video source card when Big or Autoplay is on: one InlineVideoCard per
-// clip. With Autoplay, the clip most in focus plays muted (InlineVideoCard).
+// A video source card when Big or Autoplay is on, or in the ESPN layout: one
+// InlineVideoCard per clip, 16 px apart with rounded corners (Jacob 10/9: a
+// 1 px rule made the clips read as one post). With Autoplay, the clip most in
+// focus plays muted (InlineVideoCard).
 function InlineVideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex, autoplay, large, controls, cardClassName }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null; autoplay: boolean; large: boolean; controls?: ReactNode; cardClassName?: string }) {
   if (loading || items.length === 0) {
     return <VideoSourceCard label={label} logoUrl={logoUrl} items={items} loading={loading} onPlay={onPlay} siblings={siblings} baseIndex={baseIndex} controls={controls} cardClassName={cardClassName} />;
@@ -1037,10 +1039,9 @@ function InlineVideoSourceCard({ label, logoUrl, items, loading, onPlay, sibling
   return (
     <div className={`rounded-lg overflow-clip${cardClassName ? ` ${cardClassName}` : ""}`} style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)" }}>
       <SourceHeader label={label} logoUrl={logoUrl} controls={controls} />
-      {/* px-px: keep the inset-shadow outline visible beside the clips (see VideoSourceCard). */}
-      <div className="flex flex-col px-px">
+      <div className="flex flex-col gap-4 px-2 pb-2">
         {items.map((item, idx) => (
-          <div key={item.id} style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)" }}>
+          <div key={item.id}>
             <InlineVideoCard
               item={item}
               autoplay={autoplay}
@@ -1163,7 +1164,8 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   }
   if (hidden) return null;
 
-  if (source.variant === "video" && (bigVideos || autoplayVideos)) {
+  // hugRows = the ESPN layout: its clips keep the spaced cards with Autoplay off.
+  if (source.variant === "video" && (bigVideos || autoplayVideos || hugRows)) {
     return (
       <InlineVideoSourceCard
         label={source.label}
