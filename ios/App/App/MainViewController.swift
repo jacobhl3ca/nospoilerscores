@@ -32,6 +32,17 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
     /// says; Info.plist starts at Default, which follows the phone.
     private var siteStatusBarStyle: UIStatusBarStyle?
 
+    /// No picture-in-picture in the app (#290, best guess). A clip crashed the
+    /// app in WebKit's own player layer: -[WebAVPlayerLayer
+    /// startRedirectingVideoToLayer:forMode:] is an unrecognized selector, which
+    /// is the layer AVKit hands to PiP. Nothing in the app needs PiP; inline
+    /// play and fullscreen stay as they are.
+    override func webViewConfiguration(for instanceConfiguration: InstanceConfiguration) -> WKWebViewConfiguration {
+        let configuration = super.webViewConfiguration(for: instanceConfiguration)
+        configuration.allowsPictureInPictureMediaPlayback = false
+        return configuration
+    }
+
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(HideScoreGoogleAuthPlugin())
         installTabBarBridge()
