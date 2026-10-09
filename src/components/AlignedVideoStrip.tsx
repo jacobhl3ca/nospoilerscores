@@ -389,6 +389,7 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
     return (
       <button
         type="button"
+        data-news-open=""
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
             if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
@@ -466,6 +467,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
     return (
       <button
         type="button"
+        data-news-open=""
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
             if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");

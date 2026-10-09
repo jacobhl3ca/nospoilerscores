@@ -44,6 +44,9 @@ export interface PlayOpts {
   // index — lets the modal page ‹ prev / next › without closing.
   siblings?: PlayOpts[] | null;
   index?: number;
+  // News "Hide seen" key (item.articleUrl || item.id), so paging to this post
+  // inside the modal marks it opened.
+  seenKey?: string;
 }
 export type PlayHandler = (opts: PlayOpts) => void;
 
@@ -104,6 +107,7 @@ export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
     byline: isReddit ? null : (item.byline || null),
     published: item.published || null,
     body: item.body || null,
+    seenKey: item.articleUrl || item.id,
   };
 }
 
@@ -730,6 +734,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         {thumbIsTile ? (
           <button
             type="button"
+            data-news-open=""
             onClick={(e) => {
               // Cmd/Ctrl/Shift/middle-click → "open in background tab to read
               // later" — never blow away the currently-open modal. Without this
@@ -756,6 +761,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         ) : thumb}
         <button
           type="button"
+          data-news-open=""
           onClick={(e) => {
             if (openInNewTab(e)) return;
             open();
@@ -778,6 +784,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         {!thumbIsTile && (
           <button
             type="button"
+            data-news-open=""
             onClick={open}
             className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--bg-card-hover)]"
             style={{ color: "var(--text-muted)" }}
@@ -922,6 +929,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
               return (
                 <button
                   type="button"
+                  data-news-open=""
                   key={item.id}
                   onClick={(e) => {
                     // Modifier-click → open the source article in a background

@@ -623,8 +623,8 @@ export interface Preferences {
   // what "start from the bottom" means. Lives next to the funnel in the news
   // header rather than in Settings, since it's a per-session reading choice.
   newsOldestFirst?: boolean;
-  // Drop posts already seen on this screen (Jacob 10/6): a post counts as seen
-  // once it sat on screen for 1.5 s (lib/newsSeen.ts). Only the toggle state
+  // Drop posts already opened on this device (Jacob 10/6, 10/8): a post counts
+  // as seen once he opens it (lib/newsSeen.ts). Only the toggle state
   // lives here; WHICH posts were seen is a device-local store outside
   // Preferences. Toggled by the 👁 button left of ⇅ in the news header.
   newsHideSeen?: boolean;
