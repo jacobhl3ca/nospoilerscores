@@ -2363,11 +2363,23 @@ export default function HomeContent({
     return [...leagues.filter((o) => o.sport === "top"), ...leagues.filter((o) => o.sport !== "top")];
   }, [switcherOptions]);
   // The Add more… sheet's "Previously removed" group, newest first. Only the
-  // leagues still out of the switcher, so a stale entry never shows.
+  // leagues still out of the switcher and not struck off the catalog, so a
+  // stale entry never shows.
   const addMoreRemoved = useMemo(
-    () => (prefs.removedLeagues ?? []).filter((s) => !switcherOptions.some((o) => o.sport === s)),
-    [prefs.removedLeagues, switcherOptions],
+    () => (prefs.removedLeagues ?? []).filter((s) =>
+      !switcherOptions.some((o) => o.sport === s) && !prefs.catalogHiddenLeagues?.includes(s)),
+    [prefs.removedLeagues, prefs.catalogHiddenLeagues, switcherOptions],
   );
+  // The sheet's "Edit list" ×, the same strike as Settings' Edit list: the
+  // league leaves the catalog and every switcher, and the removed group.
+  const hideFromAddMore = (sport: Sport) => {
+    const struck = prefs.catalogHiddenLeagues ?? [];
+    if (struck.includes(sport)) return;
+    updatePrefs({
+      catalogHiddenLeagues: [...struck, sport],
+      ...(prefs.removedLeagues?.includes(sport) ? { removedLeagues: dropRemoved(prefs.removedLeagues, sport) } : {}),
+    });
+  };
 
   // A scores switcher's "Remove from list…" (Jacob 10/8): the picked leagues
   // leave the switcher in one save, the same rule as unticking them in
@@ -5271,6 +5283,8 @@ export default function HomeContent({
           onToggleOffseason={() => updatePrefs({ showOffseasonInPicker: prefs.showOffseasonInPicker ? undefined : true })}
           shownElsewhere={addMoreFor.shownElsewhere}
           removed={addMoreRemoved}
+          hidden={prefs.catalogHiddenLeagues}
+          onHide={hideFromAddMore}
         />
       )}
 

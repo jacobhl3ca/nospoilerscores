@@ -3,6 +3,8 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // Jacob 10/8: the leagues taken off a column switcher ("Remove from list…" or
 // a Settings untick) say "Previously removed" and sit in their own group at
 // the bottom of the Add more… sheet, newest first (removedLeagues).
+// Part 2: the sheet's "Edit list" × strikes a league off the catalog
+// (catalogHiddenLeagues), and "N hidden · Show" lists the struck ones.
 
 const BASE_PREFS = {
   favoriteLeagues: [],
@@ -38,17 +40,18 @@ const saved = (page: Page) =>
 
 const pickRows = (switcher: Locator) => switcher.locator("button[aria-pressed]");
 
-// The sheet's pills, split at the "Previously removed" heading.
+// The sheet's pills, split at the "Previously removed" and "Hidden" headings.
 const sheetGroups = (sheet: Locator) =>
   sheet.getByTestId("league-picker-grid").evaluate((grid) => {
-    const main: string[] = [];
-    const removed: string[] = [];
-    let after = false;
+    const groups: Record<"main" | "removed" | "hidden", string[]> = { main: [], removed: [], hidden: [] };
+    let at: keyof typeof groups = "main";
     for (const el of Array.from(grid.children)) {
-      if (el.getAttribute("data-testid") === "league-picker-removed") { after = true; continue; }
-      (after ? removed : main).push((el.textContent ?? "").trim());
+      const id = el.getAttribute("data-testid");
+      if (id === "league-picker-removed") { at = "removed"; continue; }
+      if (id === "league-picker-hidden") { at = "hidden"; continue; }
+      groups[at].push((el.textContent ?? "").trim());
     }
-    return { main, removed };
+    return groups;
   });
 
 // A pill or row text starts with the league label; tails ("offseason",
@@ -115,6 +118,60 @@ for (const width of [390, 1280]) {
       const again = await openAddMore(page, rows[0]);
       expect((await sheetGroups(again)).removed.map(label)).toEqual([rows[1]]);
     });
+
+    test("Edit list × strikes a league; board leagues have none; a tap while editing does nothing", async ({ page }) => {
+      await seedPrefs(page, { catalogHiddenLeagues: ["nhl"] });
+      await page.goto("/");
+      const sheet = await openAddMore(page, "WNBA");
+
+      // A struck league is out of the sheet; the link counts it.
+      expect((await sheetGroups(sheet)).main.map(label)).not.toContain("NHL");
+      await expect(sheet.getByTestId("league-picker-show-hidden")).toHaveText("1 hidden · Show");
+
+      await sheet.getByTestId("league-picker-edit").click();
+      await expect(sheet.getByTestId("league-picker-edit")).toHaveText("Done");
+      // The column's own league and the board leagues get no ×.
+      for (const name of ["WNBA", "MLB", "NFL"]) {
+        await expect(sheet.getByRole("button", { name: `Hide ${name} from this list`, exact: true })).toHaveCount(0);
+      }
+      const xs = sheet.getByRole("button", { name: /^Hide .+ from this list$/ });
+      expect(await xs.count()).toBeGreaterThan(1);
+
+      // A pill-body tap keeps the sheet open and the column as it was.
+      const other = ((await xs.nth(1).getAttribute("aria-label")) ?? "").replace(/^Hide | from this list$/g, "");
+      await sheet.getByRole("button", { name: new RegExp(`^${other}`) }).first().click();
+      await expect(sheet).toBeVisible();
+      expect((await saved(page)).thirdLeague).toBe("wnba");
+
+      // × → the pill leaves at once, and the struck list has it.
+      const name = ((await xs.first().getAttribute("aria-label")) ?? "").replace(/^Hide | from this list$/g, "");
+      await xs.first().click();
+      await expect(sheet.getByRole("button", { name: `Hide ${name} from this list`, exact: true })).toHaveCount(0);
+      expect((await sheetGroups(sheet)).main.map((t) => label(t).toLowerCase())).not.toContain(name.toLowerCase());
+      const struck: string[] = (await saved(page)).catalogHiddenLeagues;
+      expect(struck).toHaveLength(2);
+      expect(struck[0]).toBe("nhl");
+      await expect(sheet.getByTestId("league-picker-show-hidden")).toHaveText("2 hidden · Show");
+    });
+
+    test("N hidden · Show lists the struck leagues; a tap brings one back", async ({ page }) => {
+      await seedPrefs(page, { catalogHiddenLeagues: ["nhl", "mls"] });
+      await page.goto("/");
+      const sheet = await openAddMore(page, "WNBA");
+      await expect(sheet.getByTestId("league-picker-hidden")).toHaveCount(0);
+      await sheet.getByTestId("league-picker-show-hidden").click();
+      await expect(sheet.getByTestId("league-picker-show-hidden")).toHaveText("Hide");
+      await expect(sheet.getByTestId("league-picker-hidden")).toHaveText("Hidden");
+      const groups = await sheetGroups(sheet);
+      expect(groups.hidden.map(label).sort()).toEqual(["MLS", "NHL"]);
+      expect(groups.main.map(label)).not.toContain("NHL");
+
+      await sheet.getByRole("button", { name: /^NHL/ }).click();
+      await expect(sheet).toHaveCount(0);
+      const prefs = await saved(page);
+      expect(prefs.thirdLeague).toBe("nhl");
+      expect(prefs.catalogHiddenLeagues).toEqual(["mls"]);
+    });
   });
 }
 
@@ -175,4 +232,7 @@ test("nothing removed, or only leagues back in the switcher → no heading", asy
   await expect(sheet.getByTestId("league-picker-grid")).toBeVisible();
   await expect(sheet.getByTestId("league-picker-removed")).toHaveCount(0);
   expect((await sheetGroups(sheet)).main.map(label)).toContain("MLB");
+  // Nothing struck → no "hidden · Show" link.
+  await expect(sheet.getByTestId("league-picker-edit")).toHaveText("Edit list");
+  await expect(sheet.getByTestId("league-picker-show-hidden")).toHaveCount(0);
 });

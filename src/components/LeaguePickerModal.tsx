@@ -43,6 +43,8 @@ export function LeaguePickerModal({
   demoLabels,
   shownElsewhere,
   removed,
+  hidden,
+  onHide,
   trackPrefix,
 }: {
   title: string;
@@ -70,6 +72,11 @@ export function LeaguePickerModal({
   // single only: leagues taken out of the switcher, newest first. They leave
   // the main grid and sit in a "Previously removed" group at the bottom.
   removed?: Sport[];
+  // single only: leagues struck off the catalog (catalogHiddenLeagues). They
+  // leave the sheet; "N hidden · Show" lists them in a "Hidden" group.
+  hidden?: Sport[];
+  // single only: "Edit list" × on a pill. Unset = no Edit list link.
+  onHide?: (sport: Sport) => void;
   // Umami events `<prefix>-shown`, then one of -done / -defaults / -backdrop /
   // -escape (2026-10-01). Shown minus those = left with the sheet open.
   // Unset = no events.
@@ -103,16 +110,25 @@ export function LeaguePickerModal({
   // drawn whatever the offseason toggle says. It is his own short list, and
   // hiding an entry there would make a removal look lost. The column's own
   // league never moves.
+  // "Edit list" and "N hidden · Show" (Jacob 10/8, as in Settings' My
+  // leagues): a struck league leaves the sheet, and the Hidden group at the
+  // very bottom lists them, offseason or not. Both states live only while the
+  // sheet is open.
+  const [editing, setEditing] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+  const isStruck = (sport: Sport) => !multi && !selected.includes(sport) && !!hidden?.includes(sport);
+  const hiddenOptions = multi ? [] : options.filter((o) => isStruck(o.sport));
   const removedOptions = multi
     ? []
     : (removed ?? []).flatMap((sport) => {
         const o = options.find((x) => x.sport === sport);
-        return o && !selected.includes(sport) ? [o] : [];
+        return o && !selected.includes(sport) && !isStruck(sport) ? [o] : [];
       });
   const isRemoved = (sport: Sport) => removedOptions.some((o) => o.sport === sport);
   const shown = multi
     ? (!canCollapse || expanded ? [...core, ...rest] : [...core, ...rest.filter((o) => selected.includes(o.sport))])
-    : (showOffseason ? options : options.filter((o) => !o.offseason || selected.includes(o.sport))).filter((o) => !isRemoved(o.sport));
+    : (showOffseason ? options : options.filter((o) => !o.offseason || selected.includes(o.sport)))
+        .filter((o) => !isRemoved(o.sport) && !isStruck(o.sport));
 
   // Escape closes the sheet too — same as tapping its backdrop. Brings it in
   // line with the ratings/news explainers and every other modal in the app,
@@ -187,7 +203,7 @@ export function LeaguePickerModal({
     };
   }, []);
 
-  const renderPill = (o: LeaguePickerOption) => {
+  const renderPill = (o: LeaguePickerOption, struck = false) => {
     const idx = selected.indexOf(o.sport);
     const on = idx >= 0;
     const demoOption = demoLabels?.get(o.sport);
@@ -196,12 +212,16 @@ export function LeaguePickerModal({
     const current = !multi && on;
     const elsewhere = multi || current ? undefined : shownElsewhere?.find((e) => e.sport === o.sport);
     const full = multi && selected.length >= max && !on;
-    return (
+    // Edit mode: a × after each pill, but not on the column's own league or a
+    // league on the board (· col N), where a strike would swap a column out
+    // (same rule as Remove from list…). A pill-body tap does nothing then.
+    const canStrike = editing && !!onHide && !struck && !current && !elsewhere;
+    const pill = (
       <button
         key={o.sport}
         type="button"
         disabled={full}
-        onClick={() => onPick(o.sport)}
+        onClick={() => { if (!editing) onPick(o.sport); }}
         // Multi-select toggle: expose the picked state to assistive
         // tech, since it's otherwise conveyed only by the accent
         // background (and a "1. " number prefix). Matches the
@@ -220,6 +240,8 @@ export function LeaguePickerModal({
               background: "var(--bg-card)",
               color: current ? "var(--accent)" : !multi && o.offseason ? "var(--text-muted)" : "var(--text)",
               border: `1px solid ${current ? "var(--accent)" : "var(--border)"}`,
+              ...(struck ? { opacity: 0.6 } : {}),
+              ...(editing ? { cursor: "default" } : {}),
             }}
       >
         {/* Fixed 1rem slot, reserved whether or not this pill is
@@ -243,7 +265,33 @@ export function LeaguePickerModal({
         {elsewhere && <em className="font-normal text-[11px]" style={{ color: "var(--text-muted)" }}>· col {elsewhere.col}</em>}
       </button>
     );
+    if (!canStrike) return pill;
+    const name = demoOption?.label ?? o.label;
+    // The Settings chip's × (SwitcherChip).
+    return (
+      <span key={o.sport} className="inline-flex items-center">
+        {pill}
+        <button type="button"
+          onClick={() => onHide?.(o.sport)}
+          aria-label={`Hide ${name} from this list`}
+          title="Hide from this list"
+          className="w-5 h-5 -mr-1 flex items-center justify-center rounded-full cursor-pointer hover:opacity-80"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <svg aria-hidden="true" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 5l14 14M19 5L5 19" /></svg>
+        </button>
+      </span>
+    );
   };
+  const groupHeading = (testId: string, text: string) => (
+    <div
+      data-testid={testId}
+      className="basis-full mt-2 pt-2 text-center text-[11px] font-semibold"
+      style={{ color: "var(--text-muted)", borderTop: "1px solid var(--border)" }}
+    >
+      {text}
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { track("backdrop"); onClose(); }}>
@@ -297,19 +345,21 @@ export function LeaguePickerModal({
             padding pair keeps the pills' focus rings from being clipped by
             the new overflow box. */}
         <div data-testid="league-picker-grid" className={`flex flex-wrap justify-center gap-2 mb-4 overflow-y-auto min-h-0 -mx-1 px-1${subtitle ? "" : " mt-3"}`}>
-          {shown.map(renderPill)}
+          {shown.map((o) => renderPill(o))}
           {removedOptions.length > 0 && (
             <>
               {/* Full width, so the group starts on its own line under a
                   rule. Pills inside look and tap like the rest. */}
-              <div
-                data-testid="league-picker-removed"
-                className="basis-full mt-2 pt-2 text-center text-[11px] font-semibold"
-                style={{ color: "var(--text-muted)", borderTop: "1px solid var(--border)" }}
-              >
-                Previously removed
-              </div>
-              {removedOptions.map(renderPill)}
+              {groupHeading("league-picker-removed", "Previously removed")}
+              {removedOptions.map((o) => renderPill(o))}
+            </>
+          )}
+          {/* Struck leagues, view only and faded. A tap is the normal pick,
+              which also takes the league off the struck list. */}
+          {showHidden && hiddenOptions.length > 0 && (
+            <>
+              {groupHeading("league-picker-hidden", "Hidden")}
+              {hiddenOptions.map((o) => renderPill(o, true))}
             </>
           )}
           {/* Last in the grid, outline and no mark, like the Settings chip. */}
@@ -329,6 +379,33 @@ export function LeaguePickerModal({
             </button>
           )}
         </div>
+        {/* Settings' My leagues text links (Jacob 10/8). */}
+        {!multi && (onHide || hiddenOptions.length > 0) && (
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 -mt-2 mb-3 text-xs shrink-0">
+            {onHide && (
+              <button type="button"
+                data-testid="league-picker-edit"
+                onClick={() => setEditing((v) => !v)}
+                aria-pressed={editing}
+                className="underline underline-offset-2 cursor-pointer hover:opacity-80"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {editing ? "Done" : "Edit list"}
+              </button>
+            )}
+            {hiddenOptions.length > 0 && (
+              <button type="button"
+                data-testid="league-picker-show-hidden"
+                onClick={() => setShowHidden((v) => !v)}
+                aria-expanded={showHidden}
+                className="underline underline-offset-2 cursor-pointer hover:opacity-80"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {showHidden ? "Hide" : `${hiddenOptions.length} hidden · Show`}
+              </button>
+            )}
+          </div>
+        )}
         {multi ? (
           <div className="flex gap-2 shrink-0">
             <button
