@@ -5850,7 +5850,7 @@ async function enrichNhlVideos(games: Game[], date: string): Promise<void> {
 // playback URL, and poster so GameHighlights can render official MLB buttons
 // without relying on noisy YouTube search results.
 export type MlbClip = { url: string | null; playback: string | null; poster: string | null };
-type MlbVideoEntry = { date: string | null; away: string; home: string; recap: MlbClip | null; condensed: MlbClip | null };
+export type MlbVideoEntry = { date: string | null; away: string; home: string; recap: MlbClip | null; condensed: MlbClip | null };
 
 // The MLB Recap (3m) button is populated ONLY by /api/mlb-videos, so one slow or
 // failed call drops it — while the Condensed (10m) button survives via its
@@ -5931,7 +5931,8 @@ async function fetchMlbVideos(date: string): Promise<MlbVideoEntry[]> {
 // (ESPN displayName ends with StatsAPI team.name, either home/away order) then
 // the closest kickoff time to disambiguate doubleheaders. Shared by the dated
 // board enrich and the on-demand single-game resolver so both match identically.
-function matchMlbVideoEntry(game: Game, entries: MlbVideoEntry[]): MlbVideoEntry | null {
+// Exported for scripts/highlight-coverage.mjs, which must match the same way.
+export function matchMlbVideoEntry(game: Game, entries: MlbVideoEntry[]): MlbVideoEntry | null {
   const norm = (s: string) =>
     s.toLowerCase()
       .replace(/\bthe\b/g, "")
