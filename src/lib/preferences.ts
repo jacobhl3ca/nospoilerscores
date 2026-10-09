@@ -302,6 +302,9 @@ export interface NewsCardPrefs {
 
 export type NewsLayout = "cards" | "feed" | "espn";
 
+// The Posts switch (All / No text / Videos) over videosOnly + textPosts.
+export { type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField } from "./postFilter";
+
 // The news layout to render. newsLayout wins; a blob from before it existed
 // carries only newsFeedView (true = Feed).
 export function newsLayoutOf(prefs: { newsLayout?: NewsLayout; newsFeedView?: boolean }): NewsLayout {
