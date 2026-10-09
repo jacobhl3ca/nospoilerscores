@@ -8,11 +8,13 @@ import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
 import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
+import { closeHiddenPins, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch } from "@/lib/boardSlots";
 import { LeagueMark } from "./LeagueMark";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
 import { FREQUENT_RECORD_LEAGUES, recordKeysForLeagues, toggleRecordLeague, upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import {
+  boardHiddenLeagues,
   Preferences,
   Theme,
   DefaultDateMode,
@@ -564,17 +566,15 @@ export default function SettingsPanel({
   // are allowed —
   // picking a league already in another slot just sets this slot to it too;
   // unset slots lock to their on-screen league so the auto-picker doesn't
-  // reshuffle columns the user didn't touch. Walks the displayed-league queue
-  // (each non-empty slot consumed one rendered column) so empty slots don't
-  // misalign the lock.
+  // reshuffle columns the user didn't touch — see lockSlotsToBoard. A pick
+  // also closes the columns this screen does not show, as on the board, so a
+  // wider window later shows the + button there, not an Auto league; Auto
+  // closes nothing.
   const setSlot = (slotIdx: number, sport: Sport | "empty" | undefined) => {
-    let queueIdx = 0;
-    const resolved: (Sport | "empty" | undefined)[] = [0, 1, 2, 3, 4].map((i) => {
-      const pref = slotValues[i];
-      if (pref === "empty") return "empty";
-      const shown = displayedSports[queueIdx++];
-      return pref ?? shown;
-    });
+    const locked = sport === undefined
+      ? lockSlotsToBoard(slotValues, displayedSports)
+      : lockSlotsToBoard(slotValues, displayedSports, [], visibleColumns);
+    const resolved = restoreHiddenPins(locked, savedSlots, [slotIdx], sport);
     resolved[slotIdx] = sport;
     // Pinning a league that is turned off in the switcher list (or struck off
     // the catalog) turns it back on: the board shows the next league in place
@@ -582,11 +582,7 @@ export default function SettingsPanel({
     const hiddenLeagues = (prefs.hiddenLeagues ?? []).filter((s) => s !== sport);
     const catalogHiddenLeagues = (prefs.catalogHiddenLeagues ?? []).filter((s) => s !== sport);
     updateWithUndo(`Column ${slotIdx + 1} changed`, {
-      firstLeague: resolved[0],
-      secondLeague: resolved[1],
-      thirdLeague: resolved[2],
-      fourthLeague: resolved[3],
-      fifthLeague: resolved[4],
+      ...slotPrefsPatch(resolved),
       ...(hiddenLeagues.length !== (prefs.hiddenLeagues ?? []).length
         ? { hiddenLeagues: hiddenLeagues.length ? hiddenLeagues : undefined }
         : {}),
@@ -597,13 +593,27 @@ export default function SettingsPanel({
     });
   };
 
-  const slotValues: (Sport | "empty" | undefined)[] = [
+  // The saved pins, and the board's view of them: a pin on a league turned
+  // off in the switcher list is a closed column (closeHiddenPins), so its
+  // Columns pill reads "Remove col". The "is it pinned" checks below read the
+  // saved pins.
+  const savedSlots: (Sport | "empty" | undefined)[] = [
     prefs.firstLeague,
     prefs.secondLeague,
     prefs.thirdLeague,
     prefs.fourthLeague,
     prefs.fifthLeague,
   ];
+  const slotValues = closeHiddenPins(savedSlots, boardHiddenLeagues(prefs) ?? []);
+  // Columns the board shows now: 5 wide or with scroll columns on, else 3.
+  const visibleColumns = isWideBoard || (!!prefs.scrollColumns && !prefs.singleColumn) ? 5 : 3;
+  // Taking a league out of the switcher list while a column shows it: lock
+  // the board in the same save, so that column closes rather than an Auto
+  // league taking it (Jacob 10/8). The same patch, so Undo reopens it too.
+  const closeColumnsShowing = (sport: Sport): Partial<Preferences> => {
+    const locked = lockBoardForRemoval(slotValues, displayedSports, [sport], visibleColumns);
+    return locked ? slotPrefsPatch(restoreHiddenPins(locked, savedSlots)) : {};
+  };
 
   // Whether a catalog row is currently ticked. Same rule the checkbox itself
   // renders from — pulled out so the offseason filter below can ask the
@@ -611,7 +621,7 @@ export default function SettingsPanel({
   const isSwitcherChecked = (option: LeagueOption) => {
     const hidden = prefs.hiddenLeagues?.includes(option.sport) ?? false;
     const shown = prefs.shownLeagues?.includes(option.sport) ?? false;
-    const pinned = slotValues.includes(option.sport);
+    const pinned = savedSlots.includes(option.sport);
     const preferred = option.defaultInSwitcher !== false || pinned || prefs.favoriteLeagues.includes(option.sport);
     return !hidden && (shown || preferred);
   };
@@ -679,7 +689,7 @@ export default function SettingsPanel({
   const [catalogHideOverride, setCatalogHideOverride] = useState<boolean | null>(null);
   const catalogHideOffseason = catalogHideOverride ?? prefs.hideOffseasonInCatalog ?? true;
   const offseasonRowCount = leagueOptions.filter((option) => option.offseason).length;
-  const keepOffseasonRow = (option: LeagueOption) => slotValues.includes(option.sport);
+  const keepOffseasonRow = (option: LeagueOption) => savedSlots.includes(option.sport);
   const hiddenOffseasonCount = leagueOptions.filter(
     (option) => option.offseason && !keepOffseasonRow(option) && !(prefs.catalogHiddenLeagues ?? []).includes(option.sport),
   ).length;
@@ -731,7 +741,7 @@ export default function SettingsPanel({
   // rows had. In "Edit list" mode a × strikes the league off the catalog
   // itself (catalogHiddenLeagues), which also takes it out of every switcher.
   const renderSwitcherChip = (option: LeagueOption, editing: boolean) => {
-    const pinned = slotValues.includes(option.sport);
+    const pinned = savedSlots.includes(option.sport);
     const preferred = option.defaultInSwitcher !== false || pinned || prefs.favoriteLeagues.includes(option.sport);
     const label = SPORT_LABEL[option.sport] ?? option.label;
     const note = option.offseason ? "offseason" : option.upcomingLabel ? `starts ${option.upcomingLabel}` : undefined;
@@ -748,21 +758,25 @@ export default function SettingsPanel({
           const shownLeagues = new Set(prefs.shownLeagues ?? []);
           hiddenLeagues.delete(option.sport);
           shownLeagues.delete(option.sport);
+          // A column showing it closes (the lock pins it there, so it is
+          // preferred now); turning it back on brings the column back.
+          const closing = on ? {} : closeColumnsShowing(option.sport);
           if (on && !preferred) {
             shownLeagues.add(option.sport);
-          } else if (!on && preferred) {
+          } else if (!on && (preferred || Object.keys(closing).length)) {
             hiddenLeagues.add(option.sport);
           }
           // An untick feeds the Add more… sheet's "Previously removed" group
           // too; a tick takes the league off it. Same patch, so Undo restores
-          // the list as well.
+          // the list and the columns as well.
           updateWithUndo(`${label} ${on ? "on" : "off"}`, {
+            ...closing,
             hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined,
             shownLeagues: shownLeagues.size ? [...shownLeagues] : undefined,
             removedLeagues: on ? dropRemoved(prefs.removedLeagues, option.sport) : noteRemoved(prefs.removedLeagues, [option.sport]),
           });
         }}
-        onRemove={editing ? () => updateWithUndo(`${label} hidden`, { catalogHiddenLeagues: [...catalogHidden, option.sport] }) : undefined}
+        onRemove={editing ? () => updateWithUndo(`${label} hidden`, { ...closeColumnsShowing(option.sport), catalogHiddenLeagues: [...catalogHidden, option.sport] }) : undefined}
       />
     );
   };
@@ -972,7 +986,11 @@ export default function SettingsPanel({
             const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
             if (on) hiddenLeagues.delete("best");
             else hiddenLeagues.add("best");
-            updateWithUndo(`${BEST_YESTERDAY_LABEL} ${on ? "on" : "off"}`, { hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined });
+            // Off closes a column showing it, as for a league.
+            updateWithUndo(`${BEST_YESTERDAY_LABEL} ${on ? "on" : "off"}`, {
+              ...(on ? {} : closeColumnsShowing("best")),
+              hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined,
+            });
           }}
         />
       ),

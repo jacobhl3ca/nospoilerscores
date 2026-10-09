@@ -22,7 +22,7 @@ import { fromYmd, etSlateYmd, nextYmd, getTimeZone } from "@/lib/etDay";
 import { WATCH_QUEUE_ENABLED, toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
 import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
 import GameCard from "@/components/GameCard";
-import { lockSlotsToBoard, swapBoardSlots } from "@/lib/boardSlots";
+import { closeHiddenPins, closeUnseenAutoSlots, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
 import { fetchAllLeagues, fetchSlateGames, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
@@ -106,6 +106,8 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
     shownLeagues: remote.shownLeagues,
     // Not the defaults' 2: a missing marker is what flags a legacy account.
     switcherDefaultsVersion: remote.switcherDefaultsVersion,
+    // Same for the wide-slots repair — see closeUnseenAutoSlots.
+    wideSlotsVersion: remote.wideSlotsVersion,
     // Dismissals only ever accumulate, so they merge as a UNION — never a
     // pick. The reconcile lands 1-3 s after first paint; a banner dismissed
     // inside that window was pushed, then overwritten by the in-flight pull
@@ -119,9 +121,9 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
   };
   // The remote copy is canonical for a signed-in account. Its missing marker,
   // not the new device's local marker, decides whether the account is legacy.
-  const reconciled = remote.switcherDefaultsVersion === 2
+  const reconciled = closeUnseenAutoSlots(remote.switcherDefaultsVersion === 2
     ? merged
-    : migrateLegacySwitcherPreferences({ ...merged, switcherDefaultsVersion: undefined });
+    : migrateLegacySwitcherPreferences({ ...merged, switcherDefaultsVersion: undefined }));
   // Single-column view stays per device: a server blob written before this
   // rule (or by an older client) still carries it, so ignore it on the pull.
   return keepDeviceLocalPrefs(reconciled, local);
@@ -140,7 +142,7 @@ function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): 
   const yesterday = fromYmd(prevYmd(date));
   const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && isLeagueActive(l, yesterday));
   const auto = pickAndAssignLeagues(fromYmd(date), slotCount, boardHiddenLeagues(p)).map((l) => l.sport);
-  const board = [p.firstLeague, p.secondLeague, p.thirdLeague, p.fourthLeague, p.fifthLeague]
+  const board = closeHiddenPins([p.firstLeague, p.secondLeague, p.thirdLeague, p.fourthLeague, p.fifthLeague], boardHiddenLeagues(p) ?? [])
     .slice(0, slotCount)
     .map((pref, i) => (pref === undefined ? auto[i] : pref))
     .filter((s): s is Sport => !!s && s !== "empty");
@@ -830,7 +832,7 @@ export default function HomeContent({
   const [isSignedIn, setIsSignedIn] = useState(false);
 
   useEffect(() => {
-    const loaded = migrateLegacySwitcherPreferences(loadPreferences());
+    const loaded = closeUnseenAutoSlots(migrateLegacySwitcherPreferences(loadPreferences()));
     // Android widget: hand it the favorites on launch too, so a user who never
     // touches Settings after the update still gets a working widget.
     pushWidgetPrefs(loaded);
@@ -865,6 +867,9 @@ export default function HomeContent({
         if (decoded.defaultRatings) loaded.defaultRatings = decoded.defaultRatings;
         if (decoded.newsThirdLeague) loaded.newsThirdLeague = decoded.newsThirdLeague;
         Object.assign(loaded, sharedExtrasPatch(decoded));
+        // An old 3-slot link leaves slots 4-5 on Auto: close them like any
+        // shaped board — see closeUnseenAutoSlots.
+        if (decoded.slotLeagues) Object.assign(loaded, closeUnseenAutoSlots({ ...loaded, wideSlotsVersion: undefined }));
         noStored = false; // shared setup = explicit league choices, skip the picker
         savePreferences(loaded);
         const keep = new URLSearchParams();
@@ -2386,12 +2391,16 @@ export default function HomeContent({
   // leave the switcher in one save, the same rule as unticking them in
   // Settings. Out of shownLeagues, and into hiddenLeagues when they would
   // still show (on by default, pinned, or a favorite). As with Settings, a
-  // hidden league is one Auto no longer picks. Add more… or Settings brings
-  // it back.
+  // hidden league is one Auto no longer picks, and a column showing it closes
+  // rather than taking the next league: the board locks first, so an Auto
+  // column showing it becomes a pin that closes. Add more… or Settings brings
+  // the league back, and the column with it.
   const removeFromSwitcher = (sports: Sport[]) => {
     const hidden = new Set(prefs.hiddenLeagues ?? []);
     const shown = new Set(prefs.shownLeagues ?? []);
-    const pinned = [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague];
+    const locked = lockBoardForRemoval(SLOT_INDICES.map((i) => selectedSlotLeagues[i]), sortedLeagues.map((l) => l.sport), sports, slotCount);
+    const slots = locked && restoreHiddenPins(locked, savedSlotPrefs());
+    const pinned = slots ?? savedSlotPrefs();
     for (const sport of sports) {
       shown.delete(sport);
       const preferred = !!thirdLeagueOptions.find((o) => o.sport === sport)?.defaultInSwitcher
@@ -2400,6 +2409,7 @@ export default function HomeContent({
       if (preferred) hidden.add(sport);
     }
     updatePrefs({
+      ...(slots ? slotPrefsPatch(slots) : {}),
       hiddenLeagues: hidden.size ? [...hidden] : undefined,
       shownLeagues: shown.size ? [...shown] : undefined,
       removedLeagues: noteRemoved(prefs.removedLeagues, sports),
@@ -2495,16 +2505,13 @@ export default function HomeContent({
     } else {
       // Unset slots lock to the league actually on screen at their position
       // (an Auto Best of yesterday column stays Auto) — see lockSlotsToBoard.
-      resolved = lockSlotsToBoard(SLOT_INDICES.map((i) => selectedSlotLeagues[i]), sortedLeagues.map((l) => l.sport));
+      // Columns this screen does not show close, so a wider window later
+      // shows the + button there, not an Auto league. Choosing Auto above
+      // closes nothing: it means "go back to automatic".
+      resolved = lockSlotsToBoard(SLOT_INDICES.map((i) => selectedSlotLeagues[i]), sortedLeagues.map((l) => l.sport), [], slotCount);
       resolved[slotIdx] = sport;
     }
-    return {
-      firstLeague: resolved[0],
-      secondLeague: resolved[1],
-      thirdLeague: resolved[2],
-      fourthLeague: resolved[3],
-      fifthLeague: resolved[4],
-    };
+    return slotPrefsPatch(restoreHiddenPins(resolved, savedSlotPrefs(), [slotIdx], sport));
   };
 
   // The ESPN front page's "Add {league}" popover (Jacob 9/28). Adding pins the
@@ -2550,23 +2557,23 @@ export default function HomeContent({
       sortedLeagues.map((l) => l.sport),
       fromIdx,
       toIdx,
+      slotCount,
     );
-    updatePrefs({
-      firstLeague: baseline[0],
-      secondLeague: baseline[1],
-      thirdLeague: baseline[2],
-      fourthLeague: baseline[3],
-      fifthLeague: baseline[4],
-    });
+    updatePrefs(slotPrefsPatch(restoreHiddenPins(baseline, savedSlotPrefs(), [fromIdx, toIdx])));
   };
 
-  const selectedSlotLeagues: (Sport | "empty" | undefined)[] = [
+  // A pin on a league turned off in the switcher list reads as "empty": its
+  // column is closed (fetchAllLeagues), and every walk below pairs these
+  // prefs with the rendered columns — see closeHiddenPins. Edits save the pin
+  // itself back (restoreHiddenPins), so turning the league on reopens it.
+  const savedSlotPrefs = (): (Sport | "empty" | undefined)[] => [
     prefs.firstLeague,
     prefs.secondLeague,
     prefs.thirdLeague,
     prefs.fourthLeague,
     prefs.fifthLeague,
   ];
+  const selectedSlotLeagues: (Sport | "empty" | undefined)[] = closeHiddenPins(savedSlotPrefs(), boardHidden ?? []);
 
   // Render in slot order as returned by fetchAllLeagues. The old favoriteLeagues
   // sort is dead — the star UI that set it has been removed; keeping the sort
