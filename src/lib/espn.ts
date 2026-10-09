@@ -342,7 +342,7 @@ export interface LeagueConfig {
   mustInclude?: boolean;     // NBA/MLB/NHL/NFL — always picked when active
   excludeFromAuto?: boolean; // Skipped from auto-pick; still selectable via slot-3 dropdown
   hidden?: boolean;          // BACKLOG — fully hidden from the UI (not in the switcher) until the card design is finished; data kept here
-  backfillOnly?: boolean;    // NFL Preseason — only added when fewer than 3 active picks
+  backfillOnly?: boolean;    // NFL / NBA Preseason — only added when fewer than 3 active picks
   displaySlot?: "left" | "center" | "right"; // pinned slot preference
   slotPrecedence?: number;   // tiebreak within a pinned slot — lower wins
   // World Cup is every 4 years. yearCycle.anchor matches the championship year.
@@ -368,6 +368,14 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // ── Major team sports ──
   { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-05", verifiedFor: 2026, marchMadnessLabel: true },
   { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-22", kickoffDate: "10-20", championshipDate: "06-20", scheduleReleaseDate: "08-14", verifiedFor: 2026, mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
+  // NBA Preseason (added 2026-10-09). ESPN read 10/9: the 2026-27 exhibitions
+  // (season.type 1) run Sat Oct 3 → Fri Oct 16, none Oct 17–19, and the
+  // regular season opens Tue Oct 20. backfillOnly = never auto: in October all
+  // three slots are already full (MLB, NFL, EPL/NCAAF), so the column only
+  // opens when someone picks it from the switcher. Keep this line AFTER the
+  // "NBA" config: resolveSlot's offseason fallback and the switcher's offseason
+  // row both keep the first nba config.
+  { sport: "nba",   label: "NBA Preseason", startDate: "10-01", endDate: "10-16", kickoffDate: "10-03", verifiedFor: 2026, backfillOnly: true, displaySlot: "left", slotPrecedence: 3 },
   { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", kickoffDate: "03-24", championshipDate: "10-31", scheduleReleaseDate: "07-16", verifiedFor: 2027, mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
   // NHL runs Sep 29 → mid-June (verified against ESPN 2026-08-09: first
   // 2026-27 regular-season game Tue Sep 29 2026; the 2026 Stanley Cup finished
@@ -791,7 +799,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 // FULL YEAR SCHEDULE — Max 3 leagues, slots = [left, center, right]
 //
 // Slot pinning:
-//   left  : NBA (precedence 1) > MLB (2)
+//   left  : NBA (precedence 1) > MLB (2) > NBA Preseason (3)
 //   center: NFL (1) > World Cup (2) > US Open Tennis (3) > Wimbledon (4)
 //           > US Open Golf (5) > The Open (6) > NFL Preseason (7)
 //           NCAAM dynamically pins to center during March Madness (Mar 17 – Apr 6).
@@ -800,7 +808,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 //
 // Picks: mustInclude (NBA/MLB/NHL/NFL) + firstPref always picked when active;
 // regular leagues fill remaining slots by LEAGUE_PRIORITY; backfillOnly
-// (NFL Preseason) only joins when fewer than 3 picks otherwise. excludeFromAuto
+// (NFL / NBA Preseason) only joins when fewer than 3 picks otherwise. excludeFromAuto
 // (PGA Champ, French Open) never auto-picked but remain in the slot-3 swap menu.
 // WNBA is auto-eligible during its season, but low priority and unpinned.
 // ═══════════════════════════════════════════════════════════════
@@ -1151,6 +1159,32 @@ const EVENT_SPORTS: Partial<Record<Sport, true>> = {
   golf: true, tennis: true, fifa: true, euro: true, afcon: true,
 };
 
+// The config in `pool` whose next opening comes soonest after viewDate, or null
+// when none has a window ahead. Shared by getSeasonOpener and fetchAllLeagues'
+// offseason pin, so a pinned golf or tennis column carries the same event its
+// "Returns ~…" line names.
+function nextOpening(pool: LeagueConfig[], viewDate: Date): { config: LeagueConfig; kickoff: Date; daysUntil: number } | null {
+  let best: { config: LeagueConfig; kickoff: Date; daysUntil: number } | null = null;
+  for (const config of pool) {
+    // World Cup / Euro / AFCON are gated to their cycle year, so the next
+    // occurrence of their MM-DD is usually the wrong year and kickoffFor returns
+    // null. Walk forward a cycle at a time instead of giving up — "starts Jun
+    // 2030" is still the answer someone opening the column wants.
+    const maxYears = config.yearCycle ? config.yearCycle.mod : 1;
+    for (let i = 0; i < maxYears; i++) {
+      const probe = new Date(viewDate.getFullYear() + i, viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+      const k = kickoffFor(config, probe);
+      if (!k) continue;
+      const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+      const daysUntil = Math.round((k.kickoff.getTime() - view.getTime()) / DAY_MS);
+      if (daysUntil < 1) continue;
+      if (!best || daysUntil < best.daysUntil) best = { config, kickoff: k.kickoff, daysUntil };
+      break;
+    }
+  }
+  return best;
+}
+
 // Next opener for `sport` on or after viewDate, or null when there is nothing to
 // name: event-driven sports with no season window (UFC, boxing, chess), or a
 // league already inside its window (an in-season gap is a schedule hole, not an
@@ -1171,24 +1205,7 @@ export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): Se
   // Wimbledon's date instead of going silent.
   if (pool.some((l) => isLeagueActive(l, viewDate))) return null;
 
-  let best: { config: LeagueConfig; kickoff: Date; daysUntil: number } | null = null;
-  for (const config of pool) {
-    // World Cup / Euro / AFCON are gated to their cycle year, so the next
-    // occurrence of their MM-DD is usually the wrong year and kickoffFor returns
-    // null. Walk forward a cycle at a time instead of giving up — "starts Jun
-    // 2030" is still the answer someone opening the column wants.
-    const maxYears = config.yearCycle ? config.yearCycle.mod : 1;
-    for (let i = 0; i < maxYears; i++) {
-      const probe = new Date(viewDate.getFullYear() + i, viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
-      const k = kickoffFor(config, probe);
-      if (!k) continue;
-      const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
-      const daysUntil = Math.round((k.kickoff.getTime() - view.getTime()) / DAY_MS);
-      if (daysUntil < 1) continue;
-      if (!best || daysUntil < best.daysUntil) best = { config, kickoff: k.kickoff, daysUntil };
-      break;
-    }
-  }
+  const best = nextOpening(pool, viewDate);
   if (!best) return null;
 
   const { config, kickoff, daysUntil } = best;
@@ -2951,8 +2968,9 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   if (COLLEGE_DIAMOND_SPORTS.has(sport) && event.season?.type === 6) {
     isPlayoff = true;
   }
-  // Type 1 is the exhibition slate. Only NFL games ever carry it this far (the
-  // preseason filter in eventsToGames drops it for every other sport), but the
+  // Type 1 is the exhibition slate. Only NFL and NBA games ever carry it this
+  // far (the preseason filter in eventsToGames drops it for every other sport,
+  // see SEASON_TYPE_1_IS_REGULAR), but the
   // flag is derived generically so a future carve-out doesn't have to remember
   // to add itself here. See Game.isPreseason for why the card needs this at all.
   // ⚠️ Rugby is the exception (2026-09-27): ESPN tags EVERY rugby fixture type 1
@@ -5055,6 +5073,11 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
 // Schedule TBD" while ESPN had 49 games on the board. The regular NFL config
 // doesn't start until 09-04, so no type-1 event can leak into it.
 //
+// NBA (added 2026-10-09): same shape. The type-1 slate is real preseason and
+// the dedicated "NBA Preseason" column (10-01 → 10-16) shows it. The "NBA"
+// config opens 10-20, so no exhibition reaches it except through the "last
+// played" fallback, where the PRE chip marks it.
+//
 // Rugby: ESPN tags EVERY rugby fixture type 1 — verified 2026-08-21 against the
 // scoreboard endpoint across all six competitions (Six Nations 15/15, Super
 // Rugby 79/79, Nations Championship 36/36, Rugby World Cup 48/48, Rugby Tests
@@ -5065,7 +5088,7 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
 // eventsToGames simply filtered every match out and the column rendered
 // "Upcoming Schedule TBD".
 const SEASON_TYPE_1_IS_REGULAR = new Set<Sport>([
-  "nfl",
+  "nfl", "nba",
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
   "premrugby", "urc", "top14", "challengecup", "mlr",
   // NRL: the whole regular season is type 1 ("2026 REG NRL", read 2026-09-27);
@@ -6271,11 +6294,13 @@ export async function fetchAllLeagues(
     // describes; the fix has to be here as well as in the options list.)
     const upcomingConfig = configs.find((l) => isLeagueUpcoming(l, viewDate));
     if (upcomingConfig) return upcomingConfig;
-    // NBA is the deliberate offseason exception: it stays manually pinnable
-    // for league news and the trade board, but the auto-picker above still
-    // uses isLeagueActive() and therefore never forces an empty NBA column on
-    // people between the Finals and opening night.
-    return sport === "nba" ? configs[0] : null;
+    // A pinned league between seasons keeps its column (Jacob 10/9; was NBA
+    // only): the column says when it returns, its news stays, and the column
+    // offers to close. An Auto column never lands here — the auto-picker above
+    // uses isLeagueActive(). Several configs (golf majors, tennis Slams, NFL
+    // preseason) → the one that opens next, as getSeasonOpener names it.
+    const windowed = configs.filter((l) => !l.hidden && !l.backfillOnly && l.startDate && l.endDate);
+    return nextOpening(windowed, viewDate)?.config ?? configs[0];
   };
   const slot1Cfg = resolveSlot(slotOverrides?.first);
   const slot2Cfg = resolveSlot(slotOverrides?.second);
@@ -6710,11 +6735,14 @@ export async function fetchTeamSchedule(
       // Lions schedule was THREE August exhibitions and not one of the 17 real
       // games. Asking explicitly for 1/2/3 returns 3 / 17 / 0 for that same
       // team, and `seen` already dedups the overlap.
-      // Gridiron only: it is the sport whose preseason the app deliberately
-      // keeps (LEAGUES carries an "NFL Preseason" column), and the sport whose
-      // default flipped underneath us. Every other sport still makes the single
-      // call it always made — no extra requests, no new behaviour to re-verify.
-      const seasonTypes = sport === "nfl" || sport === "ncaaf" ? [1, 2, 3] : [undefined];
+      // Gridiron + NBA only: the sports whose preseason the app deliberately
+      // keeps (LEAGUES carries "NFL Preseason" and "NBA Preseason" columns), and
+      // whose default flips underneath us. The NBA did it again on 2026-10-09:
+      // the Knicks' 2027 schedule answered `requestedSeason: {type: 1}` with the
+      // 5 exhibitions only, so a team tap showed none of the 82 real games.
+      // Every other sport still makes the single call it always made — no extra
+      // requests, no new behaviour to re-verify.
+      const seasonTypes = sport === "nfl" || sport === "ncaaf" || sport === "nba" ? [1, 2, 3] : [undefined];
       const calls: { seasonType?: number; fixture?: boolean }[] = seasonTypes.length > 1 || !opts?.upcoming
         ? seasonTypes.map((seasonType) => ({ seasonType }))
         : sportGroup(sport) === "soccer"
@@ -6790,9 +6818,10 @@ export async function fetchTeamSchedule(
         const statusName = e.status?.type?.name ?? "";
         if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) continue;
         const seasonType = resolvedSeasonType ?? 0;
-        // Same NFL-preseason carve-out as eventsToGames — a team's schedule
-        // should list its preseason games while the Preseason column is live.
-        if (seasonType === 1 && sport !== "nfl") continue;
+        // Same NFL / NBA preseason carve-out as eventsToGames — a team's
+        // schedule lists its preseason games (with the PRE chip) next to the
+        // games that count.
+        if (seasonType === 1 && sport !== "nfl" && sport !== "nba") continue;
         if (!e.id || seen.has(e.id)) continue;
         seen.add(e.id);
         const game = parseGame(e, sport);

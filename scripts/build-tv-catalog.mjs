@@ -76,7 +76,7 @@ const PERIOD_SECONDS = literal(espn, "PERIOD_SECONDS");
 const SOCCER = new Set(literal(espn, "SOCCER_SPORTS"));
 // ESPN tags exhibition play season.type 1 and the website drops it — EXCEPT for
 // the sports in this set, where type 1 is the whole regular season (every rugby
-// fixture, the NFL preseason column). The TV app applies the same rule, so it
+// fixture) or has its own column (NFL and NBA Preseason). The TV app applies the same rule, so it
 // needs the same set.
 const PRESEASON_IS_REGULAR = new Set(literal(espn, "SEASON_TYPE_1_IS_REGULAR"));
 const LOGOS = literal(news, "LEAGUE_LOGO");

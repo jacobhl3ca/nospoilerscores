@@ -50,6 +50,28 @@ test("the name returns to NFL once the preseason window closes", () => {
   }
 });
 
+// NBA Preseason (2026-10-09): the same rule one sport over. ESPN's 2026-27
+// exhibitions run Oct 3 → Oct 16; the regular season opens Oct 20.
+test("the NBA row reads NBA Preseason only inside the exhibition window", () => {
+  for (const day of ["2026-10-03", "2026-10-09", "2026-10-16"]) {
+    assert.equal(switcherLabel("nba", day), "NBA Preseason", `wrong label on ${day}`);
+  }
+  // 10-17 → 10-19 is a gap (no games), then the season; 07-01 is the offseason
+  // row, which keeps the first nba config.
+  for (const day of ["2026-10-17", "2026-10-25", "2026-07-01"]) {
+    assert.equal(switcherLabel("nba", day), "NBA", `wrong label on ${day}`);
+  }
+});
+
+// The offseason fallbacks (the switcher's offseason row, resolveSlot's
+// `configs[0]`, sportDisplayLabel) all take the FIRST nba config. If the
+// preseason line ever moved above "NBA", an offseason NBA column would read
+// "NBA Preseason" all summer.
+test("the NBA config comes before NBA Preseason in ALL_LEAGUES", () => {
+  const labels = ALL_LEAGUES.filter((l) => l.sport === "nba").map((l) => l.label);
+  assert.deepEqual(labels, ["NBA", "NBA Preseason"]);
+});
+
 // The rule is general, not an NFL special case: any sport with a single config
 // still reports that config on every day it is offered.
 test("single-config sports are unaffected", () => {
@@ -64,8 +86,8 @@ test("single-config sports are unaffected", () => {
 test("the card marker is suppressed only when the header already says it", () => {
   const card = fs.readFileSync(new URL("../src/components/GameCard.tsx", import.meta.url), "utf8");
   assert.ok(
-    /game\.isPreseason && !\/preseason\/i\.test\(leagueLabel \?\? ""\)/.test(card),
-    "the Pre chip must render on isPreseason unless the league label already says Preseason",
+    /game\.isPreseason && \(teamView \|\| !\/preseason\/i\.test\(leagueLabel \?\? ""\)\)/.test(card),
+    "the Pre chip must render on isPreseason unless the league label already says Preseason (a team schedule always shows it)",
   );
 });
 
@@ -102,11 +124,13 @@ test("the team schedule reads season type off seasonType, not season", () => {
 // ESPN returns ONE season type per call and picks the default itself. On
 // 2026-09-04 it defaulted to preseason, so a Lions schedule was three August
 // exhibitions and none of the seventeen real games. Ask for each type.
-test("gridiron schedules ask for every season type", () => {
+// The NBA did the same on 2026-10-09: the Knicks' 2027 default was type 1, five
+// exhibitions, none of the 82 real games.
+test("gridiron and NBA schedules ask for every season type", () => {
   const src = fs.readFileSync(new URL("../src/lib/espn.ts", import.meta.url), "utf8");
   assert.ok(
-    /const seasonTypes = sport === "nfl" \|\| sport === "ncaaf" \? \[1, 2, 3\] : \[undefined\];/.test(src),
-    "gridiron must request preseason + regular + postseason",
+    /const seasonTypes = sport === "nfl" \|\| sport === "ncaaf" \|\| sport === "nba" \? \[1, 2, 3\] : \[undefined\];/.test(src),
+    "gridiron + NBA must request preseason + regular + postseason",
   );
   assert.ok(/url\.searchParams\.set\("seasontype", String\(seasonType\)\)/.test(src));
 });

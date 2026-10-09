@@ -456,21 +456,76 @@ for (const reduced of [false, true]) {
   });
 }
 
-test("browser blocks autoplay: a one-time note under the toolbar, dismissible", async ({ page }) => {
+// The browser refuses muted autoplay (Jacob 10/9): every clip says "Tap to
+// play" on itself, and a one-time popup sits over the refused clip.
+const BLOCK_PLAY = () => {
+  HTMLMediaElement.prototype.play = function () { return Promise.reject(new DOMException("blocked", "NotAllowedError")); };
+};
+const popup = (page: Page) => page.getByTestId("autoplay-blocked-popup");
+
+test("browser blocks autoplay: Tap to play on the clips, a one-time popup over the clip", async ({ page }) => {
+  await page.addInitScript(BLOCK_PLAY);
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
+  await expect(popup(page)).toBeVisible(LOAD);
+  await expect(popup(page)).toContainText("Your browser blocks autoplay");
+  await expect(popup(page)).toContainText("Tap a clip to play it with sound.");
+  // The note under the toolbar is gone.
+  await expect(page.getByTestId("autoplay-blocked-note")).toHaveCount(0);
+  // Every clip says it, on the clip; nothing plays.
+  await expect(page.locator("[data-inline-video] [data-tap-to-play]")).toHaveCount(10);
+  await expect(page.locator("[data-inline-video] [data-tap-to-play]").first()).toHaveText("Tap to play");
+  expect(await playing(page)).toEqual([]);
+  // The popup sits over the refused clip.
+  const box = await popup(page).boundingBox();
+  const clip = await page.locator("[data-inline-video] .news-media-preview").first().boundingBox();
+  const mid = box!.x + box!.width / 2;
+  expect(Math.abs(mid - (clip!.x + clip!.width / 2))).toBeLessThan(2);
+  expect(box!.y).toBeGreaterThanOrEqual(clip!.y - 1);
+
+  await popup(page).getByRole("button", { name: "Got it" }).click();
+  await expect(popup(page)).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator("[data-inline-video] [data-tap-to-play]").first()).toBeVisible(LOAD);
+  await page.waitForTimeout(1500);
+  await expect(popup(page)).toHaveCount(0);
+});
+
+test("browser blocks autoplay in Feed: Tap to play on the video post", async ({ page }) => {
+  await page.addInitScript(BLOCK_PLAY);
+  await gotoNews(page, { ...PLAY, newsLayout: "feed", newsFeedView: true });
+  const videoPost = page.locator("article[data-news-key]:has(video[data-autoplay-video])").nth(1);
+  await expect(videoPost).toBeAttached(LOAD);
+  await videoPost.evaluate((el) => el.querySelector("video")!.scrollIntoView({ block: "center" }));
+  await expect(popup(page)).toBeVisible(LOAD);
+  await expect(videoPost.locator("[data-tap-to-play]")).toBeVisible();
+});
+
+test("blocked-autoplay popup: Turn Autoplay off saves the pref and clears Tap to play", async ({ page }) => {
+  await page.addInitScript(BLOCK_PLAY);
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
+  await popup(page).getByRole("button", { name: "Turn Autoplay off" }).click(LOAD);
+  await expect(popup(page)).toHaveCount(0);
+  await expect.poll(async () => (await saved(page)).newsAutoplay).toBe(false);
+  await expect(page.locator("[data-tap-to-play]")).toHaveCount(0);
+  expect(await autoplayChip(page).locator("svg line[data-slash]").count()).toBe(1);
+});
+
+test("a clip that plays clears Tap to play everywhere", async ({ page }) => {
+  // The first play() is refused, every later one plays.
   await page.addInitScript(() => {
-    HTMLMediaElement.prototype.play = function () { return Promise.reject(new DOMException("blocked", "NotAllowedError")); };
+    const real = HTMLMediaElement.prototype.play;
+    let refused = false;
+    HTMLMediaElement.prototype.play = function () {
+      if (!refused) { refused = true; return Promise.reject(new DOMException("blocked", "NotAllowedError")); }
+      return real.call(this);
+    };
   });
   await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
-  const note = page.getByTestId("autoplay-blocked-note");
-  await expect(note).toHaveText(/Your browser blocks autoplay\. Tap a video to play\./, LOAD);
-  // The play badge stays on the still.
-  expect(await playing(page)).toEqual([]);
-  await page.getByRole("button", { name: "Dismiss autoplay note" }).click();
-  await expect(note).toHaveCount(0);
-  await page.reload();
-  await expect(page.locator("[data-inline-video]").first()).toBeVisible(LOAD);
-  await page.waitForTimeout(1500);
-  await expect(note).toHaveCount(0);
+  await expect(page.locator("[data-tap-to-play]").first()).toBeVisible(LOAD);
+  await popup(page).getByRole("button", { name: "Got it" }).click();
+  await page.locator('[data-inline-video="auto"]').nth(2).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([2]);
+  await expect(page.locator("[data-tap-to-play]")).toHaveCount(0);
 });
 
 test("switch Feed → ESPN with Autoplay on: the first in-view clip plays without a scroll", async ({ page }) => {
@@ -777,4 +832,49 @@ test("Cards toolbar Media tap clears a card's own Media: ESPN then follows the g
   await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["ESPN VIDEOS", "ESPN TOP HEADLINES"]);
   expect((await cardStates(page, "media")).every((v) => v === "off")).toBe(true);
   await expect(page.getByRole("button", { name: "Toggle media reveal: ESPN Videos" })).toHaveAttribute("aria-pressed", "false");
+});
+
+// ── Jacob 10/9: gaps on the live ESPN tab ───────────────────────────────
+test("ESPN 2 columns: Top Headlines rides beside the clips while you scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await gotoNews(page, { newsLayout: "espn" });
+  const pin = page.getByTestId("news-espn-headlines-pin");
+  await expect(pin.locator(".news-source-sticky-top")).toBeVisible(LOAD);
+  await expect(page.locator("[data-inline-video]")).toHaveCount(10, LOAD);
+  await page.evaluate(() => window.scrollTo(0, 1500));
+  await expect.poll(async () => {
+    const b = await pin.boundingBox();
+    return b!.y >= 0 && b!.y < 200 && b!.y + b!.height <= 801;
+  }).toBe(true);
+});
+
+test("ESPN 2 columns, short screen: Top Headlines scrolls to its end, then stays", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 300 });
+  await gotoNews(page, { newsLayout: "espn" });
+  const pin = page.getByTestId("news-espn-headlines-pin");
+  await expect(pin.locator(".news-source-sticky-top")).toBeVisible(LOAD);
+  await expect(page.locator("[data-inline-video]")).toHaveCount(10, LOAD);
+  const height = (await pin.boundingBox())!.height;
+  expect(height).toBeGreaterThan(300);
+  await page.evaluate(() => window.scrollTo(0, 2000));
+  // Its bottom edge sits 1rem above the screen bottom: every headline is reachable.
+  await expect.poll(async () => { const b = await pin.boundingBox(); return Math.round(b!.y + b!.height); }).toBe(300 - 16);
+});
+
+test("390px phone at the page top: the first clip plays, not the one nearest the middle", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await gotoNews(page, { ...PLAY, newsLayout: "espn" });
+  await expect(page.locator('[data-inline-video="auto"]').first()).toBeVisible(LOAD);
+  await expect.poll(() => playing(page), { timeout: 3000 }).toEqual([0]);
+  // Scrolled down, the clip nearest the middle plays again.
+  await page.locator('[data-inline-video="auto"]').nth(3).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([3]);
+});
+
+test("Big: three subs sit in one row of three columns", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true });
+  await expect.poll(() => headersIn(page, "news-espn-reddit"), LOAD).toEqual(["R/BASEBALL", "R/NFL", "R/HOCKEY"]);
+  const tops = await page.getByTestId("news-espn-reddit").locator(".news-source-sticky-top")
+    .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(tops).size).toBe(1);
 });
