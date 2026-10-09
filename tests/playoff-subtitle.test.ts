@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { playoffSubtitleTiers } from "../src/lib/playoffSubtitle.ts";
+import { playoffSubtitleTiers, subtitleCarriesGameNumber } from "../src/lib/playoffSubtitle.ts";
 
 // Every slate below is the real ESPN notes[0].headline list for that date.
 
@@ -80,4 +80,13 @@ test("two different rounds name both, then fall back to the league's word", () =
 
 test("no labels, no subtitle", () => {
   assert.deepEqual(playoffSubtitleTiers([]), []);
+});
+
+test("subtitleCarriesGameNumber: true only when the subtitle keeps one game number", () => {
+  // The column's pre-game cards drop their own "Game N" line when this is true.
+  assert.equal(subtitleCarriesGameNumber(["NLWC - Game 3"]), true);
+  assert.equal(subtitleCarriesGameNumber(["ALWC - Game 2", "NLWC - Game 2"]), true);
+  assert.equal(subtitleCarriesGameNumber(["NLWC - Game 3 If Necessary"]), true);
+  assert.equal(subtitleCarriesGameNumber(["ALDS - Game 2", "NLDS - Game 3"]), false);
+  assert.equal(subtitleCarriesGameNumber([]), false);
 });
