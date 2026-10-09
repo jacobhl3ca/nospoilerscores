@@ -2534,6 +2534,9 @@ export default function HomeContent({
   const ALL_NEWS_SOURCE_TYPES: NewsSourceType[] = ["topvideos", "reddit", "espn", "homepage"];
   // Cards / Feed / ESPN (the toolbar pill). Old blobs carry only newsFeedView.
   const newsLayout: NewsLayout = newsLayoutOf(prefs);
+  // ESPN layout Autoplay pill: muted clips play while on screen. Unset = on
+  // in Big, off in the 2-column view.
+  const espnAutoplay = prefs.newsEspnAutoplay ?? !!prefs.newsEspnBig;
   const legacyNewsTypeFilter = prefs.newsTypeFilter ?? "reddit";
   const savedNewsTypeFilters = prefs.newsTypeFilters?.filter(
     (value): value is NewsSourceType => ALL_NEWS_SOURCE_TYPES.includes(value as NewsSourceType),
@@ -2742,7 +2745,7 @@ export default function HomeContent({
   useNewsSeenTracker(mainRef, showNews && prefsHydrated);
   const [seenSnapshot, setSeenSnapshot] = useState<Set<string>>(() => new Set());
   const seenSnapshotTrigger = [
-    showNews, prefs.newsHideSeen, newsLayout, prefs.newsEspnBig, newsTypeFilters.join(","), newsRefreshKey,
+    showNews, prefs.newsHideSeen, newsLayout, prefs.newsEspnBig, espnAutoplay, newsTypeFilters.join(","), newsRefreshKey,
     prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague,
     prefs.newsThirdLeague, prefs.newsTopNews, prefs.newsFocusLeague, prefs.newsSingleColumn,
     prefs.newsVideosOnly, prefs.showTextPosts, prefs.hideSensitiveNews, prefs.hideCrashNews,
@@ -3511,11 +3514,22 @@ export default function HomeContent({
               <NewsToggleChip
                 active={!!prefs.newsEspnBig}
                 onClick={() => updatePrefs({ newsEspnBig: !prefs.newsEspnBig })}
-                title="One wide column of big ESPN clips that play muted while on screen"
+                title="One wide column of big ESPN clips"
                 ariaLabel="Toggle big ESPN videos"
               >
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m10 9 5 3-5 3z" /></svg>
                 <span>Big</span>
+              </NewsToggleChip>
+            )}
+            {newsLayout === "espn" && (
+              <NewsToggleChip
+                active={espnAutoplay}
+                onClick={() => updatePrefs({ newsEspnAutoplay: !espnAutoplay })}
+                title="Play ESPN clips muted while they are on screen"
+                ariaLabel="Toggle ESPN autoplay"
+              >
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
+                <span>Autoplay</span>
               </NewsToggleChip>
             )}
             <NewsToggleChip
@@ -4213,7 +4227,14 @@ export default function HomeContent({
             }
             const redditShown = redditCols.slice(0, 3);
             const big = !!prefs.newsEspnBig;
-            const filterProps = {
+            // No column titles (Jacob 10/8): each card's own header already
+            // says ESPN Videos / ESPN Top Headlines / r/<sub>, and the titles
+            // pushed Big's first clip half a screen down. Rows hug their
+            // content: there is no cross-column alignment to keep here.
+            const columnProps = {
+              hideTitle: true,
+              hugRows: true,
+              autoplayVideos: espnAutoplay,
               onPlayVideo: playNewsVideo,
               videosOnly: !!prefs.newsVideosOnly,
               showTextPosts: !!prefs.showTextPosts,
@@ -4226,41 +4247,38 @@ export default function HomeContent({
             if (isMobile) {
               // Phones: one stacked column, Videos → Headlines → each sub.
               return (
-                <div className="flex flex-col items-center" data-testid="news-espn-layout">
+                <div className="flex flex-col items-center pt-2" data-testid="news-espn-layout">
                   <NewsColumn
                     key={`${k}-mobile`}
                     title=""
-                    hideTitle
                     sources={cascadeToSources([ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)])}
                     widthClassName={wideCol}
                     bigVideos={big}
-                    {...filterProps}
+                    {...columnProps}
                   />
                 </div>
               );
             }
             const redditWidth = redditShown.length >= 3 ? narrowCol : "flex-1 min-w-0 max-w-[360px]";
             return (
-              <div className="flex flex-col gap-6" data-testid="news-espn-layout">
+              <div className="flex flex-col gap-6 pt-2" data-testid="news-espn-layout">
                 {big ? (
-                  // Big: one wide column of large muted-autoplay clips, the
-                  // headlines under it.
+                  // Big: one wide column of large clips, the headlines under it.
                   <div className="flex flex-col items-center gap-4" data-testid="news-espn-row1">
                     <NewsColumn
                       key={`${k}-videos-big`}
                       title="ESPN Videos"
                       sources={cascadeToSources([ESPN_LAYOUT_VIDEOS])}
                       widthClassName="w-full max-w-[720px]"
-                      titleMeasureRef={newsTitleRowRef}
                       bigVideos
-                      {...filterProps}
+                      {...columnProps}
                     />
                     <NewsColumn
                       key={`${k}-headlines-big`}
                       title="Top Headlines"
                       sources={cascadeToSources([ESPN_LAYOUT_HEADLINES])}
                       widthClassName="w-full max-w-[720px]"
-                      {...filterProps}
+                      {...columnProps}
                     />
                   </div>
                 ) : (
@@ -4270,31 +4288,30 @@ export default function HomeContent({
                       title="ESPN Videos"
                       sources={cascadeToSources([ESPN_LAYOUT_VIDEOS])}
                       widthClassName="flex-1 min-w-0 max-w-[520px] xl:max-w-[560px]"
-                      titleMeasureRef={newsTitleRowRef}
-                      {...filterProps}
+                      {...columnProps}
                     />
                     <NewsColumn
                       key={`${k}-headlines`}
                       title="Top Headlines"
                       sources={cascadeToSources([ESPN_LAYOUT_HEADLINES])}
                       widthClassName="flex-1 min-w-0 max-w-[520px] xl:max-w-[560px]"
-                      {...filterProps}
+                      {...columnProps}
                     />
                   </div>
                 )}
-                <section aria-labelledby="news-espn-reddit-h" data-testid="news-espn-reddit">
-                  <h2 id="news-espn-reddit-h" className="text-center text-sm font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                <section aria-labelledby="news-espn-reddit-h" data-testid="news-espn-reddit" className="flex flex-col gap-2">
+                  <h2 id="news-espn-reddit-h" className="text-center text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
                     Your leagues on Reddit
                   </h2>
                   {/* Big: a 2-column grid under the 720px clip column. */}
-                  <div className={big ? "grid grid-cols-2 items-start gap-4 max-w-[720px] mx-auto" : "flex flex-row justify-center items-start gap-2 sm:gap-4"}>
+                  <div className={big ? "grid grid-cols-2 items-start gap-4 w-full max-w-[720px] mx-auto" : "flex flex-row justify-center items-start gap-2 sm:gap-4"}>
                     {redditShown.map((c) => (
                       <NewsColumn
                         key={`${k}-reddit-${c.id}`}
                         title={c.label}
                         sources={cascadeToSources(c.cascade)}
                         widthClassName={big ? "min-w-0" : redditWidth}
-                        {...filterProps}
+                        {...columnProps}
                       />
                     ))}
                   </div>

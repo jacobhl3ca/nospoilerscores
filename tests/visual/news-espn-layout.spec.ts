@@ -202,3 +202,68 @@ test("Big: reduced motion turns autoplay off", async ({ page }) => {
   await page.waitForTimeout(1500);
   expect(await playing(page)).toEqual([]);
 });
+
+// ── Round 2 (Jacob 10/8, after the first staging look) ──────────────────
+const autoplayChip = (page: Page) => page.getByRole("button", { name: "Toggle ESPN autoplay" });
+
+test("Autoplay pill: off by default in 2 columns, on plays clips there, persists", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn" });
+  await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "false", LOAD);
+  await expect(page.locator('[data-inline-video="auto"]')).toHaveCount(0);
+  await autoplayChip(page).click();
+  await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "true");
+  expect((await saved(page)).newsEspnAutoplay).toBe(true);
+  const cards = page.locator('[data-inline-video="auto"]');
+  await expect(cards).toHaveCount(8, LOAD);
+  await cards.nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  // 2-column clips are short, so a neighbour can be >= 60% visible too: the
+  // rule is exactly one playing, near the centred card.
+  await expect.poll(async () => {
+    const p = await playing(page);
+    return p.length === 1 && p[0] <= 2;
+  }, { timeout: 1500 }).toBe(true);
+  await page.reload();
+  await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "true", LOAD);
+});
+
+test("Autoplay pill off in Big: big stills, nothing plays", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true, newsEspnAutoplay: false });
+  await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "false", LOAD);
+  const stills = page.locator('[data-inline-video="still"]');
+  await expect(stills).toHaveCount(10, LOAD);
+  await stills.nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(1200);
+  expect(await playing(page)).toEqual([]);
+});
+
+test("no column titles; headline rows hug their text; clips sit inside the card outline", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn" });
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["ESPN VIDEOS", "ESPN TOP HEADLINES"]);
+  await expect(page.getByRole("heading", { name: "ESPN Videos", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Top Headlines", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "MLB", exact: true })).toHaveCount(0);
+
+  // A one-line headline row is far under the 7rem (112px) Cards floor.
+  const row = page.locator('[data-news-key="https://example.com/espn-top/0"]');
+  await expect(row).toBeVisible();
+  expect((await row.boundingBox())!.height).toBeLessThan(80);
+
+  // The clip button is inset from the card's edges, so the 1px outline shows.
+  const clip = page.locator('[data-news-key="https://example.com/espn-videos/0"]');
+  const card = clip.locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]");
+  const [c, k] = await Promise.all([clip.boundingBox(), card.boundingBox()]);
+  expect(c!.x).toBeGreaterThanOrEqual(k!.x + 1);
+  expect(c!.x + c!.width).toBeLessThanOrEqual(k!.x + k!.width - 1);
+});
+
+test("Big at 1280x800: the first clip starts within 200px of the toolbar", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true });
+  const first = page.locator("[data-inline-video]").first();
+  await expect(first).toBeVisible(LOAD);
+  const toolbar = await page.locator(".news-toolbar-sticky").boundingBox();
+  const clip = await first.boundingBox();
+  expect(clip!.y - (toolbar!.y + toolbar!.height)).toBeLessThan(200);
+  // The first clip and its headline fit in the viewport.
+  expect(clip!.y + clip!.height).toBeLessThanOrEqual(800);
+});

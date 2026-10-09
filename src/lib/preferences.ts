@@ -620,9 +620,12 @@ export interface Preferences {
   // below (HomeContent). Undefined = read the legacy newsFeedView above, so
   // old blobs keep their view: see newsLayoutOf.
   newsLayout?: NewsLayout;
-  // ESPN layout only: "Big" = one wide column of large video cards that play
-  // muted while on screen, headlines and subreddits under it. Default false.
+  // ESPN layout only: "Big" = one wide column of large video cards, headlines
+  // and subreddits under it. Default false.
   newsEspnBig?: boolean;
+  // ESPN layout only: clips play muted while on screen (the Autoplay pill).
+  // Undefined = follow Big (on in Big, off in the 2-column view).
+  newsEspnAutoplay?: boolean;
   // News "Videos only" quick filter: true = show only clip-bearing items. It is
   // ITEM-level on every surface (Cards, Feed, the aligned strip's ESPN tail) —
   // a Reddit v.redd.it post counts, a headline-only post never does — via

@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 
-// One large 16:9 news clip that plays MUTED while it is on screen (the ESPN
-// layout's "Big" mode, Jacob 10/8). ≥ 60% visible starts it, < 40% pauses it,
+// One 16:9 news clip that plays MUTED while it is on screen (the ESPN
+// layout's Autoplay pill, Jacob 10/8). ≥ 60% visible starts it, < 40% pauses it,
 // and only one card in the page plays at a time. A tap opens the shared modal
 // with sound, the same as every other news card. No autoplay when the user
 // asks for reduced motion, when `autoplay` is false (cards past the first 8,
@@ -15,6 +15,9 @@ import { NewsItem, proxyImage } from "@/lib/news";
 let activeVideo: HTMLVideoElement | null = null;
 
 const START_RATIO = 0.6;
+// 16:9 width whose height = the viewport under the app header and news
+// toolbar, minus ~7rem for the card header and the clip's headline.
+const BIG_MAX_WIDTH = "calc((100svh - var(--header-h, 0px) - var(--news-toolbar-h, 0px) - 7rem) * 16 / 9)";
 const STOP_RATIO = 0.4;
 
 export function inlineMediaUrl(item: NewsItem): string | null {
@@ -27,9 +30,11 @@ function prefersReducedMotion(): boolean {
     && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export default function InlineVideoCard({ item, autoplay, onOpen, ariaLabel }: {
+export default function InlineVideoCard({ item, autoplay, large = true, onOpen, ariaLabel }: {
   item: NewsItem;
   autoplay: boolean;
+  // Big mode: larger headline. Off = the regular column's text-sm headline.
+  large?: boolean;
   onOpen: () => void;
   ariaLabel: string;
 }) {
@@ -109,7 +114,17 @@ export default function InlineVideoCard({ item, autoplay, onOpen, ariaLabel }: {
       data-news-key={item.articleUrl || item.id}
       data-inline-video={canAutoplay ? "auto" : "still"}
     >
-      <div ref={wrapRef} className="news-media-preview relative w-full aspect-video overflow-hidden" style={{ background: "var(--bg-card-hover)" }}>
+      {/* Big: cap the clip so it plus its headline fits under the sticky app
+          header, toolbar and card header (Jacob 10/8). Width follows from the
+          height cap so the box stays 16:9, centered in the card. */}
+      <div
+        ref={wrapRef}
+        className="news-media-preview relative w-full aspect-video overflow-hidden mx-auto"
+        style={{
+          background: "var(--bg-card-hover)",
+          maxWidth: large ? BIG_MAX_WIDTH : undefined,
+        }}
+      >
         {item.imageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -154,7 +169,7 @@ export default function InlineVideoCard({ item, autoplay, onOpen, ariaLabel }: {
           </span>
         )}
       </div>
-      <div className="news-title px-3 py-2.5 text-base leading-snug line-clamp-3" style={{ color: "var(--text)" }}>
+      <div className={`news-title px-3 leading-snug line-clamp-3 ${large ? "py-2.5 text-base" : "py-2 text-sm"}`} style={{ color: "var(--text)" }}>
         {item.headline}
       </div>
     </button>
