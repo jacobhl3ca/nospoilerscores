@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url);
-type G = { sport: string; isPlayoff: boolean; playoffLabel: string | null };
+type G = { sport: string; isPlayoff: boolean; playoffLabel: string | null; stage?: string | null };
 const espn = await jiti.import<{
   parseGame: (event: unknown, sport: string) => G;
   aflFinalsLabel: (headline: string) => string;
@@ -137,8 +137,73 @@ test("WNBA: the first round and the Commissioner's Cup final show, the semifinal
   assert.equal(pairingSpoilsEarlierRound({ sport: "wnba", isPlayoff: false, playoffLabel: "Semifinals - Game 1" }), false);
 });
 
+// MLS, NWSL, Libertadores (2026-10-03): ESPN flags none of them as a playoff,
+// so the round comes off season.slug through parseGame's stage. Slugs read
+// 2026-10-03 off the 2025 playoffs; team names are placeholders.
+const soccerEvent = (slug: string, altGameNote?: string) => ({
+  id: "401900100", date: "2026-11-08T20:00Z", name: "Away FC at Home FC", shortName: "AWY @ HOM",
+  season: { year: 2026, type: 2, slug },
+  status: { period: 0, type: { name: "STATUS_SCHEDULED", state: "pre", completed: false } },
+  competitions: [{
+    altGameNote,
+    notes: [],
+    broadcasts: [],
+    competitors: [
+      { homeAway: "home", score: "0", team: { id: "9001", abbreviation: "HOM", displayName: "Home FC", shortDisplayName: "Home" } },
+      { homeAway: "away", score: "0", team: { id: "9002", abbreviation: "AWY", displayName: "Away FC", shortDisplayName: "Away" } },
+    ],
+  }],
+});
+const stageCase = (sport: string, slug: string, stage: string | null, masks: boolean, altGameNote?: string) => {
+  const g = espn.parseGame(soccerEvent(slug, altGameNote), sport);
+  assert.equal(g.isPlayoff, false, slug);
+  assert.equal(g.stage ?? null, stage, slug);
+  assert.equal(pairingSpoilsEarlierRound(g), masks, slug);
+};
+
+test("MLS: the Wild Card shows, Round One through MLS Cup masks", () => {
+  stageCase("mls", "eastern-conference-playoffs---wild-card", "East Wild Card", false);
+  stageCase("mls", "western-conference-playoffs---wild-card", "West Wild Card", false);
+  stageCase("mls", "eastern-conference-playoffs---round-one", "East Round One", true);
+  stageCase("mls", "western-conference-playoffs---semifinals", "West Semifinal", true);
+  stageCase("mls", "eastern-conference-playoffs---final", "East Final", true);
+  stageCase("mls", "mls-cup", "MLS Cup", true);
+  stageCase("mls", "regular-season", null, false);
+  stageCase("mls", "western-conference-playoffs---play-in", "West Playoffs", true);
+});
+
+test("NWSL: the quarterfinals show, the semifinals and Championship mask", () => {
+  stageCase("nwsl", "playoffs---quarterfinals", "Quarterfinal", false);
+  stageCase("nwsl", "playoffs---semifinals", "Semifinal", true);
+  stageCase("nwsl", "playoffs---championship", "Championship", true);
+  stageCase("nwsl", "regular-season", null, false);
+});
+
+test("Libertadores: the group stage shows, the Round of 16 through the Final masks", () => {
+  stageCase("libertadores", "group-stage", "Group Stage", false);
+  stageCase("libertadores", "round-of-16", "Round of 16", true);
+  stageCase("libertadores", "quarterfinals", "Quarterfinals", true);
+  stageCase("libertadores", "semifinals", "Semifinals", true);
+  stageCase("libertadores", "final", "Final", true);
+  stageCase("libertadores", "third-stage", null, false);
+});
+
+// Real ESPN notes headlines, read 2026-10-03.
+test("NCAA volleyball: the NCAA First Round shows, every other tournament round masks", () => {
+  const g = (playoffLabel: string | null, isPlayoff = true) => ({ sport: "ncaavb", isPlayoff, playoffLabel });
+  assert.equal(pairingSpoilsEarlierRound(g("NCAA Women's Volleyball Championship - First Round")), false);
+  assert.equal(pairingSpoilsEarlierRound(g("NCAA Women's Volleyball Championship - Second Round")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("NCAA Women's Volleyball Championship - Austin Regional")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("NCAA Women's Volleyball Championship - Semifinal")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("NCAA Women's Volleyball Championship")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("Big East Women's Volleyball Championship - Semifinal")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("Big East Women's Volleyball Championship - Final")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("SEC Women's Volleyball Tournament - Second Round")), true);
+  assert.equal(pairingSpoilsEarlierRound(g("NCAA Women's Volleyball Championship - Second Round", false)), false);
+});
+
 test("leagues with no entry are untouched", () => {
-  assert.equal(pairingSpoilsEarlierRound({ sport: "mls", isPlayoff: true, playoffLabel: null }), false);
+  assert.equal(pairingSpoilsEarlierRound({ sport: "epl", isPlayoff: true, playoffLabel: null }), false);
   assert.equal(pairingSpoilsEarlierRound({ sport: "ncaam", isPlayoff: true, playoffLabel: "NCAA Men's Basketball Championship - Final Four" }), false);
 });
 

@@ -25,6 +25,23 @@
 // round shows, the semifinals and Finals mask, and the in-season Commissioner's
 // Cup final (two standings leaders, filed as a playoff by its "Championship")
 // shows.
+//
+// MLS, NWSL, Copa Libertadores and NCAA women's volleyball joined on 2026-10-03.
+// ESPN flags no MLS or NWSL postseason game as a playoff (read 2026-10-03 off
+// the 2025 playoffs), so deriveStage reads the round off season.slug. MLS shows
+// only its Wild Card game. Round One masks too: the 1 seed plays the Wild Card
+// winner, so that card can name who won, and a series costs one tap.
+//
+// The NWSL quarterfinals are seeded 1v8 off the table, so they show; the
+// semifinals and the Championship mask.
+//
+// Libertadores (stage read 2026-10-03): the group stage shows, every knockout
+// round from the Round of 16 to the Final masks. The qualifying stages have no
+// stage and stay as they are.
+//
+// NCAA women's volleyball (notes headlines read 2026-10-03): only the NCAA
+// tournament's First Round shows. Conference tournaments mask from their first
+// listed round, because some give byes into the quarterfinals.
 
 import { useCallback, useSyncExternalStore } from "react";
 import type { Game, Sport } from "@/lib/types";
@@ -50,9 +67,23 @@ const LADDER_SEEDED_ROUND: Partial<Record<Sport, RegExp>> = {
   wnba: /\b(?:1st|first) round\b|\bcommissioner'?s cup\b/i,
   // The Pro Bowl is filed as postseason too; it is AFC v NFC, not a pairing.
   nfl: /\bwild ?card\b|\bpro bowl\b/i,
+  // "NCAA Women's Volleyball Championship - First Round"; conference
+  // tournaments ("SEC Women's Volleyball Tournament - Second Round") mask.
+  ncaavb: /\bfirst round\b/i,
 };
 
-export function pairingSpoilsEarlierRound(game: Pick<Game, "sport" | "isPlayoff" | "playoffLabel">): boolean {
+// Leagues ESPN files without a playoff flag, keyed on parseGame's stage. A
+// non-null stage puts the game in a round; the regex lists the rounds that
+// show and any other stage masks, so an unknown future slug fails closed.
+const STAGE_SEEDED_ROUND: Partial<Record<Sport, RegExp>> = {
+  mls: /\bwild card\b/i,
+  nwsl: /^quarterfinal\b/i,
+  libertadores: /^group\b/i,
+};
+
+export function pairingSpoilsEarlierRound(game: Pick<Game, "sport" | "isPlayoff" | "playoffLabel" | "stage">): boolean {
+  const rule = STAGE_SEEDED_ROUND[game.sport];
+  if (rule) return game.stage != null && !rule.test(game.stage);
   const seeded = LADDER_SEEDED_ROUND[game.sport];
   if (!seeded || !game.isPlayoff) return false;
   return !seeded.test(game.playoffLabel ?? "");

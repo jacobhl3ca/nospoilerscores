@@ -2627,6 +2627,23 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     return seg;
   }
   const slug = (seasonSlug ?? "").toLowerCase().trim();
+  // MLS + NWSL playoffs (read 2026-10-03 off the 2025 playoffs): ESPN flags
+  // neither as postseason and the notes carry the series result ("X win series
+  // 2-0"), so the round lives only in season.slug: "eastern-conference-playoffs
+  // ---round-one", "mls-cup", "playoffs---semifinals" (NWSL). An unknown suffix
+  // still names the playoffs, so pairingMask covers it.
+  const conf = /^(eastern|western)-conference-playoffs---(.+)$/.exec(slug);
+  if (conf) {
+    const side = conf[1] === "eastern" ? "East" : "West";
+    const round: Record<string, string> = { "wild-card": "Wild Card", "round-one": "Round One", semifinals: "Semifinal", final: "Final" };
+    return `${side} ${round[conf[2]] ?? "Playoffs"}`;
+  }
+  if (slug === "mls-cup") return "MLS Cup";
+  const nwsl = /^playoffs---(.+)$/.exec(slug);
+  if (nwsl) {
+    const round: Record<string, string> = { quarterfinals: "Quarterfinal", semifinals: "Semifinal", championship: "Championship" };
+    return round[nwsl[1]] ?? "Playoffs";
+  }
   const slugMap: Record<string, string> = {
     "group-stage": "Group Stage",
     "round-of-32": "Round of 32",
