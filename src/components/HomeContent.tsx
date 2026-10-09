@@ -30,6 +30,8 @@ import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn, { mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
+import GameDetailModal from "@/components/GameDetailModal";
+import EventDetailModal from "@/components/EventDetailModal";
 import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, MLB_REVIEW_HIDDEN_KEY, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
@@ -55,11 +57,11 @@ import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
 import SupportLine from "@/components/SupportLine";
 
-// Modals that are closed on first paint load on first open, so their code is
-// not in the board's first-load bundle. VideoModal stays static: it starts
-// playback from the tap, and an async mount could lose the user gesture.
-const GameDetailModal = dynamic(() => import("@/components/GameDetailModal"));
-const EventDetailModal = dynamic(() => import("@/components/EventDetailModal"));
+// Rarely opened modals that are closed on first paint load on first open, so
+// their code is not in the board's first-load bundle. VideoModal and the
+// game/event detail sheets stay static: a card tap must open its sheet in the
+// same frame (focus and Escape go to it at once), and a video must start from
+// the tap's user gesture.
 const WorldCupGroupsModal = dynamic(() => import("@/components/WorldCupGroupsModal"));
 const SlamBracketModal = dynamic(() => import("@/components/SlamBracketModal"));
 const PlayoffPictureModal = dynamic(() => import("@/components/PlayoffPictureModal"));
