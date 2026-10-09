@@ -819,10 +819,11 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
           );
         return (
           <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
-            {/* PRE — an exhibition, not a game that counts. Only the NFL gets
-                here (every other sport's season.type 1 is filtered at the
-                fetch). Suppressed when the column header ALREADY says it: the
-                dedicated "NFL Preseason" column runs 07-21 → 09-03 and would
+            {/* PRE — an exhibition, not a game that counts. Only the NFL and
+                the NBA get here (every other sport's season.type 1 is filtered
+                at the fetch). Suppressed when the column header ALREADY says it:
+                the dedicated "NFL Preseason" column runs 07-21 → 09-03 (and
+                "NBA Preseason" 10-01 → 10-16) and would
                 otherwise repeat the word on all sixteen cards. What is left is
                 exactly the two places nothing else says it — a team's schedule,
                 where preseason, regular season and playoffs share one list, and
@@ -830,7 +831,11 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 the preseason window closed (on 2026-09-04 that is an Aug 29
                 exhibition sitting under a header reading plain "NFL").
                 Rides inside the existing flex-wrap meta row rather than taking a
-                banner row of its own, so it costs no card height. */}
+                banner row of its own, so it costs no card height.
+                A team's schedule always shows it (2026-10-09): opened from the
+                "NBA Preseason" column, the Knicks list carried that label, so
+                the suppression hid the chip on the 5 exhibitions sitting next
+                to the 82 games that count. */}
             {/* Left group: the league chip, the Pre chip and the time cell.
                 Ratings mode makes it ONE flex-1 cell, the twin of the network
                 cell, so the chips count toward the left share and the badge
@@ -858,7 +863,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 {leagueTag}
               </span>
             )}
-            {game.isPreseason && !/preseason/i.test(leagueLabel ?? "") && (
+            {game.isPreseason && (teamView || !/preseason/i.test(leagueLabel ?? "")) && (
               <span
                 className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
