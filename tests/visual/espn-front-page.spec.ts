@@ -366,14 +366,14 @@ test("Tomorrow has no front page yet: the slot shows its Auto league", async ({ 
 });
 
 // Turned off in Settings' switcher list: it leaves the switcher and a column
-// pinned to it shows a league instead, same as Best of yesterday.
-test("ESPN front page turned off: the pinned column shows a league and the switcher drops it", async ({ page }) => {
+// pinned to it closes (Jacob 10/8), same as Best of yesterday.
+test("ESPN front page turned off: the pinned column closes and the switcher drops it", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page, { hiddenLeagues: ["best", "top"] });
   await page.goto("/");
   await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('[data-league-column="top"]')).toHaveCount(0);
-  await expect(page.locator("[data-league-column]")).toHaveCount(3);
+  await expect(page.locator("[data-league-column]")).toHaveCount(2);
   await page.locator('button[title="Switch league"]').first().click();
   const menu = page.getByRole("dialog", { name: "Switch league" }).first();
   await expect(menu.getByRole("button", { name: "Auto" })).toBeVisible();

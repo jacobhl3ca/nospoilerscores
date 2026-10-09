@@ -376,6 +376,11 @@ export interface Preferences {
   // version means this prefs blob has either received the one-time legacy
   // preservation migration or was created after the new defaults launched.
   switcherDefaultsVersion?: 2;
+  // v1 stopped a column edit on a 3-column screen from leaving columns 4-5 on
+  // Auto, where a fullscreen window filled them with leagues the user never
+  // picked (Jacob 10/8). A saved version means the blob has had the one-time
+  // repair (closeUnseenAutoSlots in HomeContent) or was created after it.
+  wideSlotsVersion?: 1;
   // Hide the favorite-star next to team names on game cards (favoriting stays
   // available via the team-schedule view + settings picker).
   //
@@ -728,6 +733,7 @@ const defaults: Preferences = {
   newsColCount: 3,
   smartCutoffHour: 13,
   switcherDefaultsVersion: 2,
+  wideSlotsVersion: 1,
   // Reddit-only by default (2026-08-03, ahead of the Product Hunt launch).
   // Reddit is where the game-worth-watching discussion actually lives, and it
   // is the feed a first-time visitor should land on; ESPN/homepage/top-videos
@@ -761,6 +767,10 @@ export function loadPreferences(): Preferences {
     // before the first post-deploy save overwrites the blob.
     if (stored && !Object.prototype.hasOwnProperty.call(stored, "switcherDefaultsVersion")) {
       delete prefs.switcherDefaultsVersion;
+    }
+    // Same for the wide-slots repair marker.
+    if (stored && !Object.prototype.hasOwnProperty.call(stored, "wideSlotsVersion")) {
+      delete prefs.wideSlotsVersion;
     }
     // Push the chosen zone into the shared module so the data layer + UI agree
     // before the first fetch/render after a load.
