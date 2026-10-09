@@ -901,6 +901,35 @@ function aliasTeam(name: string): string {
   return TEAM_NAME_ALIASES[name] ?? name;
 }
 
+// The short club name some channels use, tried only after the long alias
+// missed. URC titles "Cardiff v Zebre Parma", so "Cardiff Rugby" found nothing
+// (2026-10-02). Mirrors HL_TEAM_SHORT_ALIASES in scripts/lib/hl-retry.mjs.
+const TEAM_NAME_SHORT_ALIASES: Record<string, string> = {
+  "Cardiff Blues": "Cardiff",
+};
+
+// [away, home] pairs to query, in order: as given, then the short aliases.
+export function highlightNamePairs(awayTeam: string, homeTeam: string): [string, string][] {
+  const away = TEAM_NAME_SHORT_ALIASES[awayTeam] ?? awayTeam;
+  const home = TEAM_NAME_SHORT_ALIASES[homeTeam] ?? homeTeam;
+  const pairs: [string, string][] = [[awayTeam, homeTeam]];
+  if (away !== awayTeam || home !== homeTeam) pairs.push([away, home]);
+  return pairs;
+}
+
+// The query date in the reader's zone, then the UTC date when it differs. A
+// US night game ends after midnight UTC and some channels title the recap by
+// the UTC day: WNBA "Aces vs Valkyries … October 8" for the 9:30 PM ET 10/7
+// game. Mirrors hlDateStrs in scripts/lib/hl-retry.mjs. An invalid date gives
+// [""] — the same degrade-safely token GameHighlights uses.
+export function highlightDateStrs(date: Date, timeZone: string): string[] {
+  if (isNaN(date.getTime())) return [""];
+  const fmt = (tz: string) => date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: tz });
+  const local = fmt(timeZone);
+  const utc = fmt("UTC");
+  return utc === local ? [local] : [local, utc];
+}
+
 // Little League World Series: ESPN names a team for its CITY plus a state or
 // country code — "Tacoma WA", "Leon NCA". ESPN's own recap titles use neither;
 // they name the state or the country outright ("Washington vs. Alabama | Full
@@ -1123,10 +1152,12 @@ export async function resolveTelemundoWorldCupVideo(
 // Resolve a per-game highlight against one exact uploader. There is no
 // unscoped tier: a missing channel or strict miss returns null and the caller
 // hides the button rather than serving a re-upload.
+// `dateStr` may be a list (highlightDateStrs). After a miss it retries each
+// date, then the short team names (highlightNamePairs).
 export async function resolveHighlightVideo(
   awayTeam: string,
   homeTeam: string,
-  dateStr: string,
+  dateStr: string | string[],
   seriesNote: string | null | undefined,
   channel?: string,
   exclude?: (string | null | undefined)[],
@@ -1136,7 +1167,12 @@ export async function resolveHighlightVideo(
   compTokens?: string[],
   gates?: HighlightMatchGates,
 ): Promise<string | null> {
-  const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
   if (!channel) return null;
-  return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true, undefined, weekNumber, compTokens, gates);
+  for (const [away, home] of highlightNamePairs(awayTeam, homeTeam)) {
+    for (const d of Array.isArray(dateStr) ? dateStr : [dateStr]) {
+      const id = await fetchFirstVideoId(buildQuery(away, home, d, seriesNote, competition), channel, exclude, preferExtended, true, undefined, weekNumber, compTokens, gates);
+      if (id) return id;
+    }
+  }
+  return null;
 }

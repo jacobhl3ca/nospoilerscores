@@ -23,6 +23,7 @@ import {
 } from "./lib/fotmob.mjs";
 import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
+import { HL_TEAM_SHORT_ALIASES, hlDateStrs, hlNamePairs, hlTypoWordIndex } from "./lib/hl-retry.mjs";
 import { pickEspnGameClip, attachEspnVideoClips, isEspnTalkKind } from "./lib/espn-clip.mjs";
 import { isRealEspnClip, mergeVideos, orderVideos } from "./lib/video-order.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
@@ -2972,6 +2973,7 @@ function hlTeamVariants(team) {
   return new Set([
     normalizedTeam,
     hlNormalizeTeam(hlAlias(team)),
+    hlNormalizeTeam(HL_TEAM_SHORT_ALIASES[team] ?? team),
     hlNormalizeTeam(hlTelemundoTeam(team)),
     ...(HL_TITLE_TEAM_ALIASES[normalizedTeam] ?? []),
     ...(HL_WORKER_TEAM_VARIANTS[normalizedTeam] ?? []),
@@ -3057,13 +3059,33 @@ async function hlVideoTitleRejected(id, channel, preseason) {
   return titleLacksHighlightWord(channel, meta?.title, preseason) ? meta.title : null;
 }
 
+// A one-letter misspelling of the team as a whole title word, or -1 (see
+// hlTypoWordIndex). Only used when the other team matched exactly.
+function hlTeamTypoIndex(title, team) {
+  const variants = hlTeamVariants(team);
+  const t = hlTitleForTeam(title, variants);
+  let best = -1;
+  for (const v of variants) {
+    const i = hlTypoWordIndex(t, v);
+    if (i >= 0 && (best < 0 || i < best)) best = i;
+  }
+  return best;
+}
+
 async function hlVideoMatchesTeams(id, away, home, homeFirst = false) {
   const meta = await hlOembedMeta(id);
-  if (!meta?.title || !hlTitleHasTeam(meta.title, away) || !hlTitleHasTeam(meta.title, home)) return false;
+  if (!meta?.title) return false;
+  const exactAway = hlTitleHasTeam(meta.title, away);
+  const exactHome = hlTitleHasTeam(meta.title, home);
+  if (!exactAway && !exactHome) return false;
+  // One team named exactly, the other one letter off ("Estonia vs Lexemburgo").
+  const typoAway = exactAway ? -1 : hlTeamTypoIndex(meta.title, away);
+  const typoHome = exactHome ? -1 : hlTeamTypoIndex(meta.title, home);
+  if ((!exactAway && typoAway < 0) || (!exactHome && typoHome < 0)) return false;
   if (!homeFirst) return true;
   // HL_MATCH_GATES: the home team must be named first, else it is the other leg.
-  const homeAt = hlTeamTitleIndex(meta.title, home);
-  const awayAt = hlTeamTitleIndex(meta.title, away);
+  const homeAt = exactHome ? hlTeamTitleIndex(meta.title, home) : typoHome;
+  const awayAt = exactAway ? hlTeamTitleIndex(meta.title, away) : typoAway;
   return homeAt >= 0 && awayAt >= 0 && homeAt < awayAt;
 }
 
@@ -3178,10 +3200,17 @@ async function hlIsTelemundoVideo(id) {
 
 // Mirror resolveHighlightVideo: one dated query, one exact uploader, no
 // unscoped retry tier.
+// `dateStr` may be a list (hlDateStrs). After a miss it retries each date, then
+// the short team names (hlNamePairs) — see scripts/lib/hl-retry.mjs.
 async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended, week, compTokens, gates) {
-  const dated = hlQuery(away, home, dateStr, series, competition, true);
   if (!channel) return null;
-  return hlFetchId(dated, { channel, exclude, preferExtended, strict: true, week, compTokens, gates });
+  for (const [a, h] of hlNamePairs(away, home)) {
+    for (const d of Array.isArray(dateStr) ? dateStr : [dateStr]) {
+      const id = await hlFetchId(hlQuery(a, h, d, series, competition, true), { channel, exclude, preferExtended, strict: true, week, compTokens, gates });
+      if (id) return id;
+    }
+  }
+  return null;
 }
 
 async function hlResolveTelemundoWorldCup(away, home, dateStr, series, exclude, preferExtended) {
@@ -3897,6 +3926,7 @@ async function bakeGameHighlights() {
           prev = {};
         }
         const dateStr = hlDateStr(item.date);
+        const dateStrs = hlDateStrs(item.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
         const compTokens = preseason ? HL_NFL_PRESEASON_TOKENS : (cflPlayoff ?? HL_COMPETITION_TOKENS[lg.sport] ?? null);
         // The official slot's tokens: the chain-primary channel's own list when
@@ -3963,7 +3993,7 @@ async function bakeGameHighlights() {
         let official = prevOfficial ?? null;
         if (!official) {
           officialChannel = primaryChannel;
-          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, primaryTokens, gates);
+          official = await hlResolve(away, home, dateStrs, series, primaryChannel, undefined, competition, false, week, primaryTokens, gates);
           if (official && (!(await teamsOk(official)) || !(await hlVideoMatchesWeek(official, week, cflWeekRequired)) || !(await hlVideoMatchesComp(official, primaryTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
@@ -3977,7 +4007,7 @@ async function bakeGameHighlights() {
           for (const fb of official ? [] : fallbacks) {
             if (fb.searchOnly) continue;
             const tokens = officialTokensFor(fb);
-            const id = await hlResolve(away, home, dateStr, series, fb.channel, undefined, competition, false, week, tokens, gates);
+            const id = await hlResolve(away, home, dateStrs, series, fb.channel, undefined, competition, false, week, tokens, gates);
             if (!id) continue;
             if (!(await teamsOk(id)) || !(await hlVideoMatchesWeek(id, week, cflWeekRequired)) || !(await hlVideoMatchesComp(id, tokens))) {
               console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home})`);
@@ -4031,9 +4061,9 @@ async function bakeGameHighlights() {
         if (prevExtended && prevExtended === official) prevExtended = null;
         let extended = prevExtended ?? null;
         if (!extended) {
-          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, week, compTokens, gates);
+          extended = await hlResolve(away, home, dateStrs, series, secondaryChannel, undefined, competition, preferExtended, week, compTokens, gates);
           if (extended && official && extended === official) {
-            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, week, compTokens, gates);
+            extended = await hlResolve(away, home, dateStrs, series, secondaryChannel, [official], competition, preferExtended, week, compTokens, gates);
           }
           if (extended && (!(await teamsOk(extended)) || !(await hlVideoMatchesWeek(extended, week, cflWeekRequired)) || !(await hlVideoMatchesComp(extended, compTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home})`);
