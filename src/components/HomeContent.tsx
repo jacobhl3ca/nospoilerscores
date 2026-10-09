@@ -2534,9 +2534,9 @@ export default function HomeContent({
   const ALL_NEWS_SOURCE_TYPES: NewsSourceType[] = ["topvideos", "reddit", "espn", "homepage"];
   // Cards / Feed / ESPN (the toolbar pill). Old blobs carry only newsFeedView.
   const newsLayout: NewsLayout = newsLayoutOf(prefs);
-  // ESPN layout Autoplay pill: muted clips play while on screen. Unset = on
-  // in Big, off in the 2-column view.
-  const espnAutoplay = prefs.newsEspnAutoplay ?? !!prefs.newsEspnBig;
+  // News Autoplay pill (every layout): the video most in focus plays muted.
+  // Unset = on only in the ESPN layout's Big mode.
+  const newsAutoplay = prefs.newsAutoplay ?? (newsLayout === "espn" && !!prefs.newsEspnBig);
   const legacyNewsTypeFilter = prefs.newsTypeFilter ?? "reddit";
   const savedNewsTypeFilters = prefs.newsTypeFilters?.filter(
     (value): value is NewsSourceType => ALL_NEWS_SOURCE_TYPES.includes(value as NewsSourceType),
@@ -2745,7 +2745,7 @@ export default function HomeContent({
   useNewsSeenTracker(mainRef, showNews && prefsHydrated);
   const [seenSnapshot, setSeenSnapshot] = useState<Set<string>>(() => new Set());
   const seenSnapshotTrigger = [
-    showNews, prefs.newsHideSeen, newsLayout, prefs.newsEspnBig, espnAutoplay, newsTypeFilters.join(","), newsRefreshKey,
+    showNews, prefs.newsHideSeen, newsLayout, prefs.newsEspnBig, newsTypeFilters.join(","), newsRefreshKey,
     prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague,
     prefs.newsThirdLeague, prefs.newsTopNews, prefs.newsFocusLeague, prefs.newsSingleColumn,
     prefs.newsVideosOnly, prefs.showTextPosts, prefs.hideSensitiveNews, prefs.hideCrashNews,
@@ -3521,17 +3521,15 @@ export default function HomeContent({
                 <span>Big</span>
               </NewsToggleChip>
             )}
-            {newsLayout === "espn" && (
-              <NewsToggleChip
-                active={espnAutoplay}
-                onClick={() => updatePrefs({ newsEspnAutoplay: !espnAutoplay })}
-                title="Play ESPN clips muted while they are on screen"
-                ariaLabel="Toggle ESPN autoplay"
-              >
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
-                <span>Autoplay</span>
-              </NewsToggleChip>
-            )}
+            <NewsToggleChip
+              active={newsAutoplay}
+              onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
+              title="Play the video in focus, muted. Tap it for sound."
+              ariaLabel="Toggle news autoplay"
+            >
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
+              <span>Autoplay</span>
+            </NewsToggleChip>
             <NewsToggleChip
               active={!!prefs.revealNewsTitles}
               onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
@@ -4234,7 +4232,7 @@ export default function HomeContent({
             const columnProps = {
               hideTitle: true,
               hugRows: true,
-              autoplayVideos: espnAutoplay,
+              autoplayVideos: newsAutoplay,
               onPlayVideo: playNewsVideo,
               videosOnly: !!prefs.newsVideosOnly,
               showTextPosts: !!prefs.showTextPosts,
@@ -4332,6 +4330,7 @@ export default function HomeContent({
                 oldestFirst={!!prefs.newsOldestFirst}
                 hiddenCategories={hiddenNewsCategories}
                 hideSeenKeys={hideSeenKeys}
+                autoplay={newsAutoplay}
                 onSeenHiddenCount={reportSeenHidden}
               />
             );
@@ -4388,6 +4387,7 @@ export default function HomeContent({
                     hiddenCategories={hiddenNewsCategories}
                     oldestFirst={!!prefs.newsOldestFirst}
                     hideSeenKeys={hideSeenKeys}
+                    autoplay={newsAutoplay}
                     onSeenHiddenCount={reportSeenHidden}
                   />
                 </>
@@ -4416,6 +4416,7 @@ export default function HomeContent({
                     oldestFirst={!!prefs.newsOldestFirst}
                     hiddenCategories={hiddenNewsCategories}
                     hideSeenKeys={hideSeenKeys}
+                    autoplayVideos={newsAutoplay}
                     onSeenHiddenCount={reportSeenHidden}
                   />
                 ) : renderedEntries.map((entry, idx) => {
@@ -4446,6 +4447,7 @@ export default function HomeContent({
                       oldestFirst={!!prefs.newsOldestFirst}
                       hiddenCategories={hiddenNewsCategories}
                       hideSeenKeys={hideSeenKeys}
+                      autoplayVideos={newsAutoplay}
                       onSeenHiddenCount={reportSeenHidden}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).

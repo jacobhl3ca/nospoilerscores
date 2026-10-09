@@ -930,7 +930,7 @@ export default function SettingsPanel({
     newsFeedView: undefined,
     newsLayout: undefined,
     newsEspnBig: undefined,
-    newsEspnAutoplay: undefined,
+    newsAutoplay: undefined,
     newsVideosOnly: undefined,
     newsOldestFirst: undefined,
     newsHideSeen: undefined,

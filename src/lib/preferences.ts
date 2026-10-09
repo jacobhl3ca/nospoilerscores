@@ -623,9 +623,10 @@ export interface Preferences {
   // ESPN layout only: "Big" = one wide column of large video cards, headlines
   // and subreddits under it. Default false.
   newsEspnBig?: boolean;
-  // ESPN layout only: clips play muted while on screen (the Autoplay pill).
-  // Undefined = follow Big (on in Big, off in the 2-column view).
-  newsEspnAutoplay?: boolean;
+  // News Autoplay pill, every layout (Jacob 10/8): the video most in focus
+  // plays muted (components/InlineVideoCard). Undefined = on only in the ESPN
+  // layout's Big mode, off in Cards, Feed and the ESPN 2-column view.
+  newsAutoplay?: boolean;
   // News "Videos only" quick filter: true = show only clip-bearing items. It is
   // ITEM-level on every surface (Cards, Feed, the aligned strip's ESPN tail) —
   // a Reddit v.redd.it post counts, a headline-only post never does — via

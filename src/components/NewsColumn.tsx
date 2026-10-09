@@ -173,8 +173,8 @@ interface NewsColumnProps {
   // Video sources render as large cards (InlineVideoCard) — the ESPN
   // layout's "Big" mode.
   bigVideos?: boolean;
-  // Video cards play muted while on screen (InlineVideoCard), in any width —
-  // the ESPN layout's Autoplay pill.
+  // Video cards play muted while in focus (InlineVideoCard) — the news
+  // toolbar's Autoplay pill.
   autoplayVideos?: boolean;
   // Text rows hug their content (thumb + headline) instead of the 7rem floor
   // that lines rows up across side-by-side Cards columns. The ESPN layout has
@@ -1004,10 +1004,8 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-// The ESPN layout's video card when Big or Autoplay is on: one InlineVideoCard
-// per clip. With autoplay, only the first AUTOPLAY_CAP cards play, to cap data
-// use; the rest keep a still thumbnail that opens the modal.
-const AUTOPLAY_CAP = 8;
+// A video source card when Big or Autoplay is on: one InlineVideoCard per
+// clip. With Autoplay, the clip most in focus plays muted (InlineVideoCard).
 function InlineVideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex, autoplay, large }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null; autoplay: boolean; large: boolean }) {
   if (loading || items.length === 0) {
     return <VideoSourceCard label={label} logoUrl={logoUrl} items={items} loading={loading} onPlay={onPlay} siblings={siblings} baseIndex={baseIndex} />;
@@ -1021,7 +1019,7 @@ function InlineVideoSourceCard({ label, logoUrl, items, loading, onPlay, sibling
           <div key={item.id} style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)" }}>
             <InlineVideoCard
               item={item}
-              autoplay={autoplay && idx < AUTOPLAY_CAP}
+              autoplay={autoplay}
               large={large}
               ariaLabel={`Play highlight: ${item.headline}`}
               onOpen={() => {

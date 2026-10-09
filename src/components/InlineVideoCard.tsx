@@ -3,22 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 
-// One 16:9 news clip that plays MUTED while it is on screen (the ESPN
-// layout's Autoplay pill, Jacob 10/8). ≥ 60% visible starts it, < 40% pauses it,
-// and only one card in the page plays at a time. A tap opens the shared modal
-// with sound, the same as every other news card. No autoplay when the user
-// asks for reduced motion, when `autoplay` is false (cards past the first 8,
-// to cap data use), or when the item has no direct media URL (YouTube-only):
-// those keep the plain thumbnail + play button.
+// News Autoplay (Jacob 10/8: "autoplay is for videos in the feed when they're
+// in focus"). With the toolbar's Autoplay pill on, the ONE clip most in focus
+// plays muted: among clips at least 60% visible, the one whose center is
+// closest to the viewport center. Every other clip pauses, and scrolling hands
+// play to the next one. A tap still opens the shared modal with sound. No
+// autoplay under prefers-reduced-motion, and none for an item with no direct
+// media URL (YouTube-only), which keeps its thumbnail.
+//
+// <AutoplayVideo> is a <video> layer that fills its parent media box, so each
+// surface (ESPN cards, the Cards strip and video cards, Feed posts) keeps its
+// own thumbnail and play badge and only adds this layer. It must be a DIRECT
+// child of the .news-media-preview box: the Media blur rule
+// (`.news-media-preview > *`) then blurs the playing frames too.
 
-// The card playing right now, page-wide. A new card that starts pauses it.
-let activeVideo: HTMLVideoElement | null = null;
-
-const START_RATIO = 0.6;
-// 16:9 width whose height = the viewport under the app header and news
-// toolbar, minus ~7rem for the card header and the clip's headline.
-const BIG_MAX_WIDTH = "calc((100svh - var(--header-h, 0px) - var(--news-toolbar-h, 0px) - 7rem) * 16 / 9)";
-const STOP_RATIO = 0.4;
+const MIN_RATIO = 0.6;
 
 export function inlineMediaUrl(item: NewsItem): string | null {
   return item.playbackUrl || item.videoUrl || null;
@@ -30,32 +29,92 @@ function prefersReducedMotion(): boolean {
     && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export default function InlineVideoCard({ item, autoplay, large = true, onOpen, ariaLabel }: {
+// ── Page-wide focus coordinator ─────────────────────────────────────────────
+interface Entry {
+  el: HTMLElement;
+  ratio: number;
+  start: () => void;
+  stop: () => void;
+}
+const entries = new Map<Element, Entry>();
+let current: Entry | null = null;
+let io: IntersectionObserver | null = null;
+let frame = 0;
+
+function pickFocused() {
+  frame = 0;
+  const mid = window.innerHeight / 2;
+  let best: Entry | null = null;
+  let bestDist = Infinity;
+  for (const e of entries.values()) {
+    if (e.ratio < MIN_RATIO) continue;
+    const r = e.el.getBoundingClientRect();
+    const dist = Math.abs(r.top + r.height / 2 - mid);
+    if (dist < bestDist) { best = e; bestDist = dist; }
+  }
+  if (best === current) return;
+  current?.stop();
+  current = best;
+  best?.start();
+}
+function schedule() {
+  if (!frame) frame = requestAnimationFrame(pickFocused);
+}
+
+function register(entry: Entry) {
+  if (!io) {
+    io = new IntersectionObserver((records) => {
+      for (const rec of records) {
+        const e = entries.get(rec.target);
+        if (e) e.ratio = rec.intersectionRatio;
+      }
+      schedule();
+    }, { threshold: [0, 0.2, 0.4, 0.6, 0.8, 1] });
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+  }
+  entries.set(entry.el, entry);
+  io.observe(entry.el);
+}
+function unregister(entry: Entry) {
+  if (entries.get(entry.el) !== entry) return;
+  entries.delete(entry.el);
+  io?.unobserve(entry.el);
+  if (current === entry) { current = null; entry.stop(); schedule(); }
+  if (entries.size === 0 && io) {
+    io.disconnect();
+    io = null;
+    window.removeEventListener("scroll", schedule);
+    window.removeEventListener("resize", schedule);
+  }
+}
+
+// ── The video layer ─────────────────────────────────────────────────────────
+// Fills its (position: relative) parent. Shown only while it plays, so the
+// parent's thumbnail is what sits there otherwise.
+export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }: {
   item: NewsItem;
-  autoplay: boolean;
-  // Big mode: larger headline. Off = the regular column's text-sm headline.
-  large?: boolean;
-  onOpen: () => void;
-  ariaLabel: string;
+  enabled: boolean;
+  fit?: "cover" | "contain";
+  onPlayingChange?: (playing: boolean) => void;
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const src = inlineMediaUrl(item);
-  const canAutoplay = autoplay && !!src;
+  const active = enabled && !!src;
+
+  useEffect(() => { onPlayingChange?.(playing); }, [playing, onPlayingChange]);
 
   useEffect(() => {
-    const wrap = wrapRef.current;
     const video = videoRef.current;
-    if (!canAutoplay || !wrap || !video || !src || prefersReducedMotion()) return;
+    if (!active || !video || !src || prefersReducedMotion()) return;
     if (typeof IntersectionObserver === "undefined") return;
     let hls: { destroy: () => void } | null = null;
     let attached = false;
     let cancelled = false;
 
-    // Attach the source on the first start only, so a card that never
-    // scrolls into view never fetches a byte (preload="none" alone still
-    // lets some browsers fetch metadata once src is set).
+    // Attach the source on the first start only, so a clip that never comes
+    // into focus never fetches a byte.
     const attach = async () => {
       if (attached) return;
       attached = true;
@@ -64,6 +123,8 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
         const { default: Hls } = await import("hls.js");
         if (cancelled || !Hls.isSupported()) return;
         const h = new Hls();
+        // A pulled clip: give up quietly, the thumbnail stays.
+        h.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) h.destroy(); });
         h.loadSource(src);
         h.attachMedia(video);
         hls = h;
@@ -71,37 +132,64 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
         video.src = src;
       }
     };
-    const start = async () => {
-      await attach();
-      if (cancelled) return;
-      if (activeVideo && activeVideo !== video) activeVideo.pause();
-      activeVideo = video;
-      video.muted = true;
-      video.play().catch(() => { /* autoplay refused: the thumbnail stays */ });
+    const entry: Entry = {
+      el: video,
+      ratio: 0,
+      start: () => {
+        void attach().then(() => {
+          if (cancelled || current !== entry) return;
+          video.muted = true;
+          video.play().catch(() => { /* autoplay refused: the thumbnail stays */ });
+        });
+      },
+      stop: () => { if (!video.paused) video.pause(); },
     };
-    const stop = () => {
-      if (!video.paused) video.pause();
-      if (activeVideo === video) activeVideo = null;
-    };
-
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) {
-        if (e.intersectionRatio >= START_RATIO) void start();
-        else if (e.intersectionRatio < STOP_RATIO) stop();
-      }
-    }, { threshold: [0, STOP_RATIO, START_RATIO, 1] });
-    io.observe(wrap);
+    register(entry);
     return () => {
       cancelled = true;
-      io.disconnect();
-      stop();
+      unregister(entry);
       hls?.destroy();
     };
-  }, [canAutoplay, src]);
+  }, [active, src]);
 
-  const open = () => {
-    const video = videoRef.current;
-    if (video && !video.paused) video.pause();
+  if (!active) return null;
+  return (
+    <video
+      ref={videoRef}
+      muted
+      playsInline
+      loop
+      preload="none"
+      className={`absolute inset-0 w-full h-full ${fit === "contain" ? "object-contain bg-black" : "object-cover"}`}
+      style={{ opacity: playing ? 1 : 0, transition: "opacity 200ms" }}
+      onPlaying={() => setPlaying(true)}
+      onPause={() => setPlaying(false)}
+      aria-hidden="true"
+      tabIndex={-1}
+      data-autoplay-video=""
+    />
+  );
+}
+
+// 16:9 width whose height = the viewport under the app header and news
+// toolbar, minus ~7rem for the card header and the clip's headline.
+const BIG_MAX_WIDTH = "calc((100svh - var(--header-h, 0px) - var(--news-toolbar-h, 0px) - 7rem) * 16 / 9)";
+
+// One 16:9 clip card for the ESPN layout (and any video source card while
+// Autoplay is on): thumbnail + AutoplayVideo layer + headline.
+export default function InlineVideoCard({ item, autoplay, large = true, onOpen, ariaLabel }: {
+  item: NewsItem;
+  autoplay: boolean;
+  // Big mode: larger headline and a clip capped to fit the screen.
+  large?: boolean;
+  onOpen: () => void;
+  ariaLabel: string;
+}) {
+  const [playing, setPlaying] = useState(false);
+  const canAutoplay = autoplay && !!inlineMediaUrl(item);
+
+  const open = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.querySelector("video")?.pause();
     onOpen();
   };
 
@@ -118,7 +206,6 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
           header, toolbar and card header (Jacob 10/8). Width follows from the
           height cap so the box stays 16:9, centered in the card. */}
       <div
-        ref={wrapRef}
         className="news-media-preview relative w-full aspect-video overflow-hidden mx-auto"
         style={{
           background: "var(--bg-card-hover)",
@@ -137,21 +224,7 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
             onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
         )}
-        {canAutoplay && (
-          <video
-            ref={videoRef}
-            muted
-            playsInline
-            loop
-            preload="none"
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{ opacity: playing ? 1 : 0, transition: "opacity 200ms" }}
-            onPlaying={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            aria-hidden="true"
-            tabIndex={-1}
-          />
-        )}
+        <AutoplayVideo item={item} enabled={canAutoplay} onPlayingChange={setPlaying} />
         {!playing && (
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
@@ -162,16 +235,20 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
             </div>
           </div>
         )}
-        {playing && (
-          // Muted-autoplay cue: tap for sound in the modal.
-          <span className="absolute right-2 bottom-2 rounded px-1.5 py-0.5 text-[11px] font-semibold pointer-events-none" style={{ background: "rgba(0,0,0,0.6)", color: "white" }}>
-            Tap for sound
-          </span>
-        )}
+        {playing && <TapForSound />}
       </div>
       <div className={`news-title px-3 leading-snug line-clamp-3 ${large ? "py-2.5 text-base" : "py-2 text-sm"}`} style={{ color: "var(--text)" }}>
         {item.headline}
       </div>
     </button>
+  );
+}
+
+// Muted-autoplay cue: a tap opens the modal with sound.
+export function TapForSound() {
+  return (
+    <span className="absolute right-2 bottom-2 rounded px-1.5 py-0.5 text-[11px] font-semibold pointer-events-none" style={{ background: "rgba(0,0,0,0.6)", color: "white" }}>
+      Tap for sound
+    </span>
   );
 }

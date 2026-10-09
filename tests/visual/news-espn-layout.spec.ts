@@ -57,7 +57,10 @@ function itemsFor(name: string) {
     articleUrl: `https://example.com/${name}/${i}`,
     byline: "",
     section: name.startsWith("reddit-") ? `r/${name.slice(7)}` : "ESPN",
-    ...(name === "espn-videos" ? { playbackUrl: `https://clips.example.test/${i}.webm` } : {}),
+    // Every *-videos item is a clip; in a subreddit every 2nd post is one
+    // (post 2, 4, 6), like a v.redd.it clip in a mostly-text feed.
+    ...(name.endsWith("-videos") || (name.startsWith("reddit-") && i % 2 === 1)
+      ? { playbackUrl: `https://clips.example.test/${name}-${i}.webm` } : {}),
   }));
 }
 
@@ -166,20 +169,32 @@ test("an old blob with only newsFeedView: true still opens Feed", async ({ page 
 });
 
 // ── Phase 2: Big ─────────────────────────────────────────────────────────
+// Indexes of the ESPN clip cards whose video is playing.
 const playing = (page: Page) => page.evaluate(() =>
-  Array.from(document.querySelectorAll<HTMLVideoElement>("[data-inline-video] video"))
-    .map((v, i) => (!v.paused ? i : -1)).filter((i) => i >= 0));
+  Array.from(document.querySelectorAll("[data-inline-video]"))
+    .map((card, i) => { const v = card.querySelector("video"); return v && !v.paused ? i : -1; })
+    .filter((i) => i >= 0));
+// data-news-key of every post/card whose autoplay video is playing, page-wide.
+const playingKeys = (page: Page) => page.evaluate(() =>
+  Array.from(document.querySelectorAll<HTMLVideoElement>("video[data-autoplay-video]"))
+    .filter((v) => !v.paused)
+    .map((v) => v.closest("[data-news-key]")?.getAttribute("data-news-key") ?? "?"));
+// Distance of the playing video's center from the viewport center.
+const playingOffCenter = (page: Page) => page.evaluate(() => {
+  const v = Array.from(document.querySelectorAll<HTMLVideoElement>("video[data-autoplay-video]")).find((x) => !x.paused);
+  if (!v) return Infinity;
+  const r = v.getBoundingClientRect();
+  return Math.abs(r.top + r.height / 2 - window.innerHeight / 2);
+});
 
 test("Big: a clip starts muted on screen, pauses off screen, only one plays", async ({ page }) => {
   await gotoNews(page, { newsLayout: "espn", newsEspnBig: true });
   const cards = page.locator('[data-inline-video="auto"]');
   await expect(cards.first()).toBeVisible(LOAD);
-  // First 8 autoplay, the rest are stills.
-  await expect(cards).toHaveCount(8);
-  await expect(page.locator('[data-inline-video="still"]')).toHaveCount(2);
+  // Every clip can autoplay; only the one in focus does.
+  await expect(cards).toHaveCount(10);
 
-  await cards.nth(2).scrollIntoViewIfNeeded();
-  await page.evaluate(() => window.scrollBy(0, 0));
+  await cards.nth(2).evaluate((el) => el.scrollIntoView({ block: "center" }));
   await expect.poll(() => playing(page), { timeout: 1500 }).toEqual([2]);
   expect(await page.locator("[data-inline-video] video").nth(2).evaluate((v: HTMLVideoElement) => v.muted)).toBe(true);
 
@@ -204,7 +219,7 @@ test("Big: reduced motion turns autoplay off", async ({ page }) => {
 });
 
 // ── Round 2 (Jacob 10/8, after the first staging look) ──────────────────
-const autoplayChip = (page: Page) => page.getByRole("button", { name: "Toggle ESPN autoplay" });
+const autoplayChip = (page: Page) => page.getByRole("button", { name: "Toggle news autoplay" });
 
 test("Autoplay pill: off by default in 2 columns, on plays clips there, persists", async ({ page }) => {
   await gotoNews(page, { newsLayout: "espn" });
@@ -212,9 +227,9 @@ test("Autoplay pill: off by default in 2 columns, on plays clips there, persists
   await expect(page.locator('[data-inline-video="auto"]')).toHaveCount(0);
   await autoplayChip(page).click();
   await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "true");
-  expect((await saved(page)).newsEspnAutoplay).toBe(true);
+  expect((await saved(page)).newsAutoplay).toBe(true);
   const cards = page.locator('[data-inline-video="auto"]');
-  await expect(cards).toHaveCount(8, LOAD);
+  await expect(cards).toHaveCount(10, LOAD);
   await cards.nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
   // 2-column clips are short, so a neighbour can be >= 60% visible too: the
   // rule is exactly one playing, near the centred card.
@@ -227,7 +242,7 @@ test("Autoplay pill: off by default in 2 columns, on plays clips there, persists
 });
 
 test("Autoplay pill off in Big: big stills, nothing plays", async ({ page }) => {
-  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true, newsEspnAutoplay: false });
+  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true, newsAutoplay: false });
   await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "false", LOAD);
   const stills = page.locator('[data-inline-video="still"]');
   await expect(stills).toHaveCount(10, LOAD);
@@ -266,4 +281,56 @@ test("Big at 1280x800: the first clip starts within 200px of the toolbar", async
   expect(clip!.y - (toolbar!.y + toolbar!.height)).toBeLessThan(200);
   // The first clip and its headline fit in the viewport.
   expect(clip!.y + clip!.height).toBeLessThanOrEqual(800);
+});
+
+// ── Round 3 (Jacob 8:41 PM): Autoplay in every layout ───────────────────
+test("Feed: Autoplay off by default; on, exactly one video post plays and scrolling moves play on", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
+  await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "false", LOAD);
+  const videoPosts = page.locator("article[data-news-key]:has(video[data-autoplay-video])");
+  await expect(page.locator("article[data-news-key]").first()).toBeVisible(LOAD);
+  await expect(videoPosts).toHaveCount(0);
+
+  await autoplayChip(page).click();
+  await expect(videoPosts.nth(3)).toBeAttached(LOAD);
+  await videoPosts.nth(1).evaluate((el) => el.querySelector("video")!.scrollIntoView({ block: "center" }));
+  const first = await videoPosts.nth(1).getAttribute("data-news-key");
+  await expect.poll(() => playingKeys(page), { timeout: 2000 }).toEqual([first]);
+  expect(await playingOffCenter(page)).toBeLessThan(100);
+
+  await videoPosts.nth(3).evaluate((el) => el.querySelector("video")!.scrollIntoView({ block: "center" }));
+  const next = await videoPosts.nth(3).getAttribute("data-news-key");
+  await expect.poll(() => playingKeys(page), { timeout: 2000 }).toEqual([next]);
+});
+
+test("Cards: Autoplay off by default; on, exactly one clip plays and scrolling moves play on", async ({ page }) => {
+  // Videos + Reddit in the funnel, so the league columns carry their video cards.
+  await gotoNews(page, { newsTypeFilters: ["reddit", "topvideos"] });
+  await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "false", LOAD);
+  await expect(page.locator('button[aria-label^="Play highlight:"]').first()).toBeVisible(LOAD);
+  await expect(page.locator("video[data-autoplay-video]")).toHaveCount(0);
+
+  await autoplayChip(page).click();
+  const clips = page.locator("video[data-autoplay-video]");
+  await expect(clips.nth(4)).toBeAttached(LOAD);
+  await clips.nth(1).scrollIntoViewIfNeeded();
+  await clips.nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
+  const before = (await playingKeys(page))[0];
+  expect(await playingOffCenter(page)).toBeLessThan(100);
+
+  await clips.last().evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(async () => {
+    const keys = await playingKeys(page);
+    return keys.length === 1 && keys[0] !== before;
+  }, { timeout: 2000 }).toBe(true);
+  expect(await playingOffCenter(page)).toBeLessThan(100);
+});
+
+test("Media blur stays over a playing clip", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true });
+  await page.locator("[data-inline-video]").nth(1).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([1]);
+  const filter = await page.locator("[data-inline-video]").nth(1).locator("video").evaluate((v) => getComputedStyle(v).filter);
+  expect(filter).toContain("blur");
 });
