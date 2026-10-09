@@ -44,8 +44,68 @@ function edgeCachePut(ctx, keyUrl, res) {
   ctx.waitUntil(caches.default.put(new Request(keyUrl, { method: "GET" }), res.clone()).catch(() => {}));
 }
 
-// /api/boxing upstream refresh interval (see the route).
+// /api/boxing upstream refresh interval and failure backoff (see the route).
 const BOXING_SNAPSHOT_MS = 8 * 60 * 60 * 1000;
+const BOXING_LEASE_MS = 2 * 60 * 1000;          // one isolate owns a refresh
+const BOXING_RETRY_MS = 60 * 60 * 1000;         // after a failed upstream call
+const BOXING_RETRY_429_MS = 12 * 60 * 60 * 1000; // after a 429 (quota spent)
+const BOXING_SNAP_KEY = "cache/boxing-schedule.json";
+// In-isolate single flight: concurrent requests share one refresh promise.
+let boxingRefresh = null;
+
+// One upstream call for the boxing schedule. Before the call, claim a lease
+// in the R2 snapshot (`retryAt`) with a conditional put on the etag we read,
+// so only one isolate wins; the others keep serving the stale copy (the very
+// first fetch, with no snapshot yet, claims without a condition). After the
+// call, write either the new events or a backoff `retryAt`. Resolves to the
+// new events, or null when the caller should serve the stale copy.
+async function refreshBoxing(env, obj, snap) {
+  const base = { fetchedAt: Number(snap?.fetchedAt) || 0, events: Array.isArray(snap?.events) ? snap.events : [] };
+  const write = (body, onlyIf) => env.DATA
+    ? env.DATA.put(BOXING_SNAP_KEY, JSON.stringify(body),
+      { httpMetadata: { contentType: "application/json" }, ...(onlyIf ? { onlyIf } : {}) })
+    : null;
+  if (env.DATA) {
+    try {
+      const claimed = await write({ ...base, retryAt: Date.now() + BOXING_LEASE_MS },
+        obj?.etag ? { etagMatches: obj.etag } : null);
+      if (obj?.etag && !claimed) return null; // another isolate holds the lease
+    } catch { return null; }
+  }
+  const backoff = async (ms) => { try { await write({ ...base, retryAt: Date.now() + ms }); } catch { /* lease expires */ } return null; };
+  try {
+    const host = "boxing-data-api.p.rapidapi.com";
+    const res = await fetch(`https://${host}/v2/events/schedule`, {
+      headers: {
+        "x-rapidapi-host": host,
+        "x-rapidapi-key": env.BOXING_API_KEY,
+        "Content-Type": "application/json",
+      },
+    });
+    // A 429 here means the month's 100 requests are spent. Serve the stale
+    // copy (or empty) and let the column fall back rather than surfacing an
+    // error to the user.
+    if (!res.ok) return backoff(res.status === 429 ? BOXING_RETRY_429_MS : BOXING_RETRY_MS);
+    const data = await res.json();
+    const events = (data?.data || []).map((e) => ({
+      id: String(e.id || ""),
+      title: String(e.title || ""),
+      date: e.date || null,
+      venue: e.venue || null,
+      location: e.location || null,
+      // `broadcast` is per-country: [{country, broadcasters:[...]}]. Keep
+      // only the US/UK rows — those are the ones Jacob can actually watch.
+      broadcasts: (e.broadcast || [])
+        .filter((b) => ["United States", "United Kingdom"].includes(b?.country))
+        .flatMap((b) => b?.broadcasters || []),
+      poster: e.poster_image_url || null,
+    })).filter((e) => e.id && e.title && e.date);
+    try { await write({ fetchedAt: Date.now(), events }); } catch { /* serve anyway */ }
+    return events;
+  } catch {
+    return backoff(BOXING_RETRY_MS);
+  }
+}
 
 // HTMLRewriter element handler — overwrite one attribute on a <meta> tag.
 class AttrSetter {
@@ -3586,53 +3646,28 @@ export default {
       if (!env.BOXING_API_KEY) return corsJson({ events: [], disabled: true }, 200, 300);
       // 100 calls a month cannot ride on per-browser max-age: every new
       // visitor (or any crawler) would spend one. Keep ONE global copy in R2
-      // and ask upstream at most every BOXING_SNAPSHOT_MS (8 h ≈ 90 calls a
-      // month). On an upstream failure, serve the last good copy if any.
-      const snapKey = "cache/boxing-schedule.json";
+      // and ask upstream at most once per BOXING_SNAPSHOT_MS (8 h, ≤ 93 calls
+      // in a 31-day month) while upstream answers. Only one request refreshes
+      // at a time (in-isolate promise + R2 lease); the others get the stale
+      // copy. After a failure, no retry for BOXING_RETRY_MS (12 h after a 429).
+      let obj = null;
       let snap = null;
       try {
-        const obj = env.DATA ? await env.DATA.get(snapKey) : null;
+        obj = env.DATA ? await env.DATA.get(BOXING_SNAP_KEY) : null;
         if (obj) snap = await obj.json();
       } catch { /* no snapshot */ }
-      if (snap && Array.isArray(snap.events) && Date.now() - Number(snap.fetchedAt) < BOXING_SNAPSHOT_MS) {
-        return corsJson({ events: snap.events });
-      }
+      const fresh = snap && Array.isArray(snap.events) && Date.now() - Number(snap.fetchedAt) < BOXING_SNAPSHOT_MS;
+      if (fresh) return corsJson({ events: snap.events });
       const stale = snap && Array.isArray(snap.events) ? snap.events : null;
-      try {
-        const host = "boxing-data-api.p.rapidapi.com";
-        const res = await fetch(`https://${host}/v2/events/schedule`, {
-          headers: {
-            "x-rapidapi-host": host,
-            "x-rapidapi-key": env.BOXING_API_KEY,
-            "Content-Type": "application/json",
-          },
-        });
-        // A 429 here means the month's 100 requests are spent. Serve empty and
-        // let the column fall back rather than surfacing an error to the user.
-        if (!res.ok) return corsJson({ events: stale || [] }, 200, 900);
-        const data = await res.json();
-        const events = (data?.data || []).map((e) => ({
-          id: String(e.id || ""),
-          title: String(e.title || ""),
-          date: e.date || null,
-          venue: e.venue || null,
-          location: e.location || null,
-          // `broadcast` is per-country: [{country, broadcasters:[...]}]. Keep
-          // only the US/UK rows — those are the ones Jacob can actually watch.
-          broadcasts: (e.broadcast || [])
-            .filter((b) => ["United States", "United Kingdom"].includes(b?.country))
-            .flatMap((b) => b?.broadcasters || []),
-          poster: e.poster_image_url || null,
-        })).filter((e) => e.id && e.title && e.date);
-        if (env.DATA) {
-          const put = env.DATA.put(snapKey, JSON.stringify({ fetchedAt: Date.now(), events }),
-            { httpMetadata: { contentType: "application/json" } }).catch(() => {});
-          if (ctx?.waitUntil) ctx.waitUntil(put); else await put;
-        }
-        return corsJson({ events });
-      } catch {
-        return corsJson({ events: stale || [] }, 200, 300);
-      }
+      // Backoff or another isolate's lease: serve the stale copy.
+      if (snap && Date.now() < Number(snap.retryAt)) return corsJson({ events: stale || [] }, 200, 300);
+      // A refresh is already running in this isolate: serve the stale copy,
+      // or wait for it when there is none yet.
+      if (boxingRefresh) return corsJson({ events: stale || (await boxingRefresh) || [] }, 200, 300);
+      const run = refreshBoxing(env, obj, snap).finally(() => { if (boxingRefresh === run) boxingRefresh = null; });
+      boxingRefresh = run;
+      const events = await run;
+      return events ? corsJson({ events }) : corsJson({ events: stale || [] }, 200, 900);
     }
 
     if (url.pathname === "/api/mlb-videos") {

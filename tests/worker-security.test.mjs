@@ -112,12 +112,25 @@ test("/api/chess: one Lichess call per cache lifetime", async () => {
   } finally { restore(); }
 });
 
+// R2 stand-in with etags and the `onlyIf.etagMatches` precondition: a put
+// that fails it returns null, like the real binding.
 function r2() {
   const m = new Map();
+  const tags = new Map();
+  let n = 0;
   return {
     m,
-    async get(k) { const v = m.get(k); return v == null ? null : { body: v, async json() { return JSON.parse(v); } }; },
-    async put(k, v) { m.set(k, String(v)); },
+    async get(k) {
+      const v = m.get(k);
+      return v == null ? null : { body: v, etag: tags.get(k) || "e0", async json() { return JSON.parse(v); } };
+    },
+    async put(k, v, opts) {
+      const want = opts?.onlyIf?.etagMatches;
+      if (want && want !== (tags.get(k) || (m.has(k) ? "e0" : undefined))) return null;
+      m.set(k, String(v));
+      tags.set(k, `e${++n}`);
+      return { key: k, etag: tags.get(k) };
+    },
   };
 }
 
@@ -141,6 +154,67 @@ test("/api/boxing serves the last good snapshot when the quota is spent", async 
     const body = await (await call("/api/boxing", env)).json();
     assert.equal(calls.length, 1, "stale snapshot triggers one refresh attempt");
     assert.equal(body.events[0].id, "9");
+  });
+});
+
+test("/api/boxing: 20 parallel requests on a stale snapshot make one upstream call", async () => {
+  const DATA = r2();
+  DATA.m.set("cache/boxing-schedule.json", JSON.stringify({ fetchedAt: 0, events: [{ id: "9", title: "C vs D", date: "2026-12-01" }] }));
+  const env = { ASSETS: assets, BOXING_API_KEY: "k", DATA };
+  const feed = { data: [{ id: 7, title: "A vs B", date: "2026-11-01", broadcast: [] }] };
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  await withUpstream(async () => { await gate; return json(feed); }, async (calls) => {
+    const pending = Array.from({ length: 20 }, (_, i) => call(`/api/boxing?p=${i}`, env));
+    await new Promise((r) => setTimeout(r, 20));
+    release();
+    const bodies = await Promise.all(pending.map(async (p) => (await p).json()));
+    assert.equal(calls.length, 1);
+    const ids = bodies.map((b) => b.events[0].id);
+    assert.equal(ids.filter((id) => id === "7").length, 1, "the refreshing request gets the new copy");
+    assert.equal(ids.filter((id) => id === "9").length, 19, "the others get the stale copy");
+    assert.equal((await (await call("/api/boxing", env)).json()).events[0].id, "7");
+    assert.equal(calls.length, 1);
+  });
+});
+
+test("/api/boxing: a second isolate does not refresh while the R2 lease is held", async () => {
+  const DATA = r2();
+  DATA.m.set("cache/boxing-schedule.json", JSON.stringify({ fetchedAt: 0, events: [{ id: "9", title: "C vs D", date: "2026-12-01" }], retryAt: Date.now() + 60_000 }));
+  const env = { ASSETS: assets, BOXING_API_KEY: "k", DATA };
+  await withUpstream(() => json({ data: [] }), async (calls) => {
+    for (let i = 0; i < 5; i++) assert.equal((await (await call("/api/boxing", env)).json()).events[0].id, "9");
+    assert.equal(calls.length, 0);
+  });
+});
+
+test("/api/boxing backs off after an upstream failure", async () => {
+  const stale = { fetchedAt: 0, events: [{ id: "9", title: "C vs D", date: "2026-12-01" }] };
+  for (const [status, minHours] of [[429, 12], [500, 1]]) {
+    const DATA = r2();
+    DATA.m.set("cache/boxing-schedule.json", JSON.stringify(stale));
+    const env = { ASSETS: assets, BOXING_API_KEY: "k", DATA };
+    await withUpstream(() => json({ message: "no" }, status), async (calls) => {
+      await call("/api/boxing", env);
+      assert.equal(calls.length, 1);
+      for (let i = 0; i < 10; i++) {
+        assert.equal((await (await call(`/api/boxing?r=${i}`, env)).json()).events[0].id, "9");
+      }
+      assert.equal(calls.length, 1, `no retry inside the backoff after ${status}`);
+      const saved = JSON.parse(DATA.m.get("cache/boxing-schedule.json"));
+      assert.ok(saved.retryAt - Date.now() > (minHours - 0.1) * 3600_000, `backoff ≥ ${minHours} h after ${status}`);
+      assert.equal(saved.events[0].id, "9", "stale copy kept");
+    });
+  }
+});
+
+test("/api/boxing backs off when the upstream call throws", async () => {
+  const DATA = r2();
+  const env = { ASSETS: assets, BOXING_API_KEY: "k", DATA };
+  await withUpstream(() => { throw new Error("net"); }, async (calls) => {
+    assert.deepEqual((await (await call("/api/boxing", env)).json()).events, []);
+    for (let i = 0; i < 10; i++) await call("/api/boxing", env);
+    assert.equal(calls.length, 1);
   });
 });
 
