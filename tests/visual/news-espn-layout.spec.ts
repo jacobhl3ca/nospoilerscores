@@ -968,8 +968,8 @@ for (const width of [1280, 390]) {
       await expect(headlinesChip(page)).toHaveAttribute("aria-pressed", "true");
       await expect(opener).toHaveAttribute("title", "Open on example.com");
       const [tab] = await Promise.all([page.context().waitForEvent("page"), opener.click()]);
-      await tab.waitForLoadState();
-      expect(tab.url()).toBe(ESPN_TOP(1));
+      // The URL is enough: the load event can lag on a busy dev server.
+      await expect.poll(() => tab.url()).toBe(ESPN_TOP(1));
       await tab.close();
       await expect(page.getByRole("dialog")).toHaveCount(0);
 
@@ -989,8 +989,8 @@ for (const width of [1280, 390]) {
         page.context().waitForEvent("page"),
         rowOf(page, ESPN_TOP(2)).locator("[data-news-open]").click({ modifiers: ["ControlOrMeta"] }),
       ]);
-      await tab2.waitForLoadState();
-      expect(tab2.url()).toBe(ESPN_TOP(2));
+      // The URL is enough: the load event can lag on a busy dev server.
+      await expect.poll(() => tab2.url()).toBe(ESPN_TOP(2));
       await expect(page.getByRole("dialog")).toHaveCount(0);
     });
 
@@ -1017,7 +1017,7 @@ test("Cards: with Headlines on, a plain article row opens the article", async ({
   const row = page.locator(`[data-news-key="${url}"]`);
   await row.scrollIntoViewIfNeeded();
   const [tab] = await Promise.all([page.context().waitForEvent("page"), row.locator("[data-news-open]").click()]);
-  await tab.waitForLoadState();
-  expect(tab.url()).toBe(url);
+  // The URL is enough: the load event can lag on a busy dev server.
+  await expect.poll(() => tab.url()).toBe(url);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
