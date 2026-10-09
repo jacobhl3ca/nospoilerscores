@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 
 // News Autoplay (Jacob 10/8: "autoplay is for videos in the feed when they're
@@ -20,6 +20,9 @@ import { NewsItem, proxyImage } from "@/lib/news";
 // blurred clip fetches no bytes.
 
 const MIN_RATIO = 0.6;
+// Near the page top the first clip in view plays, not the one nearest the
+// middle (Jacob 10/9: on a phone clip 2 played while clip 1 sat on top).
+const TOP_ZONE = 80;
 
 export function inlineMediaUrl(item: NewsItem): string | null {
   return item.playbackUrl || item.videoUrl || null;
@@ -56,12 +59,13 @@ function mediaBlurred(el: Element): boolean {
 function pickFocused() {
   frame = 0;
   const mid = window.innerHeight / 2;
+  const atTop = window.scrollY < TOP_ZONE;
   let best: Entry | null = null;
   let bestDist = Infinity;
   for (const e of entries.values()) {
     if (e.ratio < MIN_RATIO || mediaBlurred(e.el)) continue;
     const r = e.el.getBoundingClientRect();
-    const dist = Math.abs(r.top + r.height / 2 - mid);
+    const dist = atTop ? r.top : Math.abs(r.top + r.height / 2 - mid);
     if (dist < bestDist) { best = e; bestDist = dist; }
   }
   if (best === current) return;
@@ -91,12 +95,30 @@ export function refocusAutoplay() {
   if (entries.size) schedule();
 }
 
-// play() refused by the browser (Firefox "Block Audio and Video", Safari Low
-// Power Mode): HomeContent shows a one-time note under the toolbar.
-const blockedListeners = new Set<() => void>();
-export function onAutoplayBlocked(fn: () => void): () => void {
+// play() refused by the browser (Firefox "Block Audio and Video", Safari
+// "Never Auto-Play", iPhone Low Power Mode). Each refusal reports the clip's
+// media box, so HomeContent can show its one-time popup over that clip. Once
+// one clip is refused, every clip says "Tap to play" on itself (Jacob 10/9:
+// the hint belongs on the video, not in a note under the toolbar), until a
+// clip does play.
+const blockedListeners = new Set<(box: HTMLElement) => void>();
+export function onAutoplayBlocked(fn: (box: HTMLElement) => void): () => void {
   blockedListeners.add(fn);
   return () => { blockedListeners.delete(fn); };
+}
+let blockedNow = false;
+const blockedSubs = new Set<() => void>();
+function setBlockedNow(v: boolean) {
+  if (blockedNow === v) return;
+  blockedNow = v;
+  blockedSubs.forEach((fn) => fn());
+}
+function subscribeBlocked(fn: () => void) {
+  blockedSubs.add(fn);
+  return () => { blockedSubs.delete(fn); };
+}
+function useAutoplayBlocked(): boolean {
+  return useSyncExternalStore(subscribeBlocked, () => blockedNow, () => false);
 }
 
 function register(entry: Entry) {
@@ -148,6 +170,7 @@ export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }:
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  const blocked = useAutoplayBlocked();
   const src = inlineMediaUrl(item);
   const active = enabled && !!src;
 
@@ -190,7 +213,10 @@ export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }:
           video.play().catch((err: unknown) => {
             // Refused: the thumbnail and play badge stay. AbortError is only a
             // pause() that beat the start, not a block.
-            if ((err as { name?: string })?.name === "NotAllowedError") blockedListeners.forEach((fn) => fn());
+            if ((err as { name?: string })?.name !== "NotAllowedError") return;
+            setBlockedNow(true);
+            const box = video.parentElement ?? video;
+            blockedListeners.forEach((fn) => fn(box));
           });
         });
       },
@@ -206,6 +232,7 @@ export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }:
 
   if (!active) return null;
   return (
+    <>
     <video
       ref={videoRef}
       muted
@@ -214,12 +241,14 @@ export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }:
       preload="none"
       className={`absolute inset-0 w-full h-full ${fit === "contain" ? "object-contain bg-black" : "object-cover"}`}
       style={{ opacity: playing ? 1 : 0, transition: "opacity 200ms" }}
-      onPlaying={() => setPlaying(true)}
+      onPlaying={() => { setPlaying(true); setBlockedNow(false); }}
       onPause={() => setPlaying(false)}
       aria-hidden="true"
       tabIndex={-1}
       data-autoplay-video=""
     />
+    {blocked && !playing && <TapToPlay />}
+    </>
   );
 }
 
@@ -293,6 +322,17 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
         {item.headline}
       </div>
     </button>
+  );
+}
+
+// Autoplay is on but the browser refused it: the clip says so itself, in the
+// corner where "Tap for sound" sits while a clip plays. z-index keeps it over
+// each surface's play-badge overlay, which comes later in the DOM.
+function TapToPlay() {
+  return (
+    <span className="absolute right-2 bottom-2 z-[1] rounded px-1.5 py-0.5 text-[11px] font-semibold pointer-events-none" style={{ background: "rgba(0,0,0,0.6)", color: "white" }} data-tap-to-play="">
+      Tap to play
+    </span>
   );
 }
 
