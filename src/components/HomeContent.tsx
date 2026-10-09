@@ -539,8 +539,10 @@ function SingleColToggle({ active, onClick, compact }: { active: boolean; onClic
 // News chip icons shared by the toolbar and the ESPN card headers (r5):
 // Autoplay = a play triangle in a circle (lucide circle-play), Big = two
 // diagonal arrows (lucide maximize-2), so there is only one play icon.
-function AutoplayIcon({ size = 16 }: { size?: number }) {
-  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" /></svg>;
+// Autoplay off = the same circle-play crossed out (Jacob 10/9 r6), like the
+// Headlines eye / eye-off.
+function AutoplayIcon({ on, size = 16 }: { on: boolean; size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-autoplay-icon={on ? "on" : "off"}><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" />{!on && <line x1="1" y1="1" x2="23" y2="23" data-slash="" />}</svg>;
 }
 function BigIcon({ size = 16 }: { size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>;
@@ -586,6 +588,10 @@ function CardChip({ active, onClick, title, ariaLabel, disabled, children }: {
     </button>
   );
 }
+
+// Autoplay chip titles (toolbar + ESPN Videos header).
+const AUTOPLAY_TITLE = "Play the video in focus, muted. Tap it for sound.";
+const AUTOPLAY_PAUSED_TITLE = "Paused while Media is blurred. Turn Media on to play clips.";
 
 // Set once the "browser blocks autoplay" note has shown (r4): it shows once ever.
 const AUTOPLAY_BLOCKED_NOTE_KEY = "hs.autoplayBlockedNote.v1";
@@ -2762,10 +2768,11 @@ export default function HomeContent({
   }, [newsToolbarHidden]);
 
   // A layout, Big or Autoplay change moves cards without a scroll: pick the
-  // clip in focus again (r4: Feed → ESPN did not start the first clip).
+  // clip in focus again (r4: Feed → ESPN did not start the first clip). A
+  // Media tap does too: blurred clips do not play (r6).
   useEffect(() => {
     if (showNews && newsAutoplay) refocusAutoplay();
-  }, [showNews, newsLayout, prefs.newsEspnBig, newsAutoplay]);
+  }, [showNews, newsLayout, prefs.newsEspnBig, newsAutoplay, prefs.revealNewsMedia, prefs.newsCardPrefs]);
 
   // The browser refused muted autoplay (Firefox "Block Audio and Video",
   // Safari Low Power Mode): one small note under the toolbar, shown once ever.
@@ -3615,15 +3622,33 @@ export default function HomeContent({
             {/* ESPN layout (r5): the toolbar keeps only the layout switch;
                 every option button sits in its card's header (espnCardOverride). */}
             {newsLayout !== "espn" && (<>
+            {/* Autoplay first (Jacob 10/9 r6). It dims while Media is blurred:
+                blurred clips do not play, so an on-looking chip with nothing
+                playing would read as broken. It still toggles. */}
             <NewsToggleChip
               compact={toolbarFit.compact}
               active={newsAutoplay}
               onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
-              title="Play the video in focus, muted. Tap it for sound."
+              title={newsAutoplay && prefs.revealNewsMedia !== true ? AUTOPLAY_PAUSED_TITLE : AUTOPLAY_TITLE}
               ariaLabel="Toggle news autoplay"
+              disabled={newsAutoplay && prefs.revealNewsMedia !== true}
             >
-              <AutoplayIcon />
+              <AutoplayIcon on={newsAutoplay} />
               <span>Autoplay</span>
+            </NewsToggleChip>
+            {/* Media and Headlines sit together (Jacob 8/9): the two
+                spoiler-reveal toggles do the same job to the two halves of a
+                post, while Videos/Text posts are content FILTERS. Media comes
+                first (Jacob 10/9 r6). */}
+            <NewsToggleChip
+              compact={toolbarFit.compact}
+              active={prefs.revealNewsMedia === true}
+              onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
+              title="Show or spoiler-blur news image and video previews"
+              ariaLabel="Toggle media reveal"
+            >
+              <MediaIcon />
+              <span>Media</span>
             </NewsToggleChip>
             <NewsToggleChip
               compact={toolbarFit.compact}
@@ -3632,27 +3657,8 @@ export default function HomeContent({
               title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
               ariaLabel="Toggle headline reveal"
             >
-              {prefs.revealNewsTitles ? (
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
-              ) : (
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
-              )}
+              <HeadlinesIcon on={!!prefs.revealNewsTitles} />
               <span>Headlines</span>
-            </NewsToggleChip>
-            {/* Media sits directly after Headlines (Jacob 8/9): the two
-                spoiler-reveal toggles belong next to each other — they do the
-                same job to the two halves of a post — while Videos/Text posts
-                are content FILTERS. Grouping them by what they do is most of
-                what makes this row readable. */}
-            <NewsToggleChip
-              compact={toolbarFit.compact}
-              active={prefs.revealNewsMedia === true}
-              onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
-              title="Show or spoiler-blur news image and video previews"
-              ariaLabel="Toggle media reveal"
-            >
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
-              <span>Media</span>
             </NewsToggleChip>
             <NewsToggleChip
               compact={toolbarFit.compact}
@@ -4343,12 +4349,13 @@ export default function HomeContent({
             }
             const redditShown = redditCols.slice(0, 3);
             const big = !!prefs.newsEspnBig;
-            // Each card's header carries its own buttons (Jacob 10/8 r5):
-            // ESPN Videos = Big, Autoplay, Headlines, Media; Top Headlines =
-            // Headlines, Media; each subreddit = Headlines, Media, Videos only,
-            // Text posts. Headlines / Media / Videos only / Text posts act on
-            // that card only (newsCardPrefs, falling back to the global pref);
-            // Big and Autoplay stay global.
+            // Each card's header carries its own buttons (Jacob 10/8 r5, order
+            // 10/9 r6): ESPN Videos = Autoplay, Big, Media, Headlines; Top
+            // Headlines = Media, Headlines; each subreddit = Media, Headlines,
+            // Videos only, Text posts. Media / Headlines / Videos only / Text
+            // posts act on that card only (newsCardPrefs, falling back to the
+            // global pref); Big and Autoplay stay global. Autoplay dims while
+            // this card's Media is blurred.
             const cardPrefs = prefs.newsCardPrefs ?? {};
             const setCardPref = (key: string, patch: Partial<NonNullable<typeof cardPrefs[string]>>) =>
               updatePrefs({ newsCardPrefs: { ...cardPrefs, [key]: { ...cardPrefs[key], ...patch } } });
@@ -4371,6 +4378,17 @@ export default function HomeContent({
                   <>
                     {isVideos && (
                       <CardChip
+                        active={newsAutoplay}
+                        onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
+                        title={newsAutoplay && !media ? AUTOPLAY_PAUSED_TITLE : AUTOPLAY_TITLE}
+                        ariaLabel="Toggle news autoplay"
+                        disabled={newsAutoplay && !media}
+                      >
+                        <AutoplayIcon on={newsAutoplay} size={14} />
+                      </CardChip>
+                    )}
+                    {isVideos && (
+                      <CardChip
                         active={big}
                         onClick={() => { window.scrollTo(0, 0); updatePrefs({ newsEspnBig: !big }); }}
                         title="One wide column of big ESPN clips"
@@ -4379,24 +4397,6 @@ export default function HomeContent({
                         <BigIcon size={14} />
                       </CardChip>
                     )}
-                    {isVideos && (
-                      <CardChip
-                        active={newsAutoplay}
-                        onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
-                        title="Play the video in focus, muted. Tap it for sound."
-                        ariaLabel="Toggle news autoplay"
-                      >
-                        <AutoplayIcon size={14} />
-                      </CardChip>
-                    )}
-                    <CardChip
-                      active={titles}
-                      onClick={() => setCardPref(key, { revealTitles: !titles })}
-                      title={`Show or blur the headlines in ${name}`}
-                      ariaLabel={`Toggle headline reveal: ${name}`}
-                    >
-                      <HeadlinesIcon on={titles} size={14} />
-                    </CardChip>
                     <CardChip
                       active={media}
                       onClick={() => setCardPref(key, { revealMedia: !media })}
@@ -4404,6 +4404,14 @@ export default function HomeContent({
                       ariaLabel={`Toggle media reveal: ${name}`}
                     >
                       <MediaIcon size={14} />
+                    </CardChip>
+                    <CardChip
+                      active={titles}
+                      onClick={() => setCardPref(key, { revealTitles: !titles })}
+                      title={`Show or blur the headlines in ${name}`}
+                      ariaLabel={`Toggle headline reveal: ${name}`}
+                    >
+                      <HeadlinesIcon on={titles} size={14} />
                     </CardChip>
                     {!isEspn && (
                       <CardChip

@@ -14,8 +14,10 @@ import { NewsItem, proxyImage } from "@/lib/news";
 // <AutoplayVideo> is a <video> layer that fills its parent media box, so each
 // surface (ESPN cards, the Cards strip and video cards, Feed posts) keeps its
 // own thumbnail and play badge and only adds this layer. It must be a DIRECT
-// child of the .news-media-preview box: the Media blur rule
-// (`.news-media-preview > *`) then blurs the playing frames too.
+// child of the .news-media-preview box, where the Media blur rule
+// (`.news-media-preview > *`) applies. A clip whose media is blurred does not
+// play (Jacob 10/9 r6): play goes to the next unblurred clip in focus, and a
+// blurred clip fetches no bytes.
 
 const MIN_RATIO = 0.6;
 
@@ -42,13 +44,22 @@ let io: IntersectionObserver | null = null;
 let bodyRo: ResizeObserver | null = null;
 let frame = 0;
 
+// Mirrors the Media blur rules in globals.css: a card with its own Media off
+// is blurred; else the global blur applies unless the card's own Media is on.
+// A selector check, not getComputedStyle().filter: the 150 ms filter
+// transition would read the old value right after a Media tap.
+function mediaBlurred(el: Element): boolean {
+  if (el.closest(".news-card-media-off")) return true;
+  return document.documentElement.classList.contains("blur-news-media") && !el.closest(".news-card-media-on");
+}
+
 function pickFocused() {
   frame = 0;
   const mid = window.innerHeight / 2;
   let best: Entry | null = null;
   let bestDist = Infinity;
   for (const e of entries.values()) {
-    if (e.ratio < MIN_RATIO) continue;
+    if (e.ratio < MIN_RATIO || mediaBlurred(e.el)) continue;
     const r = e.el.getBoundingClientRect();
     const dist = Math.abs(r.top + r.height / 2 - mid);
     if (dist < bestDist) { best = e; bestDist = dist; }
@@ -74,7 +85,8 @@ function scheduleAfterScroll() {
 // Re-run the in-focus pick now. The coordinator also re-picks on card
 // mount/unmount, scroll, resize, a page height change and every image/video
 // load, but a layout change or a pill toggle can move cards without any of
-// those (Jacob 10/8 r4: Feed → ESPN did not start the first clip).
+// those (Jacob 10/8 r4: Feed → ESPN did not start the first clip), and a
+// Media tap changes which clips may play (r6).
 export function refocusAutoplay() {
   if (entries.size) schedule();
 }
