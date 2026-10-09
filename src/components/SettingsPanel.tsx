@@ -960,6 +960,9 @@ export default function SettingsPanel({
     newsSingleColumn: undefined,
     hideSensitiveNews: undefined,
     hideCrashNews: undefined,
+    // Listen links: read as `?? true` / `?? false`, so undefined is the default.
+    showListenLinks: undefined,
+    listenAnywhere: undefined,
     timezone: undefined,
     reminderLinkTemplate: undefined,
     smartCutoffHour: 13,
@@ -1951,6 +1954,24 @@ export default function SettingsPanel({
               <h4 className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
                 Links
               </h4>
+              {/* Listen links (lib/radio.ts): free station players in "Where to
+                  watch" and the game details. Most NFL and MLB flagships play
+                  only in the home market, so those show only there unless the
+                  second toggle is on (VPN users). */}
+              <ToggleRow
+                label="Radio links"
+                hint="A Listen section in Where to watch and in game details. Links go to the station's own player."
+                checked={prefs.showListenLinks ?? true}
+                onChange={(v) => updatePrefs({ showListenLinks: v })}
+              />
+              {(prefs.showListenLinks ?? true) && (
+                <ToggleRow
+                  label="Show local-only radio links everywhere (for VPN users)"
+                  hint="Many team stations stream games only inside their home area. Leave off unless you use a VPN."
+                  checked={prefs.listenAnywhere ?? false}
+                  onChange={(v) => updatePrefs({ listenAnywhere: v })}
+                />
+              )}
               <FrontendLinkField
                 label="Reddit links open at"
                 hint="Your own front-end. Leave empty for reddit.com"

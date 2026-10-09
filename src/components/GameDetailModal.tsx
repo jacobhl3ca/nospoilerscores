@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Game } from "@/lib/types";
-import { handleExternalClick, liveWatchUrl, openExternal, openLiveWatch, watchLinkProps } from "@/lib/openExternal";
+import { handleExternalClick, listenLinkProps, liveWatchUrl, openExternal, openLiveWatch, watchLinkProps } from "@/lib/openExternal";
+import { useListenLinks } from "@/lib/useListenLinks";
 import { gameRef } from "@/lib/tvChannelLinks";
 import { espnGameUrl, networkStreamUrl, sportGroup, sportStreamFallback } from "@/lib/espn";
 import { formatGameProgress } from "@/lib/liveProgress";
@@ -337,6 +338,11 @@ export default function GameDetailModal({
   // chips (Jacob 6/1): Prime/ESPN/MLB deep-links when available, else the
   // network's own page, else a sport-level fallback. Opens via openExternal so
   // it deep-links into the network app on mobile.
+  // Listen: free station players for the game (lib/radio.ts); a single Paid
+  // line only when no free one exists. Empty once the game is final.
+  const listen = useListenLinks(game);
+  const listenRows = listen.free.length ? listen.free : listen.paid ? [listen.paid] : [];
+
   const networkLink = (name: string, key: string | number) => {
     const isPrime = /\b(amazon|prime)\b/i.test(name);
     const isEspn = /\b(espn|abc)\b/i.test(name);
@@ -541,6 +547,26 @@ export default function GameDetailModal({
           <div className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
             <span className="uppercase tracking-wide">Watch: </span>
             {game.broadcasts.flatMap((b, i) => (i === 0 ? [networkLink(b, i)] : [" · ", networkLink(b, i)]))}
+          </div>
+        ) : null}
+
+        {listenRows.length > 0 && !isFinal ? (
+          <div className="listen-row text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+            <span className="uppercase tracking-wide">Listen: </span>
+            {listenRows.flatMap((l, i) => {
+              const a = (
+                <a
+                  key={l.url}
+                  {...listenLinkProps(l.name, l.url)}
+                  className="underline underline-offset-2 hover:opacity-80 transition-opacity"
+                  style={{ color: "var(--accent)" }}
+                >
+                  {l.name}
+                </a>
+              );
+              const tags = l.tags.length ? <span key={`${l.url}-t`}> ({l.tags.join(" · ")})</span> : null;
+              return i === 0 ? [a, tags] : [" · ", a, tags];
+            })}
           </div>
         ) : null}
 

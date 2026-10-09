@@ -4,6 +4,7 @@ import { setServiceTimeZone, getEtServiceDate, toYmd } from "./etDay";
 import { pruneWatchQueue, type WatchQueueEntry } from "./watchQueue";
 import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
 import { setFrontendLinks } from "./frontendLinks";
+import { setListenPrefs } from "./radio";
 import { pushWidgetPrefs } from "./widgetBridge";
 
 const STORAGE_KEY = "nss-preferences";
@@ -659,6 +660,12 @@ export interface Preferences {
   // (Jacob: "idk if 2 checkboxes needed"). A blob with only one of them set
   // still filters exactly as before until the user taps the toggle.
   hideCrashNews?: boolean;
+  // "Listen" links (lib/radio.ts): free live radio for a game, in the "Where
+  // to watch" dialog and the game details. Read as `?? true`.
+  showListenLinks?: boolean;
+  // Show local-only radio links (NFL/MLB flagships play only in the home
+  // market) wherever the visitor is, for VPN users. Read as `?? false`.
+  listenAnywhere?: boolean;
 }
 
 const defaults: Preferences = {
@@ -738,6 +745,7 @@ export function loadPreferences(): Preferences {
     setServiceTimeZone(prefs.timezone);
     setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
     setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
+    setListenPrefs(prefs.showListenLinks, prefs.listenAnywhere);
     // After setServiceTimeZone, so "today" is the user's chosen zone.
     prefs.watchQueue = pruneWatchQueue(prefs.watchQueue, toYmd(getEtServiceDate()));
     return prefs;
@@ -760,6 +768,7 @@ export function savePreferences(prefs: Preferences): void {
   setServiceTimeZone(prefs.timezone);
   setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
   setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
+  setListenPrefs(prefs.showListenLinks, prefs.listenAnywhere);
   // localStorage.setItem can throw — quota exceeded, or storage blocked in a
   // sandboxed/private context — and savePreferences runs straight out of click
   // handlers (e.g. toggling a setting). Mirror loadPreferences' guard so a

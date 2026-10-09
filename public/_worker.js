@@ -65,6 +65,14 @@ const CARD_REV = 4;
 // Keep this narrow. An unscoped result-bearing upload must still be rejected.
 const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"]);
 
+// College chain channels whose game cuts name the winner or print the score
+// ("Colorado State at UTSA: Rams See 500 YDS of Offense, Fall 59-45 | FULL
+// Game Highlights (9/26/2026)", Pac-12, 2026-09-26). The client keeps their
+// title bar masked (`maskTitle` in src/lib/collegeHighlightChannels.json), so
+// a strict lookup on the channel itself may return such a title. Unscoped
+// results are still refused. Lowercased author names.
+const MASKED_CHAIN_CHANNELS = new Set(["pac-12"]);
+
 // Atlantic Hockey America (NCAA women's hockey chain, lit 2026-09-26) titles
 // every per-game cut as a bare scoreline with the date and nothing else:
 // "Ohio State 2, Penn State 1 OT - Sept. 24, 2026". No "highlights", and the
@@ -76,6 +84,11 @@ const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"])
 // agree with the query, which is what separates the 9/24 and 9/25 cuts of the
 // same pair; an undated exhibition ("Robert Morris 8, Post 3") never matches.
 const AHA_CHANNEL = "atlantic hockey america";
+// "TOP 14 - Officiel" titles some match cuts "Match Summary" rather than
+// "Highlights" ("TOP 14 Season 2026-2027 - Round 4 - Match Summary: Stade
+// Toulousain - Montpellier Hérault Rugby", 220 s). See isStrictTop14Summary.
+const TOP14_CHANNEL = "top 14 - officiel";
+const TOP14_SUMMARY_RX = /\bsummary\b|\br[eé]sum[eé](?![a-z])/;
 const AHA_SCORELINE_RX = /^\s*\S.*?\s\d{1,2},\s\S.*?\s\d{1,2}(?:\s(?:\d?OT|SO))?\s-\s(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s\d{1,2},\s\d{4}\s*$/i;
 
 // A press conference is never a highlight, whatever else its title says. The
@@ -191,6 +204,92 @@ function bylineNamesChannel(byline, preferChannelLower) {
   const b = String(byline || "").toLowerCase();
   if (b === preferChannelLower) return true;
   return b.split(/\s+and\s+/).some((part) => part.trim() === preferChannelLower);
+}
+
+// A results page is JSON inside HTML, so a title or byline arrives with its
+// JSON escapes still in it: "Texas A&M Aggies vs. LSU Tigers", "The
+// R&A". The team gate then looked for "texas a&m" in "texas a&m" and
+// never found it — the strict lookup for Texas A&M at LSU (9/26) and Kentucky
+// at Texas A&M (9/19) returned "No results" with the right cut on the page, on
+// ESPN College Football and SEC alike (measured 2026-10-03). Decode once, where
+// the string is captured. scripts/lib/recaps.mjs parseYtVideoRenderers does the
+// same for the bake.
+function decodeJsonText(raw) {
+  const s = String(raw ?? "");
+  if (!s.includes("\\")) return s;
+  try {
+    return JSON.parse(`"${s}"`);
+  } catch {
+    return s
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\\(["\\/])/g, "$1");
+  }
+}
+
+// School names built on another school's name. The college chains match on
+// ESPN's school name (team.location), and the conference channels title with
+// the same names, so a plain substring test read "Texas A&M Aggies vs. Ole
+// Miss Rebels" as a Texas game, "West Virginia" as Virginia and "Miami (OH)"
+// as Miami. The SEC posts Texas and Texas A&M cuts against the same opponents
+// in the same weeks, with no date in the title (soccer and volleyball alike).
+// Before a team's names are looked for, every "<prefix> <name>" and "<name>
+// <suffix>" phrase built on one of them is blanked to spaces of the same
+// length (positions stay true for the order gate), unless the phrase is one of
+// the team's own names. Checked 2026-10-03 against every team ESPN lists for
+// the pro leagues the bake walks (NBA … Top 14): no club's own name is such a
+// phrase, so nothing outside college changes. ⛔ Never "city" (Leicester City),
+// "united" or a bare "st" (St Kilda). A phrase never spans a title separator
+// (" - ", "|", "@"), so "Chicago Fire FC - St. Louis CITY SC" keeps the Fire;
+// a bare hyphen is part of a name ("Texas A&M-Commerce"). Keep
+// scripts/lib/team-names.mjs (the bake and the audit) in sync by hand.
+const SCHOOL_NAME_PREFIXES = [
+  "west", "east", "north", "south", "western", "eastern", "northern", "southern", "central", "middle",
+  "southeast", "southeastern", "northwest", "northwestern", "southwest", "southwestern", "northeast", "northeastern",
+];
+const SCHOOL_NAME_SUFFIXES = [
+  "state", "st.", "tech", "a&m", "a & m", "a&t", "christian", "southern", "central", "international", "atlantic",
+  "gulf coast", "valley", "poly", "baptist", "(oh)", "(ohio)", "monroe", "duluth", "omaha", "anchorage", "fairbanks",
+  "kearney", "fort wayne", "pine bluff", "little rock", "upstate", "wilmington", "greensboro", "asheville",
+  "rio grande valley", "eastern shore", "lowell", "corpus christi", "commerce", "kingsville",
+];
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const SCHOOL_PREFIX_ALT = SCHOOL_NAME_PREFIXES.map(escapeRegex).join("|");
+const SCHOOL_SUFFIX_ALT = SCHOOL_NAME_SUFFIXES.map(escapeRegex).join("|");
+// A team owns a longer name when one of its own names holds it as whole words:
+// "Sporting Kansas City" owns "Kansas City", "Southern Miss Golden Eagles"
+// owns "Southern Miss".
+function ownsTeamName(ownNames, phrase) {
+  const p = ` ${phrase.replace(/[\s\-–—]+/g, " ")} `;
+  for (const n of ownNames) {
+    if (n && ` ${n.replace(/[\s\-–—]+/g, " ")} `.includes(p)) return true;
+  }
+  return false;
+}
+const schoolPhraseRxCache = new Map();
+function blankContainingSchoolNames(title, ownNames) {
+  let t = title;
+  for (const name of ownNames) {
+    if (!name) continue;
+    let rx = schoolPhraseRxCache.get(name);
+    if (!rx) {
+      const n = escapeRegex(name);
+      rx = new RegExp(`(?<![a-z0-9])(?:(?:${SCHOOL_PREFIX_ALT})(?:\\s+|[-–—])${n}|${n}(?:\\s+|[-–—])(?:${SCHOOL_SUFFIX_ALT}))(?![a-z0-9])`, "g");
+      schoolPhraseRxCache.set(name, rx);
+    }
+    t = t.replace(rx, (m) => (ownsTeamName(ownNames, m) ? m : " ".repeat(m.length)));
+  }
+  return t;
+}
+
+// Where a team name stands in a normalized title, or -1. A name under four
+// characters ("Cal", "SMU", "NEC") must stand as a whole word: "cal" is inside
+// "physical", "nec" inside "connecticut". Longer names keep the plain
+// substring test. Mirrored in scripts/lib/team-names.mjs (teamNameIndex).
+function teamNameIndex(title, name) {
+  if (!name) return -1;
+  if (name.length >= 4) return title.indexOf(name);
+  const m = new RegExp(`(?:^|[^a-z0-9])(${escapeRegex(name)})(?![a-z0-9])`).exec(title);
+  return m ? m.index + m[0].length - m[1].length : -1;
 }
 
 function raceTitleMatches(tokens, titleLower) {
@@ -887,6 +986,29 @@ export default {
       });
     }
 
+    // --- Visitor location for the Listen links (src/lib/radio.ts): most NFL
+    // and MLB flagship streams play only inside the home market, so a
+    // market-locked link shows only when this metro is on its list. Coarse
+    // Cloudflare fields only (country, region code, Nielsen metro code), never
+    // the IP. Not logged, not cached, and the caller only learns its own spot.
+    // No CORS header on purpose: the web app and the native apps (which load
+    // https://hidescore.com, capacitor.config.ts) are same-origin, and no
+    // other site gets to read it.
+    if (url.pathname === "/api/where") {
+      const cf = request.cf || {};
+      const metro = Number(cf.metroCode);
+      return new Response(JSON.stringify({
+        country: typeof cf.country === "string" ? cf.country : null,
+        region: typeof cf.regionCode === "string" ? cf.regionCode : null,
+        metro: Number.isFinite(metro) && metro > 0 ? metro : null,
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
+
     // --- Bracket picks leaderboard (MLB postseason). See picksRoute below.
     if (url.pathname === "/api/picks") return picksRoute(request, env, ctx, url);
     if (url.pathname === "/api/picks/account") return picksAccountRoute(request, env, ctx);
@@ -1209,6 +1331,26 @@ export default {
           // "Athletics" as shortDisplayName, so we map both.
           "athletics": ["athletics", "a's", "oakland"],
           "st. john's": ["st. john's", "st johns", "saint john's", "saint johns", "st john's"],
+          // ESPN's school name (team.location) vs. the ACC's titles: "Duke vs.
+          // Pitt Match Highlights", "Fresno St. vs. Cal Match Highlights | 2026
+          // ACC Women's Soccer" (2026-10-03). "cal" only matches as a whole
+          // word (teamNameIndex), and the school-name guard blanks "Cal Poly",
+          // "Cal State" and "Cal Baptist" first.
+          "pittsburgh": ["pittsburgh", "pitt"],
+          "california": ["california", "cal"],
+          // Top 14 (2026-10-03): ESPN's club names vs. the "TOP 14 - Officiel"
+          // titles ("Section Paloise vs. Stade Rochelais Highlights", "USA
+          // Perpignan vs. Union Bordeaux-Bègles", "Stade Français Paris - LOU
+          // Rugby"). The other seven clubs' ESPN names are in their titles.
+          "bayonne": ["bayonne", "aviron bayonnais"],
+          "bordeaux begles": ["bordeaux begles", "bordeaux-begles", "union bordeaux-begles"],
+          "castres olympique": ["castres olympique", "castres"],
+          "clermont auvergne": ["clermont auvergne", "asm clermont", "clermont"],
+          "la rochelle": ["la rochelle", "stade rochelais", "rochelais"],
+          "lyon": ["lyon", "lou rugby"],
+          "montpellier herault": ["montpellier herault", "montpellier"],
+          "pau": ["pau", "section paloise", "paloise"],
+          "stade francais paris": ["stade francais paris", "stade francais"],
           // EPL — ESPN compact form ↔ club name(s) used in YouTube titles
           "nottm forest": ["nottm forest", "nottingham forest", "nottingham"],
           "man united": ["man united", "manchester united", "man utd"],
@@ -1250,6 +1392,24 @@ export default {
           "københavn": ["københavn", "kobenhavn", "copenhagen", "fc copenhagen"],
           "real madrid": ["real madrid", "madrid"],
           "barcelona": ["barcelona", "barça", "barca", "fc barcelona"],
+          // UEL (2026-10-03): the four Matchday 1 games CBS Sports Golazo -
+          // Europe and TUDN USA both cut but no lookup matched, ESPN's name
+          // first, then the CBS and TUDN title forms ("Bayer Leverkusen vs.
+          // Celje", "Hapoel Beer-Sheva", "H Beer Sheva", "Lillestrøm",
+          // "Union Saint-Gilloise"), and TUDN's Spanish or short forms of five
+          // more clubs ("Besiktas vs Marsella", "Omonia vs Celta de Vigo",
+          // "Levski Sofia vs Salzburg", "Sturm vs Rennes", "OFI vs
+          // Hoffenheim"). TUDN's own titles are the Spanish ones; its search
+          // cards show an English translation.
+          "nk celje": ["nk celje", "celje"],
+          "hapoel be'er": ["hapoel be'er", "hapoel be'er sheva", "hapoel beer sheva", "hapoel beer-sheva", "h. beer sheva", "beer sheva", "beer-sheva"],
+          "lillestrom": ["lillestrom", "lillestrøm", "lillestrom sk", "lillestrøm sk"],
+          "union sg": ["union sg", "union st.-gilloise", "union saint-gilloise", "union st-gilloise", "union saint gilloise", "royale union saint-gilloise"],
+          "marseille": ["marseille", "olympique de marseille", "marsella"],
+          "celta vigo": ["celta vigo", "celta de vigo"],
+          "rb salzburg": ["rb salzburg", "red bull salzburg", "salzburg"],
+          "sturm graz": ["sturm graz", "sk sturm graz", "sturm"],
+          "ofi crete": ["ofi crete", "ofi"],
           // League title forms the FotMob step rejected as "teams" on the
           // 2026-09-19/20 weekend: Serie A "ROMA-INTER", Bundesliga "1. FC KÖLN",
           // Sheffield United's own channel, Portsmouth's "Pompey v Blackburn",
@@ -1340,7 +1500,18 @@ export default {
         // "Ireland", "Irlanda del Norte" holds "Irlanda". When the team being
         // looked up does not own one of these, it is blanked out of the title
         // first, so a Rep Ireland lookup cannot match a Northern Ireland title.
-        const CONTAINING_TEAM_NAMES = ["northern ireland", "irlanda del norte"];
+        // The college rows (2026-10-03) are the schools the prefix/suffix rule
+        // in blankContainingSchoolNames cannot see: "Kansas City" holds Kansas,
+        // "Sam Houston" Houston, "George Washington" Washington, "Miami (Ohio)"
+        // Ohio, and the "Southern" schools hold Southern (the SWAC Jaguars,
+        // whose SEC volleyball and soccer cuts read "Southern Jaguars vs. …").
+        // Mirrored in scripts/lib/team-names.mjs.
+        const CONTAINING_TEAM_NAMES = [
+          "northern ireland", "irlanda del norte",
+          "kansas city", "sam houston", "george washington", "miami (ohio)",
+          "georgia southern", "texas southern", "southern miss", "southern utah", "southern illinois",
+          "southern indiana", "southern methodist", "southern california",
+        ];
 
         // Extract team names from query: "Away vs Home highlights ..."
         const teamsMatch = query.match(/^(.+?)\s+vs\s+(.+?)\s+(?:highlights|resumen)\b/i);
@@ -1380,14 +1551,16 @@ export default {
 
         // The title as matched for one team: normalized, with every
         // CONTAINING_TEAM_NAMES entry the team does not own blanked to spaces
-        // (same length, so the order gate's positions stay true).
+        // (same length, so the order gate's positions stay true), then every
+        // longer school name built on one of its names (see
+        // blankContainingSchoolNames).
         function titleForTeam(titleLower, variants) {
           let t = normalizeTeamMatch(titleLower);
           const own = new Set(variants.map(normalizeTeamMatch));
           for (const name of CONTAINING_TEAM_NAMES) {
-            if (!own.has(name)) t = t.split(name).join(" ".repeat(name.length));
+            if (!ownsTeamName(own, name)) t = t.split(name).join(" ".repeat(name.length));
           }
-          return t;
+          return blankContainingSchoolNames(t, own);
         }
 
         // Where a team first appears in the title (any variant), or -1. Feeds
@@ -1398,7 +1571,7 @@ export default {
           const t = titleForTeam(titleLower, variants);
           let best = -1;
           for (const v of variants) {
-            const i = t.indexOf(normalizeTeamMatch(v));
+            const i = teamNameIndex(t, normalizeTeamMatch(v));
             if (i >= 0 && (best < 0 || i < best)) best = i;
           }
           return best;
@@ -1407,7 +1580,7 @@ export default {
         function titleHasTeam(titleLower, teamName) {
           const variants = getTeamVariants(teamName);
           const normalizedTitle = titleForTeam(titleLower, variants);
-          if (variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)))) return true;
+          if (variants.some((v) => teamNameIndex(normalizedTitle, normalizeTeamMatch(v)) >= 0)) return true;
           // Singular-nickname tolerance. Not hypothetical: the OFFICIAL NFL
           // channel's Week 15 recap of Dec 14 2025 is titled "Washington
           // Commanders vs New York Giant Game Highlights | 2025 NFL Season
@@ -1473,8 +1646,8 @@ export default {
           if (publishedBeforeGame(publishedMatch ? publishedMatch[1] : "", queryGameMs, ageGateNowMs)) return null;
           return {
             videoId: idMatch[1],
-            title: titleMatch ? titleMatch[1] : "",
-            channel: channelMatch ? channelMatch[1] : "",
+            title: titleMatch ? decodeJsonText(titleMatch[1]) : "",
+            channel: channelMatch ? decodeJsonText(channelMatch[1]) : "",
           };
         }).filter(Boolean);
 
@@ -1627,12 +1800,23 @@ export default {
             preferChannelLower === AHA_CHANNEL &&
             queryHasSpecificTeams &&
             AHA_SCORELINE_RX.test(title);
+          // See TOP14_SUMMARY_RX. Strict + the channel + both teams; its try
+          // clips ("Essai de …", 30–100 s) carry neither word, and the
+          // 2-minute floor (HIGHLIGHT_MATCH_GATES in src/lib/youtube.ts)
+          // refuses them as well.
+          const isStrictTop14Summary =
+            strictChannelParam &&
+            isFromChannel &&
+            preferChannelLower === TOP14_CHANNEL &&
+            queryHasSpecificTeams &&
+            TOP14_SUMMARY_RX.test(titleLower);
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
             isStrictBareCflWeek ||
             isStrictAhaScoreline ||
+            isStrictTop14Summary ||
             roundOnlyTitleOk ||
             isStrictBareWnbaRecap ||
             isChessRoundBroadcast ||
@@ -2426,9 +2610,12 @@ export default {
           const isOfficialWorldCupUpload = isWorldCupQuery && WC_OFFICIAL_CHANNELS.includes(channel.toLowerCase());
           const isMaskedOfficialCombatUpload =
             strictChannelParam && isFromChannel && MASKED_COMBAT_CHANNELS.has(preferChannelLower);
+          const isMaskedChainUpload =
+            strictChannelParam && isFromChannel && MASKED_CHAIN_CHANNELS.has(preferChannelLower);
           if (
             !isOfficialWorldCupUpload &&
             !isMaskedOfficialCombatUpload &&
+            !isMaskedChainUpload &&
             !isStrictAhaScoreline &&
             (SCORE_RX.test(title) || SPOILER_RX.test(title) || isTeamScoreSpoiler(title))
           )
@@ -2782,8 +2969,8 @@ export default {
                 const publishedMatch = block.match(/"publishedTimeText":\{"simpleText":"(.*?)"/);
                 // Same age gate as the main loop.
                 if (publishedBeforeGame(publishedMatch ? publishedMatch[1] : "", queryGameMs, ageGateNowMs)) continue;
-                const titleLower = (titleMatch ? titleMatch[1] : "").toLowerCase();
-                const channelLower = (channelMatch ? channelMatch[1] : "").toLowerCase();
+                const titleLower = decodeJsonText(titleMatch ? titleMatch[1] : "").toLowerCase();
+                const channelLower = decodeJsonText(channelMatch ? channelMatch[1] : "").toLowerCase();
                 // Same gates as the main loop: official WC channel, "World Cup"
                 // in the title, a highlight/recap keyword, and BOTH named teams.
                 if (!rescueAllowedChannels.includes(channelLower)) continue;
