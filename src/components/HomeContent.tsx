@@ -42,6 +42,7 @@ import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts, type CardOverride } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
+import AutoplayBlockedPopover from "@/components/AutoplayBlockedPopover";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
@@ -664,8 +665,13 @@ function PostFilterCardChip({ value, onChange, name }: {
 const AUTOPLAY_TITLE = "Play the video in focus, muted. Tap it for sound.";
 const AUTOPLAY_PAUSED_TITLE = "Paused while Media is blurred. Turn Media on to play clips.";
 
-// Set once the "browser blocks autoplay" note has shown (r4): it shows once ever.
-const AUTOPLAY_BLOCKED_NOTE_KEY = "hs.autoplayBlockedNote.v1";
+// ESPN layout, Big: Reddit grid columns by sub count (full class names, so
+// Tailwind keeps them).
+const BIG_REDDIT_COLS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3" };
+
+// Set once the "browser blocks autoplay" popup has shown: it shows once ever.
+// A new key (10/9): the r4 note under the toolbar used v1 of the old one.
+const AUTOPLAY_BLOCKED_POPUP_KEY = "hs.autoplayBlockedPopup.v1";
 
 function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, children }: {
   active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean;
@@ -2907,15 +2913,31 @@ export default function HomeContent({
   }, [showNews, newsLayout, prefs.newsEspnBig, newsAutoplay, prefs.revealNewsMedia, prefs.newsCardPrefs]);
 
   // The browser refused muted autoplay (Firefox "Block Audio and Video",
-  // Safari Low Power Mode): one small note under the toolbar, shown once ever.
-  const [autoplayBlockedNote, setAutoplayBlockedNote] = useState(false);
-  useEffect(() => onAutoplayBlocked(() => {
+  // Safari "Never Auto-Play", iPhone Low Power Mode): a popup over the refused
+  // clip, shown once ever (Jacob 10/9, it replaced the note under the toolbar).
+  // Every clip says "Tap to play" on itself from then on (InlineVideoCard).
+  const [autoplayBlockedAt, setAutoplayBlockedAt] = useState<HTMLElement | null>(null);
+  const closeAutoplayPopup = useCallback(() => setAutoplayBlockedAt(null), []);
+  useEffect(() => onAutoplayBlocked((box) => {
     try {
-      if (localStorage.getItem(AUTOPLAY_BLOCKED_NOTE_KEY)) return;
-      localStorage.setItem(AUTOPLAY_BLOCKED_NOTE_KEY, "1");
+      if (localStorage.getItem(AUTOPLAY_BLOCKED_POPUP_KEY)) return;
+      localStorage.setItem(AUTOPLAY_BLOCKED_POPUP_KEY, "1");
     } catch { return; }
-    setAutoplayBlockedNote(true);
+    setAutoplayBlockedAt(box);
   }), []);
+
+  // ESPN layout, 2 columns: the pinned Top Headlines column publishes its
+  // height, so a column taller than the screen scrolls to its end before it
+  // stays (.espn-headlines-pin in globals.css).
+  const espnHeadlinesRo = useRef<ResizeObserver | null>(null);
+  const pinEspnHeadlines = useCallback((el: HTMLDivElement | null) => {
+    espnHeadlinesRo.current?.disconnect();
+    espnHeadlinesRo.current = null;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => el.style.setProperty("--espn-headlines-h", `${el.offsetHeight}px`));
+    ro.observe(el);
+    espnHeadlinesRo.current = ro;
+  }, []);
 
   useEffect(() => {
     const onScroll = () => {
@@ -3803,22 +3825,6 @@ export default function HomeContent({
             </>)}
           </div>
           </div>
-          {autoplayBlockedNote && (
-            <div role="status" data-testid="autoplay-blocked-note" className="max-w-6xl mx-auto px-4 pb-2 flex justify-center">
-              <p className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
-                Your browser blocks autoplay. Tap a video to play.
-                <button
-                  type="button"
-                  onClick={() => setAutoplayBlockedNote(false)}
-                  aria-label="Dismiss autoplay note"
-                  className="text-base leading-none cursor-pointer transition-opacity hover:opacity-70"
-                  style={{ color: "var(--text-muted)", background: "none", border: "none" }}
-                >
-                  ×
-                </button>
-              </p>
-            </div>
-          )}
         </div>
       )}
 
@@ -4686,18 +4692,24 @@ export default function HomeContent({
                       widthClassName="flex-1 min-w-0 max-w-[520px] xl:max-w-[560px]"
                       {...columnProps}
                     />
-                    <NewsColumn
-                      key={`${k}-headlines`}
-                      title="Top Headlines"
-                      sources={cascadeToSources([ESPN_LAYOUT_HEADLINES])}
-                      widthClassName="flex-1 min-w-0 max-w-[520px] xl:max-w-[560px]"
-                      {...columnProps}
-                    />
+                    {/* Top Headlines is far shorter than the clips, so it
+                        rides beside them instead of leaving the right half
+                        blank (Jacob 10/9). See .espn-headlines-pin. */}
+                    <div ref={pinEspnHeadlines} className="espn-headlines-pin sticky self-start flex-1 min-w-0 max-w-[520px] xl:max-w-[560px]" data-testid="news-espn-headlines-pin">
+                      <NewsColumn
+                        key={`${k}-headlines`}
+                        title="Top Headlines"
+                        sources={cascadeToSources([ESPN_LAYOUT_HEADLINES])}
+                        widthClassName="w-full"
+                        {...columnProps}
+                      />
+                    </div>
                   </div>
                 )}
                 {redditSection(
-                  // Big: a 2-column grid under the 720px clip column.
-                  <div className={big ? "grid grid-cols-2 items-start gap-4 w-full max-w-[720px] mx-auto" : "flex flex-row justify-center items-start gap-2 sm:gap-4"}>
+                  // Big: a grid under the 720px clip column, one column per
+                  // sub (3 subs in 2 columns left the 3rd alone, Jacob 10/9).
+                  <div className={big ? `grid ${BIG_REDDIT_COLS[redditShown.length] ?? "grid-cols-3"} items-start gap-4 w-full max-w-[720px] mx-auto` : "flex flex-row justify-center items-start gap-2 sm:gap-4"}>
                     {redditShown.map((c) => (
                       <NewsColumn
                         key={`${k}-reddit-${c.id}`}
@@ -5970,6 +5982,13 @@ export default function HomeContent({
           />
         );
       })()}
+      {autoplayBlockedAt && !videoModal && (
+        <AutoplayBlockedPopover
+          anchor={autoplayBlockedAt}
+          onTurnOff={() => { updatePrefs({ newsAutoplay: false }); closeAutoplayPopup(); }}
+          onClose={closeAutoplayPopup}
+        />
+      )}
 
       <ControlsHint
         enabled={!prefs.hideControlsHint}
