@@ -292,6 +292,13 @@ export function decodeFavorites(params: URLSearchParams): DecodedShare {
   return result;
 }
 
+export interface NewsCardPrefs {
+  revealTitles?: boolean;
+  revealMedia?: boolean;
+  videosOnly?: boolean;
+  textPosts?: boolean;
+}
+
 export type NewsLayout = "cards" | "feed" | "espn";
 
 // The news layout to render. newsLayout wins; a blob from before it existed
@@ -627,6 +634,11 @@ export interface Preferences {
   // plays muted (components/InlineVideoCard). Undefined = on in every layout
   // (Jacob 10/8 r4).
   newsAutoplay?: boolean;
+  // ESPN layout card header buttons (Jacob 10/8 r5): per-card Headlines /
+  // Media / Videos only / Text posts, keyed by the source's feed key (or its
+  // label when it has none). Unset fields fall back to the global prefs.
+  // Cards and Feed never read this.
+  newsCardPrefs?: Record<string, NewsCardPrefs>;
   // News "Videos only" quick filter: true = show only clip-bearing items. It is
   // ITEM-level on every surface (Cards, Feed, the aligned strip's ESPN tail) —
   // a Reddit v.redd.it post counts, a headline-only post never does — via

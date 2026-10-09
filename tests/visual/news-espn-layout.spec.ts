@@ -128,20 +128,14 @@ test("Hide seen, Headlines, Media and Videos only all act on the ESPN layout", a
   await page.getByTestId("news-hide-seen").click();
   await expect(seenRow).toHaveCount(1);
 
-  // Headlines + Media reveal toggles flip the page-wide classes.
-  const html = page.locator("html");
-  await expect(html).not.toHaveClass(/reveal-news-titles/);
-  await page.getByRole("button", { name: "Toggle headline reveal" }).click();
-  await expect(html).toHaveClass(/reveal-news-titles/);
-  await expect(html).toHaveClass(/blur-news-media/);
-  await page.getByRole("button", { name: "Toggle media reveal" }).click();
-  await expect(html).not.toHaveClass(/blur-news-media/);
-
-  // Videos only: headline-only posts go, the clips stay.
-  await page.getByRole("button", { name: "Toggle videos-only filter" }).click();
-  await expect(page.getByText("espn-top post 1", { exact: true })).toHaveCount(0);
+  // Videos only (r5: a subreddit card's own button): that card's
+  // headline-only posts go, its clips stay, the other cards keep theirs.
+  await page.getByRole("button", { name: "Toggle videos-only filter: r/baseball" }).click();
   await expect(page.getByText("reddit-mlb post 1", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("espn-videos post 1", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("reddit-mlb post 2", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("reddit-nfl post 1", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("espn-top post 1", { exact: true })).toHaveCount(1);
+  expect((await saved(page)).newsCardPrefs?.["reddit-mlb"]?.videosOnly).toBe(true);
 });
 
 test("reload keeps the ESPN layout", async ({ page }) => {
@@ -364,8 +358,8 @@ test("Autoplay is on by default in every layout; a saved off still wins", async 
 
 test("575px: the pill row is one row of icon-only pills, names kept; 1280px shows labels", async ({ page }) => {
   await page.setViewportSize({ width: 575, height: 900 });
-  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true });
-  await expect(chips(page)).toHaveCount(6, LOAD);
+  await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
+  await expect(chips(page)).toHaveCount(5, LOAD);
   const ys = await chips(page).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(ys).size).toBe(1);
   const seg = await pill(page, "Cards").boundingBox();
@@ -380,10 +374,10 @@ test("575px: the pill row is one row of icon-only pills, names kept; 1280px show
   await expect(toolbar(page).getByText("Autoplay", { exact: true })).toBeHidden();
 });
 
-test("390px: still one row; the row scrolls sideways when icons do not fit", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true });
-  await expect(chips(page)).toHaveCount(6, LOAD);
+test("360px: still one row; the row scrolls sideways when icons do not fit", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
+  await expect(chips(page)).toHaveCount(5, LOAD);
   const ys = await chips(page).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(ys).size).toBe(1);
   const sc = await page.locator(".news-toolbar-scroll").evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, ox: getComputedStyle(el).overflowX }));
@@ -470,4 +464,72 @@ test("a layout or Big switch from a scrolled page goes to the top and plays the 
   await page.getByRole("button", { name: "Toggle big ESPN videos" }).click();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect.poll(async () => (await playingKeys(page))[0], { timeout: 2000 }).toBe("https://example.com/espn-videos/0");
+});
+
+// ── Round 5 (Jacob 11:20 PM): ESPN option buttons in each card's header ────
+const headerButtons = (page: Page, label: string) =>
+  page.locator(".news-source-sticky-top", { hasText: label }).first().locator("[data-card-chip]")
+    .evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").replace(/:.*$/, "")));
+
+test("ESPN: the toolbar keeps only the layout switch; each card header has exactly its buttons", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn" });
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["ESPN VIDEOS", "ESPN TOP HEADLINES"]);
+  await expect(toolbar(page).getByRole("button")).toHaveText(["Cards", "Feed", "ESPN"]);
+  expect(await headerButtons(page, "ESPN Videos")).toEqual(["Toggle big ESPN videos", "Toggle news autoplay", "Toggle headline reveal", "Toggle media reveal"]);
+  expect(await headerButtons(page, "ESPN Top Headlines")).toEqual(["Toggle headline reveal", "Toggle media reveal"]);
+  for (const sub of ["r/baseball", "r/nfl", "r/hockey"]) {
+    expect(await headerButtons(page, sub)).toEqual(["Toggle headline reveal", "Toggle media reveal", "Toggle videos-only filter", "Toggle text posts"]);
+  }
+  // Every header button keeps a title and an aria-label.
+  for (const b of await page.locator("[data-card-chip]").all()) {
+    expect(await b.getAttribute("title")).toBeTruthy();
+  }
+  // Big: the one video card carries the same 4.
+  await page.getByRole("button", { name: "Toggle big ESPN videos" }).click();
+  await expect(page.locator('[data-inline-video]').first()).toBeVisible(LOAD);
+  expect(await headerButtons(page, "ESPN Videos")).toEqual(["Toggle big ESPN videos", "Toggle news autoplay", "Toggle headline reveal", "Toggle media reveal"]);
+  await expect(page.getByRole("button", { name: "Toggle big ESPN videos" })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("ESPN: Headlines on the ESPN Videos card reveals that card only", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn" });
+  const blur = (key: string) => page.locator(`[data-news-key="${key}"] .news-title`).first().evaluate((el) => getComputedStyle(el).filter);
+  const vid = "https://example.com/espn-videos/0", top = "https://example.com/espn-top/0", rd = "https://example.com/reddit-mlb/0";
+  await expect(page.locator(`[data-news-key="${rd}"]`)).toHaveCount(1, LOAD);
+  expect(await blur(vid)).toContain("blur");
+  await page.getByRole("button", { name: "Toggle headline reveal: ESPN Videos" }).click();
+  await expect.poll(() => blur(vid)).toBe("none");
+  expect(await blur(top)).toContain("blur");
+  expect(await blur(rd)).toContain("blur");
+  // Media on ESPN Videos unblurs that card's previews only (global stays blurred).
+  const media = (key: string) => page.locator(`[data-news-key="${key}"] .news-media-preview > *`).first().evaluate((el) => getComputedStyle(el).filter);
+  expect(await media(vid)).toContain("blur");
+  await page.getByRole("button", { name: "Toggle media reveal: ESPN Videos" }).click();
+  await expect.poll(() => media(vid)).toBe("none");
+  await expect(page.locator("html")).toHaveClass(/blur-news-media/);
+  expect((await saved(page)).newsCardPrefs?.["espn-videos"]?.revealTitles).toBe(true);
+  expect((await saved(page)).revealNewsTitles).toBeFalsy();
+});
+
+test("Cards and Feed keep the full toolbar", async ({ page }) => {
+  await gotoNews(page);
+  await expect(chips(page)).toHaveCount(5, LOAD);
+  await expect(page.locator("[data-card-chip]")).toHaveCount(0);
+  await pill(page, "Feed").click();
+  await expect(chips(page)).toHaveCount(5);
+  await expect(page.locator("[data-card-chip]")).toHaveCount(0);
+});
+
+test("360px phone: header buttons fit, the label gives way", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await gotoNews(page, { newsLayout: "espn" });
+  await expect.poll(() => headersIn(page, "news-espn-layout"), LOAD).toContain("R/BASEBALL");
+  const fit = await page.locator(".news-source-sticky-top").evaluateAll((hs) => hs.map((h) => {
+    const bar = h.firstElementChild!.getBoundingClientRect();
+    return Array.from(h.querySelectorAll("[data-card-chip]")).every((c) => {
+      const r = c.getBoundingClientRect();
+      return r.right <= bar.right + 0.5 && r.width >= 27;
+    });
+  }));
+  expect(fit.every(Boolean)).toBe(true);
 });

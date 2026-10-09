@@ -931,6 +931,7 @@ export default function SettingsPanel({
     newsLayout: undefined,
     newsEspnBig: undefined,
     newsAutoplay: undefined,
+    newsCardPrefs: undefined,
     newsVideosOnly: undefined,
     newsOldestFirst: undefined,
     newsHideSeen: undefined,

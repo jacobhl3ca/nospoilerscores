@@ -38,7 +38,7 @@ import MlbSeasonReviewModal from "@/components/MlbSeasonReviewModal";
 import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, MLB_REVIEW_HIDDEN_KEY, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
-import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
+import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts, type CardOverride } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
@@ -536,6 +536,57 @@ function SingleColToggle({ active, onClick, compact }: { active: boolean; onClic
 // posts while Videos only is on). It renders dimmed + aria-disabled but still
 // toggles, so the pref can be pre-set for when the override lifts — a real
 // disabled button would trap the user in the override.
+// News chip icons shared by the toolbar and the ESPN card headers (r5):
+// Autoplay = a play triangle in a circle (lucide circle-play), Big = two
+// diagonal arrows (lucide maximize-2), so there is only one play icon.
+function AutoplayIcon({ size = 16 }: { size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" /></svg>;
+}
+function BigIcon({ size = 16 }: { size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>;
+}
+function HeadlinesIcon({ on, size = 16 }: { on: boolean; size?: number }) {
+  return on
+    ? <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
+    : <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>;
+}
+function MediaIcon({ size = 16 }: { size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>;
+}
+function VideosOnlyIcon({ size = 16 }: { size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>;
+}
+function TextPostsIcon({ size = 16 }: { size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>;
+}
+
+// ESPN layout card-header button (r5): icon only, same look as
+// NewsToggleChip, sized to the header bar.
+function CardChip({ active, onClick, title, ariaLabel, disabled, children }: {
+  active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean; children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={ariaLabel}
+      aria-pressed={active}
+      aria-disabled={disabled || undefined}
+      data-card-chip=""
+      className="inline-flex shrink-0 items-center justify-center w-7 h-7 rounded-full transition-colors cursor-pointer"
+      style={{
+        background: active ? "var(--accent)" : "var(--bg-card)",
+        border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+        color: active ? "white" : "var(--text-muted)",
+        opacity: disabled ? 0.45 : undefined,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 // Set once the "browser blocks autoplay" note has shown (r4): it shows once ever.
 const AUTOPLAY_BLOCKED_NOTE_KEY = "hs.autoplayBlockedNote.v1";
 
@@ -3561,23 +3612,9 @@ export default function HomeContent({
                 </button>
               ))}
             </div>
-            {/* ESPN layout only: Big = one wide column of large clips that play
-                muted while on screen (Jacob 10/8). */}
-            {newsLayout === "espn" && (
-              <NewsToggleChip
-                compact={toolbarFit.compact}
-                active={!!prefs.newsEspnBig}
-                onClick={() => {
-                  window.scrollTo(0, 0);
-                  updatePrefs({ newsEspnBig: !prefs.newsEspnBig });
-                }}
-                title="One wide column of big ESPN clips"
-                ariaLabel="Toggle big ESPN videos"
-              >
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m10 9 5 3-5 3z" /></svg>
-                <span>Big</span>
-              </NewsToggleChip>
-            )}
+            {/* ESPN layout (r5): the toolbar keeps only the layout switch;
+                every option button sits in its card's header (espnCardOverride). */}
+            {newsLayout !== "espn" && (<>
             <NewsToggleChip
               compact={toolbarFit.compact}
               active={newsAutoplay}
@@ -3585,7 +3622,7 @@ export default function HomeContent({
               title="Play the video in focus, muted. Tap it for sound."
               ariaLabel="Toggle news autoplay"
             >
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
+              <AutoplayIcon />
               <span>Autoplay</span>
             </NewsToggleChip>
             <NewsToggleChip
@@ -3641,6 +3678,7 @@ export default function HomeContent({
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
               <span>Text posts</span>
             </NewsToggleChip>
+            </>)}
           </div>
           </div>
           {autoplayBlockedNote && (
@@ -3909,6 +3947,7 @@ export default function HomeContent({
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
               label: c.label,
+              key: c.key,
               logoUrl: c.logoUrl,
               variant: c.variant,
               fetch: c.kind === "espn-league" && c.sport
@@ -4304,6 +4343,93 @@ export default function HomeContent({
             }
             const redditShown = redditCols.slice(0, 3);
             const big = !!prefs.newsEspnBig;
+            // Each card's header carries its own buttons (Jacob 10/8 r5):
+            // ESPN Videos = Big, Autoplay, Headlines, Media; Top Headlines =
+            // Headlines, Media; each subreddit = Headlines, Media, Videos only,
+            // Text posts. Headlines / Media / Videos only / Text posts act on
+            // that card only (newsCardPrefs, falling back to the global pref);
+            // Big and Autoplay stay global.
+            const cardPrefs = prefs.newsCardPrefs ?? {};
+            const setCardPref = (key: string, patch: Partial<NonNullable<typeof cardPrefs[string]>>) =>
+              updatePrefs({ newsCardPrefs: { ...cardPrefs, [key]: { ...cardPrefs[key], ...patch } } });
+            const espnCardOverride = (source: NewsSource): CardOverride => {
+              const key = source.key ?? source.label;
+              const cp = cardPrefs[key] ?? {};
+              const isVideos = key === ESPN_LAYOUT_VIDEOS.key;
+              const isEspn = isVideos || key === ESPN_LAYOUT_HEADLINES.key;
+              const titles = cp.revealTitles ?? !!prefs.revealNewsTitles;
+              const media = cp.revealMedia ?? prefs.revealNewsMedia === true;
+              // Videos only and Text posts do not apply to the ESPN cards.
+              const vOnly = isEspn ? false : cp.videosOnly ?? !!prefs.newsVideosOnly;
+              const text = isEspn ? true : cp.textPosts ?? !!prefs.showTextPosts;
+              const name = source.label;
+              return {
+                className: `news-card-titles-${titles ? "on" : "off"} news-card-media-${media ? "on" : "off"} news-card-textposts-${text ? "on" : "off"}`,
+                videosOnly: vOnly,
+                showTextPosts: text,
+                controls: (
+                  <>
+                    {isVideos && (
+                      <CardChip
+                        active={big}
+                        onClick={() => { window.scrollTo(0, 0); updatePrefs({ newsEspnBig: !big }); }}
+                        title="One wide column of big ESPN clips"
+                        ariaLabel="Toggle big ESPN videos"
+                      >
+                        <BigIcon size={14} />
+                      </CardChip>
+                    )}
+                    {isVideos && (
+                      <CardChip
+                        active={newsAutoplay}
+                        onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
+                        title="Play the video in focus, muted. Tap it for sound."
+                        ariaLabel="Toggle news autoplay"
+                      >
+                        <AutoplayIcon size={14} />
+                      </CardChip>
+                    )}
+                    <CardChip
+                      active={titles}
+                      onClick={() => setCardPref(key, { revealTitles: !titles })}
+                      title={`Show or blur the headlines in ${name}`}
+                      ariaLabel={`Toggle headline reveal: ${name}`}
+                    >
+                      <HeadlinesIcon on={titles} size={14} />
+                    </CardChip>
+                    <CardChip
+                      active={media}
+                      onClick={() => setCardPref(key, { revealMedia: !media })}
+                      title={`Show or blur the images and videos in ${name}`}
+                      ariaLabel={`Toggle media reveal: ${name}`}
+                    >
+                      <MediaIcon size={14} />
+                    </CardChip>
+                    {!isEspn && (
+                      <CardChip
+                        active={vOnly}
+                        onClick={() => setCardPref(key, { videosOnly: !vOnly })}
+                        title={`Show only video posts in ${name}`}
+                        ariaLabel={`Toggle videos-only filter: ${name}`}
+                      >
+                        <VideosOnlyIcon size={14} />
+                      </CardChip>
+                    )}
+                    {!isEspn && (
+                      <CardChip
+                        active={text}
+                        onClick={() => setCardPref(key, { textPosts: !text })}
+                        title={vOnly ? "Off while Videos only is on" : `Show or hide headline-only text posts in ${name}`}
+                        ariaLabel={`Toggle text posts: ${name}`}
+                        disabled={vOnly}
+                      >
+                        <TextPostsIcon size={14} />
+                      </CardChip>
+                    )}
+                  </>
+                ),
+              };
+            };
             // No column titles (Jacob 10/8): each card's own header already
             // says ESPN Videos / ESPN Top Headlines / r/<sub>, and the titles
             // pushed Big's first clip half a screen down. Rows hug their
@@ -4319,6 +4445,7 @@ export default function HomeContent({
               hiddenCategories: hiddenNewsCategories,
               hideSeenKeys,
               onSeenHiddenCount: reportSeenHidden,
+              cardOverride: espnCardOverride,
             };
             const k = `espn-${newsRefreshKey}`;
             if (isMobile) {

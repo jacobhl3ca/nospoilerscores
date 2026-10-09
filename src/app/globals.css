@@ -141,17 +141,28 @@
   -webkit-user-select: none;
 }
 html.reveal-news-titles .news-title,
+.news-card-titles-on .news-title,
 .news-title.peek {
   filter: none;
   cursor: auto;
   user-select: auto;
   -webkit-user-select: auto;
 }
+/* ESPN layout (r5): a card's own Headlines button wins over the global one.
+   HomeContent puts .news-card-titles-on/off on each card (NewsColumn
+   CardOverride); a single tapped .peek row still shows. */
+html.reveal-news-titles .news-card-titles-off .news-title:not(.peek) {
+  filter: blur(7px);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
 /* Text-post visibility is independent from headline reveal. .news-textpost
    marks one mixed-source row; .news-card-alltext collapses an all-text source
    card so hiding its rows never leaves a bare header behind. */
-html:not(.show-text-posts) .news-textpost,
-html:not(.show-text-posts) .news-card-alltext {
+html:not(.show-text-posts) .news-textpost:not(.news-card-textposts-on .news-textpost),
+html:not(.show-text-posts) .news-card-alltext,
+.news-card-textposts-off .news-textpost {
   display: none;
 }
 
@@ -181,9 +192,15 @@ html.hs-play-dismissed .hs-play-badge {
 .news-media-preview > * {
   transition: filter 150ms ease, transform 150ms ease;
 }
-html.blur-news-media .news-media-preview > * {
+html.blur-news-media .news-media-preview > *,
+.news-card-media-off .news-media-preview > * {
   filter: blur(12px);
   transform: scale(1.08);
+}
+/* ESPN layout (r5): a card's own Media button wins over the global one. */
+html.blur-news-media .news-card-media-on .news-media-preview > * {
+  filter: none;
+  transform: none;
 }
 @media (prefers-reduced-motion: reduce) {
   /* Apply the blur mask instantly — no animated filter/scale sweep when the
