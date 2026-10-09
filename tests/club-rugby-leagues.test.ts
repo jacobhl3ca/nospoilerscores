@@ -23,7 +23,13 @@ const espn = await jiti.import<{
   sportGroup: (sport: string) => string;
   normalizeRugbyLinescores: (competitors: unknown[]) => void;
 }>("../src/lib/espn.ts");
-const yt = await jiti.import<{ hasNoTrustedHighlightSource: (sport: string) => boolean }>("../src/lib/youtube.ts");
+const yt = await jiti.import<{
+  hasNoTrustedHighlightSource: (sport: string) => boolean;
+  getOfficialChannelName: (sport: string) => string | null;
+  getCompetitionTitleTokens: (sport: string) => string[];
+  getHighlightMatchGates: (sport: string) => { homeFirst?: boolean; minSec?: number } | undefined;
+  highlightMatchGateParams: (gates?: { homeFirst?: boolean; minSec?: number }) => string;
+}>("../src/lib/youtube.ts");
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
 const src = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
@@ -93,13 +99,27 @@ test("rugby tests show in 2026 for the Aug–Oct tests, and still in odd years",
   assert.ok(on(new Date(2027, 6, 10)), "odd-year July tests unchanged");
 });
 
-test("only URC is lit; the other four stay dark", () => {
+test("URC and Top 14 are lit; the other three stay dark", () => {
   assert.equal(yt.hasNoTrustedHighlightSource("urc"), false);
-  for (const s of ["premrugby", "top14", "challengecup", "mlr"]) assert.equal(yt.hasNoTrustedHighlightSource(s), true, s);
+  assert.equal(yt.hasNoTrustedHighlightSource("top14"), false);
+  for (const s of ["premrugby", "challengecup", "mlr"]) assert.equal(yt.hasNoTrustedHighlightSource(s), true, s);
   const bake = src("../scripts/prebake-news.mjs");
   const audit = src("../scripts/check-highlight-fallbacks.mjs");
   assert.ok(/sport: "urc",\s+path: "\/rugby\/270557\/scoreboard",\s+channel: "United Rugby Championship"/.test(bake));
   assert.ok(audit.includes('urc: "United Rugby Championship"'));
+  // Top 14: the league's own channel, behind its title token and the
+  // home-first + 2-minute gates, in the app, the bake and the audit alike.
+  assert.equal(yt.getOfficialChannelName("top14"), "TOP 14 - Officiel");
+  assert.deepEqual(yt.getCompetitionTitleTokens("top14"), ["top 14"]);
+  assert.deepEqual(yt.getHighlightMatchGates("top14"), { homeFirst: true, minSec: 120 });
+  assert.equal(yt.highlightMatchGateParams(yt.getHighlightMatchGates("top14")), "&order=home&minsec=120");
+  assert.ok(/sport: "top14",\s+path: "\/rugby\/270559\/scoreboard",\s+channel: "TOP 14 - Officiel"/.test(bake));
+  for (const f of [bake, audit]) {
+    assert.ok(f.includes('top14: { homeFirst: true, minSec: 120 }'), "top14 gates");
+    assert.ok(f.includes('top14: ["top 14"]'), "top14 token");
+  }
+  assert.ok(audit.includes('top14: "TOP 14 - Officiel"'));
+  assert.ok(audit.includes('top14:        "/rugby/270559/scoreboard"'));
   for (const f of [src("../src/lib/youtube.ts"), bake, audit]) {
     assert.ok(f.includes('"Cardiff Blues": "Cardiff Rugby"'), "Cardiff alias in all three");
     assert.ok(f.includes('"Benetton Treviso": "Benetton"'), "Benetton alias in all three");

@@ -89,6 +89,16 @@
 //     ("Birmingham 2 Boro 2"), so every club channel is in `maskTitle`.
 //   ligamx: LIGA BBVA MX, the league's own channel, behind TUDN USA. Its
 //     titles print the result too ("JUÁREZ 2-0 TIGRES J9 AP26").
+//   uel (added 2026-10-03, NOT searchOnly): TUDN USA (Spanish commentary)
+//     after CBS Sports Golazo - Europe, live and in the bake, like its
+//     Nations League slot. Its titles are clean ("HIGHLIGHTS - Juventus vs
+//     NEC | UEFA Europa League - League Phase | TUDN") and name the home club
+//     first; the "europa league" token is per link because CBS titles read
+//     "UEL League Phase MD1". Matchday 1 (9/16–17), probed 2026-10-03
+//     with the gates: CBS 18/18 (four only through the club aliases in
+//     public/_worker.js), TUDN 14/18, 0 wrong on either. The home-first +
+//     5-minute gates (HIGHLIGHT_MATCH_GATES in youtube.ts) drop TUDN's goal
+//     clips.
 //
 // Two ncaaf gaps closed 2026-09-27 (Sep 26 slate, both ESPN+ games that ESPN
 // College Football skipped):
@@ -99,6 +109,13 @@
 //     cuts ("MAC MBB: …") off a football date. Last season's titles printed
 //     the score ("Condensed Game: Ohio 31, Buffalo 26"), so it is in
 //     `maskTitle`.
+//   Pac-12 (conference 9, added 2026-10-03): "Pac-12" cut 7 of its 8 week-5
+//     games ("Oregon State vs. UTEP: Beavers Shine in Wire-to-Wire Victory |
+//     FULL Game Highlights (9/26/2026)", "GAME RECAP: …"), 0 wrong. Its
+//     titles name the winner or print the score, so it is in `maskTitle`, and
+//     the worker takes such a title on a strict lookup of this channel only
+//     (MASKED_CHAIN_CHANNELS in public/_worker.js). No "football" in its
+//     titles, so it carries its own tokens ("game highlights", "game recap").
 //   `teamChannels` (ESPN team id → the school's own channel) is the last
 //     link, after the networks, for a school whose conference channel skips
 //     its non-conference games. Marshall (Sun Belt posted nothing for

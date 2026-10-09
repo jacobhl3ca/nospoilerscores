@@ -1,6 +1,6 @@
 "use client";
 
-import { MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sport } from "@/lib/types";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
@@ -11,13 +11,27 @@ import { frontendHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
+import InlineVideoCard from "@/components/InlineVideoCard";
 
 export interface NewsSource {
   label: string;
+  // Prebaked feed key (lib/news ColumnSource.key), when there is one.
+  key?: string;
   fetch: () => Promise<NewsItem[]>;
   logoUrl?: string;
   variant?: "text" | "video";
   youtubeChannel?: string;
+}
+
+// ESPN layout (Jacob 10/8 r5): one source card's own header buttons and
+// filters. `controls` sits right-aligned in the card's header bar;
+// `className` carries the per-card reveal classes (globals.css .news-card-*);
+// videosOnly / showTextPosts replace the column-wide values for this card.
+export interface CardOverride {
+  controls?: ReactNode;
+  className?: string;
+  videosOnly?: boolean;
+  showTextPosts?: boolean;
 }
 
 // Single source of truth for the modal-trigger payload — used by TextRow,
@@ -169,6 +183,18 @@ interface NewsColumnProps {
   // Show the subtle × remove-column control on this column's title (see
   // NewsColumnTitle.removable) — set only when more than one column is visible.
   removable?: boolean;
+  // Video sources render as large cards (InlineVideoCard) — the ESPN
+  // layout's "Big" mode.
+  bigVideos?: boolean;
+  // Video cards play muted while in focus (InlineVideoCard) — the news
+  // toolbar's Autoplay pill.
+  autoplayVideos?: boolean;
+  // Text rows hug their content (thumb + headline) instead of the 7rem floor
+  // that lines rows up across side-by-side Cards columns. The ESPN layout has
+  // no cross-column alignment to keep, so the floor only left blank space.
+  hugRows?: boolean;
+  // ESPN layout (r5): per-card header buttons and filters, by source.
+  cardOverride?: (source: NewsSource) => CardOverride | undefined;
 }
 
 // Sticky league title (with optional swap dropdown for the 3rd column).
@@ -447,7 +473,7 @@ export function NewsColumnTitle({
   );
 }
 
-function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
+function SourceHeader({ label, logoUrl, controls }: { label: string; logoUrl?: string; controls?: ReactNode }) {
   const mobileLabel = stripLeaguePrefixForMobile(label);
   return (
     // Outer wrapper carries sticky + page bg so the corner triangles outside
@@ -495,13 +521,20 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
             onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
         )}
+        {/* min-w-0 + truncate: with header buttons the label gives way,
+            never the buttons (r5). */}
         {mobileLabel !== label ? (
           <>
-            <span className="sm:hidden">{mobileLabel}</span>
-            <span className="hidden sm:inline">{label}</span>
+            <span className="sm:hidden min-w-0 truncate">{mobileLabel}</span>
+            <span className="hidden sm:inline min-w-0 truncate">{label}</span>
           </>
         ) : (
-          <span>{label}</span>
+          <span className="min-w-0 truncate">{label}</span>
+        )}
+        {controls && (
+          <div className="ml-auto flex shrink-0 items-center gap-1 normal-case tracking-normal" data-testid="card-header-controls">
+            {controls}
+          </div>
         )}
       </div>
     </div>
@@ -522,7 +555,7 @@ function stripLeaguePrefixForMobile(label: string): string {
   return s || label;
 }
 
-function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null }) {
+function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex, hugRows, controls, cardClassName }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null; hugRows?: boolean; controls?: ReactNode; cardClassName?: string }) {
   // The sibling list spans every source in the column. baseIndex is this card's
   // offset; a row's global index = baseIndex + its row index.
   const columnSiblings = baseIndex != null ? (siblings ?? null) : null;
@@ -530,7 +563,9 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
   // card), collapse the whole card while text posts are hidden — otherwise a
   // bare header with no rows would sit there. Mixed cards keep the header and
   // just hide their individual text rows.
-  const allText = items.length > 0 && items.every(itemIsTextPost);
+  // A card with its own header buttons never collapses: they are how the
+  // reader turns Text posts back on for it.
+  const allText = !controls && items.length > 0 && items.every(itemIsTextPost);
   return (
     // overflow-clip (not overflow-hidden) so position: sticky on SourceHeader
     // pins to the window, not to this card. overflow-hidden establishes a
@@ -539,10 +574,10 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
     // + borderTop overlaps the parent's top edge as a single 1px line —
     // real borders push the inner 1px inward, creating nested curves at top.
     <div
-      className={`rounded-lg overflow-clip${allText ? " news-card-alltext" : ""}`}
+      className={`rounded-lg overflow-clip${allText ? " news-card-alltext" : ""}${cardClassName ? ` ${cardClassName}` : ""}`}
       style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)" }}
     >
-      <SourceHeader label={label} logoUrl={logoUrl} />
+      <SourceHeader label={label} logoUrl={logoUrl} controls={controls} />
       {loading ? (
         // Screen readers get an announced loading status; the pulsing row
         // placeholders are purely decorative (empty styled divs), so they're
@@ -567,7 +602,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => (
-            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} siblings={columnSiblings} index={columnSiblings ? (baseIndex ?? 0) + idx : idx} />
+            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} siblings={columnSiblings} index={columnSiblings ? (baseIndex ?? 0) + idx : idx} hugRows={hugRows} />
           ))}
         </div>
       )}
@@ -581,7 +616,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
 // `Content-Type: image/jpeg` and Firefox sometimes refuses to render the
 // mismatch) we drop the thumb container entirely so the row degrades to
 // clean text instead of showing an empty grey placeholder box.
-function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; index?: number }) {
+function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; index?: number; hugRows?: boolean }) {
   const [imgFailed, setImgFailed] = useState(false);
   // NO per-row reveal gesture here. The list headline OPENS the post, full stop
   // (Jacob 8/10, reversing the tri-state toggle added earlier the same day):
@@ -609,7 +644,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // .news-textpost gates visibility; .news-title keeps the headline blurred
   // until the global reveal toggle un-blurs it or the row is tapped open.
   const isTextPost = itemIsTextPost(item);
-  const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] sm:min-h-[7rem]${isTextPost ? " news-textpost" : ""}`;
+  const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]${hugRows ? "" : " sm:min-h-[7rem]"}${isTextPost ? " news-textpost" : ""}`;
   const titleCls = "news-title min-w-0 line-clamp-5";
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   // Every news item opens the same modal; its source link remains available
@@ -841,16 +876,16 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   );
 }
 
-function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null }) {
+function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex, controls, cardClassName }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null; controls?: ReactNode; cardClassName?: string }) {
   return (
     // overflow-clip — see TextSourceCard for why (sticky SourceHeader needs
     // window as the scroll container). box-shadow inset for the card outline
     // (see TextSourceCard for the alignment rationale).
     <div
-      className="rounded-lg overflow-clip"
+      className={`rounded-lg overflow-clip${cardClassName ? ` ${cardClassName}` : ""}`}
       style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)" }}
     >
-      <SourceHeader label={label} logoUrl={logoUrl} />
+      <SourceHeader label={label} logoUrl={logoUrl} controls={controls} />
       {loading ? (
         // See TextSourceCard: sr-only status is announced, decorative pulse
         // placeholders are aria-hidden (WCAG 4.1.3, matching HomeContent).
@@ -871,7 +906,10 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
         // "Loading videos…" out for a silent line (WCAG 4.1.3).
         <p role="status" aria-live="polite" className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No videos</p>
       ) : (
-        <div className="flex flex-col">
+        // px-px: the card outline is an inset box-shadow, painted UNDER its
+        // children, so edge-to-edge thumbnails covered the left/right 1px and
+        // the outline vanished beside every clip (Jacob 10/8).
+        <div className="flex flex-col px-px">
           {items.map((item, idx) => {
             const commonCls = "block w-full text-left transition-opacity hover:opacity-90 cursor-pointer";
             const commonStyle = { borderTop: idx === 0 ? "none" : "1px solid var(--border)" };
@@ -990,7 +1028,50 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys, onHiddenItems, hideSeenKeys, onSeenHidden }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; restoredKeys?: Set<string>; onHiddenItems?: (label: string, items: NewsItem[]) => void; hideSeenKeys?: Set<string>; onSeenHidden?: (label: string, count: number) => void }) {
+// A video source card when Big or Autoplay is on: one InlineVideoCard per
+// clip. With Autoplay, the clip most in focus plays muted (InlineVideoCard).
+function InlineVideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex, autoplay, large, controls, cardClassName }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null; autoplay: boolean; large: boolean; controls?: ReactNode; cardClassName?: string }) {
+  if (loading || items.length === 0) {
+    return <VideoSourceCard label={label} logoUrl={logoUrl} items={items} loading={loading} onPlay={onPlay} siblings={siblings} baseIndex={baseIndex} controls={controls} cardClassName={cardClassName} />;
+  }
+  return (
+    <div className={`rounded-lg overflow-clip${cardClassName ? ` ${cardClassName}` : ""}`} style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)" }}>
+      <SourceHeader label={label} logoUrl={logoUrl} controls={controls} />
+      {/* px-px: keep the inset-shadow outline visible beside the clips (see VideoSourceCard). */}
+      <div className="flex flex-col px-px">
+        {items.map((item, idx) => (
+          <div key={item.id} style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)" }}>
+            <InlineVideoCard
+              item={item}
+              autoplay={autoplay}
+              large={large}
+              ariaLabel={`Play highlight: ${item.headline}`}
+              onOpen={() => {
+                if (onPlay) {
+                  onPlay({
+                    ...newsItemToPlayOpts(item),
+                    sourceLabel: null,
+                    siblings: siblings ?? undefined,
+                    index: baseIndex != null ? baseIndex + idx : idx,
+                  });
+                } else if (item.articleUrl) {
+                  window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
+                }
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys, onHiddenItems, hideSeenKeys, onSeenHidden, bigVideos, autoplayVideos, hugRows, cardOverride }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; restoredKeys?: Set<string>; onHiddenItems?: (label: string, items: NewsItem[]) => void; hideSeenKeys?: Set<string>; onSeenHidden?: (label: string, count: number) => void; bigVideos?: boolean; autoplayVideos?: boolean; hugRows?: boolean; cardOverride?: (source: NewsSource) => CardOverride | undefined }) {
+  const override = cardOverride?.(source);
+  const controls = override?.controls;
+  const cardClassName = override?.className;
+  if (override?.videosOnly !== undefined) videosOnly = override.videosOnly;
+  if (override?.showTextPosts !== undefined) showTextPosts = override.showTextPosts;
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1070,8 +1151,35 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   const hidden = !loading && items.length > 0 && shown.length === 0;
   const renderState: SourceRenderState = loading ? "loading" : hidden ? "hidden" : "shown";
   useEffect(() => { onRenderState?.(source.label, renderState); }, [renderState, source.label, onRenderState]);
+  // A card with its own buttons stays, so they can undo the filter that
+  // emptied it (r5).
+  if (hidden && controls) {
+    return (
+      <div className={`rounded-lg overflow-clip${cardClassName ? ` ${cardClassName}` : ""}`} style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)" }}>
+        <SourceHeader label={source.label} logoUrl={source.logoUrl} controls={controls} />
+        <p className="px-3 py-3 text-xs" style={{ color: "var(--text-muted)" }}>Nothing here with this card&apos;s filters.</p>
+      </div>
+    );
+  }
   if (hidden) return null;
 
+  if (source.variant === "video" && (bigVideos || autoplayVideos)) {
+    return (
+      <InlineVideoSourceCard
+        label={source.label}
+        logoUrl={source.logoUrl}
+        items={shown}
+        loading={loading}
+        onPlay={onPlayVideo}
+        siblings={siblings}
+        baseIndex={baseIndex}
+        autoplay={!!autoplayVideos}
+        large={!!bigVideos}
+        controls={controls}
+        cardClassName={cardClassName}
+      />
+    );
+  }
   if (source.variant === "video") {
     return (
       <VideoSourceCard
@@ -1082,10 +1190,12 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
         onPlay={onPlayVideo}
         siblings={siblings}
         baseIndex={baseIndex}
+        controls={controls}
+        cardClassName={cardClassName}
       />
     );
   }
-  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={shown} loading={loading} onPlay={onPlayVideo} siblings={siblings} baseIndex={baseIndex} />;
+  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={shown} loading={loading} onPlay={onPlayVideo} siblings={siblings} baseIndex={baseIndex} hugRows={hugRows} controls={controls} cardClassName={cardClassName} />;
 }
 
 export default function NewsColumn({
@@ -1111,6 +1221,10 @@ export default function NewsColumn({
   hiddenCategories,
   hideSeenKeys,
   onSeenHiddenCount,
+  bigVideos,
+  autoplayVideos,
+  hugRows,
+  cardOverride,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
 
@@ -1252,6 +1366,10 @@ export default function NewsColumn({
             onHiddenItems={handleHiddenItems}
             hideSeenKeys={hideSeenKeys}
             onSeenHidden={handleSeenHidden}
+            bigVideos={bigVideos}
+            autoplayVideos={autoplayVideos}
+            hugRows={hugRows}
+            cardOverride={cardOverride}
           />
         ))}
         {allFiltered && (
@@ -1272,7 +1390,7 @@ export default function NewsColumn({
                 {videosOnly ? "No videos here right now." : "Nothing to show with these filters."}
                 <span className="block mt-1" style={{ opacity: 0.8 }}>
                   {videosOnly
-                    ? "Turn off Videos only, or widen Source in the filter menu."
+                    ? "Set Posts to All, or widen Source in the filter menu."
                     : "Try widening Source in the filter menu."}
                 </span>
               </>

@@ -3,10 +3,10 @@ import test from "node:test";
 import { createJiti } from "jiti";
 
 // A league turned off in Settings' switcher list leaves the board too (Jacob
-// 9/26: "if a league is turned off like f1 i still saw it in my main leagues.
-// it should switch to next top league available in switcher"). An Auto column
-// skips it; a column pinned to it shows the top league not already on the
-// board. espn.ts is loaded through jiti (see preseason-separation.test.ts);
+// 9/26: "if a league is turned off like f1 i still saw it in my main
+// leagues"). An Auto column skips it; a column pinned to it closes, and no
+// other league takes it (Jacob 10/8, replacing the 9/26 "switch to next top
+// league" rule). espn.ts is loaded through jiti (see preseason-separation.test.ts);
 // every network read gets an empty scoreboard, so only slot resolution runs.
 
 type Cfg = { sport: string };
@@ -20,8 +20,7 @@ const espn = await jiti.import<{
     bestOpts: undefined,
     hidden?: string[],
   ) => Promise<Array<{ sport: string } | null>>;
-  pickAndAssignLeagues: (d: Date, count?: number, hidden?: string[]) => Cfg[];
-  nextUnusedLeague: (d: Date, hidden: string[], used: Set<string>) => Cfg | null;
+  pickAndAssignLeagues: (d: Date, count?: number, hidden?: string[]) => Array<Cfg & { label: string }>;
 }>("../src/lib/espn.ts");
 
 // A past date keeps the board off the today-only paths (lookahead, Best of
@@ -49,27 +48,31 @@ test("Auto never places a hidden league", () => {
   assert.equal(withoutTop.length, 5);
 });
 
-test("a column pinned to a hidden league shows the top unused league", async () => {
+test("a column pinned to a hidden league closes", async () => {
   const shown = await boardSports({ first: "mlb", second: "nfl", third: "f1" }, ["f1"]);
-  const expected = espn.nextUnusedLeague(DAY, ["f1"], new Set(["mlb", "nfl"]));
-  assert.ok(expected, "some league is free");
-  assert.deepEqual(shown, ["mlb", "nfl", expected.sport]);
+  assert.deepEqual(shown, ["mlb", "nfl"]);
 });
 
 test("the pin is untouched while the league is on", async () => {
-  const pinned = espn.nextUnusedLeague(DAY, [], new Set());
-  assert.ok(pinned);
-  const shown = await boardSports({ first: "mlb", second: "nfl", third: pinned.sport }, []);
-  assert.deepEqual(shown, ["mlb", "nfl", pinned.sport]);
+  const shown = await boardSports({ first: "mlb", second: "nfl", third: "ncaaf" }, []);
+  assert.deepEqual(shown, ["mlb", "nfl", "ncaaf"]);
 });
 
-test("two hidden pins take two different leagues, in ranked order", async () => {
+test("two hidden pins close two columns; the shown pin stays", async () => {
   const shown = await boardSports({ first: "f1", second: "mlb", third: "ufc" }, ["f1", "ufc"]);
-  assert.equal(shown.length, 3);
-  assert.equal(new Set(shown).size, 3, `duplicate on ${shown}`);
-  const first = espn.nextUnusedLeague(DAY, ["f1", "ufc"], new Set(["mlb"]));
-  const second = espn.nextUnusedLeague(DAY, ["f1", "ufc"], new Set(["mlb", first!.sport]));
-  assert.deepEqual(shown, [first!.sport, "mlb", second!.sport]);
+  assert.deepEqual(shown, ["mlb"]);
+});
+
+// The client reads a hidden pin as closed on every date (closeHiddenPins), so
+// a past board must not give it the slot's Auto league.
+test("a hidden Best of yesterday pin closes on a past board too", async () => {
+  const shown = await boardSports({ first: "mlb", second: "best", third: "nfl" }, ["best"]);
+  assert.deepEqual(shown, ["mlb", "nfl"]);
+});
+
+test("a hidden ESPN front page pin closes too", async () => {
+  const shown = await boardSports({ first: "mlb", second: "nfl", third: "top" }, ["top"]);
+  assert.deepEqual(shown, ["mlb", "nfl"]);
 });
 
 test("hiding an Auto column's league moves that column, not the pins", async () => {
@@ -88,4 +91,15 @@ test("an ESPN front page pin holds on a past board and takes Auto on a future on
   const shown = (await espn.fetchAllLeagues(future, undefined, { first: "mlb", second: "nfl", third: "top" }, 3, undefined, []))
     .flatMap((l) => (l ? [l.sport] : []));
   assert.ok(!shown.includes("top"), `top on a future board: ${shown}`);
+});
+
+// NBA Preseason is opt-in (2026-10-09): backfillOnly, and in October every slot
+// is already taken, so Auto never opens it on a 3- or 5-column board.
+test("Auto never places NBA Preseason in October", () => {
+  const day = new Date("2026-10-09T12:00:00");
+  for (const count of [3, 5]) {
+    const labels = espn.pickAndAssignLeagues(day, count).map((l) => l.label);
+    assert.equal(labels.length, count, `only ${labels} on a ${count}-slot board`);
+    assert.ok(!labels.includes("NBA Preseason"), `${count} slots: ${labels}`);
+  }
 });

@@ -319,6 +319,84 @@ test("an embed-blocked FotMob clip opens straight on the YouTube card with the s
   expect(playerApiLoads, "the IFrame API was fetched, so a player was being built").toEqual([]);
 });
 
+// 2026-10-03: the SEC's volleyball cuts refuse every embed while its soccer
+// cuts play in-app, and each volleyball cut's YouTube description opens with
+// the result. The volleyball card opens straight on the YouTube card and says
+// so; an SEC soccer card is unchanged.
+function secHighlights(key: string, teams: [string, string], official: string) {
+  return JSON.stringify({ games: { [key]: {
+    t: Date.parse("2026-09-28T12:00:00Z"), teams, matchup: [...teams].map((t) => t.toLowerCase()).sort().join("|"), eventDate: "2026-09-27T23:00Z",
+    official, officialChannel: "SEC", officialDurationSec: 241, sourcePolicy: "official-channel",
+  } } });
+}
+
+test("an SEC volleyball cut opens straight on the YouTube card with the description note", async ({ page }) => {
+  const playerApiLoads: string[] = [];
+  page.on("request", (r) => { if (r.url().includes("youtube.com/iframe_api")) playerApiLoads.push(r.url()); });
+  await page.clock.setFixedTime(new Date("2026-09-28T16:00:00-04:00"));
+  await setSingleLeague(page, "ncaavb");
+  await page.route("**/news/highlights.json", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: secHighlights("ncaavb:401990001", ["Florida", "Oklahoma"], "M3Q7mzfzm6M"),
+  }));
+  // Florida at Oklahoma, 9/27. ESPN ids 57 and 201, both SEC (teamConferences).
+  await page.route("**/volleyball/womens-college-volleyball/scoreboard?**", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: finishedScoreboard({
+      id: "401990001",
+      date: "2026-09-27T23:00:00Z",
+      away: { id: "57", displayName: "Florida Gators", shortDisplayName: "Florida", abbreviation: "FLA", score: "3" },
+      home: { id: "201", displayName: "Oklahoma Sooners", shortDisplayName: "Oklahoma", abbreviation: "OU", score: "0" },
+    }),
+  }));
+  await page.route("**/api/youtube?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":null}' }));
+
+  await page.goto("/yesterday");
+  const official = page.getByRole("button", { name: "SEC highlights" }).first();
+  await expect(official).toBeVisible();
+  await official.click();
+  await expect(page.getByText("the league blocked embedded playback")).toBeVisible();
+  await expect(page.getByText("YouTube’s description of this video gives the result")).toBeVisible();
+  await expect(page.getByText("YouTube shows the score in this video’s title")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /watch on youtube/i }).first()).toBeVisible();
+  await expect(page.locator("iframe")).toHaveCount(0);
+  await page.waitForTimeout(1500);
+  expect(playerApiLoads, "the IFrame API was fetched, so a player was being built").toEqual([]);
+});
+
+test("an SEC soccer cut still plays in the modal", async ({ page }) => {
+  const playerApiLoads: string[] = [];
+  page.on("request", (r) => { if (r.url().includes("youtube.com/iframe_api")) playerApiLoads.push(r.url()); });
+  await page.clock.setFixedTime(new Date("2026-09-28T16:00:00-04:00"));
+  await setSingleLeague(page, "ncaawsoc");
+  await page.route("**/news/highlights.json", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: secHighlights("ncaawsoc:401885928", ["Texas", "Ole Miss"], "BjPKAQzfEAA"),
+  }));
+  // ESPN soccer ids 20368 and 20490 are SEC schools (teamConferences).
+  await page.route("**/soccer/usa.ncaa.w.1/scoreboard?**", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: finishedScoreboard({
+      id: "401885928",
+      date: "2026-09-27T23:00:00Z",
+      away: { id: "20368", displayName: "Texas Longhorns", shortDisplayName: "Texas", abbreviation: "TEX", score: "1" },
+      home: { id: "20490", displayName: "Ole Miss Rebels", shortDisplayName: "Ole Miss", abbreviation: "MISS", score: "2" },
+    }),
+  }));
+  await page.route("**/api/youtube?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"videoId":null}' }));
+
+  await page.goto("/yesterday");
+  const official = page.getByRole("button", { name: "SEC highlights" }).first();
+  await expect(official).toBeVisible();
+  await official.click();
+  await expect.poll(() => playerApiLoads.length, { message: "no player was built" }).toBeGreaterThan(0);
+  await expect(page.getByText("YouTube’s description of this video gives the result")).toHaveCount(0);
+});
+
 // 2026-09-25: the same embed-blocked La Liga game with ESPN's spoiler-free
 // "Game Highlights" mp4 baked beside it. The clip takes the first button and
 // plays in the native <video>; the YouTube hand-off moves to a labelled link.

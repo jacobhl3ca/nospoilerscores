@@ -8,6 +8,7 @@
       "4": "Big 12 Conference",
       "5": "Big Ten Football",
       "8": "SEC",
+      "9": "Pac-12",
       "12": "Conference USA",
       "15": "Get Some MACtion",
       "37": "Sun Belt Conference",
@@ -52,10 +53,15 @@
         "football",
         "regular season week"
       ],
-      "Get Some MACtion": []
+      "Get Some MACtion": [],
+      "Pac-12": [
+        "game highlights",
+        "game recap"
+      ]
     },
     "maskTitle": [
-      "Get Some MACtion"
+      "Get Some MACtion",
+      "Pac-12"
     ]
   },
   "ncaavb": {
@@ -187,6 +193,97 @@
     ],
     "networks": []
   },
+  "ncaawsoc": {
+    "primaryFromChain": true,
+    "titleTokens": [
+      "women's soccer",
+      "sec soccer"
+    ],
+    "conferences": {
+      "acc": "ACC Digital Network",
+      "big12": "Big 12 Conference",
+      "sec": "SEC"
+    },
+    "teamConferences": {
+      "20316": "acc",
+      "20430": "acc",
+      "20353": "acc",
+      "20317": "acc",
+      "20505": "acc",
+      "20405": "acc",
+      "20502": "acc",
+      "20366": "acc",
+      "20334": "acc",
+      "20328": "acc",
+      "20468": "acc",
+      "20327": "acc",
+      "20396": "acc",
+      "20400": "acc",
+      "20336": "acc",
+      "20409": "acc",
+      "20337": "acc",
+      "20503": "big12",
+      "20529": "big12",
+      "20522": "big12",
+      "20516": "big12",
+      "20504": "big12",
+      "20392": "big12",
+      "20528": "big12",
+      "20610": "big12",
+      "20535": "big12",
+      "20494": "big12",
+      "18357": "big12",
+      "20501": "big12",
+      "20518": "big12",
+      "20540": "big12",
+      "20520": "big12",
+      "20382": "big12",
+      "20524": "sec",
+      "20495": "sec",
+      "20527": "sec",
+      "20499": "sec",
+      "20532": "sec",
+      "20427": "sec",
+      "20536": "sec",
+      "20509": "sec",
+      "20537": "sec",
+      "20523": "sec",
+      "20490": "sec",
+      "20368": "sec",
+      "20492": "sec",
+      "20517": "sec",
+      "20491": "sec",
+      "20370": "sec"
+    },
+    "networks": []
+  },
+  "ncaamsoc": {
+    "primaryFromChain": true,
+    "titleTokens": [
+      "acc men's soccer"
+    ],
+    "conferences": {
+      "acc": "ACC Digital Network"
+    },
+    "teamConferences": {
+      "5592": "acc",
+      "5706": "acc",
+      "5629": "acc",
+      "5593": "acc",
+      "5681": "acc",
+      "5642": "acc",
+      "5610": "acc",
+      "5604": "acc",
+      "5744": "acc",
+      "5603": "acc",
+      "5672": "acc",
+      "5676": "acc",
+      "5612": "acc",
+      "5685": "acc",
+      "5613": "acc"
+    },
+    "networks": []
+  },
   "efl": {
     "searchOnly": true,
     "titleTokens": [],
@@ -293,5 +390,15 @@
     "maskTitle": [
       "LIGA BBVA MX"
     ]
+  },
+  "uel": {
+    "titleTokens": [
+      "europa league"
+    ],
+    "always": [
+      "TUDN USA"
+    ],
+    "conferences": {},
+    "networks": []
   }
 }

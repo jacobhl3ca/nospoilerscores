@@ -102,6 +102,17 @@ test("a league the user never ranked sorts after the ranked ones on a tie", () =
   assert.deepEqual(rankBestYesterday(games, { leagueOrder: ["nhl"], hasClip: withClip }).map((g) => g.id), ["y", "x"]);
 });
 
+// An exhibition is never "best of yesterday" (2026-10-09): the NBA preseason
+// slate now reaches the app for its opt-in column, and nba sits in every
+// switcher order, so a rated, clipped exhibition must still stay out.
+test("a preseason game never makes the column, however good it was", () => {
+  const games = [
+    game({ id: "pre", sport: "nba", rating: 99, isPreseason: true }),
+    game({ id: "reg", sport: "mlb", rating: 60 }),
+  ];
+  assert.deepEqual(rankBestYesterday(games, { leagueOrder: ["nba", "mlb"], hasClip: withClip }).map((g) => g.id), ["reg"]);
+});
+
 test("the same game handed in twice (two source lists) shows once", () => {
   const g = game({ id: "dup", sport: "mlb", rating: 90 });
   assert.deepEqual(rankBestYesterday([g, { ...g }], { leagueOrder: ["mlb"], hasClip: withClip }).map((x) => x.id), ["dup"]);

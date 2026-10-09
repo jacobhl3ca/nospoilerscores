@@ -305,12 +305,13 @@ test("Best of yesterday turned off: Auto keeps its league and the switcher drops
   await expect(menu.getByRole("button", { name: /Best of yesterday/ })).toHaveCount(0);
 });
 
-test("a column pinned to Best of yesterday shows a league once it is turned off", async ({ page }) => {
+// Jacob 10/8: a column whose league leaves the switcher list closes; no other
+// league takes it.
+test("a column pinned to Best of yesterday closes once it is turned off", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page, { extra: { thirdLeague: "best", hiddenLeagues: ["mls", "best"] } });
   await page.goto("/");
   await expect(page.locator('[data-league-column="nfl"]')).toBeVisible({ timeout: 30_000 });
   const order = await page.locator("[data-league-column]").evaluateAll((els) => els.map((e) => e.getAttribute("data-league-column")));
-  expect(order).toHaveLength(3);
-  expect(order).not.toContain("best");
+  expect(order).toEqual(["nfl", "wnba"]);
 });
