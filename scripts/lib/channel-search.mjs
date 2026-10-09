@@ -76,6 +76,9 @@ export const CHANNEL_SEARCH_HANDLES = {
   // Robert Morris at Buffalo (9/26) to the 2019 meeting; its own search page
   // put the 9.26.26 cut first.
   "Get Some MACtion": "GetSomeMACtion",
+  // Top 14 (added 2026-10-03). Round 4 posted 49 try clips beside its 7
+  // match cuts, so the feed rolls past a Saturday's cuts within hours.
+  "TOP 14 - Officiel": "top14",
 };
 
 // A card title must carry one of these words on this channel's search page.
@@ -84,6 +87,16 @@ export const CHANNEL_SEARCH_HANDLES = {
 // "Game Highlights".
 const TITLE_TOKENS_BY_CHANNEL = {
   "NFL": ["game highlights"],
+  // The conference channels post a full replay of the same game ("Florida
+  // State vs. Louisville Full Match Replay | 2026 ACC Women's Soccer", 1 h
+  // 42 m) beside its cut. The worker's highlight words keep only the cut.
+  "ACC Digital Network": ["highlight", "recap"],
+  "Big 12 Conference": ["highlight", "recap"],
+  "SEC": ["highlight", "recap"],
+  // Its try clips name both clubs ("TOP 14 - Essai de Antoine DUPONT (ST) -
+  // Stade Toulousain - Montpellier Hérault Rugby"); a match cut says
+  // "Highlights" or "Match Summary" (TOP14_SUMMARY_RX in public/_worker.js).
+  "TOP 14 - Officiel": ["highlight", "summary", "resume"],
 };
 
 export function channelSearchTitleTokens(channel) {
@@ -95,8 +108,37 @@ export function channelSearchTitleTokens(channel) {
 // so the embed check would refuse every cut they post.
 const EMBED_BLOCKED_SEARCH_CHANNELS = new Set(["NFL"]);
 
-export function channelSearchNeedsEmbed(channel) {
-  return !EMBED_BLOCKED_SEARCH_CHANNELS.has(channel);
+// Channels that refuse embeds for one sport only (EMBED_BLOCKED_SPORT_CHANNELS
+// in src/lib/youtube.ts): the SEC's volleyball cuts, while its soccer cuts
+// embed. oEmbed answers 401 for each such upload, so the bake reads its title
+// and owner off the watch page and checks the owner against the channel id in
+// CHANNEL_FEED_IDS (see hlEmbedOffMeta in scripts/prebake-news.mjs).
+const EMBED_OFF_SPORTS_BY_CHANNEL = {
+  "SEC": ["ncaavb"],
+};
+
+/** The channel id a watch page must name for this channel's uploads in this sport, or null. */
+export function embedOffChannelId(channel, sport) {
+  return EMBED_OFF_SPORTS_BY_CHANNEL[channel]?.includes(sport) ? channelFeedId(channel) : null;
+}
+
+export function channelSearchNeedsEmbed(channel, sport) {
+  return !EMBED_BLOCKED_SEARCH_CHANNELS.has(channel) && !embedOffChannelId(channel, sport);
+}
+
+// Channels read for some sports only. The conference channels are in the
+// ncaaf and ncaavb chains too; their feeds are read for college soccer only,
+// and the SEC's for volleyball as well: the live search missed 1 of 5 SEC
+// volleyball cuts on 2026-10-03 (No. 8 Florida vs. Oklahoma), all 5 in its feed.
+const CHANNEL_SEARCH_SPORTS = {
+  "ACC Digital Network": ["ncaawsoc", "ncaamsoc"],
+  "Big 12 Conference": ["ncaawsoc", "ncaamsoc"],
+  "SEC": ["ncaawsoc", "ncaamsoc", "ncaavb"],
+};
+
+export function channelSearchServesSport(channel, sport) {
+  const sports = CHANNEL_SEARCH_SPORTS[channel];
+  return !sports || sports.includes(sport);
 }
 
 // Channel id (UC…) per channel, for its uploads feed
@@ -142,6 +184,20 @@ export const CHANNEL_FEED_IDS = {
   "ECAC Hockey": "UCjUTtbKNR2Gf2GziiKf74TQ", // gitleaks:allow
   "NFL": "UCDVYQ4Zhbm3S2dlz7P1GBDg",
   "Get Some MACtion": "UCpiOTTxIB7VvB4N4LIYMhVw",
+  // College soccer (the ncaawsoc / ncaamsoc chains, added 2026-10-03): feed
+  // only, no search page, so they never spend the bake's 30 pages. A
+  // weeknight's soccer cuts sit in the global results under the football
+  // ones: the 10/2 lookups found 5 of 15 games, while the Big 12 feed held all
+  // 7 of its cuts. Feed depth 2026-10-03: ACC ~13 h, Big 12 ~14 h, SEC ~4
+  // days, so the hourly bake reads every upload while it is in the feed.
+  "ACC Digital Network": "UC0hy7TcR1gGD8nQBqrF2FaA",
+  "Big 12 Conference": "UCLnfOCTbfqMy_3ah8OmTHEQ",
+  "SEC": "UC60q_WUDde_NK-ze3frvtiA",
+  "TOP 14 - Officiel": "UCWrD2VhZdO-_W8QDBxiXmeg",
+  // Pac-12 (the ncaaf chain, added 2026-10-03): feed only. Its 15 uploads
+  // reach back about 4 days (2026-10-03), so the hourly bake reads each game
+  // cut while it is in the feed.
+  "Pac-12": "UCtxdtF8iCxZw593FSUIPrxg",
 };
 
 export function channelFeedId(channel) {
@@ -211,7 +267,7 @@ export const NOT_FIRST_TEAM_RX = /\b(women|womens|ladies|lionesses|u-?1[5-9]|u-?
 // Women's leagues: their own cuts say "Women's" ("RPI at Mercyhurst | NCAA
 // Women's Ice Hockey | …"), so the filter above would refuse the very game on
 // the card. It is skipped for these sports.
-const WOMENS_SPORTS = new Set(["ncaawh", "ncaaw", "ncaavb", "wnba", "nwsl"]);
+const WOMENS_SPORTS = new Set(["ncaawh", "ncaaw", "ncaavb", "ncaawsoc", "wnba", "nwsl"]);
 
 export function isWomensSport(sport) {
   return WOMENS_SPORTS.has(sport);
