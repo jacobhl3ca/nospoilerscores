@@ -3877,8 +3877,12 @@ export default function HomeContent({
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid #f59e0b" }}
           >
             <p className="text-sm" style={{ color: "var(--text)" }}>
-              <span aria-hidden="true">⚠️ </span>
-              <strong>News is full of spoilers.</strong>{" "}Headlines and images give away results, player performance, and outcomes. That&apos;s why they start blurred — tap one to reveal it, or use the Headlines toggle to un-blur everything.
+              <span className="block">
+                <span aria-hidden="true">⚠️ </span>
+                <strong>News is full of spoilers.</strong>
+              </span>
+              <span className="block">Headlines and images give away results, player performance, and outcomes.</span>
+              <span className="block">That&apos;s why they start blurred — tap one to reveal it, or use the Headlines toggle to un-blur everything.</span>
             </p>
             <button
               type="button"
