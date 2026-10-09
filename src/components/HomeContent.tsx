@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode, type CSSProperties } from "react";
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
 import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
-import { Preferences, Theme, NewsLayout, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
+import { Preferences, Theme, NewsLayout, type NewsCardPrefs, type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
@@ -48,6 +48,7 @@ import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/component
 import VideoModal from "@/components/VideoModal";
 import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
 import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
+import { POST_FILTERS, POST_FILTER_NAMES } from "@/lib/postFilter";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
@@ -535,8 +536,8 @@ function SingleColToggle({ active, onClick, compact }: { active: boolean; onClic
 // A labeled on/off chip for the news toolbar (Headlines / Videos / Text posts).
 // Filled accent = ON, outline = OFF — one consistent shape so the row is easy to
 // read and toggle (Jacob 7/14).
-// `disabled` = the chip's pref is currently OVERRIDDEN by another chip (Text
-// posts while Videos only is on). It renders dimmed + aria-disabled but still
+// `disabled` = the chip's pref is currently OVERRIDDEN by another chip
+// (Autoplay while Media is blurred). It renders dimmed + aria-disabled but still
 // toggles, so the pref can be pre-set for when the override lifts — a real
 // disabled button would trap the user in the override.
 // News chip icons shared by the toolbar and the ESPN card headers (r5):
@@ -561,14 +562,20 @@ function MediaIcon({ size = 16 }: { size?: number }) {
 function VideosOnlyIcon({ size = 16 }: { size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>;
 }
-function TextPostsIcon({ size = 16 }: { size?: number }) {
-  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>;
+// Text posts crossed out = the Posts switch's "No text" (Jacob 10/9).
+function TextPostsIcon({ off, size = 16 }: { off?: boolean; size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-textposts-icon={off ? "off" : "on"}><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" />{off && <line x1="1" y1="1" x2="23" y2="23" data-slash="" />}</svg>;
+}
+function PostFilterIcon({ value, size = 16 }: { value: PostFilter; size?: number }) {
+  return value === "videos" ? <VideosOnlyIcon size={size} /> : <TextPostsIcon off={value === "notext"} size={size} />;
 }
 
 // ESPN layout card-header button (r5): icon only, same look as
 // NewsToggleChip, sized to the header bar.
-function CardChip({ active, onClick, title, ariaLabel, disabled, children }: {
-  active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean; children: ReactNode;
+// `pressed` null = no aria-pressed (the cycling Posts chip names its state).
+function CardChip({ active, onClick, title, ariaLabel, disabled, pressed, dataAttr, children }: {
+  active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean;
+  pressed?: boolean | null; dataAttr?: Record<string, string>; children: ReactNode;
 }) {
   return (
     <button
@@ -576,7 +583,8 @@ function CardChip({ active, onClick, title, ariaLabel, disabled, children }: {
       onClick={onClick}
       title={title}
       aria-label={ariaLabel}
-      aria-pressed={active}
+      aria-pressed={pressed === null ? undefined : pressed ?? active}
+      {...dataAttr}
       aria-disabled={disabled || undefined}
       data-card-chip=""
       className="inline-flex shrink-0 items-center justify-center w-7 h-7 rounded-full transition-colors cursor-pointer"
@@ -589,6 +597,66 @@ function CardChip({ active, onClick, title, ariaLabel, disabled, children }: {
     >
       {children}
     </button>
+  );
+}
+
+// Posts switch in a labeled row (Cards/Feed toolbar, the Reddit bar): one
+// segmented control, All / No text / Videos (Jacob 10/9). `value` null = the
+// cards differ, so no segment shows pressed. Compact = the same 3 icons.
+function PostFilterSwitch({ value, onChange, compact }: {
+  value: PostFilter | null; onChange: (f: PostFilter) => void; compact?: boolean;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Post filter"
+      data-testid="post-filter-switch"
+      className="inline-flex shrink-0 rounded-full p-0.5"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+    >
+      {POST_FILTERS.map((f) => {
+        const on = value === f;
+        return (
+          <button
+            type="button"
+            key={f}
+            onClick={() => onChange(f)}
+            aria-pressed={on}
+            aria-label={compact ? `Posts: ${POST_FILTER_NAMES[f]}` : undefined}
+            title={`Posts: ${POST_FILTER_NAMES[f]}`}
+            data-post-filter={f}
+            className={`inline-flex items-center gap-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${compact ? "px-2 py-1" : "px-3 py-1"}`}
+            // Blue = a filter narrows the posts; All is the neutral raised fill.
+            style={{
+              background: on ? (f === "all" ? "var(--bg-card-hover)" : "var(--accent)") : "transparent",
+              color: on ? (f === "all" ? "var(--text)" : "white") : "var(--text-muted)",
+            }}
+          >
+            {compact ? <PostFilterIcon value={f} size={16} /> : POST_FILTER_NAMES[f]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Posts in a card header (no room for 3 segments at 575px): one chip that
+// cycles All → No text → Videos.
+function PostFilterCardChip({ value, onChange, name }: {
+  value: PostFilter; onChange: (f: PostFilter) => void; name: string;
+}) {
+  const next = POST_FILTERS[(POST_FILTERS.indexOf(value) + 1) % POST_FILTERS.length];
+  return (
+    <CardChip
+      active={value !== "all"}
+      onClick={() => onChange(next)}
+      title={`Posts: ${POST_FILTER_NAMES[value]}. Tap for ${POST_FILTER_NAMES[next]}.`}
+      ariaLabel={`Post filter: ${POST_FILTER_NAMES[value]}`}
+      pressed={null}
+      dataAttr={{ "data-post-filter": value, "data-card": name }}
+    >
+      <PostFilterIcon value={value} size={14} />
+    </CardChip>
   );
 }
 
@@ -1806,6 +1874,13 @@ export default function HomeContent({
     savePreferences(next);
   }, [prefs]);
 
+  // A news Media / Headlines / Posts tap in a labeled row (the Cards/Feed
+  // toolbar or the ESPN Reddit bar) is global everywhere (Jacob 10/9): it sets
+  // the global pref AND clears that field from every ESPN card, so each card
+  // follows it again. A card's own header button stays the exception.
+  const setGlobalNewsPref = (patch: Partial<Preferences>, cardFields: (keyof NewsCardPrefs)[]) =>
+    updatePrefs({ ...patch, newsCardPrefs: clearCardField(prefs.newsCardPrefs, cardFields) });
+
   // Three-state view toggle: scores-plain (🙈) | scores-rated (🙉) | news.
   // Single segmented control in the header replaces the old separate
   // monkey + news buttons. Switching INTO news/ratings runs the same
@@ -2812,6 +2887,10 @@ export default function HomeContent({
   // .github/workflows/sticky-guard.yml). Only --news-toolbar-pin goes to 0, so
   // the rows that pin under the toolbar move up into the freed band.
   const toolbarFit = useToolbarFit(`${showNews}-${newsLayout === "espn"}`);
+  // The ESPN layout's Reddit bar (one row): icon-only buttons when the labels
+  // do not fit; its label truncates first (reserve = room kept for it). The
+  // key changes when the bar mounts, so the resize observer finds it.
+  const redditBarFit = useToolbarFit(`${showNews && newsLayout === "espn" && !(loading && leagues.length === 0)}-${isMobile}`, 96);
   const { hidden: newsToolbarHidden, reveal: revealNewsToolbar } = useHideOnScroll(showNews);
   useEffect(() => {
     const root = rootRef.current;
@@ -3691,12 +3770,12 @@ export default function HomeContent({
             </NewsToggleChip>
             {/* Media and Headlines sit together (Jacob 8/9): the two
                 spoiler-reveal toggles do the same job to the two halves of a
-                post, while Videos/Text posts are content FILTERS. Media comes
+                post, while the Posts switch is a content FILTER. Media comes
                 first (Jacob 10/9 r6). */}
             <NewsToggleChip
               compact={toolbarFit.compact}
               active={prefs.revealNewsMedia === true}
-              onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
+              onClick={() => setGlobalNewsPref({ revealNewsMedia: prefs.revealNewsMedia !== true }, ["revealMedia"])}
               title="Show or spoiler-blur news image and video previews"
               ariaLabel="Toggle media reveal"
             >
@@ -3706,37 +3785,21 @@ export default function HomeContent({
             <NewsToggleChip
               compact={toolbarFit.compact}
               active={!!prefs.revealNewsTitles}
-              onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
+              onClick={() => setGlobalNewsPref({ revealNewsTitles: !prefs.revealNewsTitles }, ["revealTitles"])}
               title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
               ariaLabel="Toggle headline reveal"
             >
               <HeadlinesIcon on={!!prefs.revealNewsTitles} />
               <span>Headlines</span>
             </NewsToggleChip>
-            <NewsToggleChip
+            {/* One Posts switch, All / No text / Videos (Jacob 10/9): it
+                replaces Videos only + Text posts, which only had 3 real
+                states (with Videos only on, Text posts did nothing). */}
+            <PostFilterSwitch
               compact={toolbarFit.compact}
-              active={!!prefs.newsVideosOnly}
-              onClick={() => updatePrefs({ newsVideosOnly: !prefs.newsVideosOnly })}
-              title="Show only video posts (highlights + Reddit clips)"
-              ariaLabel="Toggle videos-only filter"
-            >
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
-              <span>Videos only</span>
-            </NewsToggleChip>
-            {/* Videos only overrides Text posts (Jacob 9/14): a text post has no
-                clip, so it can never pass the Videos filter. Dim this chip while
-                that's the case so its state doesn't read as a lie. */}
-            <NewsToggleChip
-              compact={toolbarFit.compact}
-              active={!!prefs.showTextPosts}
-              onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
-              title={prefs.newsVideosOnly ? "Off while Videos only is on" : "Show or hide headline-only text posts"}
-              ariaLabel="Toggle text posts"
-              disabled={!!prefs.newsVideosOnly}
-            >
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
-              <span>Text posts</span>
-            </NewsToggleChip>
+              value={postFilterOf(prefs.newsVideosOnly, prefs.showTextPosts)}
+              onChange={(f) => setGlobalNewsPref(globalPostFilterPatch(f), ["videosOnly", "textPosts"])}
+            />
             </>)}
           </div>
           </div>
@@ -4405,23 +4468,32 @@ export default function HomeContent({
             // Each card's header carries its own buttons (Jacob 10/8 r5, order
             // 10/9 r6): ESPN Videos = Autoplay, Big, Media, Headlines; Top
             // Headlines = Media, Headlines; each subreddit = Media, Headlines,
-            // Videos only, Text posts. Media / Headlines / Videos only / Text
-            // posts act on that card only (newsCardPrefs, falling back to the
-            // global pref); Big and Autoplay stay global. Autoplay dims while
-            // this card's Media is blurred.
+            // Posts (one chip that cycles All / No text / Videos, Jacob 10/9).
+            // Media / Headlines / Posts act on that card only (newsCardPrefs,
+            // falling back to the global pref); Big and Autoplay stay global.
+            // Autoplay dims while this card's Media is blurred. The Reddit bar
+            // sets the global prefs and clears these per-card values.
             const cardPrefs = prefs.newsCardPrefs ?? {};
             const setCardPref = (key: string, patch: Partial<NonNullable<typeof cardPrefs[string]>>) =>
               updatePrefs({ newsCardPrefs: { ...cardPrefs, [key]: { ...cardPrefs[key], ...patch } } });
+            // What one card shows: its own pref, else the global one. The card
+            // headers and the Reddit bar's state both read this.
+            const resolveCard = (key: string) => {
+              const cp = cardPrefs[key] ?? {};
+              const isEspn = key === ESPN_LAYOUT_VIDEOS.key || key === ESPN_LAYOUT_HEADLINES.key;
+              return {
+                isEspn,
+                titles: cp.revealTitles ?? !!prefs.revealNewsTitles,
+                media: cp.revealMedia ?? prefs.revealNewsMedia === true,
+                // Posts does not apply to the ESPN cards.
+                vOnly: isEspn ? false : cp.videosOnly ?? !!prefs.newsVideosOnly,
+                text: isEspn ? true : cp.textPosts ?? !!prefs.showTextPosts,
+              };
+            };
             const espnCardOverride = (source: NewsSource): CardOverride => {
               const key = source.key ?? source.label;
-              const cp = cardPrefs[key] ?? {};
               const isVideos = key === ESPN_LAYOUT_VIDEOS.key;
-              const isEspn = isVideos || key === ESPN_LAYOUT_HEADLINES.key;
-              const titles = cp.revealTitles ?? !!prefs.revealNewsTitles;
-              const media = cp.revealMedia ?? prefs.revealNewsMedia === true;
-              // Videos only and Text posts do not apply to the ESPN cards.
-              const vOnly = isEspn ? false : cp.videosOnly ?? !!prefs.newsVideosOnly;
-              const text = isEspn ? true : cp.textPosts ?? !!prefs.showTextPosts;
+              const { isEspn, titles, media, vOnly, text } = resolveCard(key);
               const name = source.label;
               return {
                 className: `news-card-titles-${titles ? "on" : "off"} news-card-media-${media ? "on" : "off"} news-card-textposts-${text ? "on" : "off"}`,
@@ -4467,25 +4539,11 @@ export default function HomeContent({
                       <HeadlinesIcon on={titles} size={14} />
                     </CardChip>
                     {!isEspn && (
-                      <CardChip
-                        active={vOnly}
-                        onClick={() => setCardPref(key, { videosOnly: !vOnly })}
-                        title={`Show only video posts in ${name}`}
-                        ariaLabel={`Toggle videos-only filter: ${name}`}
-                      >
-                        <VideosOnlyIcon size={14} />
-                      </CardChip>
-                    )}
-                    {!isEspn && (
-                      <CardChip
-                        active={text}
-                        onClick={() => setCardPref(key, { textPosts: !text })}
-                        title={vOnly ? "Off while Videos only is on" : `Show or hide headline-only text posts in ${name}`}
-                        ariaLabel={`Toggle text posts: ${name}`}
-                        disabled={vOnly}
-                      >
-                        <TextPostsIcon size={14} />
-                      </CardChip>
+                      <PostFilterCardChip
+                        value={postFilterOf(vOnly, text)}
+                        onChange={(f) => setCardPref(key, postFilterPatch(f))}
+                        name={name}
+                      />
                     )}
                   </>
                 ),
@@ -4509,18 +4567,91 @@ export default function HomeContent({
               cardOverride: espnCardOverride,
             };
             const k = `espn-${newsRefreshKey}`;
+            // The Reddit bar (Jacob 10/9): a pinned, labeled row on top of the
+            // league subreddits. Its Media / Headlines / Posts set the global
+            // pref for EVERY card (ESPN Videos, Top Headlines, each sub). A chip
+            // shows on only when every shown card is on (mixed = off, so one
+            // tap turns all on); Posts shows no segment while the subs differ.
+            const shownCards = [ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)]
+              .map((c) => resolveCard(c.key ?? c.label));
+            const barMedia = shownCards.every((c) => c.media);
+            const barTitles = shownCards.every((c) => c.titles);
+            const subFilters = new Set(shownCards.filter((c) => !c.isEspn).map((c) => postFilterOf(c.vOnly, c.text)));
+            const barPosts: PostFilter | null = subFilters.size === 1 ? [...subFilters][0] : null;
+            // --news-titlebar-h = the bar's height (h-11), so each sub's own
+            // header (.news-source-sticky-top) pins under the bar.
+            const redditSection = (children: ReactNode) => (
+              <section
+                aria-labelledby="news-espn-reddit-h"
+                data-testid="news-espn-reddit"
+                className="flex flex-col gap-2 w-full"
+                style={{ "--news-titlebar-h": "2.75rem" } as CSSProperties}
+              >
+                <div className="news-reddit-bar sticky z-30 h-11" style={{ background: "var(--bg)" }} data-testid="news-reddit-bar">
+                  <div
+                    ref={redditBarFit.scrollerRef}
+                    className="h-full max-w-6xl mx-auto px-2 flex flex-nowrap items-center justify-center gap-3 overflow-hidden"
+                    data-compact={redditBarFit.compact ? "" : undefined}
+                  >
+                    <h2 id="news-espn-reddit-h" className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                      Your leagues on Reddit
+                    </h2>
+                    <div ref={redditBarFit.rowRef} className="w-max shrink-0 flex flex-nowrap items-center gap-2">
+                      <NewsToggleChip
+                        compact={redditBarFit.compact}
+                        active={barMedia}
+                        onClick={() => setGlobalNewsPref({ revealNewsMedia: !barMedia }, ["revealMedia"])}
+                        title="Show or blur the images and videos in every card"
+                        ariaLabel="Toggle media reveal: every card"
+                      >
+                        <MediaIcon />
+                        <span>Media</span>
+                      </NewsToggleChip>
+                      <NewsToggleChip
+                        compact={redditBarFit.compact}
+                        active={barTitles}
+                        onClick={() => setGlobalNewsPref({ revealNewsTitles: !barTitles }, ["revealTitles"])}
+                        title="Show or blur the headlines in every card"
+                        ariaLabel="Toggle headline reveal: every card"
+                      >
+                        <HeadlinesIcon on={barTitles} />
+                        <span>Headlines</span>
+                      </NewsToggleChip>
+                      <PostFilterSwitch
+                        compact={redditBarFit.compact}
+                        value={barPosts}
+                        onChange={(f) => setGlobalNewsPref(globalPostFilterPatch(f), ["videosOnly", "textPosts"])}
+                      />
+                    </div>
+                  </div>
+                </div>
+                {children}
+              </section>
+            );
             if (isMobile) {
-              // Phones: one stacked column, Videos → Headlines → each sub.
+              // Phones: ESPN Videos + Headlines, then the Reddit bar over the
+              // subs (one stacked column each).
               return (
-                <div className="flex flex-col items-center pt-2" data-testid="news-espn-layout">
+                <div className="flex flex-col items-center gap-4 pt-2" data-testid="news-espn-layout">
                   <NewsColumn
                     key={`${k}-mobile`}
                     title=""
-                    sources={cascadeToSources([ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)])}
+                    sources={cascadeToSources([ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES])}
                     widthClassName={wideCol}
                     bigVideos={big}
                     {...columnProps}
                   />
+                  {redditSection(
+                    <div className="flex flex-row justify-center">
+                      <NewsColumn
+                        key={`${k}-mobile-reddit`}
+                        title=""
+                        sources={cascadeToSources(redditShown.flatMap((c) => c.cascade))}
+                        widthClassName={wideCol}
+                        {...columnProps}
+                      />
+                    </div>,
+                  )}
                 </div>
               );
             }
@@ -4564,11 +4695,8 @@ export default function HomeContent({
                     />
                   </div>
                 )}
-                <section aria-labelledby="news-espn-reddit-h" data-testid="news-espn-reddit" className="flex flex-col gap-2">
-                  <h2 id="news-espn-reddit-h" className="text-center text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
-                    Your leagues on Reddit
-                  </h2>
-                  {/* Big: a 2-column grid under the 720px clip column. */}
+                {redditSection(
+                  // Big: a 2-column grid under the 720px clip column.
                   <div className={big ? "grid grid-cols-2 items-start gap-4 w-full max-w-[720px] mx-auto" : "flex flex-row justify-center items-start gap-2 sm:gap-4"}>
                     {redditShown.map((c) => (
                       <NewsColumn
@@ -4579,8 +4707,8 @@ export default function HomeContent({
                         {...columnProps}
                       />
                     ))}
-                  </div>
-                </section>
+                  </div>,
+                )}
               </div>
             );
           }

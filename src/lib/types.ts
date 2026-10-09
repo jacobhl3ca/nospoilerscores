@@ -50,9 +50,10 @@ export interface Game {
   // Whether this is a playoff/postseason/tournament game
   isPlayoff: boolean;
   // ESPN season.type 1 — an exhibition, not a game that counts. Currently only
-  // the NFL reaches the app with these: every other sport's type-1 slate is
-  // filtered out at the fetch (see eventsToGames), while the NFL keeps its
-  // preseason because LEAGUES carries a dedicated "NFL Preseason" column for it.
+  // the NFL and the NBA reach the app with these: every other sport's type-1
+  // slate is filtered out at the fetch (see eventsToGames), while those two keep
+  // their preseason because LEAGUES carries dedicated "NFL Preseason" and
+  // "NBA Preseason" columns for it.
   //
   // Carried on the game rather than inferred from the column because the column
   // is not always there to say it. A team's schedule (TeamView) lists preseason,

@@ -1390,7 +1390,7 @@ export default function NewsColumn({
                 {videosOnly ? "No videos here right now." : "Nothing to show with these filters."}
                 <span className="block mt-1" style={{ opacity: 0.8 }}>
                   {videosOnly
-                    ? "Turn off Videos only, or widen Source in the filter menu."
+                    ? "Set Posts to All, or widen Source in the filter menu."
                     : "Try widening Source in the filter menu."}
                 </span>
               </>
