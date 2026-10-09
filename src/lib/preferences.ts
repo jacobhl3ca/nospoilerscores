@@ -624,8 +624,8 @@ export interface Preferences {
   // and subreddits under it. Default false.
   newsEspnBig?: boolean;
   // News Autoplay pill, every layout (Jacob 10/8): the video most in focus
-  // plays muted (components/InlineVideoCard). Undefined = on only in the ESPN
-  // layout's Big mode, off in Cards, Feed and the ESPN 2-column view.
+  // plays muted (components/InlineVideoCard). Undefined = on in every layout
+  // (Jacob 10/8 r4).
   newsAutoplay?: boolean;
   // News "Videos only" quick filter: true = show only clip-bearing items. It is
   // ITEM-level on every surface (Cards, Feed, the aligned strip's ESPN tail) —

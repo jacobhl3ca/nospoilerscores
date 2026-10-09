@@ -45,6 +45,8 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, E
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
+import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
+import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
@@ -534,8 +536,13 @@ function SingleColToggle({ active, onClick, compact }: { active: boolean; onClic
 // posts while Videos only is on). It renders dimmed + aria-disabled but still
 // toggles, so the pref can be pre-set for when the override lifts — a real
 // disabled button would trap the user in the override.
-function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, children }: {
-  active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean; children: ReactNode;
+// Set once the "browser blocks autoplay" note has shown (r4): it shows once ever.
+const AUTOPLAY_BLOCKED_NOTE_KEY = "hs.autoplayBlockedNote.v1";
+
+function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, children }: {
+  active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean;
+  // Icon only (the toolbar row is too narrow for labels): see useToolbarFit.
+  compact?: boolean; children: ReactNode;
 }) {
   return (
     <button
@@ -551,7 +558,7 @@ function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, children 
       // icon-button convention used elsewhere (e.g. SingleColToggle above).
       aria-label={ariaLabel}
       aria-pressed={active}
-      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+      className={`news-chip inline-flex shrink-0 items-center gap-1.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${compact ? "news-chip-compact px-2.5" : "px-3.5"}`}
       style={{
         background: active ? "var(--accent)" : "var(--bg-card)",
         border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
@@ -2535,8 +2542,9 @@ export default function HomeContent({
   // Cards / Feed / ESPN (the toolbar pill). Old blobs carry only newsFeedView.
   const newsLayout: NewsLayout = newsLayoutOf(prefs);
   // News Autoplay pill (every layout): the video most in focus plays muted.
-  // Unset = on only in the ESPN layout's Big mode.
-  const newsAutoplay = prefs.newsAutoplay ?? (newsLayout === "espn" && !!prefs.newsEspnBig);
+  // Unset = on in every layout (Jacob 10/8 r4: off in Feed read as "autoplay
+  // is broken"). A saved choice wins.
+  const newsAutoplay = prefs.newsAutoplay ?? true;
   const legacyNewsTypeFilter = prefs.newsTypeFilter ?? "reddit";
   const savedNewsTypeFilters = prefs.newsTypeFilters?.filter(
     (value): value is NewsSourceType => ALL_NEWS_SOURCE_TYPES.includes(value as NewsSourceType),
@@ -2686,6 +2694,38 @@ export default function HomeContent({
     ro.observe(el);
     newsToolbarRoRef.current = ro;
   }, []);
+
+  // Round 4 (Jacob 10/8): the pill row is ONE row (icon-only pills when the
+  // labels do not fit, then a sideways scroll) and it slides up out of view on
+  // scroll down. The slide is a transform, so the toolbar keeps its height:
+  // --header-h, .header-flow-spacer and --news-toolbar-h never change (see
+  // .github/workflows/sticky-guard.yml). Only --news-toolbar-pin goes to 0, so
+  // the rows that pin under the toolbar move up into the freed band.
+  const toolbarFit = useToolbarFit(`${showNews}-${newsLayout === "espn"}`);
+  const { hidden: newsToolbarHidden, reveal: revealNewsToolbar } = useHideOnScroll(showNews);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    if (newsToolbarHidden) root.style.setProperty("--news-toolbar-pin", "0px");
+    else root.style.removeProperty("--news-toolbar-pin");
+  }, [newsToolbarHidden]);
+
+  // A layout, Big or Autoplay change moves cards without a scroll: pick the
+  // clip in focus again (r4: Feed → ESPN did not start the first clip).
+  useEffect(() => {
+    if (showNews && newsAutoplay) refocusAutoplay();
+  }, [showNews, newsLayout, prefs.newsEspnBig, newsAutoplay]);
+
+  // The browser refused muted autoplay (Firefox "Block Audio and Video",
+  // Safari Low Power Mode): one small note under the toolbar, shown once ever.
+  const [autoplayBlockedNote, setAutoplayBlockedNote] = useState(false);
+  useEffect(() => onAutoplayBlocked(() => {
+    try {
+      if (localStorage.getItem(AUTOPLAY_BLOCKED_NOTE_KEY)) return;
+      localStorage.setItem(AUTOPLAY_BLOCKED_NOTE_KEY, "1");
+    } catch { return; }
+    setAutoplayBlockedNote(true);
+  }), []);
 
   useEffect(() => {
     const onScroll = () => {
@@ -3484,16 +3524,29 @@ export default function HomeContent({
           paints its own opaque var(--bg), so sitting above the cover — and still
           below the z-40 app header — keeps the seam sealed either way. */}
       {showNews && (
-        <div ref={newsToolbarRef} className="news-toolbar-sticky sticky z-[36]" style={{ background: "var(--bg)" }}>
-          <div className="max-w-6xl mx-auto px-4 flex justify-center flex-wrap items-center gap-2 pt-2 pb-2">
-            <div className="inline-flex rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+        <div
+          ref={newsToolbarRef}
+          className="news-toolbar-sticky sticky z-[36]"
+          data-hidden={newsToolbarHidden ? "" : undefined}
+          onFocus={revealNewsToolbar}
+          style={{ background: "var(--bg)" }}
+        >
+          <div ref={toolbarFit.scrollerRef} className="news-toolbar-scroll max-w-6xl mx-auto px-4 overflow-x-auto" data-compact={toolbarFit.compact ? "" : undefined}>
+          <div ref={toolbarFit.rowRef} className="w-max mx-auto flex flex-nowrap items-center gap-2 pt-2 pb-2">
+            <div className="inline-flex shrink-0 rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               {([["Cards", "cards"], ["Feed", "feed"], ["ESPN", "espn"]] as const).map(([label, layout]) => (
                 <button
                   type="button"
                   key={label}
                   // newsFeedView is kept in step so an older build reading the
                   // same synced blob still lands on Feed vs Cards correctly.
-                  onClick={() => updatePrefs({ newsLayout: layout, newsFeedView: layout === "feed" })}
+                  onClick={() => {
+                    // A new layout starts at the top. Firefox scroll anchoring
+                    // otherwise kept the old position and landed ~2,500px down,
+                    // past every clip (r4).
+                    if (layout !== newsLayout) window.scrollTo(0, 0);
+                    updatePrefs({ newsLayout: layout, newsFeedView: layout === "feed" });
+                  }}
                   className="px-3 sm:px-4 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
                   // Neutral selected segment, not a solid blue pill (Jacob 7/16):
                   // a subtle raised fill + regular text reads as selected without
@@ -3512,8 +3565,12 @@ export default function HomeContent({
                 muted while on screen (Jacob 10/8). */}
             {newsLayout === "espn" && (
               <NewsToggleChip
+                compact={toolbarFit.compact}
                 active={!!prefs.newsEspnBig}
-                onClick={() => updatePrefs({ newsEspnBig: !prefs.newsEspnBig })}
+                onClick={() => {
+                  window.scrollTo(0, 0);
+                  updatePrefs({ newsEspnBig: !prefs.newsEspnBig });
+                }}
                 title="One wide column of big ESPN clips"
                 ariaLabel="Toggle big ESPN videos"
               >
@@ -3522,6 +3579,7 @@ export default function HomeContent({
               </NewsToggleChip>
             )}
             <NewsToggleChip
+              compact={toolbarFit.compact}
               active={newsAutoplay}
               onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
               title="Play the video in focus, muted. Tap it for sound."
@@ -3531,6 +3589,7 @@ export default function HomeContent({
               <span>Autoplay</span>
             </NewsToggleChip>
             <NewsToggleChip
+              compact={toolbarFit.compact}
               active={!!prefs.revealNewsTitles}
               onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
               title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
@@ -3549,6 +3608,7 @@ export default function HomeContent({
                 are content FILTERS. Grouping them by what they do is most of
                 what makes this row readable. */}
             <NewsToggleChip
+              compact={toolbarFit.compact}
               active={prefs.revealNewsMedia === true}
               onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
               title="Show or spoiler-blur news image and video previews"
@@ -3558,6 +3618,7 @@ export default function HomeContent({
               <span>Media</span>
             </NewsToggleChip>
             <NewsToggleChip
+              compact={toolbarFit.compact}
               active={!!prefs.newsVideosOnly}
               onClick={() => updatePrefs({ newsVideosOnly: !prefs.newsVideosOnly })}
               title="Show only video posts (highlights + Reddit clips)"
@@ -3570,6 +3631,7 @@ export default function HomeContent({
                 clip, so it can never pass the Videos filter. Dim this chip while
                 that's the case so its state doesn't read as a lie. */}
             <NewsToggleChip
+              compact={toolbarFit.compact}
               active={!!prefs.showTextPosts}
               onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
               title={prefs.newsVideosOnly ? "Off while Videos only is on" : "Show or hide headline-only text posts"}
@@ -3580,6 +3642,23 @@ export default function HomeContent({
               <span>Text posts</span>
             </NewsToggleChip>
           </div>
+          </div>
+          {autoplayBlockedNote && (
+            <div role="status" data-testid="autoplay-blocked-note" className="max-w-6xl mx-auto px-4 pb-2 flex justify-center">
+              <p className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+                Your browser blocks autoplay. Tap a video to play.
+                <button
+                  type="button"
+                  onClick={() => setAutoplayBlockedNote(false)}
+                  aria-label="Dismiss autoplay note"
+                  className="text-base leading-none cursor-pointer transition-opacity hover:opacity-70"
+                  style={{ color: "var(--text-muted)", background: "none", border: "none" }}
+                >
+                  ×
+                </button>
+              </p>
+            </div>
+          )}
         </div>
       )}
 

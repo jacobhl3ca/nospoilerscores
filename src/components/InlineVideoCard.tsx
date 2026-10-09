@@ -39,6 +39,7 @@ interface Entry {
 const entries = new Map<Element, Entry>();
 let current: Entry | null = null;
 let io: IntersectionObserver | null = null;
+let bodyRo: ResizeObserver | null = null;
 let frame = 0;
 
 function pickFocused() {
@@ -60,6 +61,31 @@ function pickFocused() {
 function schedule() {
   if (!frame) frame = requestAnimationFrame(pickFocused);
 }
+// Scroll picks wait until the scroll settles. A scroll event arrives before
+// the observer's records for the new position, so an immediate pick read
+// stale ratios and briefly started a clip that had just left the screen
+// (r4, WebKit). Threshold crossings still pick at once via the observer.
+let scrollTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleAfterScroll() {
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(schedule, 120);
+}
+
+// Re-run the in-focus pick now. The coordinator also re-picks on card
+// mount/unmount, scroll, resize, a page height change and every image/video
+// load, but a layout change or a pill toggle can move cards without any of
+// those (Jacob 10/8 r4: Feed → ESPN did not start the first clip).
+export function refocusAutoplay() {
+  if (entries.size) schedule();
+}
+
+// play() refused by the browser (Firefox "Block Audio and Video", Safari Low
+// Power Mode): HomeContent shows a one-time note under the toolbar.
+const blockedListeners = new Set<() => void>();
+export function onAutoplayBlocked(fn: () => void): () => void {
+  blockedListeners.add(fn);
+  return () => { blockedListeners.delete(fn); };
+}
 
 function register(entry: Entry) {
   if (!io) {
@@ -70,11 +96,17 @@ function register(entry: Entry) {
       }
       schedule();
     }, { threshold: [0, 0.2, 0.4, 0.6, 0.8, 1] });
-    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("scroll", scheduleAfterScroll, { passive: true });
     window.addEventListener("resize", schedule);
+    // Images and clips loading above a card move it without crossing an
+    // intersection threshold. `load` does not bubble, so listen in capture.
+    document.addEventListener("load", schedule, true);
+    bodyRo = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+    bodyRo?.observe(document.body);
   }
   entries.set(entry.el, entry);
   io.observe(entry.el);
+  schedule();
 }
 function unregister(entry: Entry) {
   if (entries.get(entry.el) !== entry) return;
@@ -84,8 +116,12 @@ function unregister(entry: Entry) {
   if (entries.size === 0 && io) {
     io.disconnect();
     io = null;
-    window.removeEventListener("scroll", schedule);
+    window.removeEventListener("scroll", scheduleAfterScroll);
+    clearTimeout(scrollTimer);
     window.removeEventListener("resize", schedule);
+    document.removeEventListener("load", schedule, true);
+    bodyRo?.disconnect();
+    bodyRo = null;
   }
 }
 
@@ -139,7 +175,11 @@ export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }:
         void attach().then(() => {
           if (cancelled || current !== entry) return;
           video.muted = true;
-          video.play().catch(() => { /* autoplay refused: the thumbnail stays */ });
+          video.play().catch((err: unknown) => {
+            // Refused: the thumbnail and play badge stay. AbortError is only a
+            // pause() that beat the start, not a block.
+            if ((err as { name?: string })?.name === "NotAllowedError") blockedListeners.forEach((fn) => fn());
+          });
         });
       },
       stop: () => { if (!video.paused) video.pause(); },

@@ -221,8 +221,8 @@ test("Big: reduced motion turns autoplay off", async ({ page }) => {
 // ── Round 2 (Jacob 10/8, after the first staging look) ──────────────────
 const autoplayChip = (page: Page) => page.getByRole("button", { name: "Toggle news autoplay" });
 
-test("Autoplay pill: off by default in 2 columns, on plays clips there, persists", async ({ page }) => {
-  await gotoNews(page, { newsLayout: "espn" });
+test("Autoplay pill: off in 2 columns, on plays clips there, persists", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn", newsAutoplay: false });
   await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "false", LOAD);
   await expect(page.locator('[data-inline-video="auto"]')).toHaveCount(0);
   await autoplayChip(page).click();
@@ -284,8 +284,8 @@ test("Big at 1280x800: the first clip starts within 200px of the toolbar", async
 });
 
 // ── Round 3 (Jacob 8:41 PM): Autoplay in every layout ───────────────────
-test("Feed: Autoplay off by default; on, exactly one video post plays and scrolling moves play on", async ({ page }) => {
-  await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
+test("Feed: Autoplay off = no video layer; on, exactly one video post plays and scrolling moves play on", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "feed", newsFeedView: true, newsAutoplay: false });
   await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "false", LOAD);
   const videoPosts = page.locator("article[data-news-key]:has(video[data-autoplay-video])");
   await expect(page.locator("article[data-news-key]").first()).toBeVisible(LOAD);
@@ -303,9 +303,9 @@ test("Feed: Autoplay off by default; on, exactly one video post plays and scroll
   await expect.poll(() => playingKeys(page), { timeout: 2000 }).toEqual([next]);
 });
 
-test("Cards: Autoplay off by default; on, exactly one clip plays and scrolling moves play on", async ({ page }) => {
+test("Cards: Autoplay off = no video layer; on, exactly one clip plays and scrolling moves play on", async ({ page }) => {
   // Videos + Reddit in the funnel, so the league columns carry their video cards.
-  await gotoNews(page, { newsTypeFilters: ["reddit", "topvideos"] });
+  await gotoNews(page, { newsTypeFilters: ["reddit", "topvideos"], newsAutoplay: false });
   await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "false", LOAD);
   await expect(page.locator('button[aria-label^="Play highlight:"]').first()).toBeVisible(LOAD);
   await expect(page.locator("video[data-autoplay-video]")).toHaveCount(0);
@@ -333,4 +333,141 @@ test("Media blur stays over a playing clip", async ({ page }) => {
   await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([1]);
   const filter = await page.locator("[data-inline-video]").nth(1).locator("video").evaluate((v) => getComputedStyle(v).filter);
   expect(filter).toContain("blur");
+});
+
+// ── Round 4 (Jacob 9:44 PM) ─────────────────────────────────────────────
+const toolbar = (page: Page) => page.locator(".news-toolbar-sticky");
+const chips = (page: Page) => toolbar(page).locator("button.news-chip");
+// Toolbar bottom edge vs the app header's bottom edge (hidden = tucked under it).
+const toolbarShown = (page: Page) => page.evaluate(() => {
+  const t = document.querySelector(".news-toolbar-sticky")!.getBoundingClientRect();
+  const h = document.querySelector("header")!.getBoundingClientRect();
+  return t.bottom > h.bottom + 4;
+});
+const chrome = (page: Page) => page.evaluate(() => ({
+  headerH: getComputedStyle(document.querySelector<HTMLElement>("[style*='--header-h']") ?? document.documentElement).getPropertyValue("--header-h"),
+  spacer: document.querySelector(".header-flow-spacer")?.getBoundingClientRect().height,
+}));
+
+test("Autoplay is on by default in every layout; a saved off still wins", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
+  await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "true", LOAD);
+  await expect(page.locator("video[data-autoplay-video]").first()).toBeAttached(LOAD);
+  await pill(page, "Cards").click();
+  await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "true");
+  await pill(page, "ESPN").click();
+  await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "true");
+  await autoplayChip(page).click();
+  await page.reload();
+  await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "false", LOAD);
+});
+
+test("575px: the pill row is one row of icon-only pills, names kept; 1280px shows labels", async ({ page }) => {
+  await page.setViewportSize({ width: 575, height: 900 });
+  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true });
+  await expect(chips(page)).toHaveCount(6, LOAD);
+  const ys = await chips(page).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(ys).size).toBe(1);
+  const seg = await pill(page, "Cards").boundingBox();
+  expect(Math.abs(seg!.y + seg!.height / 2 - (ys[0] + 16))).toBeLessThan(12);
+  await expect(toolbar(page).getByText("Autoplay", { exact: true })).toBeHidden();
+  await expect(autoplayChip(page)).toHaveAttribute("title", /Play the video in focus/);
+  expect((await toolbar(page).boundingBox())!.height).toBeLessThan(64);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(toolbar(page).getByText("Autoplay", { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 575, height: 900 });
+  await expect(toolbar(page).getByText("Autoplay", { exact: true })).toBeHidden();
+});
+
+test("390px: still one row; the row scrolls sideways when icons do not fit", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true });
+  await expect(chips(page)).toHaveCount(6, LOAD);
+  const ys = await chips(page).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(ys).size).toBe(1);
+  const sc = await page.locator(".news-toolbar-scroll").evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, ox: getComputedStyle(el).overflowX }));
+  expect(sc.ox).toBe("auto");
+  expect(sc.sw).toBeGreaterThan(sc.cw);
+  // The last pill can be scrolled to.
+  await chips(page).last().scrollIntoViewIfNeeded();
+  await expect(chips(page).last()).toBeInViewport();
+});
+
+for (const reduced of [false, true]) {
+  test(`toolbar hides on scroll down, returns on scroll up and at the top${reduced ? " (reduced motion: no slide)" : ""}`, async ({ page }) => {
+    if (reduced) await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 575, height: 900 });
+    await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
+    await expect(page.locator("article[data-news-key]").nth(5)).toBeAttached(LOAD);
+    const before = await chrome(page);
+    expect(await toolbarShown(page)).toBe(true);
+    expect(await toolbar(page).evaluate((el) => getComputedStyle(el).transitionDuration)).toBe(reduced ? "0s" : "0.2s");
+
+    await page.mouse.move(280, 600);
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => toolbarShown(page)).toBe(false);
+    // The sticky source headers pin straight under the header while it is hidden.
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector("[style*='--news-toolbar-pin']") ?? document.body).getPropertyValue("--news-toolbar-pin").trim())).toBe("0px");
+    expect(await chrome(page)).toEqual(before);
+
+    await page.mouse.wheel(0, -40);
+    await expect.poll(() => toolbarShown(page)).toBe(true);
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => toolbarShown(page)).toBe(false);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(() => toolbarShown(page)).toBe(true);
+    expect(await chrome(page)).toEqual(before);
+  });
+}
+
+test("browser blocks autoplay: a one-time note under the toolbar, dismissible", async ({ page }) => {
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = function () { return Promise.reject(new DOMException("blocked", "NotAllowedError")); };
+  });
+  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true });
+  const note = page.getByTestId("autoplay-blocked-note");
+  await expect(note).toHaveText(/Your browser blocks autoplay\. Tap a video to play\./, LOAD);
+  // The play badge stays on the still.
+  expect(await playing(page)).toEqual([]);
+  await page.getByRole("button", { name: "Dismiss autoplay note" }).click();
+  await expect(note).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator("[data-inline-video]").first()).toBeVisible(LOAD);
+  await page.waitForTimeout(1500);
+  await expect(note).toHaveCount(0);
+});
+
+test("switch Feed → ESPN with Autoplay on: the first in-view clip plays without a scroll", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "feed", newsFeedView: true, newsAutoplay: true });
+  await expect(page.locator("article[data-news-key]").first()).toBeVisible(LOAD);
+  await pill(page, "ESPN").click();
+  await expect(page.locator('[data-inline-video="auto"]').first()).toBeVisible(LOAD);
+  await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
+});
+
+test("switch Cards → Feed with Autoplay on: the first in-view video plays without a scroll", async ({ page }) => {
+  await gotoNews(page, { newsAutoplay: true, newsTypeFilters: ["reddit", "topvideos"] });
+  await expect(page.locator('button[aria-label^="Play highlight:"]').first()).toBeVisible(LOAD);
+  await pill(page, "Feed").click();
+  await expect(page.locator("article[data-news-key]").first()).toBeVisible(LOAD);
+  await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
+});
+
+test("a layout or Big switch from a scrolled page goes to the top and plays the first clip", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
+  await expect(page.locator("article[data-news-key]").nth(5)).toBeAttached(LOAD);
+  await page.evaluate(() => window.scrollTo(0, 600));
+  await page.evaluate(() => window.scrollBy(0, -10)); // bring the toolbar back
+  await pill(page, "ESPN").click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  // Small clips: several are in view, the one nearest the center plays.
+  await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
+  expect(await playingOffCenter(page)).toBeLessThan(450);
+
+  await page.evaluate(() => window.scrollTo(0, 600));
+  await page.evaluate(() => window.scrollBy(0, -10));
+  await page.getByRole("button", { name: "Toggle big ESPN videos" }).click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect.poll(async () => (await playingKeys(page))[0], { timeout: 2000 }).toBe("https://example.com/espn-videos/0");
 });
