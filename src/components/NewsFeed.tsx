@@ -162,7 +162,9 @@ function useAggregatedFeed(groups: FeedGroup[], refreshKey: number) {
     // Stays null until either the first items arrive or every source has
     // settled empty (then [] → "No posts"), so there's no empty flash.
     fetchGroups(groupsRef.current, () => alive && gen === genRef.current, (state, done) => {
-      if (state.items.length > 0 || done) setFeed(state);
+      // Merge, not replace: a refresh pulled while a slow first-load source
+      // is still out may already have merged posts this load lacks.
+      if (state.items.length > 0 || done) setFeed((prev) => mergeFeeds(prev, state));
     });
     return () => {
       alive = false;
@@ -204,7 +206,13 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
   // League chip (All · NFL · NBA · Top news). Session-only component state,
   // not a pref. A chip whose column left the board falls back to All.
   const [chip, setChip] = useState("all");
-  const activeChip = groups.some((g) => g.id === chip) ? chip : "all";
+  const chipInGroups = groups.some((g) => g.id === chip);
+  const activeChip = chipInGroups ? chip : "all";
+  // Forget a chip whose column left, so it does not come back on its own
+  // when that column is added again (state adjusted during render, React's
+  // pattern for state derived from props). Not while groups is empty: the
+  // board passes none for a moment while the scores load.
+  if (!chipInGroups && chip !== "all" && groups.length > 0) setChip("all");
   const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
 
   // Session-only restore set + the modal it feeds — same idea as NewsColumn's
@@ -254,12 +262,14 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
 
   // "N new posts ↑": refreshed posts not on screen yet that would pass every
   // filter above. Zero (only fresher copies of shown posts) merges silently.
+  // ⇅ Oldest first puts new posts at the bottom, where they move nothing, so
+  // that order always merges silently too.
   const newCount = useMemo(() => {
-    if (!incoming) return 0;
+    if (!incoming || oldestFirst) return 0;
     const shown = new Set((items ?? []).map(keyOf));
     const [kept] = filterList(incoming.items.filter((it) => !shown.has(keyOf(it))), incoming.groupOf);
     return kept.length;
-  }, [incoming, items, filterList]);
+  }, [incoming, items, filterList, oldestFirst]);
   // Layout effect, so a merge near the top lands before paint: the pill must
   // not flash for one frame.
   useLayoutEffect(() => {

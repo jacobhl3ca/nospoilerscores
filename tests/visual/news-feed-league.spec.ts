@@ -223,6 +223,25 @@ test("Feed: refresh at the top merges the new posts with no pill", async ({ page
   expect(await posts(page).first().getAttribute("data-news-key")).toContain("/new/");
 });
 
+test("Feed: with Oldest first, a refresh while scrolled down appends at the bottom with no pill", async ({ page }) => {
+  const state = { refreshed: false, delayMs: 0 };
+  await mockFeeds(page, state);
+  await gotoNews(page, { newsOldestFirst: true });
+  const total = await settle(page);
+  const firstKey = await posts(page).first().getAttribute("data-news-key");
+
+  state.refreshed = true;
+  state.delayMs = 1_000;
+  await pullToRefresh(page);
+  await page.evaluate(() => window.scrollTo(0, 1200));
+  const y0 = await page.evaluate(() => window.scrollY);
+  await expect(posts(page)).toHaveCount(total + NEW_PER_FEED * 2, { timeout: 15_000 });
+  await expect(pill(page)).toHaveCount(0);
+  expect(await posts(page).first().getAttribute("data-news-key")).toBe(firstKey);
+  expect(await posts(page).last().getAttribute("data-news-key")).toContain("/new/");
+  expect(Math.abs((await page.evaluate(() => window.scrollY)) - y0)).toBeLessThan(5);
+});
+
 // Screenshots for the review (phone + desktop). Set FEED_SHOTS_DIR to write them.
 test("Feed: screenshots", async ({ page }) => {
   const dir = process.env.FEED_SHOTS_DIR;
