@@ -292,6 +292,14 @@ export function decodeFavorites(params: URLSearchParams): DecodedShare {
   return result;
 }
 
+export type NewsLayout = "cards" | "feed" | "espn";
+
+// The news layout to render. newsLayout wins; a blob from before it existed
+// carries only newsFeedView (true = Feed).
+export function newsLayoutOf(prefs: { newsLayout?: NewsLayout; newsFeedView?: boolean }): NewsLayout {
+  return prefs.newsLayout ?? (prefs.newsFeedView ? "feed" : "cards");
+}
+
 export interface Preferences {
   favoriteLeagues: Sport[]; // ordered by priority (first = highest)
   favoriteTeams: string[]; // team IDs, ordered by priority (first = highest)
@@ -607,6 +615,14 @@ export interface Preferences {
   // inline images + blurred top comments). Toggled by the Cards/Feed pill in the
   // news header.
   newsFeedView?: boolean;
+  // News layout, the 3-way Cards / Feed / ESPN pill (Jacob 10/8). "espn" =
+  // ESPN Videos left + ESPN Top Headlines right, the user's league subreddits
+  // below (HomeContent). Undefined = read the legacy newsFeedView above, so
+  // old blobs keep their view: see newsLayoutOf.
+  newsLayout?: NewsLayout;
+  // ESPN layout only: "Big" = one wide column of large video cards that play
+  // muted while on screen, headlines and subreddits under it. Default false.
+  newsEspnBig?: boolean;
   // News "Videos only" quick filter: true = show only clip-bearing items. It is
   // ITEM-level on every surface (Cards, Feed, the aligned strip's ESPN tail) —
   // a Reddit v.redd.it post counts, a headline-only post never does — via
