@@ -1,0 +1,2504 @@
+{
+ "teams": {
+  "mlb:1": [],
+  "mlb:2": [
+   {
+    "name": "WEEI 93.7",
+    "url": "https://www.audacy.com/stations/weei",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      506
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   }
+  ],
+  "mlb:3": [
+   {
+    "name": "AM830 KLAA",
+    "url": "https://tunein.com/radio/AM830-KLAA-s34679/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      803
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   },
+   {
+    "name": "1330 La Primera (KWKW)",
+    "url": "https://www.iheart.com/live/1330-la-primera-11798/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      803
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Angels Spanish flagship per Wikipedia Angels Radio Network (KWKW 1330); 2026 not confirmed from team release"
+   }
+  ],
+  "mlb:4": [
+   {
+    "name": "ESPN 1000",
+    "url": "https://www.iheart.com/live/espn-1000-7907/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      602
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   }
+  ],
+  "mlb:5": [
+   {
+    "name": "NewsRadio WTAM 1100",
+    "url": "https://www.iheart.com/live/newsradio-wtam-1100-1749/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      510
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   }
+  ],
+  "mlb:6": [
+   {
+    "name": "97.1 The Ticket",
+    "url": "https://www.audacy.com/stations/971theticket",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      505
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   }
+  ],
+  "mlb:7": [
+   {
+    "name": "96.5 The Fan",
+    "url": "https://www.audacy.com/stations/965thefan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      616
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   }
+  ],
+  "mlb:8": [],
+  "mlb:9": [
+   {
+    "name": "NewsTalk 830 WCCO",
+    "url": "https://www.iheart.com/live/newstalk-830-wcco-10946/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      613
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   }
+  ],
+  "mlb:10": [
+   {
+    "name": "WFAN 101.9 FM / 660 AM",
+    "url": "https://www.audacy.com/stations/wfan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      501
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   },
+   {
+    "name": "1280 WADO",
+    "url": "https://www.iheart.com/live/1280-wado-5172/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      501
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Yankees Spanish radio is produced by WADO"
+   }
+  ],
+  "mlb:11": [
+   {
+    "name": "Talk 650 KSTE",
+    "url": "https://www.iheart.com/live/talk-650-kste-229/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      862
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Athletics Sacramento flagship (iHeart deal for time in West Sacramento); DMA 862 Sacramento"
+   }
+  ],
+  "mlb:12": [
+   {
+    "name": "Seattle Sports 710",
+    "url": "https://www.iheart.com/live/seattle-sports-710-11726/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      819
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Team page: fans in the Mariners territory (WA, OR, MT, ID, AK, BC) can listen in the Seattle Sports 710 app without blackout"
+   }
+  ],
+  "mlb:13": [
+   {
+    "name": "105.3 The Fan",
+    "url": "https://www.audacy.com/stations/1053thefan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      623
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   },
+   {
+    "name": "1270 KFLC",
+    "url": "https://www.iheart.com/live/1270-kflc-11161/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      623
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Rangers 2026 release: Spanish on Univision Deportes Radio KFLC 1270"
+   }
+  ],
+  "mlb:14": [],
+  "mlb:15": [
+   {
+    "name": "680 The Fan",
+    "url": "https://tunein.com/radio/680-The-Fan---WCNN-s27965/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      524
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   }
+  ],
+  "mlb:16": [
+   {
+    "name": "104.3 The Score",
+    "url": "https://www.audacy.com/stations/thescorechicago",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      602
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   }
+  ],
+  "mlb:17": [
+   {
+    "name": "NewsRadio 700 WLW",
+    "url": "https://www.iheart.com/live/newsradio-700-wlw-1713/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      515
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   }
+  ],
+  "mlb:18": [
+   {
+    "name": "SportsTalk 790 KBME",
+    "url": "https://www.iheart.com/live/sportstalk-790-2257/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      618
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   }
+  ],
+  "mlb:19": [
+   {
+    "name": "570 KLAC",
+    "url": "https://www.iheart.com/live/570-klac-189/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      803
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   },
+   {
+    "name": "1020 KTNQ",
+    "url": "https://www.iheart.com/live/1020-kntq-5268/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      803
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Dodgers Spanish flagship (Latino Media Network extension); iHeart lists the station as '1020 KNTQ'"
+   }
+  ],
+  "mlb:20": [
+   {
+    "name": "106.7 The Fan",
+    "url": "https://www.audacy.com/stations/thefandc",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      511
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   }
+  ],
+  "mlb:21": [
+   {
+    "name": "Mets Radio",
+    "url": "https://www.audacy.com/stations/metsradio",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      501
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   }
+  ],
+  "mlb:22": [
+   {
+    "name": "SportsRadio 94WIP",
+    "url": "https://www.audacy.com/stations/94wip",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      504
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   },
+   {
+    "name": "La Unika WTTM 1680",
+    "url": "https://tunein.com/radio/La-Unika---WTTM-1680-s23296/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      504
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Phillies radio page lists WTTM 1680 as Spanish flagship"
+   }
+  ],
+  "mlb:23": [
+   {
+    "name": "93.7 The Fan",
+    "url": "https://www.audacy.com/stations/937thefan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      508
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   }
+  ],
+  "mlb:24": [
+   {
+    "name": "104.1 FM KMOX",
+    "url": "https://www.audacy.com/stations/kmox",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      609
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   },
+   {
+    "name": "La Tremenda WIJR 880",
+    "url": "https://tunein.com/radio/La-Tremenda-880-s27763/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      609
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Cardinals 2026 release: WIJR 880 AM La Tremenda Spanish flagship for home games"
+   }
+  ],
+  "mlb:25": [
+   {
+    "name": "97.3 The Fan",
+    "url": "https://www.iheart.com/live/973-the-fan-11112/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      825
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   },
+   {
+    "name": "La Poderosa 860 (XEMO)",
+    "url": "https://tunein.com/radio/Poderosa-860-AM-s24512/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      825
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Padres 2026 release: Spanish on XEMO-860AM La Poderosa; market is San Diego-Tijuana"
+   }
+  ],
+  "mlb:26": [
+   {
+    "name": "680 / 104.5 KNBR",
+    "url": "https://www.iheart.com/live/680-1045-knbr-5530/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      807
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   }
+  ],
+  "mlb:27": [
+   {
+    "name": "850 / 94.1 KOA",
+    "url": "https://www.iheart.com/live/850-941-koa-389/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      751
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   }
+  ],
+  "mlb:28": [
+   {
+    "name": "104.3 WQAM",
+    "url": "https://www.audacy.com/stations/wqam",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      528
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station page lists article headlines that can include scores"
+   },
+   {
+    "name": "Radio Mambi 710 (WAQI)",
+    "url": "https://www.iheart.com/live/radio-mambi-710-5175/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      528
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Marlins Spanish flagship WAQI 710 per Wikipedia Marlins Radio Network and 2021 Univision list; 2026 not confirmed"
+   }
+  ],
+  "mlb:29": [
+   {
+    "name": "Arizona Sports 98.7",
+    "url": "https://www.iheart.com/live/arizona-sports-987-11724/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      753
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   }
+  ],
+  "mlb:30": [
+   {
+    "name": "95.7 WDAE",
+    "url": "https://www.iheart.com/live/957-wdae-673/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      539
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08"
+   }
+  ],
+  "nba:1": [
+   {
+    "name": "92.9 The Game",
+    "url": "https://www.audacy.com/stations/929thegame",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      524
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Hawks flagship, extended through 2029; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:2": [
+   {
+    "name": "98.5 The Sports Hub",
+    "url": "https://www.audacy.com/stations/985thesportshub",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      506
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Celtics flagship since 2013, renewed 2023; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:3": [
+   {
+    "name": "WWL",
+    "url": "https://www.audacy.com/stations/wwl",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      622
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Pelicans flagship WWL 870 AM / 105.3 FM; Audacy app listing: play-by-play audio only available within the team's DMA"
+   },
+   {
+    "name": "Latino Mix KGLA 830",
+    "url": "https://tunein.com/radio/Latino-Mix-830-s28817/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Pelicans Spanish: KGLA 830 AM / 105.7 FM per Pelicans broadcast page; TuneIn page; no NBA restriction found"
+   }
+  ],
+  "nba:4": [
+   {
+    "name": "104.3 The Score",
+    "url": "https://www.audacy.com/stations/thescorechicago",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      602
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Bulls flagship WSCR (670 AM / 104.3 FM), extension June 2026; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:5": [
+   {
+    "name": "NewsRadio WTAM 1100",
+    "url": "https://www.iheart.com/live/newsradio-wtam-1100-1749/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Cavaliers flagship WTAM 1100 / WMMS 100.7; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:6": [
+   {
+    "name": "105.3 The Fan",
+    "url": "https://www.audacy.com/stations/1053thefan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      623
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Mavericks new flagship from 2026-27, announced 2026-09-03; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:7": [
+   {
+    "name": "Altitude Sports Radio",
+    "url": "https://tunein.com/radio/Altitude-Sports-Radio-950-s33475/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Nuggets radio home; 92.5 FM flagship, 950 AM simulcast; TuneIn page; no NBA restriction found"
+   }
+  ],
+  "nba:8": [
+   {
+    "name": "97.1 The Ticket",
+    "url": "https://www.audacy.com/stations/971theticket",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      505
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Pistons flagship WXYT-FM; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:9": [
+   {
+    "name": "95.7 The Game",
+    "url": "https://www.audacy.com/stations/957thegame",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      807
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Warriors flagship, extension Oct 2025; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:10": [
+   {
+    "name": "SportsTalk 790",
+    "url": "https://www.iheart.com/live/sportstalk-790-2257/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Rockets flagship KBME; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:11": [
+   {
+    "name": "107.5 The Fan",
+    "url": "https://www.iheart.com/live/1075-the-fan-6056/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Pacers flagship per Pacers 2026-27 page (107.5 The Fan / 93.5 FM); iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:12": [
+   {
+    "name": "570 KLAC",
+    "url": "https://www.iheart.com/live/570-klac-189/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Clippers flagship KLAC; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:13": [
+   {
+    "name": "710 ESPN LA",
+    "url": "https://www.iheart.com/live/710-espn-la-7906/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Lakers flagship KSPN; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   },
+   {
+    "name": "980 La Mera Mera",
+    "url": "https://www.iheart.com/live/980-la-mera-mera-11795/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Lakers Spanish radio moved to KFWB 980 on 2025-12-18 (Inside Radio); 2026-27 not separately confirmed; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:14": [
+   {
+    "name": "FM 104.3 WQAM",
+    "url": "https://www.audacy.com/stations/wqam",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      528
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Heat flagship WQAM 560 AM / 104.3 FM; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:15": [
+   {
+    "name": "620 WTMJ",
+    "url": "https://tunein.com/radio/620-WTMJ-s23203/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Bucks flagship WTMJ since 1968-69; 2026-27 renewal not found; TuneIn page; no NBA restriction found"
+   }
+  ],
+  "nba:16": [
+   {
+    "name": "Minnesota Timberwolves/Lynx",
+    "url": "https://www.iheart.com/live/minnesota-timberwolveslynx-9998/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart dedicated Wolves/Lynx channel; KFAN FM 100.3 is flagship for select games (2023 iHeart deal); iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:17": [
+   {
+    "name": "WFAN",
+    "url": "https://www.audacy.com/stations/wfan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      501
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Nets flagship (WFAN AM 66 / FM 101.9); Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:18": [
+   {
+    "name": "ESPN New York 880",
+    "url": "https://www.audacy.com/stations/espnnewyork880",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      501
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Knicks flagship WHSQ 880 AM since Aug 2024; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:19": [
+   {
+    "name": "96.9 The Game",
+    "url": "https://www.iheart.com/live/969-the-game-601/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Magic flagship per Magic broadcast page (FM 96.9 / AM 740); iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:20": [
+   {
+    "name": "97.5 The Fanatic",
+    "url": "https://www.audacy.com/stations/975thefanatic",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      504
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "76ers flagship WPEN; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:21": [
+   {
+    "name": "Arizona Sports 98.7",
+    "url": "https://www.iheart.com/live/arizona-sports-987-11724/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Suns flagship KMVP-FM per 2026-27 report; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   },
+   {
+    "name": "La Mejor KSUN 1400",
+    "url": "https://tunein.com/radio/La-Mejor-1400-s2978/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Suns Spanish KSUN 1400 AM / 106.5 FM per Suns 2025-26 announcement; 2026-27 not separately confirmed; TuneIn page; no NBA restriction found"
+   }
+  ],
+  "nba:22": [
+   {
+    "name": "Rip City Radio 620",
+    "url": "https://www.iheart.com/live/rip-city-radio-1965/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Trail Blazers flagship KPOJ, 2026-27 confirmed; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:23": [],
+  "nba:24": [
+   {
+    "name": "NewsRadio 1200 WOAI",
+    "url": "https://www.iheart.com/live/newsradio-1200-woai-2361/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Spurs flagship WOAI 1200; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:25": [
+   {
+    "name": "98.1 The Sports Animal",
+    "url": "https://www.iheart.com/live/981-the-sports-animal-5511/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Thunder flagship WWLS-FM, simulcast KWPN 640; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:26": [
+   {
+    "name": "KSL Sports Zone 97.5",
+    "url": "https://www.iheart.com/live/ksl-sports-zone-975-11709/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Jazz flagship KZNS 97.5 / 1280 The Zone Sports Network; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nba:27": [
+   {
+    "name": "106.7 The Fan",
+    "url": "https://www.audacy.com/stations/thefandc",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      511
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Wizards flagship WJFK-FM, extension Oct 2025; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:28": [
+   {
+    "name": "Sportsnet 590 The FAN",
+    "url": "https://tunein.com/radio/Sportsnet-590-The-FAN-s31210/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Raptors radio home CJCL 590; TuneIn page has no score ticker; 2026-27 renewal not found; TuneIn page; no NBA restriction found"
+   }
+  ],
+  "nba:29": [
+   {
+    "name": "92.9 FM ESPN",
+    "url": "https://www.audacy.com/stations/929espn",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      640
+     ],
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Grizzlies flagship WMFS-FM; Audacy app listing: play-by-play audio only available within the team's DMA"
+   }
+  ],
+  "nba:30": [
+   {
+    "name": "92.7 WFNZ",
+    "url": "https://www.iheart.com/live/927-wfnz-6742/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Hornets flagship, 2026-27 extension announced 2026-09-03; iHeart help documents game blackouts only for NFL/MLB; no NBA restriction found"
+   }
+  ],
+  "nfl:1": [
+   {
+    "name": "92-9 The Game",
+    "url": "https://www.audacy.com/stations/929thegame",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      524
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Falcons flagship WZGC (team site lists 92.9 FM The Game). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   }
+  ],
+  "nfl:2": [
+   {
+    "name": "97 Rock",
+    "url": "https://www.iheart.com/live/97-rock-5355/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      514
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WGRF, Bills flagship from 2026 (Cumulus, left Audacy WGR). NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:3": [
+   {
+    "name": "ESPN 1000",
+    "url": "https://www.iheart.com/live/espn-1000-7907/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      602
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Bears flagship 2026 (WMVP, AM 1000). NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "Latino Mix 93.5",
+    "url": "https://www.iheart.com/live/latino-mix-935-5183/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      602
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Bears Spanish radio 2026 (Omar Ramos). NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:4": [
+   {
+    "name": "102.7 WEBN",
+    "url": "https://www.iheart.com/live/1027-webn-1701/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      515
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Bengals flagship with ESPN 1530 and WLW (iHeart deal through 2028). NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "ESPN 1530",
+    "url": "https://www.iheart.com/live/espn-1530-1697/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      515
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WCKY, Bengals co-flagship. NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "NewsRadio 700 WLW",
+    "url": "https://www.iheart.com/live/newsradio-700-wlw-1713/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      515
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Carries Bengals games when no Reds conflict. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:5": [
+   {
+    "name": "92.3 The Fan",
+    "url": "https://www.audacy.com/stations/923thefan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      510
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Browns flagship (Audacy/Good Karma renewal 2025). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   },
+   {
+    "name": "98.5 WNCX",
+    "url": "https://www.audacy.com/stations/wncx",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      510
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Browns flagship group (Audacy). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   }
+  ],
+  "nfl:6": [
+   {
+    "name": "105.3 The Fan",
+    "url": "https://www.audacy.com/stations/1053thefan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      623
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "KRLD-FM, Cowboys flagship since 2009. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   },
+   {
+    "name": "La Grande 107.5 FM",
+    "url": "https://www.audacy.com/stations/lagrande1075",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      623
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "KMVK, listed as Cowboys Spanish flagship (Wikipedia; Audacy 2026 market doc). No 2026 team announcement found. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   }
+  ],
+  "nfl:7": [
+   {
+    "name": "850 / 94.1 KOA",
+    "url": "https://www.iheart.com/live/850-941-koa-389/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      751
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Broncos flagship. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:8": [
+   {
+    "name": "97.1 The Ticket",
+    "url": "https://www.audacy.com/stations/971theticket",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      505
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Lions flagship, multi-year extension Feb 2026. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   }
+  ],
+  "nfl:9": [
+   {
+    "name": "95.7 BIG FM",
+    "url": "https://www.iheart.com/live/957-big-fm-2689/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      658,
+      617
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WRIT, Packers flagship per packers.com (renewed Sept 2026). NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:10": [
+   {
+    "name": "104.5 The Zone",
+    "url": "https://www.iheart.com/live/1045-the-zone-5453/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      659
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WGFX, Titans flagship (titans 2026 announcement). NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:11": [
+   {
+    "name": "107.5 The Fan",
+    "url": "https://www.iheart.com/live/1075-the-fan-6056/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      527
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WFNI, Colts flagship. NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "Country 97.1 Hank FM",
+    "url": "https://www.iheart.com/live/country-971-hank-fm-6058/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      527
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WLHK, Colts FM simulcast. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:12": [
+   {
+    "name": "96.5 The Fan",
+    "url": "https://www.audacy.com/stations/965thefan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      616
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "KFNZ, Chiefs flagship (Audacy). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   }
+  ],
+  "nfl:13": [
+   {
+    "name": "Raider Nation Radio 920",
+    "url": "https://www.iheart.com/live/raider-nation-radio-920-11833/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      839
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "KRLV, Raiders flagship (raiders.com: in-market only, NFL+ elsewhere)."
+   },
+   {
+    "name": "KOMP 92.3",
+    "url": "https://www.iheart.com/live/komp-923-11813/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      839
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Raiders flagship FM (raiders.com: in-market only, NFL+ elsewhere)."
+   },
+   {
+    "name": "Deportes Vegas 1460",
+    "url": "https://www.iheart.com/live/deportes-vegas-1460-11815/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      839
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "KENO, Raiders Spanish flagship, Week 1 2026 broadcast page. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:14": [
+   {
+    "name": "710 ESPN LA",
+    "url": "https://www.iheart.com/live/710-espn-la-7906/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      803
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "KSPN, Rams flagship (2026 team announcement). NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "93.1 Jack FM",
+    "url": "https://www.audacy.com/stations/931jackfm",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      803
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Rams FM simulcast partner, regular season. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   },
+   {
+    "name": "1330 La Primera",
+    "url": "https://www.iheart.com/live/1330-la-primera-11798/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      803
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "KWKW, Rams Spanish 2026. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:15": [
+   {
+    "name": "Big 105.9",
+    "url": "https://www.iheart.com/live/big-1059-557/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      528
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Dolphins English radio (iHeart deal). NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "Fox Sports 940",
+    "url": "https://www.iheart.com/live/fox-sports-940-565/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      528
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WINZ, Dolphins English radio. NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "La Mezcla 94.9",
+    "url": "https://www.iheart.com/live/la-mezcla-949-10397/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      528
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WZTU-HD2, iHeart page subtitled 'La Casa De Los Miami Dolphins'. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:16": [
+   {
+    "name": "KFAN FM 100.3",
+    "url": "https://www.iheart.com/live/kfan-fm-1003-1209/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      613
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "KFXN, Vikings flagship through 2031. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:17": [
+   {
+    "name": "98.5 The Sports Hub",
+    "url": "https://www.audacy.com/stations/985thesportshub",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      506
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Patriots flagship. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   }
+  ],
+  "nfl:18": [
+   {
+    "name": "WWL 870 AM / 105.3 FM",
+    "url": "https://www.audacy.com/stations/wwl",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      622
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Saints flagship since 1995, extended 2026. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   }
+  ],
+  "nfl:19": [
+   {
+    "name": "WFAN 101.9 FM / 660 AM",
+    "url": "https://www.audacy.com/stations/wfan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      501
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Giants flagship (extended July 2025). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   },
+   {
+    "name": "1280 WADO",
+    "url": "https://www.iheart.com/live/1280-wado-5172/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      501
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Giants official Spanish-language flagship (giants.com). NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:20": [
+   {
+    "name": "Q104.3",
+    "url": "https://www.iheart.com/live/q1043-1465/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      501
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Jets official radio home (newyorkjets.com: iHeartRadio app, local market only)."
+   }
+  ],
+  "nfl:21": [
+   {
+    "name": "SportsRadio 94WIP",
+    "url": "https://www.audacy.com/stations/94wip",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      504
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Eagles flagship through 2028. Audacy Eagles FAQ: within 100 miles of Lincoln Financial Field."
+   }
+  ],
+  "nfl:22": [
+   {
+    "name": "Arizona Sports 98.7 FM",
+    "url": "https://www.iheart.com/live/arizona-sports-987-11724/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      753
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Cardinals flagship (azcardinals/Arizona Sports). NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "Latino Mix 100.3",
+    "url": "https://www.iheart.com/live/latino-mix-1003-5216/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      753
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "TelevisaUnivision 2026 deal: Cardinals Spanish on TUDN 105.1 (no stream page found) and Latino Mix 100.3 KQMR. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:23": [
+   {
+    "name": "102.5 DVE",
+    "url": "https://www.iheart.com/live/1025-dve-2017/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      508
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WDVE, Steelers flagship (steelers.com). NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "Fox Sports 970",
+    "url": "https://www.iheart.com/live/fox-sports-970-2013/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      508
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WBGG, Steelers co-flagship (steelers.com). NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:24": [
+   {
+    "name": "KFI AM 640",
+    "url": "https://www.iheart.com/live/kfi-am-640-177/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      803
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Chargers radio home per chargers.com 2026 game pages. NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "Latino Mix 103.9 / 98.3",
+    "url": "https://www.iheart.com/live/latino-mix-1039-983-11767/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      803
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Chargers Spanish per chargers.com Week 3 2026 page. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:25": [
+   {
+    "name": "680 / 104.5 KNBR",
+    "url": "https://www.iheart.com/live/680-1045-knbr-5530/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      807
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "49ers flagship, renewed Apr 2026. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:26": [
+   {
+    "name": "Seattle Sports 710",
+    "url": "https://www.iheart.com/live/seattle-sports-710-11726/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      819
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Seahawks flagship with KIRO 97.3. NFL rule: game audio streams are home-market only (no station help page found)."
+   },
+   {
+    "name": "NewsRadio 97.3 KIRO",
+    "url": "https://www.iheart.com/live/newsradio-973-kiro-11719/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      819
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Seahawks flagship FM. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:27": [
+   {
+    "name": "98ROCK Tampa Bay",
+    "url": "https://www.iheart.com/live/98rock-tampa-bay-697/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      539
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WXTB 97.9, English flagship per buccaneers.com 2026 pages. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:28": [
+   {
+    "name": "Big 100",
+    "url": "https://www.iheart.com/live/big-100-2505/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      511
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WBIG 100.3, Commanders flagship 2026. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:29": [
+   {
+    "name": "99.7 The Fox",
+    "url": "https://www.iheart.com/live/997-the-fox-1613/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      517
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "WRFX, Panthers flagship since 2022 iHeart deal. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:30": [
+   {
+    "name": "Rumba 106.9",
+    "url": "https://www.iheart.com/live/rumba-1069-7071/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      561
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Jaguars 2026 affiliate list: Spanish on Rumba 106.9 / WQIK 99.1 HD3. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:33": [
+   {
+    "name": "98 Rock WIYY 97.9 FM",
+    "url": "https://www.98online.com/player",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      512
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Ravens page: all games on 98 Rock WIYY and WBAL 1090/101.5 (Hearst, no iHeart/Audacy page). Ravens app audio is Baltimore-area only. NFL rule: game audio streams are home-market only (no station help page found)."
+   }
+  ],
+  "nfl:34": [
+   {
+    "name": "100.3 The Bull",
+    "url": "https://www.audacy.com/stations/thebull",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      618
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Texans flagship KILT-FM (Audacy FAQ page: Texans games here; 100-mile radius of NRG Stadium)."
+   },
+   {
+    "name": "95.7 The Fan",
+    "url": "https://www.audacy.com/stations/957thefan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      618
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "Texans flagship SportsRadio 610; audacy.com/stations/sportsradio610 (the stream the Texans FAQ names) now redirects here. Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   },
+   {
+    "name": "Mega 101 Houston",
+    "url": "https://www.audacy.com/stations/klol",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "dma": [
+      618
+     ],
+     "vpnOk": "unknown",
+     "signIn": false
+    },
+    "checked": "2026-10-08",
+    "note": "KLOL, Texans Spanish flagship (texans.com, through 2027). Audacy help: play-by-play streams limited to a radius of the team's home stadium (Eagles/Texans FAQ: 100 miles)."
+   }
+  ],
+  "nhl:1": [
+   {
+    "name": "98.5 The Sports Hub",
+    "url": "https://www.audacy.com/stations/985thesportshub",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "vpnOk": "unknown",
+     "dma": [
+      506
+     ]
+    },
+    "checked": "2026-10-08",
+    "note": "Audacy Bruins guide (2024-25): coverage within 75 miles of Boston"
+   }
+  ],
+  "nhl:2": [
+   {
+    "name": "WGR 550",
+    "url": "https://www.audacy.com/stations/wgr550",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Audacy Sabres guide: available nationwide on desktop; mobile radius not stated"
+   }
+  ],
+  "nhl:3": [
+   {
+    "name": "QR Calgary 770",
+    "url": "https://tunein.com/radio/QR-Calgary-770AM-s31172/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "New 5-year Corus deal from 2026-27 (Sportsnet 960 closed). No geo limit documented by the source."
+   }
+  ],
+  "nhl:4": [
+   {
+    "name": "WGN Radio 720",
+    "url": "https://www.iheart.com/live/wgn-am-720-5305/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ],
+  "nhl:5": [
+   {
+    "name": "97.1 The Ticket",
+    "url": "https://www.audacy.com/stations/971theticket",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "vpnOk": "unknown",
+     "dma": [
+      505
+     ]
+    },
+    "checked": "2026-10-08",
+    "note": "Audacy Red Wings guide (2024-25): coverage within 500 miles of Detroit"
+   }
+  ],
+  "nhl:6": [
+   {
+    "name": "880 CHED",
+    "url": "https://tunein.com/radio/880-CHED-s11767/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Corus renewal March 2026. No geo limit documented by the source."
+   }
+  ],
+  "nhl:7": [
+   {
+    "name": "99.9 The Fan",
+    "url": "https://www.iheart.com/live/999-the-fan-11750/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ],
+  "nhl:8": [
+   {
+    "name": "ESPN LA 710",
+    "url": "https://www.audacy.com/stations/espnla",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Kings: some games on air, all in ESPN LA app per 2024 deal; 2026-27 count unconfirmed. Audacy help: play-by-play depends on device location and each team's streaming contract; NHL not named."
+   }
+  ],
+  "nhl:9": [
+   {
+    "name": "96.7 / 1310 The Ticket",
+    "url": "https://www.iheart.com/live/1310-the-ticket-5524/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "KTCK AM simulcast of SportsRadio 96.7. iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ],
+  "nhl:10": [
+   {
+    "name": "TSN 690",
+    "url": "https://www.iheart.com/live/tsn-690-7450/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "No geo limit documented by the source."
+   },
+   {
+    "name": "98.5 Montréal",
+    "url": "https://tunein.com/radio/985-Montr%c3%a9al-s12468/",
+    "lang": "fr",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Cogeco French flagship. No geo limit documented by the source."
+   }
+  ],
+  "nhl:11": [
+   {
+    "name": "WFAN",
+    "url": "https://www.audacy.com/stations/wfan",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Audacy WFAN page; Devils on WFAN per 2026-27 media guide, team page not yet updated. Audacy help: play-by-play depends on device location and each team's streaming contract; NHL not named."
+   }
+  ],
+  "nhl:12": [
+   {
+    "name": "WRHU 88.7",
+    "url": "https://tunein.com/radio/WRHU-887-s22416/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Hofstra station, Islanders flagship (2025-26 team page); 2026-27 unconfirmed. No restriction documented."
+   }
+  ],
+  "nhl:13": [
+   {
+    "name": "880 ESPN New York",
+    "url": "https://www.iheart.com/live/espn-880-7905/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart stream is the WHSQ 880 feed. iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ],
+  "nhl:14": [
+   {
+    "name": "TSN 1200",
+    "url": "https://www.iheart.com/live/tsn-1200-7503/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "No geo limit documented by the source."
+   },
+   {
+    "name": "104.7 Outaouais",
+    "url": "https://tunein.com/radio/1047-Outaouais-s12320/",
+    "lang": "fr",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "French rights, 3-year deal. No geo limit documented by the source."
+   }
+  ],
+  "nhl:15": [
+   {
+    "name": "97.5 The Fanatic",
+    "url": "https://www.audacy.com/stations/975thefanatic",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Audacy help: play-by-play depends on device location and each team's streaming contract; NHL not named."
+   }
+  ],
+  "nhl:16": [
+   {
+    "name": "105.9 The X",
+    "url": "https://www.iheart.com/live/1059-the-x-2033/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ],
+  "nhl:17": [
+   {
+    "name": "Altitude Sports Radio 92.5",
+    "url": "https://player.listenlive.co/20551",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "KKSE-FM player linked from altitudesportsradio.com; page title is call letters only. No restriction documented."
+   }
+  ],
+  "nhl:18": [
+   {
+    "name": "Sharks Audio Network",
+    "url": "https://tunein.com/radio/San-Jose-Sharks-Audio-Network-s321245/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Team audio channel hosted on TuneIn; no Bay Area terrestrial flagship. No restriction documented."
+   }
+  ],
+  "nhl:19": [
+   {
+    "name": "101 ESPN",
+    "url": "https://tunein.com/radio/101-ESPN-1011-s23633/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Hubbard WXOS; flagship deal through 2027-28. No restriction documented."
+   }
+  ],
+  "nhl:20": [
+   {
+    "name": "102.5 The Bone",
+    "url": "https://www.iheart.com/live/1025-the-bone-5920/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ],
+  "nhl:21": [
+   {
+    "name": "TSN 1050",
+    "url": "https://www.iheart.com/live/tsn-1050-7495/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Leafs radio partners are Sportsnet and TSN (team release); game split unconfirmed. No geo limit documented by the source."
+   }
+  ],
+  "nhl:22": [],
+  "nhl:23": [
+   {
+    "name": "106.7 The Fan",
+    "url": "https://www.audacy.com/stations/thefandc",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "market",
+     "vpnOk": "unknown",
+     "dma": [
+      511
+     ]
+    },
+    "checked": "2026-10-08",
+    "note": "Audacy Capitals guide (2024-25): coverage within 500 miles of Washington DC"
+   }
+  ],
+  "nhl:25": [
+   {
+    "name": "Ducks Stream",
+    "url": "https://tunein.com/radio/Ducks-Stream-s320793/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Team audio channel hosted on TuneIn; team FAQ says free, no sign-up"
+   }
+  ],
+  "nhl:26": [
+   {
+    "name": "WQAM",
+    "url": "https://www.audacy.com/stations/wqam",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Audacy Panthers guide: available nationwide on desktop/mobile"
+   }
+  ],
+  "nhl:27": [
+   {
+    "name": "102.5 The Game",
+    "url": "https://www.thegamenashville.com/player/?playerID=220",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Station player page; no restriction documented."
+   }
+  ],
+  "nhl:28": [
+   {
+    "name": "680 CJOB",
+    "url": "https://tunein.com/radio/CJOB-680-s31221/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "No geo limit documented by the source."
+   }
+  ],
+  "nhl:29": [
+   {
+    "name": "97.1 The Fan",
+    "url": "https://www.iheart.com/live/971-the-fan-10028/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ],
+  "nhl:30": [
+   {
+    "name": "KFAN 100.3",
+    "url": "https://www.iheart.com/live/kfan-fm-1003-1209/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ],
+  "nhl:37": [
+   {
+    "name": "X 107.9",
+    "url": "https://www.iheart.com/live/x1079-5815/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   },
+   {
+    "name": "105.7 Maxima",
+    "url": "https://www.iheart.com/live/1057-maxima-5814/",
+    "lang": "es",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "Spanish flagship per Beasley release 9/28/2026. iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ],
+  "nhl:124292": [
+   {
+    "name": "SportsRadio 93.3 KJR",
+    "url": "https://www.iheart.com/live/sportsradio-933-kjr-2577/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ],
+  "nhl:129764": [
+   {
+    "name": "KSL Sports Zone 97.5",
+    "url": "https://www.iheart.com/live/ksl-sports-zone-975-11709/",
+    "lang": "en",
+    "access": {
+     "cost": "free",
+     "geo": "none",
+     "vpnOk": "unknown"
+    },
+    "checked": "2026-10-08",
+    "note": "iHeart help: live sports may be limited to local area by league rules (MLB/NFL named, NHL not)."
+   }
+  ]
+ },
+ "national": {
+  "ERADM": {
+   "name": "ESPN Radio",
+   "url": "https://www.iheart.com/live/espn-radio-7903/",
+   "lang": "en",
+   "access": {
+    "cost": "free",
+    "geo": "country",
+    "countries": [
+     "US"
+    ],
+    "vpnOk": "unknown"
+   },
+   "checked": "2026-10-08",
+   "note": "iHeartRadio station 7903, the national ESPN Radio feed. iHeart streams are US-only."
+  }
+ },
+ "leagues": {
+  "nfl": {
+   "paid": [
+    {
+     "name": "SiriusXM",
+     "url": "https://www.siriusxm.com/sports/nfl",
+     "lang": "en",
+     "access": {
+      "cost": "paid",
+      "geo": "none",
+      "signIn": true,
+      "vpnOk": "unknown"
+     },
+     "checked": "2026-10-08",
+     "note": "Every NFL game, home and away feeds, with a SiriusXM subscription."
+    }
+   ]
+  },
+  "mlb": {
+   "paid": [
+    {
+     "name": "SiriusXM",
+     "url": "https://www.siriusxm.com/sports/mlb",
+     "lang": "en",
+     "access": {
+      "cost": "paid",
+      "geo": "none",
+      "signIn": true,
+      "vpnOk": "unknown"
+     },
+     "checked": "2026-10-08",
+     "note": "Every MLB game, home and away feeds, with a SiriusXM subscription."
+    }
+   ]
+  },
+  "nba": {
+   "paid": [
+    {
+     "name": "SiriusXM",
+     "url": "https://www.siriusxm.com/sports/nba",
+     "lang": "en",
+     "access": {
+      "cost": "paid",
+      "geo": "none",
+      "signIn": true,
+      "vpnOk": "unknown"
+     },
+     "checked": "2026-10-08",
+     "note": "Every NBA game, home and away feeds, with a SiriusXM subscription."
+    }
+   ]
+  },
+  "nhl": {
+   "paid": [
+    {
+     "name": "SiriusXM",
+     "url": "https://www.siriusxm.com/sports/nhl",
+     "lang": "en",
+     "access": {
+      "cost": "paid",
+      "geo": "none",
+      "signIn": true,
+      "vpnOk": "unknown"
+     },
+     "checked": "2026-10-08",
+     "note": "Every NHL game, home and away feeds, with a SiriusXM subscription."
+    }
+   ]
+  }
+ },
+ "events": {}
+}

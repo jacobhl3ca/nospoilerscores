@@ -9,7 +9,9 @@ import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } 
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { startTimeLabel } from "@/lib/gameTime";
 import { fifaRank } from "@/lib/fifaRankings";
-import { handleExternalClick, liveWatchProps, watchLinkProps } from "@/lib/openExternal";
+import { handleExternalClick, listenLinkProps, liveWatchProps, watchLinkProps } from "@/lib/openExternal";
+import { useListenLinks } from "@/lib/useListenLinks";
+import type { ListenResult } from "@/lib/radio";
 import { gameRef } from "@/lib/tvChannelLinks";
 import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
@@ -403,6 +405,30 @@ function PairingMaskCard({ game, nextGameDate, leagueTag, showRatings, onReveal 
   );
 }
 
+// The "Listen" block at the foot of the Where to watch dialog: one row per
+// station, name first, then its chips (ES · local only · sign-in · Paid).
+function ListenSection({ listen }: { listen: ListenResult }) {
+  const rows = listen.free.length ? listen.free : listen.paid ? [listen.paid] : [];
+  return (
+    <div className="listen-section flex flex-col gap-1 pt-1 mt-0.5" style={{ borderTop: "1px solid var(--border)" }}>
+      <span className="text-[10px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>Listen</span>
+      {rows.map((l) => (
+        <a
+          key={l.url}
+          {...listenLinkProps(l.name, l.url)}
+          className="listen-link hover:underline whitespace-normal break-words"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {l.name}
+          {l.tags.map((t) => (
+            <span key={t} className="ml-1 text-[10px] px-1 rounded whitespace-nowrap" style={{ border: "1px solid var(--border)" }}>{t}</span>
+          ))}
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues, hideWatchLater }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // "Later" pill (Jacob 9/27): queue the game for the Watch queue strip above
@@ -478,8 +504,17 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
   // state renders as a top banner above the card, not in this row.
   const hasStatusText = isLive || isFuture || !!nextGameDate || !!teamView || !isFinished;
   const hasBroadcast = !isFinished && game.broadcasts.length > 0;
+  // Listen links (lib/radio.ts) ride the same chip: no new chip on the card
+  // face. Empty for a final game, so isFinished already gates them.
+  const listen = useListenLinks(game);
+  const hasListen = listen.free.length > 0 || !!listen.paid;
+  // The chip opens the dialog for 2+ networks, or reads "Listen" when there
+  // is radio but no TV. One network keeps its one-tap link (Jacob 6/9): its
+  // Listen links live in the game details, so the chip never turns from a
+  // link into a button when the station table lands.
+  const networksDialog = game.broadcasts.length > 1 || (hasListen && game.broadcasts.length === 0 && !isFinished);
   const showFinal = isFinished && !isPastDate && !teamView;
-  const metaRowHasText = hasStatusText || showRating || hasBroadcast || showFinal;
+  const metaRowHasText = hasStatusText || showRating || hasBroadcast || (hasListen && networksDialog) || showFinal;
   // The 3-column phone board moves the league chip onto the card's top border
   // only when the row has other text to share it with (see league-tag-tab).
   const leagueTabOnBorder = !!leagueTag && metaRowHasText;
@@ -986,7 +1021,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 is what keeps the badge centered card to card. Elsewhere (no
                 badge) it stays shrink-0 + ml-auto: natural width, pinned right. */}
             <span className={hasRating ? "flex-1 min-w-0 truncate text-right" : "shrink-0 ml-auto text-right"}>
-              {hasBroadcast && (() => {
+              {(hasBroadcast || (hasListen && networksDialog)) && (() => {
                 const networkLink = (name: string, key: string | number) => {
                   const isPrime = /\b(amazon|prime)\b/i.test(name);
                   const isEspn = /\b(espn|abc)\b/i.test(name);
@@ -1024,7 +1059,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                     </a>
                   );
                 };
-                if (game.broadcasts.length > 1) {
+                if (networksDialog) {
                   // When the overlay is open, hide the inline row so it
                   // doesn't bleed through behind the expanded list.
                   if (broadcastExpanded) return null;
@@ -1037,7 +1072,9 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                       type="button"
                       className="text-[11px] cursor-pointer hover:underline whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
-                      title={`See all networks: ${game.broadcasts.join(", ")}`}
+                      title={game.broadcasts.length
+                        ? `See all networks${hasListen ? " and radio" : ""}: ${game.broadcasts.join(", ")}`
+                        : "Listen on the radio"}
                       // The "+N" is hidden on mobile (sm:inline), so the visible
                       // label is just the lead network — announce the popup and
                       // its open/closed state to screen readers, matching the
@@ -1050,7 +1087,9 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                       aria-expanded={broadcastExpanded}
                       onClick={(e) => { e.stopPropagation(); setBroadcastExpanded((v) => !v); }}
                     >
-                      {shortNetwork(game.broadcasts[0])}<span className="hidden sm:inline"> +{game.broadcasts.length - 1}</span>
+                      {/* No TV listed: the chip reads "Listen" (radio only). */}
+                      {game.broadcasts.length ? shortNetwork(game.broadcasts[0]) : "Listen"}
+                      {game.broadcasts.length > 1 && <span className="hidden sm:inline"> +{game.broadcasts.length - 1}</span>}
                     </button>
                   );
                 }
@@ -1067,7 +1106,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
 
       {/* Expanded-networks overlay — anchored top-right, covers the records column
           on the team rows. Click × — or anywhere outside — to collapse back to "+N". */}
-      {broadcastExpanded && game.broadcasts.length > 1 && (
+      {broadcastExpanded && networksDialog && (
         <div
           ref={broadcastOverlayRef}
           // The toggle above declares aria-haspopup="dialog" + aria-expanded, so
@@ -1123,6 +1162,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                   </a>
                 );
               })}
+              {hasListen && !isFinished && <ListenSection listen={listen} />}
             </div>
             <button
               type="button"

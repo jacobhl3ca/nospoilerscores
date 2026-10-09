@@ -19,6 +19,9 @@ export interface Game {
   homeTeam: Team;
   awayTeam: Team;
   broadcasts: string[]; // ["ESPN", "TBS"]
+  // ESPN radio media short names from competition.geoBroadcasts type 5
+  // ("ERADM" = national ESPN Radio). Mapped to a player link by lib/radio.ts.
+  radio?: string[];
   venue: string;
   // Game quality rating (0-100) based on score closeness
   rating: number | null;
@@ -261,6 +264,7 @@ export interface LeagueEventCard {
   statusDetail: string;     // "Race" / "Fight Night" / "Live" / "Final"
   date: string;             // ISO of the headline session (race / main card)
   broadcasts: string[];
+  radio?: string[];         // ESPN radio short names, as Game.radio
   boutCount?: number;       // UFC: total fights on the card
   // UFC only: every bout on the card, main event first → prelims. Each renders
   // as its own card. ESPN has no fight-quality score, so order = card order.

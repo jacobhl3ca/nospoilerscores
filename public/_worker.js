@@ -887,6 +887,29 @@ export default {
       });
     }
 
+    // --- Visitor location for the Listen links (src/lib/radio.ts): most NFL
+    // and MLB flagship streams play only inside the home market, so a
+    // market-locked link shows only when this metro is on its list. Coarse
+    // Cloudflare fields only (country, region code, Nielsen metro code), never
+    // the IP. Not logged, not cached, and the caller only learns its own spot.
+    // No CORS header on purpose: the web app and the native apps (which load
+    // https://hidescore.com, capacitor.config.ts) are same-origin, and no
+    // other site gets to read it.
+    if (url.pathname === "/api/where") {
+      const cf = request.cf || {};
+      const metro = Number(cf.metroCode);
+      return new Response(JSON.stringify({
+        country: typeof cf.country === "string" ? cf.country : null,
+        region: typeof cf.regionCode === "string" ? cf.regionCode : null,
+        metro: Number.isFinite(metro) && metro > 0 ? metro : null,
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
+
     // --- Bracket picks leaderboard (MLB postseason). See picksRoute below.
     if (url.pathname === "/api/picks") return picksRoute(request, env, ctx, url);
     if (url.pathname === "/api/picks/account") return picksAccountRoute(request, env, ctx);

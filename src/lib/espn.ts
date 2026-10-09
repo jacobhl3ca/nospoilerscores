@@ -9,6 +9,7 @@ import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } f
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
+import { parseRadioBroadcasts, type GeoBroadcast } from "./radio";
 import { fetchCuratedBoxingEvent } from "./boxing";
 import { CLIMB_CHANNEL, climbNotStreamedCount, climbRoundLabel, climbSubtitle, climbSubtitleVariants, climbVisibleRounds, type ClimbDiscipline } from "./climbing";
 import { logoForTeam, logoOverride, ncaaSchoolLogo, isPlaceholderTeam } from "./teamLogos";
@@ -2757,6 +2758,7 @@ type ScoreboardEvent = {
     SoccerCompetition & {
       competitors?: ScoreboardCompetitor[];
       broadcasts?: { names?: string[] }[];
+      geoBroadcasts?: GeoBroadcast[];
       headlines?: { video?: { links?: { web?: { href?: string } } }[] }[];
       notes?: { headline?: string }[];
       series?: { type?: string; summary?: string };
@@ -3057,6 +3059,7 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     homeTeam: parseTeam(home ?? {}, sport),
     awayTeam: parseTeam(away ?? {}, sport),
     broadcasts,
+    radio: parseRadioBroadcasts(competition?.geoBroadcasts),
     venue: venueName,
     venueLocation,
     venueRoof,
@@ -3962,6 +3965,10 @@ function countryNameFromFlagUrl(url: string): string {
 // Pull broadcast network names off an ESPN competition (handles the
 // names[]/media.shortName/name shapes the racing + mma feeds use).
 type BroadcastEntry = { names?: string[]; media?: { shortName?: string }; name?: string };
+// The national radio rows (ESPN Radio) on the same competition — see lib/radio.ts.
+function eventRadio(comp: { geoBroadcasts?: GeoBroadcast[] } | null | undefined): string[] {
+  return parseRadioBroadcasts(comp?.geoBroadcasts);
+}
 function eventBroadcasts(comp: { broadcasts?: BroadcastEntry[] } | null | undefined): string[] {
   const out: string[] = [];
   for (const b of comp?.broadcasts ?? []) {
@@ -3992,6 +3999,7 @@ type LeagueEventCompetition = {
   venue?: LeagueEventVenue;
   competitors?: LeagueEventCompetitor[];
   broadcasts?: BroadcastEntry[];
+  geoBroadcasts?: GeoBroadcast[];
 };
 type LeagueEvent = {
   date: string;
@@ -4661,6 +4669,7 @@ async function fetchLeagueEvent(
       statusDetail: state === "post" ? "Final" : state === "in" ? "Live" : "Race",
       date: raceDate,
       broadcasts: eventBroadcasts(race),
+      radio: eventRadio(race),
       // Skip the series prefix when ESPN's own event name already carries it —
       // NASCAR names every race "NASCAR Cup Series at <track>", which otherwise
       // produced "NASCAR Cup Series 2026 NASCAR Cup Series at Iowa race
@@ -4735,6 +4744,7 @@ async function fetchLeagueEvent(
     statusDetail: state === "post" ? "Final" : state === "in" ? "Live" : "Fight Night",
     date: event.date || main?.date || "",
     broadcasts: eventBroadcasts(main),
+    radio: eventRadio(main),
     boutCount: comps.length,
     fights,
     highlightQuery: `${name} highlights`,
