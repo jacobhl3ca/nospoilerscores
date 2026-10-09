@@ -4509,6 +4509,7 @@ export default function HomeContent({
                 className: `news-card-titles-${titles ? "on" : "off"} news-card-media-${media ? "on" : "off"} news-card-textposts-${text ? "on" : "off"}`,
                 videosOnly: vOnly,
                 showTextPosts: text,
+                titlesShown: titles,
                 controls: (
                   <>
                     {isVideos && (
@@ -4837,6 +4838,7 @@ export default function HomeContent({
                     hideSeenKeys={hideSeenKeys}
                     autoplayVideos={newsAutoplay}
                     onSeenHiddenCount={reportSeenHidden}
+                    titlesShown={!!prefs.revealNewsTitles}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -4868,6 +4870,7 @@ export default function HomeContent({
                       hideSeenKeys={hideSeenKeys}
                       autoplayVideos={newsAutoplay}
                       onSeenHiddenCount={reportSeenHidden}
+                      titlesShown={!!prefs.revealNewsTitles}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).
                       removable={renderedEntries.length > 1}

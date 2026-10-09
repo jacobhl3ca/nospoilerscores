@@ -6,12 +6,14 @@ import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
 import { NewsItem, proxyImage } from "@/lib/news";
-import { handleExternalClick } from "@/lib/openExternal";
+import { handleExternalClick, openExternal } from "@/lib/openExternal";
 import { frontendHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
 import InlineVideoCard from "@/components/InlineVideoCard";
+import { sourceLabelFromUrl } from "@/components/VideoModal";
+import { isPlainArticle } from "@/lib/plainArticle";
 
 export interface NewsSource {
   label: string;
@@ -32,6 +34,9 @@ export interface CardOverride {
   className?: string;
   videosOnly?: boolean;
   showTextPosts?: boolean;
+  // This card's headlines are shown (its own Headlines button), so a plain
+  // article row opens the article itself (see isPlainArticle).
+  titlesShown?: boolean;
 }
 
 // Single source of truth for the modal-trigger payload — used by TextRow,
@@ -195,6 +200,9 @@ interface NewsColumnProps {
   hugRows?: boolean;
   // ESPN layout (r5): per-card header buttons and filters, by source.
   cardOverride?: (source: NewsSource) => CardOverride | undefined;
+  // Headlines are shown (the global Headlines button in Cards), so a plain
+  // article row opens the article. A cardOverride's titlesShown wins.
+  titlesShown?: boolean;
 }
 
 // Sticky league title (with optional swap dropdown for the 3rd column).
@@ -555,7 +563,7 @@ function stripLeaguePrefixForMobile(label: string): string {
   return s || label;
 }
 
-function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex, hugRows, controls, cardClassName }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null; hugRows?: boolean; controls?: ReactNode; cardClassName?: string }) {
+function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex, hugRows, titlesShown, controls, cardClassName }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null; hugRows?: boolean; titlesShown?: boolean; controls?: ReactNode; cardClassName?: string }) {
   // The sibling list spans every source in the column. baseIndex is this card's
   // offset; a row's global index = baseIndex + its row index.
   const columnSiblings = baseIndex != null ? (siblings ?? null) : null;
@@ -602,7 +610,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => (
-            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} siblings={columnSiblings} index={columnSiblings ? (baseIndex ?? 0) + idx : idx} hugRows={hugRows} />
+            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} siblings={columnSiblings} index={columnSiblings ? (baseIndex ?? 0) + idx : idx} hugRows={hugRows} titlesShown={titlesShown} />
           ))}
         </div>
       )}
@@ -616,7 +624,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
 // `Content-Type: image/jpeg` and Firefox sometimes refuses to render the
 // mismatch) we drop the thumb container entirely so the row degrades to
 // clean text instead of showing an empty grey placeholder box.
-function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; index?: number; hugRows?: boolean }) {
+function TextRow({ item, isFirst, onPlay, siblings, index, hugRows, titlesShown }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; index?: number; hugRows?: boolean; titlesShown?: boolean }) {
   const [imgFailed, setImgFailed] = useState(false);
   // NO per-row reveal gesture here. The list headline OPENS the post, full stop
   // (Jacob 8/10, reversing the tri-state toggle added earlier the same day):
@@ -643,8 +651,12 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
   // like every other headline — same as the mobile Feed view (Jacob 7/15).
   // .news-textpost gates visibility; .news-title keeps the headline blurred
   // until the global reveal toggle un-blurs it or the row is tapped open.
+  // ESPN layout (hugRows): the headline sits centered against the thumb. Cards
+  // keep top alignment so the 7rem floor lines rows up across columns.
+  // relative: the row is the box the headline button's ::after stretches over
+  // (.news-row-open in globals.css), so the whole row is one tap target.
   const isTextPost = itemIsTextPost(item);
-  const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]${hugRows ? "" : " sm:min-h-[7rem]"}${isTextPost ? " news-textpost" : ""}`;
+  const rowCls = `relative flex ${hugRows ? "items-center" : "items-start"} gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]${hugRows ? "" : " sm:min-h-[7rem]"}${isTextPost ? " news-textpost" : ""}`;
   const titleCls = "news-title min-w-0 line-clamp-5";
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   // Every news item opens the same modal; its source link remains available
@@ -739,21 +751,40 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
       onError={(e) => { e.currentTarget.style.display = "none"; }}
     />
   ) : null;
-  // Only the 48/56px media tiles are a real tap target. The leagueLogo branch
-  // renders an 18px mark, which is decoration, not a button — rows that fall
-  // back to it get the chevron instead.
+  // Only the 48/56px media tiles are a real tile. The leagueLogo branch renders
+  // an 18px mark, which is decoration — rows that fall back to it get the
+  // chevron instead.
   const thumbIsTile = showThumb || hasInlineMedia;
-  // ONE rule now: every clickable part of the row — thumbnail, headline,
-  // chevron — opens the post. Modifier/middle-click still means "open the
-  // source in a background tab" everywhere, so the split is only in the target,
-  // never in what a plain click does.
+  // ONE tap target per row (Jacob 10/9): the headline's button. Its ::after
+  // covers the row, so a tap on the thumb, the padding or the chevron opens
+  // the post too, and a keyboard user gets one tab stop per row. The thumb is
+  // still the escape hatch for a row whose headline is blurred — it just no
+  // longer needs its own button. Modifier/middle-click still means "open the
+  // source in a background tab".
   const openInNewTab = (e: ReactMouseEvent) => {
     if (!(e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) return false;
     if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
     return true;
   };
+  const chevron = !thumbIsTile && (
+    // Rows with no thumbnail (plain text posts) get a small chevron at the
+    // right edge as an explicit open affordance. Decoration: the row is the
+    // control.
+    <span
+      aria-hidden="true"
+      className={`shrink-0 ${hugRows ? "" : "self-start mt-0.5 "}w-6 h-6 -mr-1 flex items-center justify-center rounded`}
+      style={{ color: "var(--text-muted)" }}
+    >
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+    </span>
+  );
   if (shouldPopModal) {
     const open = () => onPlay!({ ...newsItemToPlayOpts(item), siblings: siblings ?? undefined, index });
+    // A plain article whose headline is shown opens the article itself: the
+    // modal would only show a bigger thumb, the same headline and "Open on
+    // ESPN". Anything else (Reddit, clips, pictures, bodies) opens the modal.
+    const asArticle = !!titlesShown && !!item.articleUrl && isPlainArticle(item);
+    const tip = asArticle ? sourceLabelFromUrl(item.articleUrl) : "Open post";
     return (
       <div
         className={`${rowCls} w-full text-left`}
@@ -763,115 +794,56 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
         // restored post reappears with no signal of what changed or where.
         data-news-key={item.articleUrl || item.id}
       >
-        {/* The thumbnail always opens the post — that's the escape hatch for a
-            row whose headline is still blurred (and the same split the Feed
-            view uses: headline peeks, media opens). */}
-        {thumbIsTile ? (
-          <button
-            type="button"
-            data-news-open=""
-            onClick={(e) => {
-              // Cmd/Ctrl/Shift/middle-click → "open in background tab to read
-              // later" — never blow away the currently-open modal. Without this
-              // the button just re-pops the modal with new content and the user
-              // loses the video/image they were watching.
-              if (openInNewTab(e)) return;
-              // Same payload via the shared helper, plus the column's siblings so the
-              // modal can page prev/next across the full rendered column.
-              open();
-            }}
-            onAuxClick={(e) => {
-              // Middle-click fires onAuxClick, not onClick. Mirror the modifier
-              // path so wheel-click also opens in a background tab.
-              if (e.button === 1 && item.articleUrl) {
-                window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
-              }
-            }}
-            className="shrink-0 cursor-pointer"
-            aria-label="Open post"
-            title="Open post"
-          >
-            {thumb}
-          </button>
-        ) : thumb}
+        {thumb}
         <button
           type="button"
           data-news-open=""
           onClick={(e) => {
+            // Cmd/Ctrl/Shift/middle-click → "open in background tab to read
+            // later" — never blow away the currently-open modal.
             if (openInNewTab(e)) return;
+            if (asArticle) {
+              openExternal(item.articleUrl);
+              return;
+            }
+            // Same payload via the shared helper, plus the column's siblings so the
+            // modal can page prev/next across the full rendered column.
             open();
           }}
           onAuxClick={(e) => {
+            // Middle-click fires onAuxClick, not onClick. Mirror the modifier
+            // path so wheel-click also opens in a background tab.
             if (e.button === 1 && item.articleUrl) {
               window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
             }
           }}
-          className="min-w-0 flex-1 text-left cursor-pointer"
-          title="Open post"
+          className="news-row-open min-w-0 flex-1 text-left cursor-pointer"
+          title={tip}
           aria-label="Open post"
         >
           <span className={titleCls}>{item.headline}</span>
         </button>
-        {/* Rows with no thumbnail (plain text posts — now shown by default)
-            get a small chevron at the right edge as an explicit open
-            affordance, without touching the row height the column alignment
-            depends on. */}
-        {!thumbIsTile && (
-          <button
-            type="button"
-            data-news-open=""
-            onClick={open}
-            className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--bg-card-hover)]"
-            style={{ color: "var(--text-muted)" }}
-            aria-label="Open post"
-            title="Open post"
-          >
-            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-          </button>
-        )}
+        {chevron}
       </div>
     );
   }
+  // No modal on this surface, so the headline is a real link to the source.
+  // Its ::after covers the row like the button above, which keeps
+  // middle-click, keyboard, and "copy link" honest.
   return (
     <div className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
-      {thumbIsTile ? (
-        <a
-          href={frontendHref(item.articleUrl)}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={handleExternalClick(item.articleUrl)}
-          className="shrink-0"
-          aria-label="Open post"
-        >
-          {thumb}
-        </a>
-      ) : thumb}
-      {/* No modal on this surface, so the headline is a real link to the
-          source — same target as the thumbnail and chevron beside it, which
-          keeps middle-click, keyboard, and "copy link" honest. */}
+      {thumb}
       <a
         href={frontendHref(item.articleUrl)}
         target="_blank"
         rel="noopener noreferrer"
         onClick={handleExternalClick(item.articleUrl)}
-        className="min-w-0 flex-1 text-left cursor-pointer"
+        className="news-row-open min-w-0 flex-1 text-left cursor-pointer"
         aria-label="Open post"
       >
         <span className={titleCls}>{item.headline}</span>
       </a>
-      {!thumbIsTile && (
-        <a
-          href={frontendHref(item.articleUrl)}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={handleExternalClick(item.articleUrl)}
-          className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded"
-          style={{ color: "var(--text-muted)" }}
-          aria-label="Open post"
-        >
-          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-        </a>
-      )}
+      {chevron}
     </div>
   );
 }
@@ -1066,8 +1038,9 @@ function InlineVideoSourceCard({ label, logoUrl, items, loading, onPlay, sibling
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys, onHiddenItems, hideSeenKeys, onSeenHidden, bigVideos, autoplayVideos, hugRows, cardOverride }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; restoredKeys?: Set<string>; onHiddenItems?: (label: string, items: NewsItem[]) => void; hideSeenKeys?: Set<string>; onSeenHidden?: (label: string, count: number) => void; bigVideos?: boolean; autoplayVideos?: boolean; hugRows?: boolean; cardOverride?: (source: NewsSource) => CardOverride | undefined }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, restoredKeys, onHiddenItems, hideSeenKeys, onSeenHidden, bigVideos, autoplayVideos, hugRows, titlesShown, cardOverride }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; restoredKeys?: Set<string>; onHiddenItems?: (label: string, items: NewsItem[]) => void; hideSeenKeys?: Set<string>; onSeenHidden?: (label: string, count: number) => void; bigVideos?: boolean; autoplayVideos?: boolean; hugRows?: boolean; titlesShown?: boolean; cardOverride?: (source: NewsSource) => CardOverride | undefined }) {
   const override = cardOverride?.(source);
+  if (override?.titlesShown !== undefined) titlesShown = override.titlesShown;
   const controls = override?.controls;
   const cardClassName = override?.className;
   if (override?.videosOnly !== undefined) videosOnly = override.videosOnly;
@@ -1195,7 +1168,7 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
       />
     );
   }
-  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={shown} loading={loading} onPlay={onPlayVideo} siblings={siblings} baseIndex={baseIndex} hugRows={hugRows} controls={controls} cardClassName={cardClassName} />;
+  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={shown} loading={loading} onPlay={onPlayVideo} siblings={siblings} baseIndex={baseIndex} hugRows={hugRows} titlesShown={titlesShown} controls={controls} cardClassName={cardClassName} />;
 }
 
 export default function NewsColumn({
@@ -1225,6 +1198,7 @@ export default function NewsColumn({
   autoplayVideos,
   hugRows,
   cardOverride,
+  titlesShown,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
 
@@ -1369,6 +1343,7 @@ export default function NewsColumn({
             bigVideos={bigVideos}
             autoplayVideos={autoplayVideos}
             hugRows={hugRows}
+            titlesShown={titlesShown}
             cardOverride={cardOverride}
           />
         ))}

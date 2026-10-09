@@ -363,7 +363,7 @@ function withAutoplay(url: string): string {
 // Per-source label for the modal's "Open on …" link. The footer used to read
 // "Open on source" generically — this maps the URL host to the actual brand so
 // users know whether they're heading to Reddit, MLB, ESPN, etc. before tapping.
-function sourceLabelFromUrl(url: string): string {
+export function sourceLabelFromUrl(url: string): string {
   try {
     const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
     if (host.endsWith("reddit.com") || host === "redd.it" || host.endsWith(".redd.it")) return "Open on Reddit";

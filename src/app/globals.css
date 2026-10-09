@@ -180,6 +180,27 @@ html.reveal-news-titles .news-card-titles-off .news-title:not(.peek) {
   user-select: none;
   -webkit-user-select: none;
 }
+/* News rows (Jacob 10/9): the headline's button (or link) is the row's one tap
+   target. Its ::after stretches over the whole row (NewsColumn TextRow sets
+   the row to position: relative), so a tap on the thumb or the padding opens
+   the post too. The keyboard ring goes on the ::after, so it outlines the row.
+   A shown headline keeps the pointer: it is part of the target, not text to
+   select. */
+.news-row-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.news-row-open:focus-visible {
+  outline: none;
+}
+.news-row-open:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+html .news-row-open .news-title {
+  cursor: pointer;
+}
 /* Text-post visibility is independent from headline reveal. .news-textpost
    marks one mixed-source row; .news-card-alltext collapses an all-text source
    card so hiding its rows never leaves a bare header behind. */

@@ -66,18 +66,22 @@ function itemsFor(name: string) {
   }));
 }
 
-async function mockFeeds(page: Page) {
+type Item = ReturnType<typeof itemsFor>[number] & Record<string, unknown>;
+type FeedPatch = (name: string, items: Item[]) => Item[];
+
+async function mockFeeds(page: Page, patch?: FeedPatch) {
   await page.route("**/news/*.json", (route) => {
     const name = new URL(route.request().url()).pathname.split("/").pop()!.replace(/\.json$/, "");
     if (name === "highlights") return route.fulfill({ status: 200, contentType: "application/json", body: '{"games":{}}' });
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fetchedAt: new Date(NOW).toISOString(), items: itemsFor(name) }) });
+    const items = patch ? patch(name, itemsFor(name)) : itemsFor(name);
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fetchedAt: new Date(NOW).toISOString(), items }) });
   });
   await page.route("https://clips.example.test/**", (route) => route.fulfill({ status: 200, contentType: "video/webm", body: CLIP }));
 }
 
 // Seed prefs ONCE per tab, so a reload keeps what the UI wrote.
-async function gotoNews(page: Page, extra: Record<string, unknown> = {}, seen: string[] = []) {
-  await mockFeeds(page);
+async function gotoNews(page: Page, extra: Record<string, unknown> = {}, seen: string[] = [], patch?: FeedPatch) {
+  await mockFeeds(page, patch);
   await page.addInitScript(({ prefs, seenKey, seenKeys }) => {
     if (sessionStorage.getItem("hs-seed")) return;
     sessionStorage.setItem("hs-seed", "1");
@@ -849,16 +853,18 @@ test("ESPN 2 columns: Top Headlines rides beside the clips while you scroll", as
 });
 
 test("ESPN 2 columns, short screen: Top Headlines scrolls to its end, then stays", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 300 });
+  // 280 tall: the 6 headline rows (centered chevrons, Jacob 10/9) make a card
+  // just under 300px, and this needs one taller than the screen.
+  await page.setViewportSize({ width: 1280, height: 280 });
   await gotoNews(page, { newsLayout: "espn" });
   const pin = page.getByTestId("news-espn-headlines-pin");
   await expect(pin.locator(".news-source-sticky-top")).toBeVisible(LOAD);
   await expect(page.locator("[data-inline-video]")).toHaveCount(10, LOAD);
   const height = (await pin.boundingBox())!.height;
-  expect(height).toBeGreaterThan(300);
+  expect(height).toBeGreaterThan(280);
   await page.evaluate(() => window.scrollTo(0, 2000));
   // Its bottom edge sits 1rem above the screen bottom: every headline is reachable.
-  await expect.poll(async () => { const b = await pin.boundingBox(); return Math.round(b!.y + b!.height); }).toBe(300 - 16);
+  await expect.poll(async () => { const b = await pin.boundingBox(); return Math.round(b!.y + b!.height); }).toBe(280 - 16);
 });
 
 test("390px phone at the page top: the first clip plays, not the one nearest the middle", async ({ page }) => {
@@ -877,4 +883,141 @@ test("Big: three subs sit in one row of three columns", async ({ page }) => {
   const tops = await page.getByTestId("news-espn-reddit").locator(".news-source-sticky-top")
     .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(tops).size).toBe(1);
+});
+
+// ── Headline rows: centered, one tap target, a shown article opens itself ──
+// (Jacob 10/9.) espn-top posts 1–3 carry a thumb; 4–6 are headline-only rows
+// with the chevron. Subreddit posts 2/4/6 are clips (a play tile).
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+const withThumbs: FeedPatch = (name, items) => name === "espn-top"
+  ? items.map((it, i) => (i < 3 ? { ...it, imageUrl: `https://img.example.test/${name}-${i}.png` } : it))
+  : items;
+async function gotoRows(page: Page, extra: Record<string, unknown> = {}) {
+  await page.context().route("https://img.example.test/**", (route) => route.fulfill({ status: 200, contentType: "image/png", body: PNG }));
+  // A plain article opens in a new tab; keep it off the network.
+  await page.context().route("https://example.com/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>article</title>" }));
+  await gotoNews(page, extra, [], withThumbs);
+}
+const rowOf = (page: Page, url: string) => page.locator(`[data-news-key="${url}"]`);
+const centerY = (b: { y: number; height: number } | null) => b!.y + b!.height / 2;
+const headlinesChip = (page: Page) => page.getByRole("button", { name: "Toggle headline reveal: ESPN Top Headlines", exact: true });
+const ESPN_TOP = (i: number) => `https://example.com/espn-top/${i}`;
+
+for (const width of [1280, 390]) {
+  test.describe(`${width}px`, () => {
+    test.use({ viewport: { width, height: 844 } });
+
+    test("ESPN layout: the headline sits centered on the thumb; Cards rows stay top-aligned", async ({ page }) => {
+      await gotoRows(page, { newsLayout: "espn" });
+      const row = rowOf(page, ESPN_TOP(0));
+      const thumb = row.locator(".news-media-preview");
+      await expect(thumb.locator("img")).toBeVisible(LOAD);
+      const title = row.locator(".news-title");
+      expect(Math.abs(centerY(await title.boundingBox()) - centerY(await thumb.boundingBox()))).toBeLessThanOrEqual(2);
+      // A headline-only row centers its chevron too.
+      const plain = rowOf(page, ESPN_TOP(3));
+      const chev = plain.locator('span[aria-hidden="true"]').last();
+      expect(Math.abs(centerY(await chev.boundingBox()) - centerY(await plain.boundingBox()))).toBeLessThanOrEqual(2);
+
+      // Cards: the clip tile and the headline share a top edge.
+      await pill(page, "Cards").click();
+      const clipRow = rowOf(page, "https://example.com/reddit-nfl/1");
+      const tile = clipRow.locator(".news-media-preview");
+      await expect(tile).toBeVisible(LOAD);
+      const [t, b] = await Promise.all([tile.boundingBox(), clipRow.locator("[data-news-open]").boundingBox()]);
+      expect(Math.abs(t!.y - b!.y)).toBeLessThanOrEqual(2);
+      expect(centerY(t) - centerY(await clipRow.locator(".news-title").boundingBox())).toBeGreaterThan(4);
+    });
+
+    test("a row is one tap target: one opener per row, a tap on its empty corner opens the modal", async ({ page }) => {
+      await gotoRows(page, { newsLayout: "espn" });
+      await expect(rowOf(page, ESPN_TOP(5))).toBeVisible(LOAD);
+      await expect(rowOf(page, "https://example.com/reddit-nfl/5")).toBeVisible(LOAD);
+      const counts = await page.locator("[data-news-key]:has(.news-row-open)")
+        .evaluateAll((rows) => rows.map((r) => r.querySelectorAll("[data-news-open]").length));
+      expect(counts.length).toBeGreaterThanOrEqual(24);
+      expect(new Set(counts)).toEqual(new Set([1]));
+      // The thumb is no longer a button of its own.
+      await expect(rowOf(page, ESPN_TOP(0)).locator("button")).toHaveCount(1);
+
+      // Bottom-right corner of a headline-only row = row padding, not text.
+      const row = rowOf(page, ESPN_TOP(4));
+      await row.scrollIntoViewIfNeeded();
+      const box = (await row.boundingBox())!;
+      await page.mouse.click(box.x + box.width - 3, box.y + box.height - 3);
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator("[data-modal-headline]")).toHaveText("espn-top post 5");
+    });
+
+    test("Top Headlines: card Headlines off opens the modal; on opens the article; Reddit still opens the modal", async ({ page }) => {
+      await gotoRows(page, { newsLayout: "espn" });
+      const row = rowOf(page, ESPN_TOP(1));
+      await expect(row).toBeVisible(LOAD);
+      const opener = row.locator("[data-news-open]");
+      await expect(opener).toHaveAttribute("title", "Open post");
+
+      // Off: the modal.
+      await opener.click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+
+      // On: a new tab on the article, no modal.
+      await headlinesChip(page).click();
+      await expect(headlinesChip(page)).toHaveAttribute("aria-pressed", "true");
+      await expect(opener).toHaveAttribute("title", "Open on example.com");
+      const [tab] = await Promise.all([page.context().waitForEvent("page"), opener.click()]);
+      await tab.waitForLoadState();
+      expect(tab.url()).toBe(ESPN_TOP(1));
+      await tab.close();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+
+      // A shown Reddit row (the Reddit bar's Headlines) still opens the modal.
+      await page.getByTestId("news-reddit-bar").getByRole("button", { name: "Toggle headline reveal: every card" }).click();
+      const reddit = rowOf(page, "https://example.com/reddit-nfl/0");
+      await expect(reddit.locator(".news-title")).toHaveCSS("filter", "none");
+      await reddit.locator("[data-news-open]").click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(page.getByRole("dialog").locator("[data-modal-headline]")).toHaveText("reddit-nfl post 1");
+      await page.keyboard.press("Escape");
+
+      // Cmd/Ctrl-click opens the article in a tab, Headlines off too.
+      await headlinesChip(page).click();
+      await expect(headlinesChip(page)).toHaveAttribute("aria-pressed", "false");
+      const [tab2] = await Promise.all([
+        page.context().waitForEvent("page"),
+        rowOf(page, ESPN_TOP(2)).locator("[data-news-open]").click({ modifiers: ["ControlOrMeta"] }),
+      ]);
+      await tab2.waitForLoadState();
+      expect(tab2.url()).toBe(ESPN_TOP(2));
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    });
+
+    test("Hide seen: a row opened as an article is marked seen", async ({ page }) => {
+      await gotoRows(page, { newsLayout: "espn", newsCardPrefs: { "espn-top": { revealTitles: true } } });
+      const row = rowOf(page, ESPN_TOP(3));
+      await expect(row).toBeVisible(LOAD);
+      await page.getByTestId("news-hide-seen").click();
+      const [tab] = await Promise.all([page.context().waitForEvent("page"), row.locator("[data-news-open]").click()]);
+      await tab.close();
+      await expect.poll(() => page.evaluate((k) => Object.keys(JSON.parse(localStorage.getItem(k) || "{}")), SEEN_KEY))
+        .toContain(ESPN_TOP(3));
+    });
+  });
+}
+
+test("Cards: with Headlines on, a plain article row opens the article", async ({ page }) => {
+  // All sources, so the league-site cards (MLB.com, …) show beside Reddit.
+  await gotoRows(page, { revealNewsTitles: true, newsTypeFilter: "all" });
+  const rows = page.locator("[data-news-key]:has(.news-row-open)");
+  await expect(rows.first()).toBeVisible(LOAD);
+  await expect.poll(() => rows.evaluateAll((els) => els.filter((e) => !e.getAttribute("data-news-key")!.includes("/reddit-")).length), LOAD).toBeGreaterThan(0);
+  const url = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-news-key")!).find((k) => !k.includes("/reddit-"))!);
+  const row = page.locator(`[data-news-key="${url}"]`);
+  await row.scrollIntoViewIfNeeded();
+  const [tab] = await Promise.all([page.context().waitForEvent("page"), row.locator("[data-news-open]").click()]);
+  await tab.waitForLoadState();
+  expect(tab.url()).toBe(url);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
