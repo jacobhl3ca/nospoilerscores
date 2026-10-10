@@ -33,12 +33,22 @@ test.use({
   hasTouch: true,
 });
 
+// The invariant is pure layout, so no live feed may decide whether it runs.
+// With real ESPN/MLB/analytics traffic, `waitUntil: "networkidle"` never
+// settled on a busy slate and page.goto hit the test timeout in CI (run
+// 37865705052). Off-origin requests are aborted, so the board renders from the
+// dev server alone, the same way it does in a sandbox with no outbound network.
+test.beforeEach(async ({ page, baseURL }) => {
+  const origin = new URL(baseURL!).origin;
+  await page.route((url) => url.origin !== origin, (route) => route.abort());
+});
+
 /** Scroll far enough that game cards are underneath the pinned title. */
 async function scrollIntoCards(page: import("@playwright/test").Page) {
   // Same share-URL trick league-switcher-defaults.spec.ts uses: it skips the
   // first-run "Pick your leagues" modal, whose full-viewport z-50 scrim would
   // otherwise sit over the seam and make every probe meaningless.
-  await page.goto("/?l=m&s=m.0.0&dd=t&dv=s", { waitUntil: "networkidle" });
+  await page.goto("/?l=m&s=m.0.0&dd=t&dv=s");
   // The scoreboard hydrates async; the league title only mounts with data.
   await page.locator(".league-sticky-top").first().waitFor({ timeout: 30_000 });
 
@@ -223,7 +233,7 @@ async function openSingleColumn(page: import("@playwright/test").Page) {
   await page.addInitScript(() => {
     localStorage.setItem("nss-preferences", JSON.stringify({ singleColumn: true, leaguesOnboarded: true }));
   });
-  await page.goto("/?l=m&s=m.0.0&dd=t&dv=s", { waitUntil: "networkidle" });
+  await page.goto("/?l=m&s=m.0.0&dd=t&dv=s");
   await page.locator(".league-sticky-top").first().waitFor({ timeout: 30_000 });
 }
 

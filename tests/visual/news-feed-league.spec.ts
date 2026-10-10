@@ -107,8 +107,17 @@ async function pullToRefresh(page: Page) {
 const groupsOf = (page: Page) => posts(page).evaluateAll((els) => els.map((e) => e.getAttribute("data-feed-group")));
 const seenStore = (page: Page) => page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("hs.newsSeen.v1") || "{}")));
 
+// The league tag's logo comes from ESPN's CDN, and a logo that fails to load
+// drops its mark. Serve every off-site image a 1x1 PNG so the tag checks read
+// our markup, not the CDN's uptime (and run offline).
+const PIXEL = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date(NOW));
+  await page.route(/^https?:\/\/(?!localhost[:/])/, (route) =>
+    route.request().resourceType() === "image"
+      ? route.fulfill({ status: 200, contentType: "image/png", body: PIXEL })
+      : route.fallback());
 });
 
 test("Feed: every post shows its league tag", async ({ page }) => {

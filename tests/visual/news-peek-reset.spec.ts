@@ -29,7 +29,57 @@ const BASE_PREFS = {
 
 const HEADLINE = 'button[aria-label="Open post"]:has(.news-title)';
 
+// Same stand-in YouTube API as news-modal-text-headline.spec: a plain iframe,
+// no network.
+const FAKE_YT_API = `
+(function () {
+  function FakePlayer(el, config) {
+    var mount = typeof el === "string" ? document.getElementById(el) : el;
+    var iframe = document.createElement("iframe");
+    iframe.id = "yt-player";
+    iframe.src = "https://www.youtube.com/embed/" + config.videoId + "?fake=1";
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
+    mount.replaceWith(iframe);
+    this._iframe = iframe;
+    setTimeout(function () { config.events.onReady && config.events.onReady({ target: this }); }.bind(this), 0);
+  }
+  var noop = function () {};
+  FakePlayer.prototype = {
+    playVideo: noop, pauseVideo: noop, mute: noop, unMute: noop, setPlaybackQuality: noop,
+    getIframe: function () { return this._iframe; }, getPlayerState: function () { return -1; },
+    getDuration: function () { return 30; }, getCurrentTime: function () { return 0; },
+    getAvailableQualityLevels: function () { return []; }, getVideoData: function () { return { title: "x" }; },
+    destroy: function () { this._iframe && this._iframe.remove(); },
+  };
+  window.YT = { Player: FakePlayer, PlayerState: { ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5, UNSTARTED: -1 } };
+  if (window.onYouTubeIframeAPIReady) window.onYouTubeIframeAPIReady();
+})();
+`;
+
+// Every Reddit feed answers three clips, so the modal has a next and a
+// previous post without the live feeds (the prebaked public/news/*.json files
+// are gitignored and may be missing).
+async function mockFeeds(page: import("@playwright/test").Page) {
+  await page.route("**/news/*.json", (route) => {
+    const name = new URL(route.request().url()).pathname.split("/").pop()!.replace(/\.json$/, "");
+    if (name === "highlights") return route.fulfill({ status: 200, contentType: "application/json", body: '{"games":{}}' });
+    const items = [1, 2, 3].map((i) => {
+      const id = `${name.replace(/[^a-z0-9]/gi, "").slice(0, 8)}${i}`.padEnd(11, "x").slice(0, 11);
+      return {
+        id: `${name}-y${i}`, headline: `${name} clip ${i}: a spoiler headline`, description: "", imageUrl: null,
+        published: new Date(Date.now() - i * 3_600_000).toISOString(), byline: "u/fixture", section: `r/${name}`,
+        articleUrl: `https://www.youtube.com/watch?v=${id}`, youtubeVideoId: id,
+      };
+    });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items }) });
+  });
+  await page.route("https://www.youtube.com/iframe_api", (route) => route.fulfill({ status: 200, contentType: "application/javascript", body: FAKE_YT_API }));
+  await page.route("https://www.youtube.com/embed/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<body style='margin:0;background:#111'></body>" }));
+}
+
 async function gotoNews(page: import("@playwright/test").Page) {
+  await mockFeeds(page);
   await page.addInitScript((base) => {
     localStorage.setItem("nss-preferences", JSON.stringify(base));
   }, BASE_PREFS);

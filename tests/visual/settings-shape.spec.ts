@@ -87,10 +87,15 @@ test("phone: section order, search first, 3 slots, folds closed, short panel", a
   ]);
   await expect(dialog.locator("summary", { hasText: "More settings" })).toBeVisible();
   // More settings now sits under Share (Jacob 10/1).
-  const shareBottom = await dialog.locator("section", { has: page.locator("h3", { hasText: /^Share$/ }) })
-    .evaluate((el) => el.getBoundingClientRect().bottom);
-  const moreTop = await dialog.locator("summary", { hasText: "More settings" }).evaluate((el) => el.getBoundingClientRect().top);
-  expect(moreTop).toBeGreaterThan(shareBottom);
+  // Polled: the panel still reflows while its sections settle (one run read
+  // the two boxes 8px apart mid-reflow).
+  const shareSection = dialog.locator("section", { has: page.locator("h3", { hasText: /^Share$/ }) });
+  const moreSummary = dialog.locator("summary", { hasText: "More settings" });
+  await expect.poll(async () => {
+    const shareBottom = await shareSection.evaluate((el) => el.getBoundingClientRect().bottom);
+    const moreTop = await moreSummary.evaluate((el) => el.getBoundingClientRect().top);
+    return moreTop - shareBottom;
+  }).toBeGreaterThan(0);
 
   const teams = dialog.locator("section", { has: page.locator("h3", { hasText: "Favorite teams" }) });
   await expect(teams.locator("input, select, button").first()).toHaveAttribute("type", "search");

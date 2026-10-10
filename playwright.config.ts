@@ -38,6 +38,11 @@ export default defineConfig({
     // https://hidescore.com) got the REAL feeds where a spec had mocked them.
     // Dev registers none, so this changes nothing locally.
     serviceWorkers: "block",
+    // The specs pin times and slates in ET (kickoffs "10:30", "Aug 4" upload
+    // dates, the ET slate day). Without this the browser takes the host's zone,
+    // so the same spec passed on a Mac in ET and failed on a UTC runner.
+    // timezone.spec.ts overrides it per test.
+    timezoneId: "America/New_York",
   },
   projects: [
     {
