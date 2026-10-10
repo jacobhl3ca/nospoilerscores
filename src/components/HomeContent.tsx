@@ -784,7 +784,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; seenKey?: string | null; titlesShown?: boolean | null; section?: string | null };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; seenKey?: string | null; titlesShown?: boolean | null; section?: string | null; restored?: boolean };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -801,6 +801,11 @@ export default function HomeContent({
   const REOPEN_MS = 8000;
   const videoModalRef = useRef<VideoModalState | null>(null);
   useEffect(() => { videoModalRef.current = videoModal; }, [videoModal]);
+  // The post a reloaded modal reopened (its source link = the item's seen key).
+  // 👁 Hide seen leaves it in its card while that modal is open, so the card's
+  // list still holds it and the modal gets its ‹ › back (see adoptSiblings).
+  const restoredSeenKeyRef = useRef<string | null>(null);
+  useEffect(() => { if (!videoModal?.restored) restoredSeenKeyRef.current = null; }, [videoModal]);
   const [reopenVideo, setReopenVideo] = useState<VideoModalState | null>(null);
   const reopenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearReopen = useCallback(() => {
@@ -1037,6 +1042,8 @@ export default function HomeContent({
       // The news post's section: ?hn, else ?hl (the share URL drops ?hn when
       // the two match).
       const hSection = params.get("hn") || hLabel || null;
+      // A game card's highlight (?c=) is not a news post, so no card list is its own.
+      const restored = !params.get("c");
       // A shared-highlight link cold-loaded with ?demo=1 still on (sessionStorage
       // sticky, see demoMode.ts) is the same real-content leak openVideoModal/
       // openEmbedModal guard against — this reopen path sets videoModal state
@@ -1049,8 +1056,10 @@ export default function HomeContent({
         // back on. So the title cover is on here whatever the Settings toggle
         // says (it defaults off since 9/8). It still lifts once the title reads clean.
         const forceTitleMask = /^\/watch\/?$/.test(window.location.pathname);
-        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster, forceTitleMask, section: hSection });
+        restoredSeenKeyRef.current = hSource || null;
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster, forceTitleMask, section: hSection, restored });
       } else if (hStream || hEmbed || hImage) {
+        restoredSeenKeyRef.current = hSource || null;
         setVideoModal({
           videoId: "",
           fallbackUrl: hSource,
@@ -1061,6 +1070,7 @@ export default function HomeContent({
           sourceLabel: hLabel || null,
           headline: hHead || null,
           section: hSection,
+          restored,
         });
       }
     }
@@ -1529,6 +1539,29 @@ export default function HomeContent({
       return nm;
     });
   }, [optsToModal, modalShareHref]);
+
+  // A modal reopened from the address bar (a reload) has no post list, so no
+  // ‹ › arrows. Every news card reports its list here once it loads; the first
+  // one that holds the open post gives the modal its list. A later, longer list
+  // that holds it too replaces it while the modal is still the reloaded post: a
+  // card's list grows as its sources load. Only the list changes, never the
+  // media (that would reload the player) or the address bar.
+  const adoptSiblings = useCallback((list: PlayOpts[]) => {
+    // No reloaded modal open (the usual case): skip the state update entirely.
+    if (!videoModalRef.current?.restored) return;
+    setVideoModal((m) => {
+      if (!m?.restored || (m.siblings && m.siblings.length >= list.length)) return m;
+      const pick = (o: PlayOpts): string | null | undefined =>
+        m.videoId ? o.videoId : m.playbackUrl ? o.playbackUrl : m.embedUrl ? o.embedUrl : m.imageUrl ? o.imageUrl : o.fallbackUrl;
+      const want = m.videoId || m.playbackUrl || m.embedUrl || m.imageUrl || m.fallbackUrl;
+      if (!want) return m;
+      // Same media AND same source link first: one clip can sit in two posts.
+      let i = list.findIndex((o) => pick(o) === want && (!m.fallbackUrl || o.fallbackUrl === m.fallbackUrl));
+      if (i < 0) i = list.findIndex((o) => pick(o) === want);
+      if (i < 0) return m;
+      return { ...m, siblings: list, sibIndex: i, seenKey: list[i].seenKey ?? m.seenKey, titlesShown: m.titlesShown ?? list[i].titlesShown ?? null };
+    });
+  }, []);
 
   // Wipe the highlight deep-link params (?v / ?h* / ?c) out of the address bar,
   // leaving anything else on the URL alone. Used on every dismiss that does NOT
@@ -3047,7 +3080,10 @@ export default function HomeContent({
   ].join("|");
   useEffect(() => {
     // localStorage is client-only, so the snapshot is read here, not in render.
-    if (showNews && prefs.newsHideSeen) setSeenSnapshot(seenKeys());
+    if (!(showNews && prefs.newsHideSeen)) return;
+    const keys = seenKeys();
+    if (restoredSeenKeyRef.current) keys.delete(restoredSeenKeyRef.current);
+    setSeenSnapshot(keys);
   }, [seenSnapshotTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
   const hideSeenKeys = prefs.newsHideSeen ? seenSnapshot : undefined;
   // Per-surface "dropped as seen" counts, summed for the 👁 tooltip.
@@ -4618,6 +4654,7 @@ export default function HomeContent({
               hideSeenKeys,
               onSeenHiddenCount: reportSeenHidden,
               cardOverride: espnCardOverride,
+              onSiblingList: adoptSiblings,
             };
             const k = `espn-${newsRefreshKey}`;
             // The Reddit bar (Jacob 10/9): a pinned, labeled row on top of the
@@ -4787,6 +4824,7 @@ export default function HomeContent({
                 groups={feedGroups}
                 refreshKey={newsRefreshKey}
                 onPlay={playNewsVideo}
+                onSiblingList={adoptSiblings}
                 showTextPosts={!!prefs.showTextPosts}
                 videosOnly={!!prefs.newsVideosOnly}
                 oldestFirst={!!prefs.newsOldestFirst}
@@ -4842,6 +4880,7 @@ export default function HomeContent({
                     key={`avs-${newsRefreshKey}`}
                     sources={stripCols.map((s) => s[0])}
                     onPlay={playNewsVideo}
+                    onSiblingList={adoptSiblings}
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
                     tailColIdx={useEspnTopTail ? espnColIdx : undefined}
                     showTextPosts={!!prefs.showTextPosts}
@@ -4872,6 +4911,7 @@ export default function HomeContent({
                     sources={mobileMergedSources()}
                     hideTitle
                     onPlayVideo={playNewsVideo}
+                    onSiblingList={adoptSiblings}
                     widthClassName={widthClassFor()}
                     videosOnly={!!prefs.newsVideosOnly}
                     showTextPosts={!!prefs.showTextPosts}
@@ -4903,6 +4943,7 @@ export default function HomeContent({
                       autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
+                      onSiblingList={adoptSiblings}
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
                       showTextPosts={!!prefs.showTextPosts}

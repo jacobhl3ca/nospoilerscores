@@ -938,3 +938,43 @@ test("ESPN modal after a reload: global Headlines on + r/nfl card off = the head
   await expect(footerTitle(page)).toHaveText("reddit-nfl post 2", LOAD);
   await expect.poll(() => titleFilter(page)).toBe("blur(7px)");
 });
+
+// A reload reopens the modal from the URL alone, which has no post list, so
+// the ‹ › arrows went away (Jacob 10/10). Once the cards behind it load, the
+// card that holds the open post gives the modal its list back.
+const nextPost = (page: Page) => page.getByRole("dialog").getByRole("button", { name: "Next post" });
+const reloadThenStep = async (page: Page, from: string, to: string) => {
+  await page.reload();
+  await expect(footerTitle(page)).toHaveText(from, LOAD);
+  await expect(nextPost(page)).toBeEnabled(LOAD);
+  await page.keyboard.press("ArrowDown");
+  // Post 3 of a sub is a text post, whose title is not in the clip footer.
+  await expect(page.getByRole("dialog").getByText(to, { exact: true }).first()).toBeVisible();
+};
+
+test("ESPN modal after a reload: the arrows come back and ↓ steps to post 2", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, revealNewsTitles: true });
+  await openVideosClip(page);
+  await reloadThenStep(page, "espn-videos post 1", "espn-videos post 2");
+});
+
+test("r/nfl modal after a reload: the arrows come back and ↓ steps to the next post", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, revealNewsTitles: true });
+  await page.getByText("reddit-nfl post 2", { exact: true }).click(LOAD);
+  await expect(footerTitle(page)).toHaveText("reddit-nfl post 2", LOAD);
+  await reloadThenStep(page, "reddit-nfl post 2", "reddit-nfl post 3");
+});
+
+test("Cards modal after a reload: the arrows come back and ↓ steps to the next post", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsAutoplay: false, revealNewsTitles: true });
+  await expect(pill(page, "Cards")).toHaveAttribute("aria-pressed", "true", LOAD);
+  await page.getByText("reddit-nfl post 2", { exact: true }).click(LOAD);
+  await expect(footerTitle(page)).toHaveText("reddit-nfl post 2", LOAD);
+  await reloadThenStep(page, "reddit-nfl post 2", "reddit-nfl post 3");
+});
+
+test("Hide seen on: the reloaded post stays in its card, so the arrows come back", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, revealNewsTitles: true, newsHideSeen: true });
+  await openVideosClip(page);
+  await reloadThenStep(page, "espn-videos post 1", "espn-videos post 2");
+});
