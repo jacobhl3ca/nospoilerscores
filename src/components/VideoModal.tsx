@@ -12,6 +12,7 @@ import { shareCardUrl, buildHighlightShareUrl, highlightSharePath, type ShareCar
 import { getTimeZone } from "@/lib/etDay";
 import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
 import { noteHighlightWatched } from "@/lib/rateApp";
+import { trackEvent } from "@/lib/track";
 
 interface VideoModalProps {
   videoId: string;
@@ -95,6 +96,11 @@ interface VideoModalProps {
   // overlay so a FIFA-blocked FOX clip can jump straight to an embeddable stream
   // instead of only linking out to YouTube (Jacob 7/14).
   alternates?: { label: string; videoId: string }[];
+  // Umami fields for video-play / video-finished (2026-10-01): the league key
+  // ("mlb", "news" for a merged news feed) and the page the clip opened from
+  // ("today" / "yesterday" / "team" / "worldcup" / "other").
+  trackLeague?: string | null;
+  trackPage?: string | null;
 }
 
 // Minimal slice of the YouTube IFrame Player API this modal actually drives.
@@ -478,7 +484,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates, trackLeague, trackPage }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   // The React-owned box the YouTube player lives INSIDE. React renders this and
   // nothing else touches it; the #yt-player node YT destroys is a plain DOM
@@ -777,15 +783,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const postKey = [videoId, playbackUrl, embedUrl, imageUrl, fallbackUrl, headline]
     .map((v) => v || "")
     .join("\u0000");
+  // video-play and video-finished send the same four fields, so a finished
+  // count divides cleanly by the play count per league, page or player. Read
+  // through a ref so the two callbacks below change only with postKey: the
+  // player effect lists them, and a changed callback there reruns that effect.
+  const clipFieldsRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    clipFieldsRef.current = {
+      player: ytMode ? "youtube" : hlsMode ? "native" : "other",
+      source: sourceLabel || "unknown",
+      league: trackLeague || "unknown",
+      page: trackPage || "other",
+    };
+  }, [ytMode, hlsMode, sourceLabel, trackLeague, trackPage]);
   const trackedPlayRef = useRef<string | null>(null);
   const trackVideoPlay = useCallback(() => {
     if (!postKey || trackedPlayRef.current === postKey) return;
     trackedPlayRef.current = postKey;
-    window.umami?.track("video-play", {
-      player: ytMode ? "youtube" : hlsMode ? "native" : "other",
-      source: (sourceLabel || "unknown").slice(0, 40),
-    });
-  }, [postKey, ytMode, hlsMode, sourceLabel]);
+    trackEvent("video-play", clipFieldsRef.current);
+  }, [postKey]);
   // Same reuse trap as trackedPlayRef: postKey dedupes so paging past the
   // same clip twice (or a stray double ENDED event) only counts as "finished
   // watching a highlight" once per clip, which is all the in-app rating
@@ -795,6 +811,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (!postKey || trackedEndRef.current === postKey) return;
     trackedEndRef.current = postKey;
     noteHighlightWatched();
+    trackEvent("video-finished", clipFieldsRef.current);
   }, [postKey]);
   // The progress poll below (near-end auto-pause) is set up once per ytMode
   // change, not per clip, so it closes over whichever markHighlightWatched

@@ -45,6 +45,7 @@ import { parseYouTubeId } from "./youtubeLink.ts";
 import { gameRef, tvChannelLink, type GameRef } from "./tvChannelLinks.ts";
 import { frontendConfig, rewriteExternalUrl } from "./frontendLinks.ts";
 import type { Game } from "./types";
+import { trackEvent } from "./track.ts";
 
 // True inside the Capacitor iOS/Android wrapper. Exported for callers that
 // need to pick a native-safe link form (e.g. an https .ics instead of a data:
@@ -264,7 +265,8 @@ export function handleAppSchemeClick(url: string): (e: React.MouseEvent) => void
 // network is on the Settings list (lib/tvChannelLinks.ts), else the web link.
 // `game` fills a per-game (`{game}`) line. The click asks the list again, so a
 // per-game pre-check that came back "no stream" after render opens the site.
-export function watchLinkProps(network: string, webHref: string, game?: GameRef) {
+// `league` is only for the tv-link-open Umami event.
+export function watchLinkProps(network: string, webHref: string, game?: GameRef, league?: string) {
   const tv = tvChannelLink(network, game);
   if (tv) {
     return {
@@ -272,7 +274,10 @@ export function watchLinkProps(network: string, webHref: string, game?: GameRef)
       title: `Watch ${network} on your TV`,
       onClick: (e: React.MouseEvent) => {
         const now = tvChannelLink(network, game);
-        if (now) handleAppSchemeClick(now)(e);
+        if (now) {
+          trackTvLink(network, league);
+          handleAppSchemeClick(now)(e);
+        }
         else handleExternalClick(webHref)(e);
       },
     };
@@ -290,7 +295,13 @@ export function watchLinkProps(network: string, webHref: string, game?: GameRef)
 // web stream. Used by the card's live clock and the modal's Watch live button,
 // so the two big live entry points follow the Settings TV channel list the
 // same way the small network chips do.
-type LiveGame = Pick<Game, "broadcasts" | "streamUrl"> & Partial<Pick<Game, "homeTeam" | "awayTeam" | "date">>;
+type LiveGame = Pick<Game, "broadcasts" | "streamUrl"> & Partial<Pick<Game, "homeTeam" | "awayTeam" | "date" | "sport">>;
+
+// Umami count of opens of the user's own TV channel links (2026-10-01). The
+// network name and league key only, never the link itself.
+function trackTvLink(network: string | null, league?: string): void {
+  trackEvent("tv-link-open", { network: network || "unknown", league: league || "unknown" });
+}
 
 export function liveWatchUrl(game: LiveGame): { url: string; network: string | null; scheme: boolean } | null {
   const ref = gameRef(game);
@@ -330,7 +341,10 @@ export function liveWatchProps(game: LiveGame) {
 export function openLiveWatch(game: LiveGame): boolean {
   const live = liveWatchUrl(game);
   if (!live) return false;
-  if (live.scheme) openAppScheme(live.url);
+  if (live.scheme) {
+    trackTvLink(live.network, game.sport);
+    openAppScheme(live.url);
+  }
   else openExternal(live.url);
   return true;
 }
