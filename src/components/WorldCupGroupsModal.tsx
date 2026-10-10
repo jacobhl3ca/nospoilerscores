@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { abortOwn } from "@/lib/abort";
 import { fifaRank } from "@/lib/fifaRankings";
 import { getEtServiceDate, toYmd } from "@/lib/etDay";
 import WorldCupBracket from "./WorldCupBracket";
@@ -367,7 +368,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
         if (!ctrl.signal.aborted) setFailed(true);
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, []);
 
   // Lazily fetch the fixture list for any enabled day. We read ONLY the team
@@ -406,7 +407,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
         }
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, [days]);
 
   // Flat list across all groups + which FIFA-ranked teams fall in the top 10 /

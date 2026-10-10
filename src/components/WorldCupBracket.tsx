@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { abortOwn } from "@/lib/abort";
 import { getTimeZone, getEtServiceDate, toYmd } from "@/lib/etDay";
 import {
   fetchBracket,
@@ -106,7 +107,7 @@ export default function WorldCupBracket({ selectedDate }: { selectedDate?: strin
         if (!ctrl.signal.aborted) setFailed(true);
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, []);
 
   // Main tree columns (R32 → Final); third-place is a small standalone card.

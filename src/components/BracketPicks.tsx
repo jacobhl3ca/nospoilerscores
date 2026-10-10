@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { abortOwn } from "@/lib/abort";
 import {
   applyPick,
   championOf,
@@ -387,7 +388,7 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
         if (!ctrl.signal.aborted) setBoard({ state: "error" });
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, [id, boardTick, locked]);
 
   const save = useCallback((next: Saved) => {
