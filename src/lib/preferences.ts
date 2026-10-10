@@ -472,6 +472,12 @@ export interface Preferences {
   // would fall back to it takes the next league instead. Best of yesterday is
   // turned off the same way, through hiddenLeagues ("best" is a Sport).
   topNewsHidden?: boolean;
+  // The Best of yesterday column's span row (Jacob 10/10, lib/topGames.ts):
+  // which span it shows and whether "All leagues" is on. Unset = Yesterday,
+  // the user's own leagues. Only read while ratings show (the row hides with
+  // them, and the column falls back to Yesterday).
+  bestSpan?: "yesterday" | "week" | "month" | "year";
+  bestAllLeagues?: boolean;
   // Which POSITION the generic "Top news" column occupies on the news board
   // (0-2, default 2 = last). Picking "Top news" from any column's
   // switcher moves the column here rather than doing nothing — before this,

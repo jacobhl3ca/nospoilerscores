@@ -18,6 +18,8 @@ import { LeaguePickerModal } from "./LeaguePickerModal";
 import type { BestYesterdayOptions } from "@/lib/espn";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
+import { TOP_GAMES_COLUMN_LABEL, isTopGamesSpan, type TopGamesSpan } from "@/lib/topGames";
+import BestSpanBar from "./BestSpanBar";
 import { fromYmd, etSlateYmd, nextYmd, getTimeZone } from "@/lib/etDay";
 import { WATCH_QUEUE_ENABLED, toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
 import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
@@ -25,7 +27,7 @@ import GameCard from "@/components/GameCard";
 import { closeHiddenPins, closeUnseenAutoSlots, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
-import { fetchAllLeagues, fetchSlateGames, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { fetchAllLeagues, fetchSlateGames, fetchTopGamesSpan, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
@@ -2506,6 +2508,38 @@ export default function HomeContent({
     }),
     [thirdLeagueOptions, prefs, boardHidden],
   );
+  // The Best column's span row (Jacob 10/10, lib/topGames.ts). The spans rank
+  // by rating, so the row only shows while ratings do; with ratings off the
+  // column is plain Best of yesterday whatever was picked. Yesterday on the
+  // user's own leagues is the live column; any other choice reads the mini's
+  // bake (fetchTopGamesSpan). "My leagues" there = every league in the user's
+  // switcher, in or out of season (a year spans several seasons); "All
+  // leagues" = every league in the bake.
+  const bestSpan: TopGamesSpan = prefs.showRatings && isTopGamesSpan(prefs.bestSpan) ? prefs.bestSpan : "yesterday";
+  const bestAllLeagues = prefs.showRatings && !!prefs.bestAllLeagues;
+  const bestSpanSources = useMemo(() => {
+    const hidden = boardHidden ?? [];
+    const pinned = [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague];
+    const out: Sport[] = [];
+    for (const l of ALL_LEAGUES) {
+      if (l.hidden || hidden.includes(l.sport) || out.includes(l.sport)) continue;
+      if (!l.excludeFromAuto || prefs.shownLeagues?.includes(l.sport) || pinned.includes(l.sport) || prefs.favoriteLeagues.includes(l.sport)) out.push(l.sport);
+    }
+    return out;
+  }, [boardHidden, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, prefs.shownLeagues, prefs.favoriteLeagues]);
+  const bestBaked = bestOnBoard && (bestSpan !== "yesterday" || bestAllLeagues);
+  const bestSpanKey = `${bestSpan}|${bestAllLeagues ? "*" : bestSpanSources.join(",")}`;
+  const [bestSpanData, setBestSpanData] = useState<{ key: string; data: LeagueData } | null>(null);
+  useEffect(() => {
+    if (!bestBaked) return;
+    let live = true;
+    const key = bestSpanKey;
+    fetchTopGamesSpan(bestSpan, bestAllLeagues ? null : bestSpanSources).then((data) => {
+      if (live) setBestSpanData({ key, data });
+    });
+    return () => { live = false; };
+  }, [bestBaked, bestSpan, bestAllLeagues, bestSpanSources, bestSpanKey]);
+
   // Best of yesterday has no news feed, so the news switchers skip it. ESPN
   // front page does (espn.com's headlines + clips), so it is a league row
   // there too, first like in the scores switcher (Jacob 9/26).
@@ -4994,6 +5028,29 @@ export default function HomeContent({
             // treatment.
             const crossDayProps = (league: LeagueData) =>
               league.sport === "best" ? { isPastDate: true, isToday: false } : {};
+            // The Best column on a baked span (or "All leagues") swaps in the
+            // bake's games; until they arrive it says so instead of showing
+            // yesterday's under a "This week" header.
+            const bestShown = (league: LeagueData): LeagueData => {
+              if (league.sport !== "best" || !bestBaked) return league;
+              if (bestSpanData?.key === bestSpanKey) return bestSpanData.data;
+              return { sport: "best", label: TOP_GAMES_COLUMN_LABEL[bestSpan], games: [], emptyLabel: "Loading…" };
+            };
+            const bestTopCard = (league: LeagueData) => {
+              const recap = recapTopCard(league);
+              if (league.sport !== "best" || !prefs.showRatings) return recap;
+              return (
+                <>
+                  {recap}
+                  <BestSpanBar
+                    span={bestSpan}
+                    allLeagues={bestAllLeagues}
+                    onSpan={(span) => updatePrefs({ bestSpan: span === "yesterday" ? undefined : span })}
+                    onAllLeagues={(on) => updatePrefs({ bestAllLeagues: on ? true : undefined })}
+                  />
+                </>
+              );
+            };
             // Per-slot swap dropdowns: every column lists every in-season
             // league plus the explicitly-labelled offseason NBA option.
             // Leagues already shown in another column come through greyed (via
@@ -5530,7 +5587,7 @@ export default function HomeContent({
                   {slotEntries.map((entry) => (
                     <LeagueColumn
                       key={`${entry.league.sport}-${entry.slotIdx}`}
-                      league={entry.league}
+                      league={bestShown(entry.league)}
                       slotIdx={entry.slotIdx}
                       onReorderSlots={reorderSlots}
                       {...commonProps}
@@ -5541,7 +5598,7 @@ export default function HomeContent({
                       widthClassName={colWidthClass}
                       condense={singleColumn}
                       footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
-                      topCard={recapTopCard(entry.league)}
+                      topCard={bestTopCard(entry.league)}
                       topCardIsSpacer={recapRowIsSpacer(entry.league)}
                     />
                   ))}
@@ -5564,7 +5621,7 @@ export default function HomeContent({
                 {slotEntries.map((entry) => (
                   <LeagueColumn
                     key={`${entry.league.sport}-${entry.slotIdx}`}
-                    league={entry.league}
+                    league={bestShown(entry.league)}
                     slotIdx={entry.slotIdx}
                     onReorderSlots={reorderSlots}
                     {...commonProps}
@@ -5574,7 +5631,7 @@ export default function HomeContent({
                     widthClassName={colWidthClass}
                     condense={singleColumn}
                     footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
-                    topCard={recapTopCard(entry.league)}
+                    topCard={bestTopCard(entry.league)}
                     topCardIsSpacer={recapRowIsSpacer(entry.league)}
                   />
                 ))}

@@ -4,6 +4,7 @@ import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
 import { espnFeaturedKeys, espnFrontPageSports, orderByEspnHeader, orderBySports, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_MIN_GAMES, prevYmd, rankBestYesterday } from "./bestYesterday";
+import { TOP_GAMES_COLUMN_LABEL, TOP_GAMES_EMPTY_LABEL, isTopGamesFile, pickTopGames, type TopGamesFile, type TopGamesSpan } from "./topGames";
 import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
@@ -2286,6 +2287,13 @@ function volleyballRating(competitors: VolleyballCompetitor[], period: number, s
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
+// How far the last generic rating's uncapped sum went past 100, per event.
+// Many finished games land on exactly 100 (73% of a month's best, 10/10), so
+// the top games spans (lib/topGames.ts) break that tie with the headroom
+// instead of the date. A WeakMap, so calculateRating's signature and its other
+// callers stay as they are.
+const ratingExcess = new WeakMap<object, number>();
+
 function calculateRating(game: RatingGame): number | null {
   const competition = game.competitions?.[0];
   if (!competition) return null;
@@ -2403,7 +2411,9 @@ function calculateRating(game: RatingGame): number | null {
   // added to the set later, the exact ucl/uel drift the penalty comment warns of.
   const lateDramaBonus = SOCCER_SPORTS.has(sport) ? soccerLateDramaBonus(competition) : 0;
 
-  const raw = Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus + lateDramaBonus - lowScoringPenalty)));
+  const sum = baseScore + overtimeBonus + scoringBonus + comebackBonus + lateDramaBonus - lowScoringPenalty;
+  const raw = Math.max(0, Math.min(100, Math.round(sum)));
+  if (state === "post" && sum > 100) ratingExcess.set(game, Math.round((sum - 100) * 10) / 10);
 
   return liveTimeCap(raw, progress);
 }
@@ -3075,6 +3085,7 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     stage,
     formatTag: cricketInfo?.formatTag ?? null,
     rating: calculateRating(event),
+    ...(ratingExcess.has(event) ? { ratingExcess: ratingExcess.get(event) } : {}),
     liveProgress: event.status?.type?.state === "in"
       ? gameProgress(event, sport, (SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba).regulationPeriods, "in")
       : undefined,
@@ -6150,7 +6161,9 @@ export interface BestYesterdayOptions {
 // check is getChannelVerifiedBakedId against the record's own uploader — the
 // freshness, matchup and duplicate gates the card applies — so a stale or
 // mismatched record cannot put a card with no button in the column.
-function hasPlayableClip(game: Game, baked: Record<string, BakedHighlight>): boolean {
+// Exported for the top-games bake (scripts/lib/top-games-bake.mjs), which
+// applies the same bar to the longer spans.
+export function hasPlayableClip(game: Game, baked: Record<string, BakedHighlight>): boolean {
   if (game.sport === "mlb") return !!(game.mlbRecapPlaybackUrl || game.mlbCondensedPlaybackUrl);
   if (game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed)) return true;
   const rec = baked[`${game.sport}:${game.id}`];
@@ -6200,6 +6213,44 @@ export function fetchBestYesterday(todayYmd: string, opts: BestYesterdayOptions 
   bestYesterdayCache.set(key, { at: Date.now(), data });
   data.catch(() => bestYesterdayCache.delete(key));
   return data;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOP GAMES — the Best of yesterday column's longer spans (Jacob 10/10)
+// ═══════════════════════════════════════════════════════════════
+// Read from the mini's bake (news/top-games-<span>.json, lib/topGames.ts), not
+// live: ESPN serves one day per request, so a year cannot be pulled from a
+// browser. Only fetched when the user picks a span (or "All leagues"), and held
+// for the session like loadBakedHighlights. A failed read is dropped at once
+// so the next pick retries.
+const TOP_GAMES_TTL_MS = 10 * 60_000;
+const topGamesCache = new Map<TopGamesSpan, { at: number; data: Promise<TopGamesFile | null> }>();
+
+export function loadTopGamesFile(span: TopGamesSpan): Promise<TopGamesFile | null> {
+  const hit = topGamesCache.get(span);
+  if (hit && Date.now() - hit.at < TOP_GAMES_TTL_MS) return hit.data;
+  const data = (async (): Promise<TopGamesFile | null> => {
+    const res = await fetch(`${getApiBase()}/news/top-games-${span}.json`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`top-games ${span} HTTP ${res.status}`);
+    const body: unknown = await res.json();
+    return isTopGamesFile(body) && body.span === span ? body : null;
+  })();
+  topGamesCache.set(span, { at: Date.now(), data });
+  data.catch(() => topGamesCache.delete(span));
+  return data;
+}
+
+// The Best column's games for a baked span. `sources` = the user's leagues,
+// or null for every league ("All leagues").
+export async function fetchTopGamesSpan(span: TopGamesSpan, sources: Sport[] | null): Promise<LeagueData> {
+  const base = { sport: "best" as Sport, label: TOP_GAMES_COLUMN_LABEL[span], emptyLabel: TOP_GAMES_EMPTY_LABEL[span] };
+  try {
+    const file = await loadTopGamesFile(span);
+    if (!file) return { ...base, games: [], fetchFailed: true };
+    return { ...base, games: pickTopGames(file, sources), fetchFailed: false };
+  } catch {
+    return { ...base, games: [], fetchFailed: true };
+  }
 }
 
 // One league's games for one slate day, with the same NHL/MLB video

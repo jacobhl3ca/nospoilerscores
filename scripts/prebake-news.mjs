@@ -5532,6 +5532,26 @@ if (runHighlights) {
   }
 }
 
+// Top games: the Best of yesterday column's longer spans and the weekly post's
+// source (scripts/lib/top-games-bake.mjs). After the highlights bake, which
+// wrote the clip index it reads. Token "top-games" for --only / --skip.
+const runTopGames = !ONLY_REDDIT
+  && (ONLY_LIST.length === 0 || ONLY_LIST.includes("top-games"))
+  && !SKIP_LIST.some((s) => (s.endsWith("*") ? "top-games".startsWith(s.slice(0, -1)) : s === "top-games"));
+let topGamesFailed = false;
+if (runTopGames) {
+  try {
+    const tg = await import("./lib/top-games-bake.mjs");
+    const highlights = await tg.loadTopGamesHighlights(`${OUT_DIR}/highlights.json`);
+    if (!highlights) throw new Error("no highlights.json (local or live)");
+    const deps = await tg.loadTopGamesDeps({ highlights });
+    await tg.bakeTopGames({ deps, yesterday: deps.top.minusDays(etServiceYmd(), 1), outDir: OUT_DIR });
+  } catch (e) {
+    console.error("top-games bake FAILED:", e?.message || e);
+    topGamesFailed = true;
+  }
+}
+
 // League-wide recap lookout (see bakeLeagueRecaps). Same standalone shape as
 // the highlights bake, token "recaps" for --only / --skip.
 const runRecaps = !ONLY_REDDIT
@@ -5685,6 +5705,7 @@ results.forEach((r, i) => {
 if (activeJobs.length > 0 && failed === activeJobs.length) process.exit(1);
 if (highlightsFailed && ONLY_LIST.includes("highlights")) process.exit(1);
 if (recapsFailed && ONLY_LIST.includes("recaps")) process.exit(1);
+if (topGamesFailed && ONLY_LIST.includes("top-games")) process.exit(1);
 if (mlbReviewFailed && ONLY_LIST.includes("mlb-review")) process.exit(1);
 if (cricketSeriesFailed && ONLY_LIST.includes("cricket-series")) process.exit(1);
 if (espnFrontFailed && ONLY_LIST.includes("espn-front")) process.exit(1);
