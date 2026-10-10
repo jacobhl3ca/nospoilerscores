@@ -10,6 +10,7 @@ import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { closeHiddenPins, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch } from "@/lib/boardSlots";
 import { LeagueMark } from "./LeagueMark";
+import { trackEvent } from "@/lib/track";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
 import { BRACKET_RESULTS_ALWAYS_KEY, loadResultsAlways } from "@/lib/playoffPicture";
@@ -297,6 +298,17 @@ export default function SettingsPanel({
   const [bracketTick, setBracketTick] = useState(0);
   const bracketResultsAlways = useMemo(() => (open && bracketTick >= 0 ? loadResultsAlways() : false), [open, bracketTick]);
 
+  // Umami usage counts (2026-10-01): settings-open per open, then
+  // settings-change {key} the first time each setting changes in that open. A
+  // text box writes on every keystroke, so once per key per open keeps it to
+  // one event. The key names only, never the value.
+  const changedKeysRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!open) return;
+    changedKeysRef.current = new Set();
+    trackEvent("settings-open");
+  }, [open]);
+
   // One "Saved" mark in the header for every write (Jacob 10/1). It was only
   // under the two Links fields. "show" for 2 s, then "fade" while the opacity
   // runs out, then gone. Reduced motion skips the transition.
@@ -304,6 +316,13 @@ export default function SettingsPanel({
   const savedTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => { savedTimersRef.current.forEach(clearTimeout); }, []);
   const updatePrefs = useCallback((update: Partial<Preferences>) => {
+    // A league pin or Reset writes many keys at once: those count as "many".
+    const keys = Object.keys(update).sort();
+    const key = keys.length > 2 ? "many" : keys.join(",");
+    if (key && !changedKeysRef.current.has(key)) {
+      changedKeysRef.current.add(key);
+      trackEvent("settings-change", { key });
+    }
     savePrefs(update);
     savedTimersRef.current.forEach(clearTimeout);
     setSavedMark("show");

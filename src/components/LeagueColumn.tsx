@@ -29,6 +29,7 @@ import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
 import { useHideRanks } from "./HideRanksContext";
+import { trackEvent } from "@/lib/track";
 
 interface LeagueColumnProps {
   league: LeagueData;
@@ -634,7 +635,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
   const hrefProps = !href
     ? null
     : result?.watchName
-      ? watchLinkProps(result.watchName, href)
+      ? watchLinkProps(result.watchName, href, undefined, sport)
       : { href, target: "_blank", rel: "noopener noreferrer", onClick: handleExternalClick(href) };
   const tiersKey = tiers.join("|");
   // A tier below suffixTiers.length is a paired one, so the trailing
@@ -2321,7 +2322,7 @@ export default function LeagueColumn({
                       <button
                         type="button"
                         data-testid="league-switcher-add-more"
-                        onClick={() => { setSwapOpen(false); onAddMore(); }}
+                        onClick={() => { setSwapOpen(false); trackEvent("switcher-add-more"); onAddMore(); }}
                         className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                         style={{
                           color: "var(--text-muted)",

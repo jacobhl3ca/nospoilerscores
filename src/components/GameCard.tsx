@@ -244,7 +244,7 @@ export function CompactUpcomingCard({
   const networkNode = network ? (
     networkHref ? (
       <a
-        {...watchLinkProps(network, networkHref, gameRef(game))}
+        {...watchLinkProps(network, networkHref, gameRef(game), game.sport)}
         className="text-[11px] hover:underline whitespace-nowrap"
         style={{ color: "var(--text-muted)" }}
       >
@@ -1062,7 +1062,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                   return (
                     <a
                       key={key}
-                      {...watchLinkProps(name, href, gameRef(game))}
+                      {...watchLinkProps(name, href, gameRef(game), game.sport)}
                       className="hover:underline transition-colors whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
                     >
@@ -1165,7 +1165,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 return (
                   <a
                     key={b}
-                    {...watchLinkProps(b, href, gameRef(game))}
+                    {...watchLinkProps(b, href, gameRef(game), game.sport)}
                     className="hover:underline whitespace-normal break-words"
                     style={{ color: "var(--text-muted)" }}
                   >

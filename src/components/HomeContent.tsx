@@ -72,6 +72,13 @@ import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
 import SupportLine from "@/components/SupportLine";
 
+// The league key at the front of a share-card key (`mlb-bos-nyy-20260930`),
+// for the video-play Umami field. No card (TBD teams, the MLB review cuts) =
+// "unknown".
+function shareCardLeague(card?: ShareCardMeta | null): string {
+  return card?.key.split("-")[0] || "unknown";
+}
+
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
     if (typeof window === "undefined") return "dark";
@@ -817,7 +824,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; league?: string | null; seenKey?: string | null };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; league?: string | null; trackLeague?: string; seenKey?: string | null };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -1471,7 +1478,7 @@ export default function HomeContent({
       setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       return;
     }
-    setVideoModal({ videoId, fallbackUrl, shareCard, alternates, league });
+    setVideoModal({ videoId, fallbackUrl, shareCard, alternates, league, trackLeague: shareCardLeague(shareCard) });
     const href = modalShareHref({ videoId, fallbackUrl, shareCard });
     if (href) window.history.pushState({ videoModal: true }, "", href);
   }, [modalShareHref, clearReopen]);
@@ -1488,7 +1495,7 @@ export default function HomeContent({
       setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       return;
     }
-    setVideoModal({ videoId: "", fallbackUrl, embedUrl, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard });
+    setVideoModal({ videoId: "", fallbackUrl, embedUrl, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard, trackLeague: shareCardLeague(shareCard) });
     const href = modalShareHref({ embedUrl, fallbackUrl, playbackUrl: playbackUrl || null, sourceLabel, shareCard });
     window.history.pushState({ videoModal: true }, "", href ?? window.location.href);
   }, [modalShareHref, clearReopen]);
@@ -1514,7 +1521,9 @@ export default function HomeContent({
     sibIndex: opts.index ?? null,
     seenKey: opts.seenKey || null,
   }), []);
-  const playNewsVideo = useCallback<PlayHandler>((opts) => {
+  // `league` is only for the video-play / video-finished Umami fields: the
+  // column's league key, or "news" for a feed that mixes leagues.
+  const openNewsVideo = useCallback((opts: PlayOpts, league: string) => {
     clearReopen();
     // News posts embed real third-party photos/clips (Reddit, ESPN) that the
     // board-side anonymizer never touches — same substitution as the two
@@ -1524,7 +1533,7 @@ export default function HomeContent({
       setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       return;
     }
-    const m = optsToModal(opts);
+    const m = { ...optsToModal(opts), trackLeague: league };
     // Opening a news post marks it seen. The card-click tracker already did;
     // this covers openers outside a card. Idempotent.
     if (m.seenKey) markSeen(m.seenKey);
@@ -1536,6 +1545,21 @@ export default function HomeContent({
     const href = modalShareHref(m);
     if (href) window.history.pushState({ videoModal: true }, "", href);
   }, [optsToModal, modalShareHref, clearReopen]);
+  const playNewsVideo = useCallback<PlayHandler>((opts) => openNewsVideo(opts, "news"), [openNewsVideo]);
+  // One stable handler per league for the per-league news columns, so a column
+  // does not see a new onPlayVideo on every board render. Each one reads the
+  // current openNewsVideo through the ref.
+  const openNewsVideoRef = useRef(openNewsVideo);
+  useEffect(() => { openNewsVideoRef.current = openNewsVideo; }, [openNewsVideo]);
+  const newsPlayHandlers = useRef(new Map<string, PlayHandler>());
+  const newsPlayFor = useCallback((league: string): PlayHandler => {
+    let h = newsPlayHandlers.current.get(league);
+    if (!h) {
+      h = (opts) => openNewsVideoRef.current(opts, league);
+      newsPlayHandlers.current.set(league, h);
+    }
+    return h;
+  }, []);
   // Page to the previous/next post in the same news list without closing the
   // modal (dir = -1 / +1). No-op past either edge. replaceState (not push) keeps
   // the URL bar pointed at the post you're actually looking at, without spamming
@@ -1545,7 +1569,7 @@ export default function HomeContent({
       if (!m?.siblings || m.sibIndex == null) return m;
       const ni = m.sibIndex + dir;
       if (ni < 0 || ni >= m.siblings.length) return m;
-      const nm = optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni });
+      const nm = { ...optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni }), trackLeague: m.trackLeague };
       // Paging to a post opens it, so it counts as seen.
       if (nm.seenKey) markSeen(nm.seenKey);
       if (typeof window !== "undefined") {
@@ -4975,7 +4999,7 @@ export default function HomeContent({
                       autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
                       autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                       hideTitle={stripActive}
-                      onPlayVideo={playNewsVideo}
+                      onPlayVideo={newsPlayFor(entry.sport ?? entry.id)}
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
                       showTextPosts={!!prefs.showTextPosts}
@@ -6053,6 +6077,8 @@ export default function HomeContent({
           onPrev={videoModal.siblings && (videoModal.sibIndex ?? 0) > 0 ? () => stepVideo(-1) : undefined}
           onNext={videoModal.siblings && (videoModal.sibIndex ?? 0) < videoModal.siblings.length - 1 ? () => stepVideo(1) : undefined}
           alternates={videoModal.alternates}
+          trackLeague={videoModal.trackLeague}
+          trackPage={worldCupHub ? "worldcup" : isToday ? "today" : selectedDate === getDateString(-1) ? "yesterday" : "other"}
           extraLink={reviewLinkDue && mlbReview && videoModal.sourceLabel === "MLB.com"
             ? { label: `All ${mlbReview.season} cuts`, onClick: () => { closeVideoModal("explicit"); setReviewOpen(true); } }
             : null}

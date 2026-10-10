@@ -13,6 +13,7 @@ import { getTimeZone } from "@/lib/etDay";
 import { exitDocumentFullscreen, requestElementFullscreen } from "@/lib/mediaSafe";
 import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
 import { noteHighlightWatched } from "@/lib/rateApp";
+import { trackEvent } from "@/lib/track";
 
 interface VideoModalProps {
   videoId: string;
@@ -45,7 +46,7 @@ interface VideoModalProps {
   sourceLabel?: string | null;
   // Sport key ("nfl", "f1") for the video-play / video-out events. A game
   // highlight's share card key already leads with it, so this is only needed
-  // for clips without one (F1 / UFC event tiles); see trackLeague.
+  // for clips without one (F1 / UFC event tiles); see clipLeague.
   league?: string | null;
   // Third footer link, e.g. the MLB season-review dialog behind an MLB.com cut.
   extraLink?: { label: string; onClick: () => void } | null;
@@ -100,6 +101,11 @@ interface VideoModalProps {
   // overlay so a FIFA-blocked FOX clip can jump straight to an embeddable stream
   // instead of only linking out to YouTube (Jacob 7/14).
   alternates?: { label: string; videoId: string }[];
+  // Umami fields for video-play / video-finished (2026-10-01): the league key
+  // ("mlb", "news" for a merged news feed) and the page the clip opened from
+  // ("today" / "yesterday" / "team" / "worldcup" / "other").
+  trackLeague?: string | null;
+  trackPage?: string | null;
 }
 
 // Minimal slice of the YouTube IFrame Player API this modal actually drives.
@@ -501,7 +507,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, league, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, league, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates, trackLeague, trackPage }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   // The React-owned box the YouTube player lives INSIDE. React renders this and
   // nothing else touches it; the #yt-player node YT destroys is a plain DOM
@@ -841,25 +847,38 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Arm the landscape fade each time the landscape player comes up, or a new
   // post lands in it.
   useEffect(() => { if (immersive) revealChrome(); }, [immersive, postKey, revealChrome]);
-  // Analytics labels shared by video-play and video-out. A YouTube game
-  // highlight opens with no sourceLabel, which left `source` "unknown" on more
-  // than half of all plays (Oct 3–4); the channel it was resolved from rides on
-  // the fallback URL, and the player itself knows the uploader once it loads.
-  const trackLeague = (shareCard?.key.split("-")[0] || league || "unknown").slice(0, 20);
+  // Analytics labels shared by video-play, video-out and video-finished. A
+  // YouTube game highlight opens with no sourceLabel, which left `source`
+  // "unknown" on more than half of all plays (Oct 3–4); the channel it was
+  // resolved from rides on the fallback URL, and the player itself knows the
+  // uploader once it loads. The league is the share card's sport, else the
+  // tile's `league`, else the opener's trackLeague ("news" for a merged feed).
+  const clipLeague = (shareCard?.key.split("-")[0] || league || trackLeague || "unknown").slice(0, 20);
   const trackSource = useCallback(
     () => (sourceLabel || leadFallbackChannel(fallbackUrl) || playerRef.current?.getVideoData?.()?.author || "unknown").slice(0, 40),
     [sourceLabel, fallbackUrl],
   );
+  // video-play and video-finished send the same four fields, so a finished
+  // count divides cleanly by the play count per league, page or player. Read
+  // through refs so the callbacks below change only with postKey: the player
+  // effect lists them, and a changed callback there reruns that effect.
+  const clipFieldsRef = useRef<Record<string, string>>({});
+  const trackSourceRef = useRef(trackSource);
+  useEffect(() => {
+    trackSourceRef.current = trackSource;
+    clipFieldsRef.current = {
+      player: ytMode ? "youtube" : hlsMode ? "native" : "other",
+      league: clipLeague,
+      page: trackPage || "other",
+    };
+  }, [ytMode, hlsMode, trackSource, clipLeague, trackPage]);
+  const clipFields = useCallback(() => ({ ...clipFieldsRef.current, source: trackSourceRef.current() }), []);
   const trackedPlayRef = useRef<string | null>(null);
   const trackVideoPlay = useCallback(() => {
     if (!postKey || trackedPlayRef.current === postKey) return;
     trackedPlayRef.current = postKey;
-    window.umami?.track("video-play", {
-      player: ytMode ? "youtube" : hlsMode ? "native" : "other",
-      source: trackSource(),
-      league: trackLeague,
-    });
-  }, [postKey, ytMode, hlsMode, trackSource, trackLeague]);
+    trackEvent("video-play", clipFields());
+  }, [postKey, clipFields]);
   // The "Watch on YouTube" hand-off. NFL and F1 refuse embeds, so every one of
   // their highlights ends here and video-play never fires; without this event
   // those leagues read as unwatched. Once per clip, like video-play. `via` =
@@ -868,8 +887,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const trackVideoOut = useCallback((via: "card" | "footer") => {
     if (!postKey || trackedOutRef.current === postKey) return;
     trackedOutRef.current = postKey;
-    window.umami?.track("video-out", { source: trackSource(), league: trackLeague, via });
-  }, [postKey, trackSource, trackLeague]);
+    trackEvent("video-out", { source: trackSourceRef.current(), league: clipFieldsRef.current.league ?? "unknown", via });
+  }, [postKey]);
   // Same reuse trap as trackedPlayRef: postKey dedupes so paging past the
   // same clip twice (or a stray double ENDED event) only counts as "finished
   // watching a highlight" once per clip, which is all the in-app rating
@@ -879,7 +898,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (!postKey || trackedEndRef.current === postKey) return;
     trackedEndRef.current = postKey;
     noteHighlightWatched();
-  }, [postKey]);
+    trackEvent("video-finished", clipFields());
+  }, [postKey, clipFields]);
   // The progress poll below (near-end auto-pause) is set up once per ytMode
   // change, not per clip, so it closes over whichever markHighlightWatched
   // existed at that time. Route it through a ref that's always current so a
