@@ -831,7 +831,7 @@ export default function HomeContent({
   // The same, for the EVENT tiles (races, UFC bouts, boxing, chess, poker).
   // Separate state because an event tile is not a Game; `fight` is set only
   // when one bout of a UFC card was tapped rather than the card as a whole.
-  const [detailEvent, setDetailEvent] = useState<{ event: LeagueEventCard; fight?: FightBout; leagueLabel?: string } | null>(null);
+  const [detailEvent, setDetailEvent] = useState<{ event: LeagueEventCard; fight?: FightBout; leagueLabel?: string; sport?: Sport } | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
   // The tennis draw and the MLB playoff picture. Both open from the league
   // column's subtitle line and both gate their own contents behind a reveal —
@@ -5032,7 +5032,7 @@ export default function HomeContent({
               onPlayHighlight: openVideoModal,
               onPlayEmbed: openEmbedModal,
               onShowDetails: (g: Game) => setDetailGame(g),
-              onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
+              onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string, sport?: Sport) => setDetailEvent({ event, fight, leagueLabel, sport }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
               onAddLeague: (sport: Sport, anchor: DOMRect) => setAddLeague({ sport, anchor }),
@@ -6018,6 +6018,7 @@ export default function HomeContent({
           event={detailEvent.event}
           fight={detailEvent.fight}
           leagueLabel={detailEvent.leagueLabel}
+          sport={detailEvent.sport}
           onClose={() => setDetailEvent(null)}
           reminderLinkTemplate={prefs.reminderLinkTemplate}
         />
