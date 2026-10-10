@@ -21,6 +21,7 @@ import { revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/p
 import { shortenPlayoffLabel } from "@/lib/playoffSubtitle";
 import { shouldShowRating } from "@/lib/ratingGate";
 import { useWatchQueue } from "@/components/WatchQueueContext";
+import { useHideRanks } from "@/components/HideRanksContext";
 
 interface GameCardProps {
   game: Game;
@@ -438,6 +439,8 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
   // "Later" pill (Jacob 9/27): queue the game for the Watch queue strip above
   // the board. Null outside the board (no provider) or when Settings hides it.
   const watchQueue = useWatchQueue();
+  // Settings' "Show team ranks and seeds" off: no "#N" chip, any sport or state.
+  const hideRanks = useHideRanks();
   const showWatchLater = !!watchQueue && !hideWatchLater;
   const queued = showWatchLater && watchQueue.isQueued(game);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
@@ -1243,7 +1246,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                     (!effectivePastDate && !isFinished). A pre-game standing
                     isn't a spoiler, so it shows on upcoming cards. */}
               {(() => {
-                if (isTBD) return null;
+                if (isTBD || hideRanks) return null;
                 let rank: number | null = null;
                 let title = "";
                 if (game.sport === "fifa") {

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { abortOwn } from "@/lib/abort";
+import { useHideRanks } from "@/components/HideRanksContext";
 import {
   NFL_CLINCH_TEXT,
   NFL_PLAYOFF_DATES,
@@ -61,6 +62,7 @@ function ClinchTag({ t }: { t: NflTeam }) {
 }
 
 function SeedsTable({ conf }: { conf: NflConference }) {
+  const hideRanks = useHideRanks();
   return (
     <section data-nfl-conference={conf.key} aria-label={`${conf.key} seeds`}>
       <h3 className="text-sm font-bold mb-1.5" style={{ color: "var(--text)" }}>{conf.key}</h3>
@@ -79,7 +81,7 @@ function SeedsTable({ conf }: { conf: NflConference }) {
               data-nfl-seed={t.seed ?? ""}
               style={{ borderTop: i === 4 ? "1px dashed var(--border-hover)" : "1px solid var(--border)" }}
             >
-              <td className="py-1.5 font-bold">{t.seed}</td>
+              <td className="py-1.5 font-bold">{hideRanks ? null : t.seed}</td>
               <td className="py-1.5">
                 <span className="flex items-center gap-1.5 min-w-0">
                   <Logo t={t} />
@@ -123,6 +125,7 @@ function SeedsTable({ conf }: { conf: NflConference }) {
 }
 
 function DivisionTable({ name, teams }: { name: string; teams: NflTeam[] }) {
+  const hideRanks = useHideRanks();
   return (
     <section data-nfl-division={name} aria-label={name}>
       <h3 className="text-xs font-bold mb-1" style={{ color: "var(--text)" }}>{name}</h3>
@@ -142,7 +145,7 @@ function DivisionTable({ name, teams }: { name: string; teams: NflTeam[] }) {
                 <span className="flex items-center gap-1.5 min-w-0">
                   <Logo t={t} size={16} />
                   <span className="truncate font-semibold" style={{ color: "var(--text)" }}>{t.name}</span>
-                  {t.seed ? <span className="text-[10px] shrink-0" style={muted}>#{t.seed}</span> : null}
+                  {t.seed && !hideRanks ? <span className="text-[10px] shrink-0" style={muted}>#{t.seed}</span> : null}
                 </span>
               </td>
               <td className="py-1 text-right">{t.record}</td>
@@ -157,6 +160,7 @@ function DivisionTable({ name, teams }: { name: string; teams: NflTeam[] }) {
 }
 
 function Seat({ team, label }: { team: NflTeam | null; label: string }) {
+  const hideRanks = useHideRanks();
   if (!team) {
     return (
       <div className="flex items-center px-2 h-[28px] text-[10px] italic" style={{ ...muted, opacity: 0.8 }}>{label}</div>
@@ -164,7 +168,7 @@ function Seat({ team, label }: { team: NflTeam | null; label: string }) {
   }
   return (
     <div data-nfl-bracket-team="" className="flex items-center gap-1.5 px-2 h-[28px]" title={team.name}>
-      <span className="text-[10px] font-bold w-2.5 shrink-0" style={muted}>{team.seed}</span>
+      <span className="text-[10px] font-bold w-2.5 shrink-0" style={muted}>{hideRanks ? null : team.seed}</span>
       <Logo t={team} />
       <span className="text-[11px] font-bold" style={{ color: "var(--text)" }}>{team.abbrev}</span>
     </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { abortOwn } from "@/lib/abort";
+import { useHideRanks } from "@/components/HideRanksContext";
 import { fifaRank } from "@/lib/fifaRankings";
 import { getEtServiceDate, toYmd } from "@/lib/etDay";
 import WorldCupBracket from "./WorldCupBracket";
@@ -135,6 +136,7 @@ const PAIR_PALETTE: Array<{ bg: string; bar: string }> = [
 // standings endpoint, from which we take only the team name + flag and drop
 // every standings field.
 export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedDate }: { onClose: () => void; highlightGroup?: string | null; selectedDate?: string }) {
+  const hideRanks = useHideRanks();
   // Once the knockout stage is under way, the bracket is the headline view — so
   // offer the Bracket tab and default to it (unless we were opened to spotlight
   // a specific group, which forces the grouped view). Date-gated so we don't add
@@ -717,7 +719,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
                         <span className="w-4 h-4 shrink-0" />
                       )}
                       <span className="text-xs truncate flex-1" style={{ color: "var(--text-muted)" }}>{t.name}</span>
-                      {t.rank ? (
+                      {t.rank && !hideRanks ? (
                         <span className="text-[10px] shrink-0 tabular-nums" style={{ color: "var(--text-muted)", opacity: 0.7 }}>#{t.rank}</span>
                       ) : null}
                     </li>
