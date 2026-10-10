@@ -899,6 +899,7 @@ export default function SettingsPanel({
     favoritesOnlyStrict: undefined,
     offseasonKeep: undefined,
     hideWatchLaterPill: undefined,
+    hidePlayoffRaceTags: undefined,
     watchQueue: undefined,
     upcomingRecordLeagues: undefined,
     hideUpcomingRecords: undefined,
@@ -1628,6 +1629,16 @@ export default function SettingsPanel({
                 </p>
               )}
             </div>
+            {/* Rides on NFL records (owner design 10/9): the tag shows only
+                where the record does, so the switch shows only while NFL is on. */}
+            {recordSelected.has("nfl") && (
+              <ToggleRow
+                label="Playoff race tags"
+                hint="A small tag on up to 3 NFL games a week, weeks 13–18, where both teams are still in the playoff hunt"
+                checked={!prefs.hidePlayoffRaceTags}
+                onChange={(v) => updatePrefs({ hidePlayoffRaceTags: !v })}
+              />
+            )}
           </Section>
 
           {/* Default View */}
