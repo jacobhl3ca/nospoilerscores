@@ -27,6 +27,7 @@ import { applyFavoritesFilter, filterLeague } from "@/lib/favoritesFilter";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
+import { useHideRanks } from "./HideRanksContext";
 
 interface LeagueColumnProps {
   league: LeagueData;
@@ -1306,6 +1307,8 @@ export default function LeagueColumn({
   // those changed — e.g. a past tab that's empty today gains a lookback game —
   // abbreviations wouldn't recompute. Keying on all four fields the body reads
   // closes that gap.
+  // No "#N" chip to make room for when Settings hides ranks.
+  const hideRanks = useHideRanks();
   const checkIfFullNamesFit = useCallback(() => {
     const el = columnRef.current;
     if (!el) return;
@@ -1350,9 +1353,9 @@ export default function LeagueColumn({
       // ("Bosnia-Herzegovina", "Trail Blazers") could spill past the cell. Shown
       // for the World Cup (static FIFA rank) and any league whose teams carry a
       // live standings rank.
-      const showsRankChip =
+      const showsRankChip = !hideRanks && (
         league.sport === "fifa" ||
-        measuredGames.some((g) => g.homeTeam.rank != null || g.awayTeam.rank != null);
+        measuredGames.some((g) => g.homeTeam.rank != null || g.awayTeam.rank != null));
       const rankAllowance = showsRankChip ? 30 : 0;
       const availableWidth = rowWidth - occupied - totalGaps - 4 - rankAllowance; // 4px safety
 
@@ -1369,7 +1372,7 @@ export default function LeagueColumn({
 
       setUseAbbreviations(longestWidth > availableWidth);
     });
-  }, [league.games, league.nextGameDay, league.previousGameDay, league.sport]);
+  }, [league.games, league.nextGameDay, league.previousGameDay, league.sport, hideRanks]);
 
   // Re-check when the rendered games change
   useEffect(() => {

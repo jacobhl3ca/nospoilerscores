@@ -902,6 +902,7 @@ export default function SettingsPanel({
     watchQueue: undefined,
     upcomingRecordLeagues: undefined,
     hideUpcomingRecords: undefined,
+    hideRanks: undefined,
     // Reset means "act like a fresh install", and on a fresh install the
     // stars are on for two visits before the app hides them itself. Leaving
     // the counter at 3 would re-hide them on the very next open, which reads
@@ -1628,6 +1629,12 @@ export default function SettingsPanel({
                 </p>
               )}
             </div>
+            <ToggleRow
+              label="Show team ranks and seeds"
+              hint="The #8 by a team name, and bracket seeds"
+              checked={!prefs.hideRanks}
+              onChange={(v) => updatePrefs({ hideRanks: !v })}
+            />
           </Section>
 
           {/* Default View */}
