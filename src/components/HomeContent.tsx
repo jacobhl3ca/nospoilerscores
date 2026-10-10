@@ -2488,7 +2488,7 @@ export default function HomeContent({
     fetchNflPicture(ctrl.signal)
       .then((p) => { if (p) setNflClinch(nflClinchSnapshot(p, Date.now())); })
       .catch(() => {});
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, [prefs.foldEliminatedGames, selectedDate, nflClinchAt]);
 
   const teamLeagueOptions = useMemo(() => {
