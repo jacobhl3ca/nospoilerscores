@@ -2558,7 +2558,8 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   // with the same broadcasts[].names[] shape as team sports (see parseGame).
   const broadcasts: string[] = [];
   for (const b of match.broadcasts ?? []) {
-    for (const bn of b.names ?? []) {
+    for (const raw of b.names ?? []) {
+      const bn = normalizeNetworkName(raw);
       if (!broadcasts.includes(bn)) broadcasts.push(bn);
     }
   }
@@ -2874,7 +2875,8 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   // Gather broadcasts
   const broadcasts: string[] = [];
   for (const b of competition?.broadcasts ?? []) {
-    for (const name of b.names ?? []) {
+    for (const raw of b.names ?? []) {
+      const name = normalizeNetworkName(raw);
       if (!broadcasts.includes(name)) broadcasts.push(name);
     }
   }
@@ -3980,6 +3982,13 @@ function countryNameFromFlagUrl(url: string): string {
   return COUNTRY_NAMES[code] ?? code.toUpperCase();
 }
 
+// ESPN sends "Fox" from Oct 2026 (it sent "FOX" on 9/26). The brand is all
+// caps, and lib/collegeHighlights matches the exact "FOX", so every broadcast
+// name runs through this as it enters the app ("Fox Deportes" → "FOX Deportes").
+export function normalizeNetworkName(name: string): string {
+  return name.trim().replace(/\bFox\b/g, "FOX");
+}
+
 // Pull broadcast network names off an ESPN competition (handles the
 // names[]/media.shortName/name shapes the racing + mma feeds use).
 type BroadcastEntry = { names?: string[]; media?: { shortName?: string }; name?: string };
@@ -3994,7 +4003,7 @@ function eventBroadcasts(comp: { broadcasts?: BroadcastEntry[] } | null | undefi
     else if (b?.media?.shortName) out.push(b.media.shortName);
     else if (typeof b?.name === "string") out.push(b.name);
   }
-  return [...new Set(out.filter(Boolean))];
+  return [...new Set(out.filter(Boolean).map(normalizeNetworkName))];
 }
 
 // Minimal shapes of ESPN's F1/UFC single-event payload — only the fields
@@ -4883,7 +4892,8 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
   // Gather broadcasts
   const broadcasts: string[] = [];
   for (const b of competition?.broadcasts ?? []) {
-    for (const name of b.names ?? []) {
+    for (const raw of b.names ?? []) {
+      const name = normalizeNetworkName(raw);
       if (!broadcasts.includes(name)) broadcasts.push(name);
     }
   }
