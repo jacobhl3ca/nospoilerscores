@@ -169,6 +169,14 @@ export default function WatchWorldCupWithoutSpoilersPage() {
           </li>
         ))}
       </ol>
+      {/* Added 2026-10-07: the full, non-World-Cup version of these tips. */}
+      <p className="mb-4" style={{ color: "var(--text-muted)" }}>
+        Step by step for every app, including how to block or redirect ESPN:{" "}
+        <Link href="/how-to-avoid-sports-spoilers" className="underline underline-offset-2">
+          how to avoid sports spoilers
+        </Link>
+        .
+      </p>
 
       <h2 className="text-lg font-semibold mt-8 mb-3">Frequently asked questions</h2>
       <section className="space-y-5">
@@ -205,18 +213,6 @@ export default function WatchWorldCupWithoutSpoilersPage() {
           >
             also on the App Store
           </a>
-          {/* tip jar hidden for now 2026-06-24; restore by un-commenting:
-          {" "}·{" "}
-          <a
-            href="https://ko-fi.com/jacobhl"
-            target="_blank"
-            rel="noreferrer"
-            className="underline underline-offset-2"
-            style={{ color: "var(--text-muted)" }}
-          >
-            support it ☕
-          </a>
-          */}
         </p>
       </div>
 
@@ -251,12 +247,10 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                 // MODIFIED) so the JSON-LD and OG freshness signals never drift.
                 datePublished: PUBLISHED,
                 dateModified: MODIFIED,
-                author: { "@type": "Organization", name: "HideScore" },
-                publisher: {
-                  "@type": "Organization",
-                  name: "HideScore",
-                  logo: { "@type": "ImageObject", url: "https://hidescore.com/icon-512.png" },
-                },
+                // The layout's Organization node (name, url, logo), by @id, as
+                // SeoLandingPage's Articles do. The inline copies had no url.
+                author: { "@id": "https://hidescore.com/#organization" },
+                publisher: { "@id": "https://hidescore.com/#organization" },
                 mainEntityOfPage: "https://hidescore.com/watch-world-cup-without-spoilers",
                 // Tie this guide into the site's WebSite entity (@id declared in
                 // layout.tsx's @graph) rather than letting it read as a standalone

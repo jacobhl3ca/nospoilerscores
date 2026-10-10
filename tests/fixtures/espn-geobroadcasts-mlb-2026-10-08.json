@@ -1,0 +1,51 @@
+{
+ "id": "401907993",
+ "name": "Cleveland Guardians at Chicago White Sox",
+ "geoBroadcasts": [
+  {
+   "type": {
+    "id": "5",
+    "shortName": "Radio"
+   },
+   "market": {
+    "id": "1",
+    "type": "National"
+   },
+   "media": {
+    "shortName": "ERADM"
+   },
+   "lang": "en",
+   "region": "us"
+  },
+  {
+   "type": {
+    "id": "1",
+    "shortName": "TV"
+   },
+   "market": {
+    "id": "1",
+    "type": "National"
+   },
+   "media": {
+    "shortName": "TBS"
+   },
+   "lang": "en",
+   "region": "us"
+  },
+  {
+   "type": {
+    "id": "1",
+    "shortName": "TV"
+   },
+   "market": {
+    "id": "1",
+    "type": "National"
+   },
+   "media": {
+    "shortName": "truTV"
+   },
+   "lang": "en",
+   "region": "us"
+  }
+ ]
+}

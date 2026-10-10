@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A 1-row widget: ‹ one game › (HideScoreWidgetProvider). The arrows
+     fill the body's height so they are easy to hit. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal">
+
+    <TextView
+        android:id="@+id/pager_prev"
+        android:layout_width="24dp"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/widget_prev"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="@string/widget_prev_arrow"
+        android:textColor="@color/widget_muted"
+        android:textSize="22sp" />
+
+    <LinearLayout
+        android:id="@+id/pager_row"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical" />
+
+    <TextView
+        android:id="@+id/pager_next"
+        android:layout_width="24dp"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/widget_next"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="@string/widget_next_arrow"
+        android:textColor="@color/widget_muted"
+        android:textSize="22sp" />
+</LinearLayout>

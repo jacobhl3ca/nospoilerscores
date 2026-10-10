@@ -31,6 +31,82 @@ function cardMetaFromKey(key) {
   };
 }
 
+// Shared edge cache (caches.default) for GET routes whose upstream is metered
+// or rate-limited. The key is built from the route's PARSED inputs, never the
+// raw URL, so an extra or reordered query param can't mint a fresh entry and
+// send one more request upstream. Inert where the Cache API is absent (tests).
+async function edgeCacheMatch(keyUrl) {
+  if (typeof caches === "undefined") return null;
+  try { return (await caches.default.match(new Request(keyUrl, { method: "GET" }))) || null; } catch { return null; }
+}
+function edgeCachePut(ctx, keyUrl, res) {
+  if (typeof caches === "undefined" || !ctx?.waitUntil) return;
+  ctx.waitUntil(caches.default.put(new Request(keyUrl, { method: "GET" }), res.clone()).catch(() => {}));
+}
+
+// /api/boxing upstream refresh interval and failure backoff (see the route).
+const BOXING_SNAPSHOT_MS = 8 * 60 * 60 * 1000;
+const BOXING_LEASE_MS = 2 * 60 * 1000;          // one isolate owns a refresh
+const BOXING_RETRY_MS = 60 * 60 * 1000;         // after a failed upstream call
+const BOXING_RETRY_429_MS = 12 * 60 * 60 * 1000; // after a 429 (quota spent)
+const BOXING_SNAP_KEY = "cache/boxing-schedule.json";
+// In-isolate single flight: concurrent requests share one refresh promise.
+let boxingRefresh = null;
+
+// One upstream call for the boxing schedule. Before the call, claim a lease
+// in the R2 snapshot (`retryAt`) with a conditional put on the etag we read,
+// so only one isolate wins; the others keep serving the stale copy (the very
+// first fetch, with no snapshot yet, claims without a condition). After the
+// call, write either the new events or a backoff `retryAt`. Resolves to the
+// new events, or null when the caller should serve the stale copy.
+async function refreshBoxing(env, obj, snap) {
+  const base = { fetchedAt: Number(snap?.fetchedAt) || 0, events: Array.isArray(snap?.events) ? snap.events : [] };
+  const write = (body, onlyIf) => env.DATA
+    ? env.DATA.put(BOXING_SNAP_KEY, JSON.stringify(body),
+      { httpMetadata: { contentType: "application/json" }, ...(onlyIf ? { onlyIf } : {}) })
+    : null;
+  if (env.DATA) {
+    try {
+      const claimed = await write({ ...base, retryAt: Date.now() + BOXING_LEASE_MS },
+        obj?.etag ? { etagMatches: obj.etag } : null);
+      if (obj?.etag && !claimed) return null; // another isolate holds the lease
+    } catch { return null; }
+  }
+  const backoff = async (ms) => { try { await write({ ...base, retryAt: Date.now() + ms }); } catch { /* lease expires */ } return null; };
+  try {
+    const host = "boxing-data-api.p.rapidapi.com";
+    const res = await fetch(`https://${host}/v2/events/schedule`, {
+      headers: {
+        "x-rapidapi-host": host,
+        "x-rapidapi-key": env.BOXING_API_KEY,
+        "Content-Type": "application/json",
+      },
+    });
+    // A 429 here means the month's 100 requests are spent. Serve the stale
+    // copy (or empty) and let the column fall back rather than surfacing an
+    // error to the user.
+    if (!res.ok) return backoff(res.status === 429 ? BOXING_RETRY_429_MS : BOXING_RETRY_MS);
+    const data = await res.json();
+    const events = (data?.data || []).map((e) => ({
+      id: String(e.id || ""),
+      title: String(e.title || ""),
+      date: e.date || null,
+      venue: e.venue || null,
+      location: e.location || null,
+      // `broadcast` is per-country: [{country, broadcasters:[...]}]. Keep
+      // only the US/UK rows — those are the ones Jacob can actually watch.
+      broadcasts: (e.broadcast || [])
+        .filter((b) => ["United States", "United Kingdom"].includes(b?.country))
+        .flatMap((b) => b?.broadcasters || []),
+      poster: e.poster_image_url || null,
+    })).filter((e) => e.id && e.title && e.date);
+    try { await write({ fetchedAt: Date.now(), events }); } catch { /* serve anyway */ }
+    return events;
+  } catch {
+    return backoff(BOXING_RETRY_MS);
+  }
+}
+
 // HTMLRewriter element handler — overwrite one attribute on a <meta> tag.
 class AttrSetter {
   constructor(attr, value) { this.attr = attr; this.value = value; }
@@ -65,6 +141,14 @@ const CARD_REV = 4;
 // Keep this narrow. An unscoped result-bearing upload must still be rejected.
 const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"]);
 
+// College chain channels whose game cuts name the winner or print the score
+// ("Colorado State at UTSA: Rams See 500 YDS of Offense, Fall 59-45 | FULL
+// Game Highlights (9/26/2026)", Pac-12, 2026-09-26). The client keeps their
+// title bar masked (`maskTitle` in src/lib/collegeHighlightChannels.json), so
+// a strict lookup on the channel itself may return such a title. Unscoped
+// results are still refused. Lowercased author names.
+const MASKED_CHAIN_CHANNELS = new Set(["pac-12"]);
+
 // Atlantic Hockey America (NCAA women's hockey chain, lit 2026-09-26) titles
 // every per-game cut as a bare scoreline with the date and nothing else:
 // "Ohio State 2, Penn State 1 OT - Sept. 24, 2026". No "highlights", and the
@@ -76,6 +160,11 @@ const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"])
 // agree with the query, which is what separates the 9/24 and 9/25 cuts of the
 // same pair; an undated exhibition ("Robert Morris 8, Post 3") never matches.
 const AHA_CHANNEL = "atlantic hockey america";
+// "TOP 14 - Officiel" titles some match cuts "Match Summary" rather than
+// "Highlights" ("TOP 14 Season 2026-2027 - Round 4 - Match Summary: Stade
+// Toulousain - Montpellier Hérault Rugby", 220 s). See isStrictTop14Summary.
+const TOP14_CHANNEL = "top 14 - officiel";
+const TOP14_SUMMARY_RX = /\bsummary\b|\br[eé]sum[eé](?![a-z])/;
 const AHA_SCORELINE_RX = /^\s*\S.*?\s\d{1,2},\s\S.*?\s\d{1,2}(?:\s(?:\d?OT|SO))?\s-\s(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s\d{1,2},\s\d{4}\s*$/i;
 
 // A press conference is never a highlight, whatever else its title says. The
@@ -191,6 +280,92 @@ function bylineNamesChannel(byline, preferChannelLower) {
   const b = String(byline || "").toLowerCase();
   if (b === preferChannelLower) return true;
   return b.split(/\s+and\s+/).some((part) => part.trim() === preferChannelLower);
+}
+
+// A results page is JSON inside HTML, so a title or byline arrives with its
+// JSON escapes still in it: "Texas A&M Aggies vs. LSU Tigers", "The
+// R&A". The team gate then looked for "texas a&m" in "texas a&m" and
+// never found it — the strict lookup for Texas A&M at LSU (9/26) and Kentucky
+// at Texas A&M (9/19) returned "No results" with the right cut on the page, on
+// ESPN College Football and SEC alike (measured 2026-10-03). Decode once, where
+// the string is captured. scripts/lib/recaps.mjs parseYtVideoRenderers does the
+// same for the bake.
+function decodeJsonText(raw) {
+  const s = String(raw ?? "");
+  if (!s.includes("\\")) return s;
+  try {
+    return JSON.parse(`"${s}"`);
+  } catch {
+    return s
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\\(["\\/])/g, "$1");
+  }
+}
+
+// School names built on another school's name. The college chains match on
+// ESPN's school name (team.location), and the conference channels title with
+// the same names, so a plain substring test read "Texas A&M Aggies vs. Ole
+// Miss Rebels" as a Texas game, "West Virginia" as Virginia and "Miami (OH)"
+// as Miami. The SEC posts Texas and Texas A&M cuts against the same opponents
+// in the same weeks, with no date in the title (soccer and volleyball alike).
+// Before a team's names are looked for, every "<prefix> <name>" and "<name>
+// <suffix>" phrase built on one of them is blanked to spaces of the same
+// length (positions stay true for the order gate), unless the phrase is one of
+// the team's own names. Checked 2026-10-03 against every team ESPN lists for
+// the pro leagues the bake walks (NBA … Top 14): no club's own name is such a
+// phrase, so nothing outside college changes. ⛔ Never "city" (Leicester City),
+// "united" or a bare "st" (St Kilda). A phrase never spans a title separator
+// (" - ", "|", "@"), so "Chicago Fire FC - St. Louis CITY SC" keeps the Fire;
+// a bare hyphen is part of a name ("Texas A&M-Commerce"). Keep
+// scripts/lib/team-names.mjs (the bake and the audit) in sync by hand.
+const SCHOOL_NAME_PREFIXES = [
+  "west", "east", "north", "south", "western", "eastern", "northern", "southern", "central", "middle",
+  "southeast", "southeastern", "northwest", "northwestern", "southwest", "southwestern", "northeast", "northeastern",
+];
+const SCHOOL_NAME_SUFFIXES = [
+  "state", "st.", "tech", "a&m", "a & m", "a&t", "christian", "southern", "central", "international", "atlantic",
+  "gulf coast", "valley", "poly", "baptist", "(oh)", "(ohio)", "monroe", "duluth", "omaha", "anchorage", "fairbanks",
+  "kearney", "fort wayne", "pine bluff", "little rock", "upstate", "wilmington", "greensboro", "asheville",
+  "rio grande valley", "eastern shore", "lowell", "corpus christi", "commerce", "kingsville",
+];
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const SCHOOL_PREFIX_ALT = SCHOOL_NAME_PREFIXES.map(escapeRegex).join("|");
+const SCHOOL_SUFFIX_ALT = SCHOOL_NAME_SUFFIXES.map(escapeRegex).join("|");
+// A team owns a longer name when one of its own names holds it as whole words:
+// "Sporting Kansas City" owns "Kansas City", "Southern Miss Golden Eagles"
+// owns "Southern Miss".
+function ownsTeamName(ownNames, phrase) {
+  const p = ` ${phrase.replace(/[\s\-–—]+/g, " ")} `;
+  for (const n of ownNames) {
+    if (n && ` ${n.replace(/[\s\-–—]+/g, " ")} `.includes(p)) return true;
+  }
+  return false;
+}
+const schoolPhraseRxCache = new Map();
+function blankContainingSchoolNames(title, ownNames) {
+  let t = title;
+  for (const name of ownNames) {
+    if (!name) continue;
+    let rx = schoolPhraseRxCache.get(name);
+    if (!rx) {
+      const n = escapeRegex(name);
+      rx = new RegExp(`(?<![a-z0-9])(?:(?:${SCHOOL_PREFIX_ALT})(?:\\s+|[-–—])${n}|${n}(?:\\s+|[-–—])(?:${SCHOOL_SUFFIX_ALT}))(?![a-z0-9])`, "g");
+      schoolPhraseRxCache.set(name, rx);
+    }
+    t = t.replace(rx, (m) => (ownsTeamName(ownNames, m) ? m : " ".repeat(m.length)));
+  }
+  return t;
+}
+
+// Where a team name stands in a normalized title, or -1. A name under four
+// characters ("Cal", "SMU", "NEC") must stand as a whole word: "cal" is inside
+// "physical", "nec" inside "connecticut". Longer names keep the plain
+// substring test. Mirrored in scripts/lib/team-names.mjs (teamNameIndex).
+function teamNameIndex(title, name) {
+  if (!name) return -1;
+  if (name.length >= 4) return title.indexOf(name);
+  const m = new RegExp(`(?:^|[^a-z0-9])(${escapeRegex(name)})(?![a-z0-9])`).exec(title);
+  return m ? m.index + m[0].length - m[1].length : -1;
 }
 
 function raceTitleMatches(tokens, titleLower) {
@@ -887,6 +1062,29 @@ export default {
       });
     }
 
+    // --- Visitor location for the Listen links (src/lib/radio.ts): most NFL
+    // and MLB flagship streams play only inside the home market, so a
+    // market-locked link shows only when this metro is on its list. Coarse
+    // Cloudflare fields only (country, region code, Nielsen metro code), never
+    // the IP. Not logged, not cached, and the caller only learns its own spot.
+    // No CORS header on purpose: the web app and the native apps (which load
+    // https://hidescore.com, capacitor.config.ts) are same-origin, and no
+    // other site gets to read it.
+    if (url.pathname === "/api/where") {
+      const cf = request.cf || {};
+      const metro = Number(cf.metroCode);
+      return new Response(JSON.stringify({
+        country: typeof cf.country === "string" ? cf.country : null,
+        region: typeof cf.regionCode === "string" ? cf.regionCode : null,
+        metro: Number.isFinite(metro) && metro > 0 ? metro : null,
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
+
     // --- Bracket picks leaderboard (MLB postseason). See picksRoute below.
     if (url.pathname === "/api/picks") return picksRoute(request, env, ctx, url);
     if (url.pathname === "/api/picks/account") return picksAccountRoute(request, env, ctx);
@@ -965,8 +1163,11 @@ export default {
       const title = newsHead
         ? (newsHead.length > 110 ? `${newsHead.slice(0, 109)}…` : newsHead)
         : "HideScore — No Spoiler Sports";
-      const desc = newsLabel
-        ? `${newsLabel} · Watch on HideScore — catch up without seeing the score.`
+      // The label is caller text too: cap it like the headline so a crafted
+      // link can't put a paragraph into a hidescore.com unfurl.
+      const label = newsLabel && newsLabel.length > 60 ? `${newsLabel.slice(0, 59)}…` : newsLabel;
+      const desc = label
+        ? `${label} · Watch on HideScore — catch up without seeing the score.`
         : "Watch the highlight on HideScore — catch up without seeing the score.";
       const assetRes = await env.ASSETS.fetch(new Request(new URL("/", url), { method: "GET" }));
       return new HTMLRewriter()
@@ -1072,6 +1273,35 @@ export default {
           },
         });
       }
+      // Real lookups are one game's "A vs B highlights <date>" (well under 200
+      // chars) with a handful of excluded ids. Anything far past that is not
+      // the app, and each call costs up to four YouTube fetches.
+      if (query.length > 300 || excludeSet.size > 25 || url.search.length > 2048) {
+        return new Response(JSON.stringify({ error: "Bad params" }), {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      }
+      // Many visitors open the same games, so the same lookup repeats. Share
+      // one answer per colo for the same max-age the browser already gets.
+      const ytKey = new URL("https://hidescore.com/api/youtube");
+      for (const [k, v] of [
+        ["q", query],
+        ["channel", (preferChannel || "").toLowerCase()],
+        ["prefer", preferExtended ? "extended" : ""],
+        ["strict", strictChannelParam ? "1" : ""],
+        ["race", raceTokens.join("|")],
+        ["comp", compTokens.join("|")],
+        ["week", queryWeek ? String(queryWeek) : ""],
+        ["order", homeFirst ? "home" : ""],
+        ["minsec", minSec ? String(minSec) : ""],
+        ["exclude", [...excludeSet].sort().join(",")],
+      ]) if (v) ytKey.searchParams.set(k, v);
+      const ytCached = await edgeCacheMatch(ytKey.toString());
+      if (ytCached) return ytCached;
 
       try {
         const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
@@ -1209,6 +1439,26 @@ export default {
           // "Athletics" as shortDisplayName, so we map both.
           "athletics": ["athletics", "a's", "oakland"],
           "st. john's": ["st. john's", "st johns", "saint john's", "saint johns", "st john's"],
+          // ESPN's school name (team.location) vs. the ACC's titles: "Duke vs.
+          // Pitt Match Highlights", "Fresno St. vs. Cal Match Highlights | 2026
+          // ACC Women's Soccer" (2026-10-03). "cal" only matches as a whole
+          // word (teamNameIndex), and the school-name guard blanks "Cal Poly",
+          // "Cal State" and "Cal Baptist" first.
+          "pittsburgh": ["pittsburgh", "pitt"],
+          "california": ["california", "cal"],
+          // Top 14 (2026-10-03): ESPN's club names vs. the "TOP 14 - Officiel"
+          // titles ("Section Paloise vs. Stade Rochelais Highlights", "USA
+          // Perpignan vs. Union Bordeaux-Bègles", "Stade Français Paris - LOU
+          // Rugby"). The other seven clubs' ESPN names are in their titles.
+          "bayonne": ["bayonne", "aviron bayonnais"],
+          "bordeaux begles": ["bordeaux begles", "bordeaux-begles", "union bordeaux-begles"],
+          "castres olympique": ["castres olympique", "castres"],
+          "clermont auvergne": ["clermont auvergne", "asm clermont", "clermont"],
+          "la rochelle": ["la rochelle", "stade rochelais", "rochelais"],
+          "lyon": ["lyon", "lou rugby"],
+          "montpellier herault": ["montpellier herault", "montpellier"],
+          "pau": ["pau", "section paloise", "paloise"],
+          "stade francais paris": ["stade francais paris", "stade francais"],
           // EPL — ESPN compact form ↔ club name(s) used in YouTube titles
           "nottm forest": ["nottm forest", "nottingham forest", "nottingham"],
           "man united": ["man united", "manchester united", "man utd"],
@@ -1250,6 +1500,24 @@ export default {
           "københavn": ["københavn", "kobenhavn", "copenhagen", "fc copenhagen"],
           "real madrid": ["real madrid", "madrid"],
           "barcelona": ["barcelona", "barça", "barca", "fc barcelona"],
+          // UEL (2026-10-03): the four Matchday 1 games CBS Sports Golazo -
+          // Europe and TUDN USA both cut but no lookup matched, ESPN's name
+          // first, then the CBS and TUDN title forms ("Bayer Leverkusen vs.
+          // Celje", "Hapoel Beer-Sheva", "H Beer Sheva", "Lillestrøm",
+          // "Union Saint-Gilloise"), and TUDN's Spanish or short forms of five
+          // more clubs ("Besiktas vs Marsella", "Omonia vs Celta de Vigo",
+          // "Levski Sofia vs Salzburg", "Sturm vs Rennes", "OFI vs
+          // Hoffenheim"). TUDN's own titles are the Spanish ones; its search
+          // cards show an English translation.
+          "nk celje": ["nk celje", "celje"],
+          "hapoel be'er": ["hapoel be'er", "hapoel be'er sheva", "hapoel beer sheva", "hapoel beer-sheva", "h. beer sheva", "beer sheva", "beer-sheva"],
+          "lillestrom": ["lillestrom", "lillestrøm", "lillestrom sk", "lillestrøm sk"],
+          "union sg": ["union sg", "union st.-gilloise", "union saint-gilloise", "union st-gilloise", "union saint gilloise", "royale union saint-gilloise"],
+          "marseille": ["marseille", "olympique de marseille", "marsella"],
+          "celta vigo": ["celta vigo", "celta de vigo"],
+          "rb salzburg": ["rb salzburg", "red bull salzburg", "salzburg"],
+          "sturm graz": ["sturm graz", "sk sturm graz", "sturm"],
+          "ofi crete": ["ofi crete", "ofi"],
           // League title forms the FotMob step rejected as "teams" on the
           // 2026-09-19/20 weekend: Serie A "ROMA-INTER", Bundesliga "1. FC KÖLN",
           // Sheffield United's own channel, Portsmouth's "Pompey v Blackburn",
@@ -1340,7 +1608,18 @@ export default {
         // "Ireland", "Irlanda del Norte" holds "Irlanda". When the team being
         // looked up does not own one of these, it is blanked out of the title
         // first, so a Rep Ireland lookup cannot match a Northern Ireland title.
-        const CONTAINING_TEAM_NAMES = ["northern ireland", "irlanda del norte"];
+        // The college rows (2026-10-03) are the schools the prefix/suffix rule
+        // in blankContainingSchoolNames cannot see: "Kansas City" holds Kansas,
+        // "Sam Houston" Houston, "George Washington" Washington, "Miami (Ohio)"
+        // Ohio, and the "Southern" schools hold Southern (the SWAC Jaguars,
+        // whose SEC volleyball and soccer cuts read "Southern Jaguars vs. …").
+        // Mirrored in scripts/lib/team-names.mjs.
+        const CONTAINING_TEAM_NAMES = [
+          "northern ireland", "irlanda del norte",
+          "kansas city", "sam houston", "george washington", "miami (ohio)",
+          "georgia southern", "texas southern", "southern miss", "southern utah", "southern illinois",
+          "southern indiana", "southern methodist", "southern california",
+        ];
 
         // Extract team names from query: "Away vs Home highlights ..."
         const teamsMatch = query.match(/^(.+?)\s+vs\s+(.+?)\s+(?:highlights|resumen)\b/i);
@@ -1380,14 +1659,16 @@ export default {
 
         // The title as matched for one team: normalized, with every
         // CONTAINING_TEAM_NAMES entry the team does not own blanked to spaces
-        // (same length, so the order gate's positions stay true).
+        // (same length, so the order gate's positions stay true), then every
+        // longer school name built on one of its names (see
+        // blankContainingSchoolNames).
         function titleForTeam(titleLower, variants) {
           let t = normalizeTeamMatch(titleLower);
           const own = new Set(variants.map(normalizeTeamMatch));
           for (const name of CONTAINING_TEAM_NAMES) {
-            if (!own.has(name)) t = t.split(name).join(" ".repeat(name.length));
+            if (!ownsTeamName(own, name)) t = t.split(name).join(" ".repeat(name.length));
           }
-          return t;
+          return blankContainingSchoolNames(t, own);
         }
 
         // Where a team first appears in the title (any variant), or -1. Feeds
@@ -1398,7 +1679,7 @@ export default {
           const t = titleForTeam(titleLower, variants);
           let best = -1;
           for (const v of variants) {
-            const i = t.indexOf(normalizeTeamMatch(v));
+            const i = teamNameIndex(t, normalizeTeamMatch(v));
             if (i >= 0 && (best < 0 || i < best)) best = i;
           }
           return best;
@@ -1407,7 +1688,7 @@ export default {
         function titleHasTeam(titleLower, teamName) {
           const variants = getTeamVariants(teamName);
           const normalizedTitle = titleForTeam(titleLower, variants);
-          if (variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)))) return true;
+          if (variants.some((v) => teamNameIndex(normalizedTitle, normalizeTeamMatch(v)) >= 0)) return true;
           // Singular-nickname tolerance. Not hypothetical: the OFFICIAL NFL
           // channel's Week 15 recap of Dec 14 2025 is titled "Washington
           // Commanders vs New York Giant Game Highlights | 2025 NFL Season
@@ -1473,8 +1754,8 @@ export default {
           if (publishedBeforeGame(publishedMatch ? publishedMatch[1] : "", queryGameMs, ageGateNowMs)) return null;
           return {
             videoId: idMatch[1],
-            title: titleMatch ? titleMatch[1] : "",
-            channel: channelMatch ? channelMatch[1] : "",
+            title: titleMatch ? decodeJsonText(titleMatch[1]) : "",
+            channel: channelMatch ? decodeJsonText(channelMatch[1]) : "",
           };
         }).filter(Boolean);
 
@@ -1627,12 +1908,23 @@ export default {
             preferChannelLower === AHA_CHANNEL &&
             queryHasSpecificTeams &&
             AHA_SCORELINE_RX.test(title);
+          // See TOP14_SUMMARY_RX. Strict + the channel + both teams; its try
+          // clips ("Essai de …", 30–100 s) carry neither word, and the
+          // 2-minute floor (HIGHLIGHT_MATCH_GATES in src/lib/youtube.ts)
+          // refuses them as well.
+          const isStrictTop14Summary =
+            strictChannelParam &&
+            isFromChannel &&
+            preferChannelLower === TOP14_CHANNEL &&
+            queryHasSpecificTeams &&
+            TOP14_SUMMARY_RX.test(titleLower);
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
             isStrictBareCflWeek ||
             isStrictAhaScoreline ||
+            isStrictTop14Summary ||
             roundOnlyTitleOk ||
             isStrictBareWnbaRecap ||
             isChessRoundBroadcast ||
@@ -2426,9 +2718,12 @@ export default {
           const isOfficialWorldCupUpload = isWorldCupQuery && WC_OFFICIAL_CHANNELS.includes(channel.toLowerCase());
           const isMaskedOfficialCombatUpload =
             strictChannelParam && isFromChannel && MASKED_COMBAT_CHANNELS.has(preferChannelLower);
+          const isMaskedChainUpload =
+            strictChannelParam && isFromChannel && MASKED_CHAIN_CHANNELS.has(preferChannelLower);
           if (
             !isOfficialWorldCupUpload &&
             !isMaskedOfficialCombatUpload &&
+            !isMaskedChainUpload &&
             !isStrictAhaScoreline &&
             (SCORE_RX.test(title) || SPOILER_RX.test(title) || isTeamScoreSpoiler(title))
           )
@@ -2782,8 +3077,8 @@ export default {
                 const publishedMatch = block.match(/"publishedTimeText":\{"simpleText":"(.*?)"/);
                 // Same age gate as the main loop.
                 if (publishedBeforeGame(publishedMatch ? publishedMatch[1] : "", queryGameMs, ageGateNowMs)) continue;
-                const titleLower = (titleMatch ? titleMatch[1] : "").toLowerCase();
-                const channelLower = (channelMatch ? channelMatch[1] : "").toLowerCase();
+                const titleLower = decodeJsonText(titleMatch ? titleMatch[1] : "").toLowerCase();
+                const channelLower = decodeJsonText(channelMatch ? channelMatch[1] : "").toLowerCase();
                 // Same gates as the main loop: official WC channel, "World Cup"
                 // in the title, a highlight/recap keyword, and BOTH named teams.
                 if (!rescueAllowedChannels.includes(channelLower)) continue;
@@ -2815,7 +3110,7 @@ export default {
           // account toward Cloudflare's 100K/day free cap. A Pages Function
           // response is NOT edge-cached, so this header saves invocations only
           // via the browser/WebView HTTP cache (the client uses a plain fetch()).
-          return new Response(JSON.stringify({ error: "No results" }), {
+          const miss = new Response(JSON.stringify({ error: "No results" }), {
             status: 404,
             headers: {
               "Content-Type": "application/json",
@@ -2823,16 +3118,22 @@ export default {
               "Access-Control-Allow-Origin": "*",
             },
           });
+          // An empty page is also what YouTube serves when it throttles us; do
+          // not pin that. Cache only a miss that came from a real results page.
+          if (html.includes('"videoRenderer"')) edgeCachePut(ctx, ytKey.toString(), miss);
+          return miss;
         }
 
         const lengthSec = lengthById.get(videoId) ?? null;
-        return new Response(JSON.stringify(lengthSec ? { videoId, lengthSec } : { videoId }), {
+        const hit = new Response(JSON.stringify(lengthSec ? { videoId, lengthSec } : { videoId }), {
           headers: {
             "Content-Type": "application/json",
             "Cache-Control": "public, max-age=300",
             "Access-Control-Allow-Origin": "*",
           },
         });
+        edgeCachePut(ctx, ytKey.toString(), hit);
+        return hit;
       } catch {
         return new Response(JSON.stringify({ error: "Search failed" }), {
           status: 500,
@@ -2878,6 +3179,11 @@ export default {
           },
         });
       const MIN_TIER = 4;
+      // Same answer for everyone, so one per colo per max-age. Without it each
+      // visitor (or crawler hit) is one more call to Lichess from our IPs.
+      const chessKey = "https://hidescore.com/api/chess";
+      const chessCached = await edgeCacheMatch(chessKey);
+      if (chessCached) return chessCached;
       try {
         const res = await fetch("https://lichess.org/api/broadcast/top?nb=20", {
           // Lichess asks API consumers to identify themselves. A generic
@@ -2931,7 +3237,9 @@ export default {
             if (row && row.id && row.name) events.push(row);
           }
         }
-        return corsJson({ events });
+        const out = corsJson({ events });
+        edgeCachePut(ctx, chessKey, out);
+        return out;
       } catch {
         return corsJson({ events: [] }, 200, 60);
       }
@@ -2975,9 +3283,14 @@ export default {
       const TITLES = ["league-of-legends", "cs-go", "cs2", "dota-2", "valorant"];
       const ALLOWED_TIERS = ["s", "a"];
       const date = url.searchParams.get("date");
+      const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(date || "");
+      // Every miss spends the PandaScore token's hourly quota. Key on the
+      // parsed date only, so junk params can't bypass the shared copy.
+      const esportsKey = `https://hidescore.com/api/esports${hasDate ? `?date=${date}` : ""}`;
+      const esportsCached = await edgeCacheMatch(esportsKey);
+      if (esportsCached) return esportsCached;
       try {
         const qs = new URLSearchParams({ per_page: "100", sort: "begin_at" });
-        const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(date || "");
         if (hasDate) qs.set("range[begin_at]", `${date}T00:00:00Z,${date}T23:59:59Z`);
         // ⚠️ `/matches` with NO range is every match PandaScore has ever
         // recorded, and `sort=begin_at` is ascending — so the dateless call
@@ -3024,7 +3337,9 @@ export default {
             winnerId: m.winner_id != null ? String(m.winner_id) : null,
           });
         }
-        return corsJson({ games });
+        const out = corsJson({ games });
+        edgeCachePut(ctx, esportsKey, out);
+        return out;
       } catch {
         return corsJson({ games: [] }, 200, 120);
       }
@@ -3112,8 +3427,11 @@ export default {
       if (url.pathname.endsWith("/standings")) return cjson({ children: [] }, 3600);
       if (url.pathname.endsWith("/teams")) return cjson({ items: [] }, 3600);
 
+      // Cache key from the parsed range only: the raw URL let any extra param
+      // (?x=1, ?x=2, …) skip the cache, and each miss is up to 49 ESPN fetches.
       const cache = typeof caches !== "undefined" ? caches.default : null;
-      const cacheKey = new Request(url.toString(), { method: "GET" });
+      const datesKey = (url.searchParams.get("dates") || "").match(/^\d{8}(?:-\d{8})?$/)?.[0] || "";
+      const cacheKey = new Request(`https://hidescore.com/api/cricket-intl${datesKey ? `?dates=${datesKey}` : ""}`, { method: "GET" });
       if (cache) {
         const hit = await cache.match(cacheKey);
         if (hit) return hit;
@@ -3469,8 +3787,7 @@ export default {
     // The plan is Basic: 100 requests/month, HARD-capped, no card on file — so
     // this cannot generate a bill, but it also cannot absorb per-user traffic.
     // Hence the long cache: boxing announces cards 6-8 weeks out and the feed
-    // only carries a handful of events, so hourly is far more than fresh
-    // enough and keeps us near ~24 requests/day worst case.
+    // only carries a handful of events, so a few refreshes a day is enough.
     if (url.pathname === "/api/boxing") {
       if (request.method === "OPTIONS") {
         return new Response(null, {
@@ -3491,36 +3808,30 @@ export default {
           },
         });
       if (!env.BOXING_API_KEY) return corsJson({ events: [], disabled: true }, 200, 300);
+      // 100 calls a month cannot ride on per-browser max-age: every new
+      // visitor (or any crawler) would spend one. Keep ONE global copy in R2
+      // and ask upstream at most once per BOXING_SNAPSHOT_MS (8 h, ≤ 93 calls
+      // in a 31-day month) while upstream answers. Only one request refreshes
+      // at a time (in-isolate promise + R2 lease); the others get the stale
+      // copy. After a failure, no retry for BOXING_RETRY_MS (12 h after a 429).
+      let obj = null;
+      let snap = null;
       try {
-        const host = "boxing-data-api.p.rapidapi.com";
-        const res = await fetch(`https://${host}/v2/events/schedule`, {
-          headers: {
-            "x-rapidapi-host": host,
-            "x-rapidapi-key": env.BOXING_API_KEY,
-            "Content-Type": "application/json",
-          },
-        });
-        // A 429 here means the month's 100 requests are spent. Serve empty and
-        // let the column fall back rather than surfacing an error to the user.
-        if (!res.ok) return corsJson({ events: [] }, 200, 900);
-        const data = await res.json();
-        const events = (data?.data || []).map((e) => ({
-          id: String(e.id || ""),
-          title: String(e.title || ""),
-          date: e.date || null,
-          venue: e.venue || null,
-          location: e.location || null,
-          // `broadcast` is per-country: [{country, broadcasters:[...]}]. Keep
-          // only the US/UK rows — those are the ones Jacob can actually watch.
-          broadcasts: (e.broadcast || [])
-            .filter((b) => ["United States", "United Kingdom"].includes(b?.country))
-            .flatMap((b) => b?.broadcasters || []),
-          poster: e.poster_image_url || null,
-        })).filter((e) => e.id && e.title && e.date);
-        return corsJson({ events });
-      } catch {
-        return corsJson({ events: [] }, 200, 300);
-      }
+        obj = env.DATA ? await env.DATA.get(BOXING_SNAP_KEY) : null;
+        if (obj) snap = await obj.json();
+      } catch { /* no snapshot */ }
+      const fresh = snap && Array.isArray(snap.events) && Date.now() - Number(snap.fetchedAt) < BOXING_SNAPSHOT_MS;
+      if (fresh) return corsJson({ events: snap.events });
+      const stale = snap && Array.isArray(snap.events) ? snap.events : null;
+      // Backoff or another isolate's lease: serve the stale copy.
+      if (snap && Date.now() < Number(snap.retryAt)) return corsJson({ events: stale || [] }, 200, 300);
+      // A refresh is already running in this isolate: serve the stale copy,
+      // or wait for it when there is none yet.
+      if (boxingRefresh) return corsJson({ events: stale || (await boxingRefresh) || [] }, 200, 300);
+      const run = refreshBoxing(env, obj, snap).finally(() => { if (boxingRefresh === run) boxingRefresh = null; });
+      boxingRefresh = run;
+      const events = await run;
+      return events ? corsJson({ events }) : corsJson({ events: stale || [] }, 200, 900);
     }
 
     if (url.pathname === "/api/mlb-videos") {
@@ -4020,6 +4331,9 @@ async function siwaCallback(request, env, url) {
 // ID, so verify against APPLE_APP_BUNDLE_ID. No client_secret / code exchange
 // needed -- the identityToken is already an Apple-signed JWT.
 async function siwaNative(request, env) {
+  // Same-origin only, like the email routes: the app's WebView loads
+  // hidescore.com, so a cross-site POST here is never the app.
+  if (!_hsMutationAllowed(request)) return _siwaJson({ error: "cross_site" }, 403);
   if (!env.SESSION_SECRET) return _siwaJson({ error: "not_configured" }, 503);
   let body;
   try { body = await request.json(); } catch { return _siwaJson({ error: "bad_request" }, 400); }
@@ -4659,6 +4973,7 @@ async function googleCallback(request, env, url) {
 // app-generated PKCE verifier, so another app claiming the same custom scheme
 // cannot redeem an intercepted callback URL.
 async function googleNativeComplete(request, env) {
+  if (!_hsMutationAllowed(request)) return _siwaJson({ error: "cross_site" }, 403);
   if (!env.DATA || !env.SESSION_SECRET) return _siwaJson({ error: "not_configured" }, 503);
   let body;
   try { body = await request.json(); } catch { return _siwaJson({ error: "bad_request" }, 400); }
@@ -4704,7 +5019,8 @@ async function googleNativeComplete(request, env) {
 // The client (components/BracketPicks) keeps a player's own picks and score in
 // localStorage; this is the shared half. KV binding PICKS, one key per entry:
 //
-//   e:<board>:<name key>  → { name, picks, owner, at }   (metadata: name, picks)
+//   e:<board>:<name key>  → { name, picks, owner, at, late?, lateAt? }
+//                            (metadata: n name, p picks, l lateAt on a late entry)
 //   d:<board>:<owner>     → the entry key this device owns
 //   rl:<ip hash>          → POST count, expires after 10 minutes
 //
@@ -4721,6 +5037,12 @@ async function googleNativeComplete(request, env) {
 // with the same rule as lib/mlbPicks lockTimeFrom. Before the lock a GET
 // returns names only, so nobody can copy a bracket; after it, everything.
 //
+// Late brackets (Jacob 10/1): after the lock a device with no on-time entry
+// can still send one, until World Series Game 1. It keeps only picks on series
+// that had not started; an update keeps its earlier picks on series that have
+// started since. Stored with `late: true` and `lateAt` (first late send), which
+// the client scores against: only the series open at lateAt count.
+//
 // Inert until the KV namespace is bound: every call answers 503 {disabled}.
 
 const PICKS_BOARD_RE = /^mlb-(\d{4})$/;
@@ -4733,7 +5055,7 @@ const PICKS_TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
 const PICKS_POST_LIMIT = 10;
 const PICKS_POST_WINDOW = 600; // seconds; KV's own floor is 60
 const PICKS_LOCK_TTL = 10 * 60 * 1000;
-const _picksLockCache = new Map();
+const _picksFeedCache = new Map();
 
 function _picksJson(body, status = 200, maxAge = 0) {
   return new Response(JSON.stringify(body), {
@@ -4787,22 +5109,76 @@ function _picksLockFrom(data) {
   return Number.isFinite(lock) ? lock : null;
 }
 
-// undefined = could not ask; null = MLB has no wild-card games listed.
-async function _picksLock(season) {
-  const hit = _picksLockCache.get(season);
-  if (hit && Date.now() - hit.fetched < PICKS_LOCK_TTL) return hit.at;
+// Mirror of lib/mlbPicks gameAt: first pitch, or noon ET on its date while TBD.
+function _picksGameAt(g) {
+  const t = g.gameDate ? Date.parse(g.gameDate) : NaN;
+  if (!g.status?.startTimeTBD && Number.isFinite(t)) return t;
+  return g.officialDate ? Date.parse(`${g.officialDate}T16:00:00Z`) : NaN;
+}
+
+const _PICKS_ROUND = { F: 0, D: 1, L: 2, W: 3 };
+
+// Mirror of lib/mlbPicks seriesStarts, plus each series' league read off its
+// description ("AL Wild Card Series", "NLDS 'A' Game 1"). Keep the two in sync.
+function _picksStartsFrom(data) {
+  const out = [];
+  for (const s of data?.series || []) {
+    const games = s.games || [];
+    const round = _PICKS_ROUND[games[0]?.gameType];
+    if (round == null) continue;
+    const at = Math.min(...games.map(_picksGameAt).filter(Number.isFinite));
+    if (!Number.isFinite(at)) continue;
+    const teams = new Set();
+    for (const g of games) {
+      for (const id of [g.teams?.home?.team?.id, g.teams?.away?.team?.id]) {
+        if (id != null && PICKS_TEAM_RE.test(String(id))) teams.add(String(id));
+      }
+    }
+    const lg = /^(AL|NL)/.exec(games[0]?.seriesDescription || games[0]?.description || "");
+    out.push({ round, league: lg ? lg[1] : null, teams, at });
+  }
+  return out;
+}
+
+// Has the series behind one pick started? Found by the picked club when the
+// feed already lists it in that round; otherwise only once every series of
+// that round (in that league, when the feed says) has. lib/bracketPicks
+// startedKeys is the client's twin, which finds the series by its seats.
+function _picksStarted(starts, key, team, now) {
+  const round = key === "ws" ? 3 : /:wc-/.test(key) ? 0 : /:ds-/.test(key) ? 1 : 2;
+  const league = key === "ws" ? null : key.slice(0, 2);
+  const inRound = starts.filter((s) => s.round === round);
+  const own = inRound.find((s) => s.teams.has(team));
+  if (own) return own.at <= now;
+  const same = inRound.filter((s) => !league || !s.league || s.league === league);
+  return same.length > 0 && same.every((s) => s.at <= now);
+}
+
+// undefined = could not ask. `lock` null = MLB has no wild-card games listed;
+// `close` (World Series Game 1) null = not listed yet.
+async function _picksFeed(season) {
+  const hit = _picksFeedCache.get(season);
+  if (hit && Date.now() - hit.fetched < PICKS_LOCK_TTL) return hit.feed;
   try {
     const res = await fetch(`https://statsapi.mlb.com/api/v1/schedule/postseason/series?sportId=1&season=${season}`, {
       headers: { "User-Agent": "HideScore/1.0 (+https://hidescore.com)", Accept: "application/json" },
     });
     if (!res.ok) throw new Error(String(res.status));
-    const at = _picksLockFrom(await res.json());
-    _picksLockCache.set(season, { at, fetched: Date.now() });
-    return at;
+    const data = await res.json();
+    const starts = _picksStartsFrom(data);
+    const ws = starts.filter((s) => s.round === 3).map((s) => s.at);
+    const feed = { lock: _picksLockFrom(data), close: ws.length ? Math.min(...ws) : null, starts };
+    _picksFeedCache.set(season, { feed, fetched: Date.now() });
+    return feed;
   } catch {
     // A stale answer beats none: the lock time only ever moves by hours.
-    return hit ? hit.at : undefined;
+    return hit ? hit.feed : undefined;
   }
+}
+
+async function _picksLock(season) {
+  const feed = await _picksFeed(season);
+  return feed ? feed.lock : undefined;
 }
 
 async function _picksListEntries(env, board) {
@@ -4812,7 +5188,9 @@ async function _picksListEntries(env, board) {
     const res = await env.PICKS.list({ prefix: `e:${board}:`, cursor });
     for (const k of res.keys) {
       const m = k.metadata;
-      if (m && typeof m.n === "string" && m.p && typeof m.p === "object") out.push({ name: m.n, picks: m.p });
+      if (m && typeof m.n === "string" && m.p && typeof m.p === "object") {
+        out.push(typeof m.l === "string" ? { name: m.n, picks: m.p, late: true, lateAt: m.l } : { name: m.n, picks: m.p });
+      }
     }
     if (res.list_complete || !res.cursor) break;
     cursor = res.cursor;
@@ -4882,9 +5260,13 @@ async function picksRoute(request, env, ctx, url) {
     if (used >= PICKS_POST_LIMIT) return _picksJson({ error: "throttled" }, 429);
     await env.PICKS.put(rlKey, String(used + 1), { expirationTtl: PICKS_POST_WINDOW });
 
-    const lockAt = await _picksLock(bm[1]);
+    const feed = await _picksFeed(bm[1]);
+    const lockAt = feed?.lock;
     if (lockAt == null) return _picksJson({ error: "lock_unknown" }, 503);
-    if (Date.now() >= lockAt) return _picksJson({ error: "locked", lockAt: new Date(lockAt).toISOString() }, 423);
+    const now = Date.now();
+    const lockedBody = { error: "locked", lockAt: new Date(lockAt).toISOString() };
+    const late = now >= lockAt;
+    if (late && feed.close != null && now >= feed.close) return _picksJson({ ...lockedBody, closed: true }, 423);
 
     const owner = await _picksSha(body.token);
     const entryKey = `e:${board}:${encodeURIComponent(name.toLowerCase())}`;
@@ -4893,17 +5275,34 @@ async function picksRoute(request, env, ctx, url) {
 
     const devKey = `d:${board}:${owner}`;
     const prevKey = await env.PICKS.get(devKey);
-    if (prevKey && prevKey !== entryKey) {
-      const prev = await env.PICKS.get(prevKey, "json");
-      if (prev && prev.owner === owner) await env.PICKS.delete(prevKey);
+    const prevRaw = prevKey ? (prevKey === entryKey ? existing : await env.PICKS.get(prevKey, "json")) : null;
+    const prev = prevRaw && prevRaw.owner === owner ? prevRaw : null;
+
+    let stored = { name, picks, owner };
+    let meta = { n: name, p: picks };
+    if (late) {
+      // An on-time bracket never changes after the lock.
+      if ((existing && !existing.late) || (prev && !prev.late)) return _picksJson(lockedBody, 423);
+      const base = prev && prev.picks && typeof prev.picks === "object" ? prev.picks : {};
+      const kept = {};
+      for (const k of new Set([...Object.keys(picks), ...Object.keys(base)])) {
+        if (picks[k] && !_picksStarted(feed.starts, k, picks[k], now)) kept[k] = picks[k];
+        else if (base[k] && _picksStarted(feed.starts, k, base[k], now)) kept[k] = base[k];
+      }
+      if (!Object.keys(kept).length) return _picksJson({ error: "bad_picks" }, 400);
+      const lateAt = typeof prev?.lateAt === "string" ? prev.lateAt : new Date(now).toISOString();
+      stored = { name, picks: kept, owner, late: true, lateAt };
+      meta = { n: name, p: kept, l: lateAt };
     }
+
+    if (prevKey && prevKey !== entryKey && prev) await env.PICKS.delete(prevKey);
     const at = new Date().toISOString();
-    await env.PICKS.put(entryKey, JSON.stringify({ name, picks, owner, at }), { metadata: { n: name, p: picks } });
+    await env.PICKS.put(entryKey, JSON.stringify({ ...stored, at }), { metadata: meta });
     if (prevKey !== entryKey) await env.PICKS.put(devKey, entryKey);
     if (typeof caches !== "undefined") {
       try { await caches.default.delete(new Request(`https://hidescore.com/api/picks?board=${board}`)); } catch { /* best effort */ }
     }
-    return _picksJson({ ok: true, name, at });
+    return _picksJson(late ? { ok: true, name, at, late: true, lateAt: stored.lateAt, picks: stored.picks } : { ok: true, name, at });
   } catch {
     return _picksJson({ error: "unavailable" }, 503);
   }

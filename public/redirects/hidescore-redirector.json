@@ -1,0 +1,74 @@
+{
+  "createdBy": "HideScore (hidescore.com/how-to-avoid-sports-spoilers)",
+  "createdAt": "2026-10-07T00:00:00.000Z",
+  "redirects": [
+    {
+      "description": "ESPN → HideScore (spoiler-free)",
+      "exampleUrl": "https://www.espn.com/nba/scoreboard",
+      "exampleResult": "https://hidescore.com/",
+      "error": null,
+      "includePattern": "^https?://([a-z0-9-]+\\.)*espn\\.com(/.*)?$",
+      "excludePattern": "",
+      "patternDesc": "Any ESPN page opens HideScore instead. Made by hidescore.com/how-to-avoid-sports-spoilers.",
+      "redirectUrl": "https://hidescore.com/",
+      "patternType": "R",
+      "processMatches": "noProcessing",
+      "disabled": false,
+      "grouped": false,
+      "appliesTo": [
+        "main_frame"
+      ]
+    },
+    {
+      "description": "CBS Sports → HideScore (spoiler-free)",
+      "exampleUrl": "https://www.cbssports.com/nfl/scoreboard/",
+      "exampleResult": "https://hidescore.com/",
+      "error": null,
+      "includePattern": "^https?://([a-z0-9-]+\\.)*cbssports\\.com(/.*)?$",
+      "excludePattern": "",
+      "patternDesc": "Any CBS Sports page opens HideScore instead. Made by hidescore.com/how-to-avoid-sports-spoilers.",
+      "redirectUrl": "https://hidescore.com/",
+      "patternType": "R",
+      "processMatches": "noProcessing",
+      "disabled": false,
+      "grouped": false,
+      "appliesTo": [
+        "main_frame"
+      ]
+    },
+    {
+      "description": "Yahoo Sports → HideScore (spoiler-free)",
+      "exampleUrl": "https://sports.yahoo.com/mlb/scoreboard/",
+      "exampleResult": "https://hidescore.com/",
+      "error": null,
+      "includePattern": "^https?://([a-z0-9-]+\\.)*sports\\.yahoo\\.com(/.*)?$",
+      "excludePattern": "",
+      "patternDesc": "Any Yahoo Sports page opens HideScore instead. Made by hidescore.com/how-to-avoid-sports-spoilers.",
+      "redirectUrl": "https://hidescore.com/",
+      "patternType": "R",
+      "processMatches": "noProcessing",
+      "disabled": false,
+      "grouped": false,
+      "appliesTo": [
+        "main_frame"
+      ]
+    },
+    {
+      "description": "Bleacher Report → HideScore (spoiler-free)",
+      "exampleUrl": "https://bleacherreport.com/nhl",
+      "exampleResult": "https://hidescore.com/",
+      "error": null,
+      "includePattern": "^https?://([a-z0-9-]+\\.)*bleacherreport\\.com(/.*)?$",
+      "excludePattern": "",
+      "patternDesc": "Any Bleacher Report page opens HideScore instead. Made by hidescore.com/how-to-avoid-sports-spoilers.",
+      "redirectUrl": "https://hidescore.com/",
+      "patternType": "R",
+      "processMatches": "noProcessing",
+      "disabled": false,
+      "grouped": false,
+      "appliesTo": [
+        "main_frame"
+      ]
+    }
+  ]
+}

@@ -87,6 +87,7 @@ export const metadata: Metadata = {
 export default function PremierLeagueWithoutSpoilersPage() {
   return (
     <SeoLandingPage
+      teamLeague="premier-league"
       h1="Premier League without spoilers"
       intro={[
         "The Premier League is the hardest league in the world to watch late. Saturday's 12:30 kickoff lands at 7:30 in the morning on the US East Coast, the 3pm block is a wall of simultaneous matches, and by the time most people sit down with the replay the result has already arrived by push alert, group chat, or a scrolling ticker on some other channel.",

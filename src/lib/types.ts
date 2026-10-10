@@ -19,9 +19,15 @@ export interface Game {
   homeTeam: Team;
   awayTeam: Team;
   broadcasts: string[]; // ["ESPN", "TBS"]
+  // ESPN radio media short names from competition.geoBroadcasts type 5
+  // ("ERADM" = national ESPN Radio). Mapped to a player link by lib/radio.ts.
+  radio?: string[];
   venue: string;
   // Game quality rating (0-100) based on score closeness
   rating: number | null;
+  // Finished games rated 100 only: how far the uncapped sum went past 100
+  // (lib/espn.ts calculateRating). The top games spans' tie-break.
+  ratingExcess?: number;
   // Live games only: fraction of regulation played [0,1]. Sort tiebreak — of
   // two live games with the same rating, the later one sits higher. Never
   // changes the badge.
@@ -47,9 +53,10 @@ export interface Game {
   // Whether this is a playoff/postseason/tournament game
   isPlayoff: boolean;
   // ESPN season.type 1 — an exhibition, not a game that counts. Currently only
-  // the NFL reaches the app with these: every other sport's type-1 slate is
-  // filtered out at the fetch (see eventsToGames), while the NFL keeps its
-  // preseason because LEAGUES carries a dedicated "NFL Preseason" column for it.
+  // the NFL and the NBA reach the app with these: every other sport's type-1
+  // slate is filtered out at the fetch (see eventsToGames), while those two keep
+  // their preseason because LEAGUES carries dedicated "NFL Preseason" and
+  // "NBA Preseason" columns for it.
   //
   // Carried on the game rather than inferred from the column because the column
   // is not always there to say it. A team's schedule (TeamView) lists preseason,
@@ -67,6 +74,10 @@ export interface Game {
   seriesStatus: string | null;
   // Recap link
   recapUrl: string | null; // ESPN gamecast URL
+  // ESPN's box score page (the event link whose rel includes "boxscore").
+  // Shows the score, so the detail popup only opens it behind a warning
+  // (BoxScoreDialog). Optional: only the ESPN scoreboard parser sets it.
+  boxscoreUrl?: string | null;
   // NHL.com condensed-game + recap videos (finished NHL games only). Sourced
   // from the NHL API via the /api/nhl-videos worker proxy. Each has a *Url
   // (the nhl.com page — modal "Open on NHL.com" fallback) and a *Embed
@@ -257,6 +268,7 @@ export interface LeagueEventCard {
   statusDetail: string;     // "Race" / "Fight Night" / "Live" / "Final"
   date: string;             // ISO of the headline session (race / main card)
   broadcasts: string[];
+  radio?: string[];         // ESPN radio short names, as Game.radio
   boutCount?: number;       // UFC: total fights on the card
   // UFC only: every bout on the card, main event first → prelims. Each renders
   // as its own card. ESPN has no fight-quality score, so order = card order.
@@ -359,4 +371,7 @@ export interface LeagueData {
   // ESPN front page on a past date: "day" = that day's snapshot, "fallback" =
   // no snapshot, so today's strip leagues stand in. Unset on today's board.
   espnSnapshot?: "day" | "fallback";
+  // The empty-column line when the default one is wrong (the Best column on a
+  // longer span: "No rated games this week yet").
+  emptyLabel?: string;
 }

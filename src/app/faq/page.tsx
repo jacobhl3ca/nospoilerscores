@@ -55,13 +55,19 @@ const FAQ: { q: string; a: string; links?: FaqLink[] }[] = [
     q: "How can I watch sports highlights without spoilers?",
     a: "Open HideScore before checking search, YouTube, league apps, or social feeds. No score or winner is written on the board, the optional ratings help you pick the best finished games, and each game card links to recap or condensed highlights when available.",
   },
+  // Added 2026-10-07 with the guide it links to.
+  {
+    q: "How do I avoid spoilers outside HideScore?",
+    a: "Most spoilers come from your phone, not a scores site: turn off score alerts in ESPN, Apple Sports and your team's app, mute the team name on X and Threads, clear sports widgets and Live Activities from the lock screen, and block or redirect the sites you open by habit. Every step is in",
+    links: [{ href: "/how-to-avoid-sports-spoilers", text: "how to avoid sports spoilers everywhere else" }],
+  },
   {
     q: "Which sports and leagues does HideScore cover?",
     a: "HideScore covers the NBA, WNBA, MLB, NHL, NFL, college basketball and football, golf, tennis, motorsports, combat sports, cricket, rugby union, the NRL, the AFL, the CFL, chess, poker, competition climbing, and soccer. Soccer includes the Premier League, MLS, Champions League, Europa League, Conference League, La Liga, Serie A, Bundesliga, Ligue 1, Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, the UEFA Nations League, and major international tournaments.",
   },
   {
     q: "Why don't I see a league on the main screen?",
-    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round in the In season and Offseason groups, and saved offseason picks return automatically when play resumes. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
+    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round in the In season and Offseason groups, and a column you pick keeps its league in the offseason: it shows when the league returns and its news, and you can close it from the column. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
   },
   {
     q: "How do the separate soccer leagues work?",

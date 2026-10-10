@@ -91,6 +91,7 @@ export const metadata: Metadata = {
 export default function NhlScoresWithoutSpoilersPage() {
   return (
     <SeoLandingPage
+      teamLeague="nhl"
       h1="NHL scores without spoilers"
       intro={[
         "Hockey has a scheduling problem that no other league quite matches: a normal night runs from a 5:00 pm Eastern puck drop to a 10:30 pm one out west, so the games finish across an eight-hour span. If you are following more than one team, something has always already ended by the time you sit down — and the result reaches you by push alert, ticker, or group chat long before the game does.",

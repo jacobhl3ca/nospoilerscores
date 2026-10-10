@@ -54,6 +54,8 @@ public class WidgetParserTest {
         assertEquals("GB", g.home);
         assertEquals("FOX", g.channel);
         assertEquals(WidgetParser.parseIso("2026-10-11T17:00Z"), g.startMs);
+        assertEquals("/i/teamlogos/nfl/500/scoreboard/chi.png", g.awayLogo);
+        assertEquals("/i/teamlogos/nfl/500/scoreboard/gb.png", g.homeLogo);
     }
 
     @Test
@@ -104,7 +106,7 @@ public class WidgetParserTest {
         JSONObject cached = g.toJson();
         Set<String> keys = new HashSet<>();
         for (Iterator<String> it = cached.keys(); it.hasNext(); ) keys.add(it.next());
-        assertEquals(ids("id", "league", "away", "home", "channel", "start"), keys);
+        assertEquals(ids("id", "league", "away", "home", "channel", "start", "awayLogo", "homeLogo", "d"), keys);
     }
 
     @Test
@@ -130,10 +132,10 @@ public class WidgetParserTest {
             .put("leagues", new JSONObject()
                 .put("mlb", new JSONObject().put("label", "MLB").put("post", mlb.postseason))
                 .put("nfl", new JSONObject().put("label", "NFL").put("post", false)));
-        List<WidgetRows.Row> rows = WidgetRows.fromCache(cache, TimeZone.getTimeZone("America/New_York"), 0);
-        // Mask row, one day header (all games share a start), the games.
-        assertEquals(1 + 1 + nfl.games.size(), rows.size());
-        assertEquals("Playoffs: open HideScore", rows.get(0).teams);
+        List<WidgetRows.Row> rows = WidgetRows.items(cache, TimeZone.getTimeZone("America/New_York"), 0);
+        // One day header (all games share a start), the games, then the mask row.
+        assertEquals(1 + nfl.games.size() + 1, rows.size());
+        assertEquals("Playoffs: open HideScore", rows.get(rows.size() - 1).teams);
         for (WidgetRows.Row row : rows) {
             for (String cell : row.cells()) assertFalse(cell, SPOILER.matcher(cell).find());
         }
@@ -154,7 +156,7 @@ public class WidgetParserTest {
             .put(game("old", "ESPN", WidgetParser.parseIso("2026-10-05T15:00Z")));              // started
         JSONObject cache = new JSONObject().put("games", games)
             .put("leagues", new JSONObject().put("nhl", new JSONObject().put("label", "NHL").put("post", false)));
-        List<WidgetRows.Row> rows = WidgetRows.fromCache(cache, ny, now);
+        List<WidgetRows.Row> rows = WidgetRows.items(cache, ny, now);
         assertEquals(6, rows.size());
         assertEquals("Today", rows.get(0).teams);
         assertEquals("7:30 PM", rows.get(1).time);
@@ -173,7 +175,7 @@ public class WidgetParserTest {
         // Never more than 6 games however tall.
         JSONArray many = new JSONArray();
         for (int i = 0; i < 10; i++) many.put(game("g" + i, "ESPN", now + 3_600_000L * (i + 1)));
-        List<WidgetRows.Row> tall = WidgetRows.fit(WidgetRows.fromCache(new JSONObject().put("games", many), ny, now), 2000);
+        List<WidgetRows.Row> tall = WidgetRows.fit(WidgetRows.items(new JSONObject().put("games", many), ny, now), 2000);
         int shown = 0;
         for (WidgetRows.Row r : tall) if (r.kind != WidgetRows.Kind.DAY) shown++;
         assertEquals(WidgetRows.MAX_GAMES, shown);

@@ -366,14 +366,14 @@ test("Tomorrow has no front page yet: the slot shows its Auto league", async ({ 
 });
 
 // Turned off in Settings' switcher list: it leaves the switcher and a column
-// pinned to it shows a league instead, same as Best of yesterday.
-test("ESPN front page turned off: the pinned column shows a league and the switcher drops it", async ({ page }) => {
+// pinned to it closes (Jacob 10/8), same as Best of yesterday.
+test("ESPN front page turned off: the pinned column closes and the switcher drops it", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page, { hiddenLeagues: ["best", "top"] });
   await page.goto("/");
   await expect(page.locator('[data-league-column="mlb"]')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('[data-league-column="top"]')).toHaveCount(0);
-  await expect(page.locator("[data-league-column]")).toHaveCount(3);
+  await expect(page.locator("[data-league-column]")).toHaveCount(2);
   await page.locator('button[title="Switch league"]').first().click();
   const menu = page.getByRole("dialog", { name: "Switch league" }).first();
   await expect(menu.getByRole("button", { name: "Auto" })).toBeVisible();
@@ -451,4 +451,36 @@ test("ESPN front page: with no free column, a picked column takes the league", a
   expect(saved.shownLeagues ?? []).toContain("nhl");
   // Adding also lifts a catalog strike.
   expect(saved.catalogHiddenLeagues).toBeUndefined();
+});
+
+// Jacob 10/9: a league that already has a column on the board shows its plain
+// label. "MLB +" next to the MLB column only opened a useless Add popover.
+test("ESPN front page: a league that already has a column shows no +", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seed(page);
+  await page.goto("/");
+  const col = page.locator('[data-league-column="top"]');
+  await expect(col).toBeVisible({ timeout: 30_000 });
+  await expect(cards(page)).toHaveCount(4, { timeout: 15_000 });
+  await expect(col.locator('[data-espn-league="mlb"]').getByText("MLB", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add MLB to a column" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add NHL to a column" })).toHaveCount(1);
+});
+
+// The lead block's label sits in the recap row when a sibling (here MLB's
+// Playoffs pill) holds one, and that row label is the one that wore the "+".
+test("ESPN front page: the lead label of a league with a column is not clickable", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seed(page, { secondLeague: "ncaaf" });
+  await page.goto("/");
+  const col = page.locator('[data-league-column="top"]');
+  await expect(col).toBeVisible({ timeout: 30_000 });
+  await expect(cards(page)).toHaveCount(4, { timeout: 15_000 });
+  const label = col.getByText("NCAAF", { exact: true }).first();
+  await expect(label).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add NCAAF to a column" })).toHaveCount(0);
+  await expect(col.getByRole("button", { name: /^NCAAF\b/ })).toHaveCount(0);
+  await label.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add NHL to a column" })).toHaveCount(1);
 });

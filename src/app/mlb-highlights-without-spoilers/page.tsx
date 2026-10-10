@@ -61,6 +61,7 @@ export const metadata: Metadata = {
 export default function MlbHighlightsWithoutSpoilersPage() {
   return (
     <SeoLandingPage
+      teamLeague="mlb"
       h1="MLB highlights without spoilers"
       intro={[
         "Baseball is a daily sport, which means there is always another final score waiting to spoil a game you planned to watch later.",

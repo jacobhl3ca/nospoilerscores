@@ -1,9 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home-screen widget. Same palette as hidescore.com (globals.css bg and text). -->
+<!-- Home-screen widget. Same palette as hidescore.com (globals.css bg and text).
+     widget_* follow the system (values-night aliases the dark set); the
+     light and dark sets are for the app's Theme pills (WidgetTheme). -->
 <resources>
-    <color name="widget_bg">#FFFFFF</color>
-    <color name="widget_text">#111111</color>
-    <color name="widget_muted">#666666</color>
-    <color name="widget_chip_bg">#EBEBEB</color>
-    <color name="widget_accent">#2563EB</color>
+    <color name="widget_light_bg">#FFFFFF</color>
+    <color name="widget_light_text">#111111</color>
+    <color name="widget_light_muted">#666666</color>
+    <color name="widget_light_chip_bg">#EBEBEB</color>
+    <color name="widget_light_accent">#2563EB</color>
+
+    <color name="widget_dark_bg">#161616</color>
+    <color name="widget_dark_text">#EDEDED</color>
+    <color name="widget_dark_muted">#9CA3AF</color>
+    <color name="widget_dark_chip_bg">#2A2A2A</color>
+    <color name="widget_dark_accent">#60A5FA</color>
+
+    <color name="widget_bg">@color/widget_light_bg</color>
+    <color name="widget_text">@color/widget_light_text</color>
+    <color name="widget_muted">@color/widget_light_muted</color>
+    <color name="widget_chip_bg">@color/widget_light_chip_bg</color>
+    <color name="widget_accent">@color/widget_light_accent</color>
 </resources>

@@ -218,7 +218,9 @@ function fallbackForcesTitleMask(fallbackUrl: string): boolean {
 // bake found refusing every embed while it plays on youtube.com (LaLiga,
 // Ligue 1): `nss_embed_blocked=1` opens straight on the "Watch on YouTube"
 // card, the per-video twin of leadChannelBlocksEmbeds; `nss_title_score=1`
-// adds a line on that card saying the YouTube title shows the score.
+// adds a line on that card saying the YouTube title shows the score. The SEC's
+// volleyball cuts (sportChannelBlocksEmbeds) carry `nss_embed_blocked=1` too,
+// plus `nss_desc_result=1`: their YouTube description opens with the result.
 function fallbackFlag(fallbackUrl: string, name: string): boolean {
   try {
     return new URL(fallbackUrl).searchParams.get(name) === "1";
@@ -2541,6 +2543,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   <p className="text-white/85 text-sm sm:text-base font-medium max-w-xs leading-snug">This highlight can’t play here — the league blocked embedded playback.</p>
                   {fallbackFlag(fallbackUrl, "nss_title_score") && (
                     <p className="text-white/60 text-xs sm:text-sm max-w-xs leading-snug">Heads up: YouTube shows the score in this video’s title.</p>
+                  )}
+                  {fallbackFlag(fallbackUrl, "nss_desc_result") && (
+                    <p className="text-white/60 text-xs sm:text-sm max-w-xs leading-snug">Heads up: YouTube’s description of this video gives the result.</p>
                   )}
                   {/* One-tap jump to another version of the same game (e.g. the
                       Telemundo cut) — often embeddable when the FOX/FIFA one isn't.
