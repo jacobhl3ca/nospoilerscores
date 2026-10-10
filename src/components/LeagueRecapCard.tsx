@@ -80,10 +80,13 @@ export function reviewHeadings(season: number): string[] {
   return [`${season} in review`, `\u2019${String(season).slice(-2)} review`];
 }
 
+const NO_RECORDS: RecapRecord[] = [];
+
 export default function LeagueRecapCard({
   sport,
   date,
   lastPlayedDate,
+  noRecap = false,
   reserveSlot = false,
   onShowPlayoffs,
   hidePlayoffOdds = false,
@@ -99,6 +102,11 @@ export default function LeagueRecapCard({
   // — the NFL Week-1 card must follow that slate through the Tue/Wed the cut
   // posts on. YYYYMMDD, same format as `date`.
   lastPlayedDate?: string | null;
+  // "Only my teams" left the column with no games (Jacob 10/9): no recap
+  // buttons, so a league-wide cut never sits over "No games for your teams".
+  // The Playoffs / review pills and the reserved row still follow their own
+  // rules.
+  noRecap?: boolean;
   // A sibling column on the same side-by-side board shows a pill. With no
   // records of our own, render an invisible row of the same height so the
   // first game cards of every column sit at the same y — the same idea as
@@ -125,7 +133,8 @@ export default function LeagueRecapCard({
   // fetches it with the scores — so the pill is in the column's first paint.
   // Only a cold cache (a direct deep link before that fetch resolves) waits for
   // the effect below.
-  const [records, setRecords] = useState<RecapRecord[]>(() => getRecapsForSync(sport, ymd) ?? []);
+  const [loaded, setRecords] = useState<RecapRecord[]>(() => getRecapsForSync(sport, ymd) ?? []);
+  const records = noRecap ? NO_RECORDS : loaded;
   const [prevKey, setPrevKey] = useState(`${sport}|${ymd}`);
   // Stacked (narrow) until measured — the phone is the case that breaks, so
   // the first paint must not be the one-row layout. A callback ref rather

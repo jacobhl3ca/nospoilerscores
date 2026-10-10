@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   applyFavoritesFilter,
   favCountForSport,
+  favoritesEmptied,
   favoritesMode,
   filterLeague,
   involvesFavorite,
@@ -83,4 +84,29 @@ test("a league with no lookahead keeps it absent, not null", () => {
   const raw = mlb({ nextGameDay: undefined });
   const L = applyFavoritesFilter(raw, filterLeague(raw, ["mlb-21"], true, []));
   assert.equal(L.nextGameDay, undefined);
+});
+
+// The recap pill's test (Jacob 10/9): true exactly when the column draws its
+// "No games for your teams" / "none starred" cell.
+test("favoritesEmptied matches the column's empty cell", () => {
+  const empty = (L: LeagueData, favs: string[], past: boolean, strict: Sport[] = []) =>
+    favoritesEmptied(L, filterLeague(L, favs, true, strict), past);
+  // mlb-8 played only in the lookback: it keeps the "Last played" slate.
+  assert.equal(empty(mlb(), ["mlb-8"], true), false);
+  // mlb-99 is in no list: emptied, past tab or today.
+  assert.equal(empty(mlb(), ["mlb-99"], true), true);
+  assert.equal(empty(mlb(), ["mlb-99"], false), true);
+  // mlb-5 plays only tomorrow: today shows that game; a past tab of a
+  // started league shows the empty cell.
+  assert.equal(empty(mlb(), ["mlb-5"], false), false);
+  assert.equal(empty(mlb(), ["mlb-5"], true), true);
+  // A past tab of a league that has not started shows its first games.
+  assert.equal(empty(mlb({ games: [], previousGameDay: null }), ["mlb-5"], true), false);
+  // Starred team plays on the day: never emptied.
+  assert.equal(empty(mlb(), ["mlb-21"], true), false);
+  // Strict with nobody starred: emptied. Banner and off: never.
+  assert.equal(empty(mlb(), [], true, ["mlb"]), true);
+  assert.equal(empty(mlb(), [], true), false);
+  const L = mlb();
+  assert.equal(favoritesEmptied(L, filterLeague(L, ["mlb-99"], false, []), true), false);
 });
