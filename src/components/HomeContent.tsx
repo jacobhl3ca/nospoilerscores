@@ -60,6 +60,8 @@ import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
 import { fetchPlayoffPicture, fieldIsSet } from "@/lib/playoffPicture";
+import { fetchNflPicture } from "@/lib/nflPlayoffPicture";
+import { nflClinchSnapshot, type ClinchSnapshot } from "@/lib/eliminatedFold";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
 import { OFFLINE_BOARD_KEY, formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
@@ -2412,6 +2414,20 @@ export default function HomeContent({
     () => upcomingRecordLeagues({ upcomingRecordLeagues: prefs.upcomingRecordLeagues, hideUpcomingRecords: prefs.hideUpcomingRecords }),
     [prefs.upcomingRecordLeagues, prefs.hideUpcomingRecords],
   );
+
+  // "Fold games with no playoff stakes": ESPN's NFL standings, read only while
+  // the setting is on. Fetched again on a date change once an hour old; a
+  // failed fetch leaves null, and nothing folds (lib/eliminatedFold.ts).
+  const [nflClinch, setNflClinch] = useState<ClinchSnapshot | null>(null);
+  const nflClinchAt = nflClinch?.at ?? 0;
+  useEffect(() => {
+    if (!prefs.foldEliminatedGames || Date.now() - nflClinchAt < 60 * 60 * 1000) return;
+    const ctrl = new AbortController();
+    fetchNflPicture(ctrl.signal)
+      .then((p) => { if (p) setNflClinch(nflClinchSnapshot(p, Date.now())); })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [prefs.foldEliminatedGames, selectedDate, nflClinchAt]);
 
   const teamLeagueOptions = useMemo(() => {
     const seen = new Set<Sport>();
@@ -5053,6 +5069,7 @@ export default function HomeContent({
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
               upcomingRecordLeagues: recordLeagues,
+              foldClinch: prefs.foldEliminatedGames ? nflClinch : null,
               onAbbrevReport,
               namesCompact,
             };

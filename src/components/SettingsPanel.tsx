@@ -910,6 +910,7 @@ export default function SettingsPanel({
     upcomingRecordLeagues: undefined,
     hideUpcomingRecords: undefined,
     hideRanks: undefined,
+    foldEliminatedGames: undefined,
     // Reset means "act like a fresh install", and on a fresh install the
     // stars are on for two visits before the app hides them itself. Leaving
     // the counter at 3 would re-hide them on the very next open, which reads
@@ -1641,6 +1642,12 @@ export default function SettingsPanel({
               hint="The #8 by a team name, and bracket seeds"
               checked={!prefs.hideRanks}
               onChange={(v) => updatePrefs({ hideRanks: !v })}
+            />
+            <ToggleRow
+              label="Fold games with no playoff stakes"
+              hint="Games between two teams already out of the playoffs fold into one row."
+              checked={!!prefs.foldEliminatedGames}
+              onChange={(v) => updatePrefs({ foldEliminatedGames: v ? true : undefined })}
             />
           </Section>
 

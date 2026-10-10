@@ -443,6 +443,10 @@ export interface Preferences {
   // gets none — see upcomingRecordLeagues() in lib/upcomingRecords.ts. Nothing
   // writes it any more except a clear on the first league pick.
   hideUpcomingRecords?: boolean;
+  // "Fold games with no playoff stakes" (Jacob 9/24, rule 10/9): an NFL game
+  // between two eliminated teams folds into one tap-to-open row at the end of
+  // its day. Opt-in, undefined = off. See lib/eliminatedFold.ts.
+  foldEliminatedGames?: boolean;
   // "Add the World Cup column" banner dismissed (only shows during the
   // tournament when no visible column is the World Cup).
   wcBannerDismissed?: boolean;
