@@ -43,6 +43,9 @@ export default function FeedbackBox({
 }: { openSignal?: number; prefill?: string; label?: string; seed?: string; hideTrigger?: boolean } = {}) {
   const [text, setText] = useState("");
   const [email, setEmail] = useState("");
+  // Opt-in credit for the "Built from your requests" list on /contact
+  // (2026-10-09). Typing initials here is the consent to be thanked by them.
+  const [initials, setInitials] = useState("");
   const [sent, setSent] = useState(false);
   const [open, setOpen] = useState(false);
   // Seeded from the parent's initial value so the FIRST render is never treated
@@ -64,6 +67,7 @@ export default function FeedbackBox({
   const close = () => {
     setText("");
     setEmail("");
+    setInitials("");
     setOpen(false);
   };
 
@@ -150,10 +154,12 @@ export default function FeedbackBox({
     const message = text.trim();
     if (!message) return;
     const replyTo = EMAIL_RX.test(trimmedEmail) ? trimmedEmail : "";
+    const credit = initials.trim();
     setSent(true); // optimistic — the box is throwaway, no error UI needed
     setOpen(false);
     setText("");
     setEmail("");
+    setInitials("");
     try {
       await fetch(FORMSPREE_ENDPOINT, {
         method: "POST",
@@ -165,6 +171,7 @@ export default function FeedbackBox({
           // every submission arrives anonymous and unanswerable (which is
           // exactly what happened to the 2026-08-03 leagues request).
           ...(replyTo ? { email: replyTo, _replyto: replyTo } : {}),
+          ...(credit ? { initials: credit } : {}),
           _subject: replyTo ? `HideScore feedback from ${replyTo}` : "HideScore feedback",
           source: "hidescore.com",
           // Which build, and whether this came from the app or a browser. The
@@ -325,6 +332,28 @@ export default function FeedbackBox({
             // a team-name filter). No behavior change on desktop.
             enterKeyHint="send"
             autoComplete="off"
+            className="w-full text-sm px-3 py-2 rounded outline-none"
+            style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
+          />
+          <label htmlFor="hs-feedback-initials" className="sr-only">
+            Initials for the thanks list (optional)
+          </label>
+          <input
+            id="hs-feedback-initials"
+            type="text"
+            value={initials}
+            onChange={(e) => setInitials(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                close();
+              }
+            }}
+            placeholder="Initials for the thanks list (optional)"
+            maxLength={6}
+            autoComplete="off"
+            autoCapitalize="characters"
+            enterKeyHint="send"
             className="w-full text-sm px-3 py-2 rounded outline-none"
             style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
           />
