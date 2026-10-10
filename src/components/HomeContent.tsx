@@ -8,6 +8,7 @@ import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, NewsLayout, type NewsCardPrefs, type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
+import { mergeAddMorePicks } from "@/lib/addMorePicks";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
@@ -2397,7 +2398,7 @@ export default function HomeContent({
   // way Settings' catalog judges it (against today), in the first-run
   // picker's popularity order. The sheet itself hides the offseason pills
   // until its toggle is on. Settings-style, a turned-off league is listed
-  // too, and picking it turns it back on (see pickAddMore).
+  // too, and picking it turns it back on (see addFromAddMore).
   const addMoreOptions = useMemo(
     () => [...settingsLeagueOptions].sort((a, b) => pickerRank(a.sport) - pickerRank(b.sport)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pickerRank reads only the literal PICKER_RANK
@@ -2595,29 +2596,45 @@ export default function HomeContent({
     });
   };
 
-  // A tap in the Add more… sheet does what the dropdown row for that column
-  // does. Like pinning in Settings, picking a turned-off league turns it back
-  // on — otherwise the column would show the next league instead. News
-  // column 3 only keeps a pick that is in the news switcher, so a league from
-  // outside it (an opt-in or offseason one) is added to shownLeagues too.
-  const pickAddMore = (sport: Sport) => {
+  // The Add more… sheet's Add (Jacob 10/1: "multi select", "add btn"). The
+  // sheet splits the picks (planAddMorePicks). The column's pick (`now[0]`) does
+  // what the dropdown row for that column does; the other in-season picks
+  // join the column's league list, so its ‹ › arrows and dropdown reach them.
+  // The other offseason picks show nowhere until their season starts, so
+  // they are only saved (the sheet's note says so). No column opens. Like pinning in
+  // Settings, every pick comes back on if it was turned off — otherwise the
+  // column would show the next league instead. News column 3 only keeps a
+  // pick that is in the news switcher, so a first pick from outside it (an
+  // opt-in one) is added to shownLeagues too.
+  const addFromAddMore = (now: Sport[], later: Sport[]) => {
     const target = addMoreFor;
     setAddMoreFor(null);
-    if (!target) return;
-    const hidden = prefs.hiddenLeagues ?? [];
-    const struck = prefs.catalogHiddenLeagues ?? [];
-    const unhide: Partial<Preferences> = {
-      ...(hidden.includes(sport) ? { hiddenLeagues: hidden.length > 1 ? hidden.filter((s) => s !== sport) : undefined } : {}),
-      ...(struck.includes(sport) ? { catalogHiddenLeagues: struck.length > 1 ? struck.filter((s) => s !== sport) : undefined } : {}),
-      ...(prefs.removedLeagues?.includes(sport) ? { removedLeagues: dropRemoved(prefs.removedLeagues, sport) } : {}),
+    const picks = [...now, ...later];
+    const first = now[0];
+    if (!target || !picks.length) return;
+    const pinned = savedSlotPrefs();
+    // In the switcher once its hides are lifted (switcherOptions' own rule).
+    const listedWhenShown = (sport: Sport) =>
+      !!thirdLeagueOptions.find((o) => o.sport === sport)?.defaultInSwitcher
+      || pinned.includes(sport)
+      || prefs.favoriteLeagues.includes(sport);
+    const lists = {
+      hiddenLeagues: prefs.hiddenLeagues,
+      catalogHiddenLeagues: prefs.catalogHiddenLeagues,
+      removedLeagues: prefs.removedLeagues,
+      shownLeagues: prefs.shownLeagues,
     };
-    if (target.kind === "news" && target.slotIdx === 2) {
-      const shown = prefs.shownLeagues ?? [];
-      const inSwitcher = newsSwitcherOptions.some((o) => o.sport === sport) || shown.includes(sport);
-      setNewsThirdLeague(sport, target.autoId ?? "espn", inSwitcher ? unhide : { ...unhide, shownLeagues: [...shown, sport] });
+    if (!first) {
+      updatePrefs(mergeAddMorePicks(picks, lists, listedWhenShown));
       return;
     }
-    setSlotLeague(target.slotIdx, sport, unhide);
+    if (target.kind === "news" && target.slotIdx === 2) {
+      const patch = mergeAddMorePicks(picks, lists, (s) =>
+        s === first ? newsSwitcherOptions.some((o) => o.sport === s) : listedWhenShown(s));
+      setNewsThirdLeague(first, target.autoId ?? "espn", patch);
+      return;
+    }
+    setSlotLeague(target.slotIdx, first, mergeAddMorePicks(picks, lists, (s) => s === first || listedWhenShown(s)));
   };
   const leagueLabelFor = (sport: Sport) =>
     thirdLeagueOptions.find((o) => o.sport === sport)?.label
@@ -5861,15 +5878,18 @@ export default function HomeContent({
         />
       )}
 
-      {/* A column switcher's Add more… (Jacob 9/29): the same sheet, one tap
-          switches the column. */}
+      {/* A column switcher's Add more… (Jacob 9/29): the same sheet. Tap
+          several pills, then one Add (Jacob 10/1). */}
       {addMoreFor && (
         <LeaguePickerModal
           title="More leagues"
           options={addMoreOptions}
-          mode="single"
+          mode="add"
           selected={addMoreFor.current ? [addMoreFor.current] : []}
-          onPick={pickAddMore}
+          onAdd={addFromAddMore}
+          // resolveSlot keeps NBA as the one offseason slot pin; news column
+          // 3 keeps any pick through shownLeagues.
+          columnTakes={(s) => (addMoreFor.kind === "news" && addMoreFor.slotIdx === 2) || s === "nba"}
           onClose={() => setAddMoreFor(null)}
           showOffseason={!!prefs.showOffseasonInPicker}
           onToggleOffseason={() => updatePrefs({ showOffseasonInPicker: prefs.showOffseasonInPicker ? undefined : true })}
