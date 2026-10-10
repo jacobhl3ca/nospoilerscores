@@ -13,7 +13,7 @@ import { mergeAddMorePicks } from "@/lib/addMorePicks";
 import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
-import { filterLeague } from "@/lib/favoritesFilter";
+import { applyFavoritesFilter, favoritesEmptied, filterLeague } from "@/lib/favoritesFilter";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import { LeaguePickerModal } from "./LeaguePickerModal";
@@ -3243,6 +3243,18 @@ export default function HomeContent({
   // (sport, ymd) rule as recapTopCard, same slot → league queue as
   // slotEntries — so every LeagueRecapCard can reserve the row. Cheap:
   // getRecapsFor reads the session-cached /news/recaps.json.
+  // The recap pill reads the league as its column draws it under "Only my
+  // teams" (Jacob 10/9): the "Last played" date follows the filtered slate,
+  // and a column the filter left empty gets no recap.
+  const favStrict = prefs.favoritesOnlyStrict ?? NO_FAV_STRICT;
+  const recapView = (league: LeagueData) => {
+    const f = filterLeague(league, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict);
+    const shown = applyFavoritesFilter(league, f);
+    return {
+      lastPlayedDate: shown.games.length ? null : shown.previousGameDay?.date,
+      emptied: favoritesEmptied(league, f, selectedDate < getDateString(0)),
+    };
+  };
   const recapQueryKey = (() => {
     if (selectedDate > getDateString(0)) return "";
     const queue = [...sortedLeagues];
@@ -3251,7 +3263,9 @@ export default function HomeContent({
       if (selectedSlotLeagues[slotIdx] === "empty") continue;
       const league = queue.shift();
       if (!league) continue;
-      const ymd = (league.games.length ? null : league.previousGameDay?.date) || selectedDate;
+      const view = recapView(league);
+      if (view.emptied) continue;
+      const ymd = view.lastPlayedDate || selectedDate;
       pairs.push(`${league.sport}:${ymd}`);
     }
     return pairs.join(",");
@@ -5010,7 +5024,6 @@ export default function HomeContent({
             // "Only my teams" decides the Final split on the games the columns
             // will actually draw, or a column could show a "Final" header with
             // no cards under it.
-            const favStrict = prefs.favoritesOnlyStrict ?? NO_FAV_STRICT;
             const shownGames = (l: LeagueData) => filterLeague(l, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
             const hasNonFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state !== "post"));
             const hasFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state === "post"));
@@ -5094,12 +5107,15 @@ export default function HomeContent({
             // the one day it must NOT appear — the live football Sunday — is
             // held out by the record's own skipDays, not by a rule here.
             // Tomorrow and later stay clear.
-            const recapTopCard = (league: LeagueData) => isPast || isToday
-              ? (
+            const recapTopCard = (league: LeagueData) => {
+              if (!isPast && !isToday) return undefined;
+              const view = recapView(league);
+              return (
                 <LeagueRecapCard
                   sport={league.sport}
                   date={selectedDate}
-                  lastPlayedDate={league.games.length ? null : league.previousGameDay?.date}
+                  lastPlayedDate={view.lastPlayedDate}
+                  noRecap={view.emptied}
                   reserveSlot={reserveRecapSlot}
                   onShowPlayoffs={bracketPillDue && league.sport === "mlb"
                     ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
@@ -5112,8 +5128,8 @@ export default function HomeContent({
                   reviewSections={reviewSections}
                   onPlayList={playNewsVideo}
                 />
-              )
-              : undefined;
+              );
+            };
             // The ESPN front page has no recap or pill of its own, so where the
             // board reserves the row its top card is only the spacer, and its
             // first league label takes that row (see LeagueColumn leadLabelSlot).

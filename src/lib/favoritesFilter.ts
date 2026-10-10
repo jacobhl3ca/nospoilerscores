@@ -81,3 +81,16 @@ export function applyFavoritesFilter(league: LeagueData, f: FilteredLeague): Lea
     previousGameDay: league.previousGameDay && f.prevGames.length ? { ...league.previousGameDay, games: f.prevGames } : league.previousGameDay ? null : league.previousGameDay,
   };
 }
+
+// True when "Only my teams" leaves the column with its empty cell ("No games
+// for your teams" or "No … team starred yet"): the same test as those two
+// branches in LeagueColumn. The recap pill reads it so a league-wide cut
+// never sits over a column with no games (Jacob 10/9).
+export function favoritesEmptied(league: LeagueData, f: FilteredLeague, isPastDate: boolean): boolean {
+  if (f.mode === "strict-empty") return true;
+  if (f.mode !== "filter" || f.games.length > 0 || f.prevGames.length > 0) return false;
+  if (!isPastDate) return f.nextGames.length === 0;
+  // A past tab of a league that has not started yet shows its first games
+  // instead (LeagueColumn notStartedDate, read off the raw lookback).
+  return !(!league.previousGameDay?.games?.length && f.nextGames.length > 0);
+}
