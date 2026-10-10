@@ -20,7 +20,7 @@ const espn = await jiti.import<{
     bestOpts: undefined,
     hidden?: string[],
   ) => Promise<Array<{ sport: string } | null>>;
-  pickAndAssignLeagues: (d: Date, count?: number, hidden?: string[]) => Cfg[];
+  pickAndAssignLeagues: (d: Date, count?: number, hidden?: string[]) => Array<Cfg & { label: string }>;
 }>("../src/lib/espn.ts");
 
 // A past date keeps the board off the today-only paths (lookahead, Best of
@@ -91,4 +91,15 @@ test("an ESPN front page pin holds on a past board and takes Auto on a future on
   const shown = (await espn.fetchAllLeagues(future, undefined, { first: "mlb", second: "nfl", third: "top" }, 3, undefined, []))
     .flatMap((l) => (l ? [l.sport] : []));
   assert.ok(!shown.includes("top"), `top on a future board: ${shown}`);
+});
+
+// NBA Preseason is opt-in (2026-10-09): backfillOnly, and in October every slot
+// is already taken, so Auto never opens it on a 3- or 5-column board.
+test("Auto never places NBA Preseason in October", () => {
+  const day = new Date("2026-10-09T12:00:00");
+  for (const count of [3, 5]) {
+    const labels = espn.pickAndAssignLeagues(day, count).map((l) => l.label);
+    assert.equal(labels.length, count, `only ${labels} on a ${count}-slot board`);
+    assert.ok(!labels.includes("NBA Preseason"), `${count} slots: ${labels}`);
+  }
 });

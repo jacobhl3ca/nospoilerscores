@@ -28,6 +28,7 @@ export const SHORT_LEAGUE_LABELS: Record<string, string> = {
   "NCAA Volleyball": "NCAA VB",   // 15 chars, well past the 99px budget (the sport key stays "ncaavb")
   "NCAAW Soccer": "W. Soccer",    // women's college soccer; the "W. Hockey" house style (the sport key stays "ncaawsoc")
   "NFL Preseason": "NFL Pre",     // 122 → 63
+  "NBA Preseason": "NBA Pre",     // twin of "NFL Pre" (added 2026-10-09)
   "Premier League": "EPL",        // 128 → 31  (matches the sport key, and the UCL/UEL house style)
   "Rugby Nations": "Nations",     // 119 → 63
   "Rugby Tests": "Tests",         // 100 → 45
@@ -35,6 +36,10 @@ export const SHORT_LEAGUE_LABELS: Record<string, string> = {
   "Super Rugby": "S. Rugby",      // 105 → 71
   "ESPN front page": "ESPN.com",   // the cross-league column (lib/topEvents.ts)
   "Best of yesterday": "Yesterday", // the cross-league column (lib/bestYesterday.ts)
+  // The same column on a longer span (lib/topGames.ts TOP_GAMES_COLUMN_LABEL).
+  "Best this week": "Week",
+  "Best this month": "Month",
+  "Best this year": "Year",
 };
 
 // Below this column width the header falls back to SHORT_LEAGUE_LABELS. The

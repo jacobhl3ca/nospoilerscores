@@ -117,7 +117,7 @@ test("pill offers Cards / Feed / ESPN; ESPN = Videos + Headlines on top, one Red
   expect(p.newsFeedView).toBe(false);
 });
 
-test("Hide seen, Headlines, Media and Videos only all act on the ESPN layout", async ({ page }) => {
+test("Hide seen, Headlines, Media and Posts all act on the ESPN layout", async ({ page }) => {
   const seenUrl = "https://example.com/espn-top/5";
   await gotoNews(page, { newsLayout: "espn" }, [seenUrl]);
   await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["ESPN VIDEOS", "ESPN TOP HEADLINES"]);
@@ -130,9 +130,12 @@ test("Hide seen, Headlines, Media and Videos only all act on the ESPN layout", a
   await page.getByTestId("news-hide-seen").click();
   await expect(seenRow).toHaveCount(1);
 
-  // Videos only (r5: a subreddit card's own button): that card's
-  // headline-only posts go, its clips stay, the other cards keep theirs.
-  await page.getByRole("button", { name: "Toggle videos-only filter: r/baseball" }).click();
+  // Posts (a subreddit card's own chip, cycling All → No text → Videos,
+  // Jacob 10/9): on Videos that card's headline-only posts go, its clips
+  // stay, the other cards keep theirs.
+  await page.getByRole("button", { name: "Post filter: All" }).first().click();
+  await page.getByRole("button", { name: "Post filter: No text" }).click();
+  await expect(page.getByRole("button", { name: "Post filter: Videos" })).toHaveCount(1);
   await expect(page.getByText("reddit-mlb post 1", { exact: true })).toHaveCount(0);
   await expect(page.getByText("reddit-mlb post 2", { exact: true })).toHaveCount(1);
   await expect(page.getByText("reddit-nfl post 1", { exact: true })).toHaveCount(1);
@@ -365,6 +368,7 @@ test("ESPN 2 columns: global Media on, ESPN Videos card Media off = nothing play
 // ── Round 4 (Jacob 9:44 PM) ─────────────────────────────────────────────
 const toolbar = (page: Page) => page.locator(".news-toolbar-sticky");
 const chips = (page: Page) => toolbar(page).locator("button.news-chip");
+const postSwitch = (page: Page) => toolbar(page).getByTestId("post-filter-switch");
 // Toolbar bottom edge vs the app header's bottom edge (hidden = tucked under it).
 const toolbarShown = (page: Page) => page.evaluate(() => {
   const t = document.querySelector(".news-toolbar-sticky")!.getBoundingClientRect();
@@ -392,9 +396,13 @@ test("Autoplay is on by default in every layout; a saved off still wins", async 
 test("575px: the pill row is one row of icon-only pills, names kept; 1280px shows labels", async ({ page }) => {
   await page.setViewportSize({ width: 575, height: 900 });
   await gotoNews(page, { ...PLAY, newsLayout: "feed", newsFeedView: true });
-  await expect(chips(page)).toHaveCount(5, LOAD);
+  await expect(chips(page)).toHaveCount(3, LOAD);
   const ys = await chips(page).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(ys).size).toBe(1);
+  // The Posts switch sits on the same row, icon-only with names kept.
+  const sw = (await postSwitch(page).boundingBox())!;
+  expect(Math.abs(sw.y + sw.height / 2 - (ys[0] + 16))).toBeLessThan(12);
+  await expect(postSwitch(page).getByRole("button", { name: "Posts: No text" })).toBeVisible();
   const seg = await pill(page, "Cards").boundingBox();
   expect(Math.abs(seg!.y + seg!.height / 2 - (ys[0] + 16))).toBeLessThan(12);
   await expect(toolbar(page).getByText("Autoplay", { exact: true })).toBeHidden();
@@ -410,15 +418,15 @@ test("575px: the pill row is one row of icon-only pills, names kept; 1280px show
 test("360px: still one row; the row scrolls sideways when icons do not fit", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
-  await expect(chips(page)).toHaveCount(5, LOAD);
+  await expect(chips(page)).toHaveCount(3, LOAD);
   const ys = await chips(page).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(ys).size).toBe(1);
   const sc = await page.locator(".news-toolbar-scroll").evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, ox: getComputedStyle(el).overflowX }));
   expect(sc.ox).toBe("auto");
   expect(sc.sw).toBeGreaterThan(sc.cw);
-  // The last pill can be scrolled to.
-  await chips(page).last().scrollIntoViewIfNeeded();
-  await expect(chips(page).last()).toBeInViewport();
+  // The last control (the Posts switch) can be scrolled to.
+  await postSwitch(page).scrollIntoViewIfNeeded();
+  await expect(postSwitch(page)).toBeInViewport();
 });
 
 for (const reduced of [false, true]) {
@@ -448,21 +456,76 @@ for (const reduced of [false, true]) {
   });
 }
 
-test("browser blocks autoplay: a one-time note under the toolbar, dismissible", async ({ page }) => {
+// The browser refuses muted autoplay (Jacob 10/9): every clip says "Tap to
+// play" on itself, and a one-time popup sits over the refused clip.
+const BLOCK_PLAY = () => {
+  HTMLMediaElement.prototype.play = function () { return Promise.reject(new DOMException("blocked", "NotAllowedError")); };
+};
+const popup = (page: Page) => page.getByTestId("autoplay-blocked-popup");
+
+test("browser blocks autoplay: Tap to play on the clips, a one-time popup over the clip", async ({ page }) => {
+  await page.addInitScript(BLOCK_PLAY);
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
+  await expect(popup(page)).toBeVisible(LOAD);
+  await expect(popup(page)).toContainText("Your browser blocks autoplay");
+  await expect(popup(page)).toContainText("Tap a clip to play it with sound.");
+  // The note under the toolbar is gone.
+  await expect(page.getByTestId("autoplay-blocked-note")).toHaveCount(0);
+  // Every clip says it, on the clip; nothing plays.
+  await expect(page.locator("[data-inline-video] [data-tap-to-play]")).toHaveCount(10);
+  await expect(page.locator("[data-inline-video] [data-tap-to-play]").first()).toHaveText("Tap to play");
+  expect(await playing(page)).toEqual([]);
+  // The popup sits over the refused clip.
+  const box = await popup(page).boundingBox();
+  const clip = await page.locator("[data-inline-video] .news-media-preview").first().boundingBox();
+  const mid = box!.x + box!.width / 2;
+  expect(Math.abs(mid - (clip!.x + clip!.width / 2))).toBeLessThan(2);
+  expect(box!.y).toBeGreaterThanOrEqual(clip!.y - 1);
+
+  await popup(page).getByRole("button", { name: "Got it" }).click();
+  await expect(popup(page)).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator("[data-inline-video] [data-tap-to-play]").first()).toBeVisible(LOAD);
+  await page.waitForTimeout(1500);
+  await expect(popup(page)).toHaveCount(0);
+});
+
+test("browser blocks autoplay in Feed: Tap to play on the video post", async ({ page }) => {
+  await page.addInitScript(BLOCK_PLAY);
+  await gotoNews(page, { ...PLAY, newsLayout: "feed", newsFeedView: true });
+  const videoPost = page.locator("article[data-news-key]:has(video[data-autoplay-video])").nth(1);
+  await expect(videoPost).toBeAttached(LOAD);
+  await videoPost.evaluate((el) => el.querySelector("video")!.scrollIntoView({ block: "center" }));
+  await expect(popup(page)).toBeVisible(LOAD);
+  await expect(videoPost.locator("[data-tap-to-play]")).toBeVisible();
+});
+
+test("blocked-autoplay popup: Turn Autoplay off saves the pref and clears Tap to play", async ({ page }) => {
+  await page.addInitScript(BLOCK_PLAY);
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
+  await popup(page).getByRole("button", { name: "Turn Autoplay off" }).click(LOAD);
+  await expect(popup(page)).toHaveCount(0);
+  await expect.poll(async () => (await saved(page)).newsAutoplay).toBe(false);
+  await expect(page.locator("[data-tap-to-play]")).toHaveCount(0);
+  expect(await autoplayChip(page).locator("svg line[data-slash]").count()).toBe(1);
+});
+
+test("a clip that plays clears Tap to play everywhere", async ({ page }) => {
+  // The first play() is refused, every later one plays.
   await page.addInitScript(() => {
-    HTMLMediaElement.prototype.play = function () { return Promise.reject(new DOMException("blocked", "NotAllowedError")); };
+    const real = HTMLMediaElement.prototype.play;
+    let refused = false;
+    HTMLMediaElement.prototype.play = function () {
+      if (!refused) { refused = true; return Promise.reject(new DOMException("blocked", "NotAllowedError")); }
+      return real.call(this);
+    };
   });
   await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
-  const note = page.getByTestId("autoplay-blocked-note");
-  await expect(note).toHaveText(/Your browser blocks autoplay\. Tap a video to play\./, LOAD);
-  // The play badge stays on the still.
-  expect(await playing(page)).toEqual([]);
-  await page.getByRole("button", { name: "Dismiss autoplay note" }).click();
-  await expect(note).toHaveCount(0);
-  await page.reload();
-  await expect(page.locator("[data-inline-video]").first()).toBeVisible(LOAD);
-  await page.waitForTimeout(1500);
-  await expect(note).toHaveCount(0);
+  await expect(page.locator("[data-tap-to-play]").first()).toBeVisible(LOAD);
+  await popup(page).getByRole("button", { name: "Got it" }).click();
+  await page.locator('[data-inline-video="auto"]').nth(2).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([2]);
+  await expect(page.locator("[data-tap-to-play]")).toHaveCount(0);
 });
 
 test("switch Feed → ESPN with Autoplay on: the first in-view clip plays without a scroll", async ({ page }) => {
@@ -512,7 +575,7 @@ test("ESPN: the toolbar keeps only the layout switch; each card header has exact
   expect(await headerButtons(page, "ESPN Videos")).toEqual(["Toggle news autoplay", "Toggle big ESPN videos", "Toggle media reveal", "Toggle headline reveal"]);
   expect(await headerButtons(page, "ESPN Top Headlines")).toEqual(["Toggle media reveal", "Toggle headline reveal"]);
   for (const sub of ["r/baseball", "r/nfl", "r/hockey"]) {
-    expect(await headerButtons(page, sub)).toEqual(["Toggle media reveal", "Toggle headline reveal", "Toggle videos-only filter", "Toggle text posts"]);
+    expect(await headerButtons(page, sub)).toEqual(["Toggle media reveal", "Toggle headline reveal", "Post filter"]);
   }
   // Every header button keeps a title and an aria-label.
   for (const b of await page.locator("[data-card-chip]").all()) {
@@ -547,10 +610,12 @@ test("ESPN: Headlines on the ESPN Videos card reveals that card only", async ({ 
 
 test("Cards and Feed keep the full toolbar", async ({ page }) => {
   await gotoNews(page);
-  await expect(chips(page)).toHaveCount(5, LOAD);
+  await expect(chips(page)).toHaveCount(3, LOAD);
+  await expect(postSwitch(page)).toHaveCount(1);
   await expect(page.locator("[data-card-chip]")).toHaveCount(0);
   await pill(page, "Feed").click();
-  await expect(chips(page)).toHaveCount(5);
+  await expect(chips(page)).toHaveCount(3);
+  await expect(postSwitch(page)).toHaveCount(1);
   await expect(page.locator("[data-card-chip]")).toHaveCount(0);
 });
 
@@ -569,12 +634,13 @@ test("360px phone: header buttons fit, the label gives way", async ({ page }) =>
 });
 
 // ── Round 6 (Jacob 7:26 AM 10/9): icon order, Autoplay off icon, dim under blur ──
-test("Cards/Feed toolbar order: Autoplay, Media, Headlines, Videos only, Text posts", async ({ page }) => {
+test("Cards/Feed toolbar order: Autoplay, Media, Headlines, Posts", async ({ page }) => {
   await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
-  await expect(chips(page)).toHaveCount(5, LOAD);
-  expect(await chips(page).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).toEqual([
-    "Toggle news autoplay", "Toggle media reveal", "Toggle headline reveal", "Toggle videos-only filter", "Toggle text posts",
+  await expect(chips(page)).toHaveCount(3, LOAD);
+  expect(await toolbar(page).locator("button.news-chip, [data-testid=post-filter-switch]").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).toEqual([
+    "Toggle news autoplay", "Toggle media reveal", "Toggle headline reveal", "Post filter",
   ]);
+  await expect(postSwitch(page).getByRole("button")).toHaveText(["All", "No text", "Videos"]);
 });
 
 const slashed = (page: Page) => autoplayChip(page).locator("svg line[data-slash]").count();
@@ -605,4 +671,210 @@ test("ESPN Videos header: Autoplay dims on that card's Media, not the global one
   await autoplayChip(page).click();
   expect(await slashed(page)).toBe(1);
   await expect(autoplayChip(page)).not.toHaveAttribute("aria-disabled", /.*/);
+});
+
+// ── Reddit bar + Posts switch (Jacob 10/9) ─────────────────────────────────
+const bar = (page: Page) => page.getByTestId("news-reddit-bar");
+const barSwitch = (page: Page) => bar(page).getByTestId("post-filter-switch");
+const segPressed = (page: Page) => barSwitch(page).getByRole("button")
+  .evaluateAll((els) => els.map((e) => e.getAttribute("aria-pressed")));
+// Every card's per-card class, e.g. "on" for news-card-media-on.
+const cardStates = (page: Page, kind: string) => page.locator(`[class*="news-card-${kind}-"]`)
+  .evaluateAll((els, k) => els.map((e) => (e.className.match(new RegExp(`news-card-${k}-(on|off)`)) ?? [])[1]), kind);
+// Text-post rows in the Reddit section that are showing.
+const shownTextPosts = (page: Page) => page.getByTestId("news-espn-reddit").locator(".news-textpost")
+  .evaluateAll((els) => els.filter((e) => (e as HTMLElement).offsetParent !== null).length);
+
+test("1280: the Reddit bar pins under the header + toolbar; each sub header pins under the bar", async ({ page }) => {
+  // Short window: the mocked subs are short, and the page must scroll past
+  // the bar's pin point.
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await gotoNews(page, { newsLayout: "espn" });
+  await expect.poll(() => headersIn(page, "news-espn-reddit"), LOAD).toEqual(["R/BASEBALL", "R/NFL", "R/HOCKEY"]);
+  await expect(bar(page).getByRole("heading", { name: "Your leagues on Reddit" })).toBeVisible();
+  for (const name of ["Toggle media reveal: every card", "Toggle headline reveal: every card"]) {
+    await expect(bar(page).getByRole("button", { name })).toBeVisible();
+  }
+  await expect(barSwitch(page).getByRole("button")).toHaveText(["All", "No text", "Videos"]);
+
+  const sectionTop = await page.getByTestId("news-espn-reddit").evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+  for (const y of [sectionTop + 120, sectionTop + 60]) {
+    await page.evaluate((top) => window.scrollTo(0, top), y);
+    await page.waitForTimeout(400);
+    const m = await page.evaluate(() => {
+      const r = (q: string) => document.querySelector(q)!.getBoundingClientRect();
+      const b = r("[data-testid=news-reddit-bar]");
+      const subs = Array.from(document.querySelectorAll("[data-testid=news-espn-reddit] .news-source-sticky-top")).map((h) => h.getBoundingClientRect().top);
+      return { barTop: b.top, barBottom: b.bottom, pinAt: Math.max(r("header").bottom, r(".news-toolbar-sticky").bottom), subs };
+    });
+    expect(Math.abs(m.barTop - m.pinAt)).toBeLessThanOrEqual(2);
+    for (const t of m.subs) expect(t).toBeGreaterThanOrEqual(m.barBottom - 1);
+  }
+});
+
+test("Reddit bar Media / Headlines set every card and clear the per-card values", async ({ page }) => {
+  await gotoNews(page, {
+    newsLayout: "espn",
+    revealNewsMedia: true,
+    newsCardPrefs: { "espn-videos": { revealMedia: false }, "reddit-mlb": { revealTitles: true } },
+  });
+  await expect.poll(() => headersIn(page, "news-espn-reddit"), LOAD).toEqual(["R/BASEBALL", "R/NFL", "R/HOCKEY"]);
+  const media = bar(page).getByRole("button", { name: "Toggle media reveal: every card" });
+  const titles = bar(page).getByRole("button", { name: "Toggle headline reveal: every card" });
+  // Mixed reads as off, so one tap turns every card on.
+  await expect(media).toHaveAttribute("aria-pressed", "false");
+  await expect(titles).toHaveAttribute("aria-pressed", "false");
+  await media.click();
+  await expect(media).toHaveAttribute("aria-pressed", "true");
+  const m = await cardStates(page, "media");
+  expect(m.length).toBeGreaterThanOrEqual(5);
+  expect(m.every((v) => v === "on")).toBe(true);
+  let p = await saved(page);
+  expect(p.revealNewsMedia).toBe(true);
+  expect(Object.values(p.newsCardPrefs ?? {}).some((c) => "revealMedia" in (c as object))).toBe(false);
+
+  await titles.click();
+  await expect(titles).toHaveAttribute("aria-pressed", "true");
+  expect((await cardStates(page, "titles")).every((v) => v === "on")).toBe(true);
+  p = await saved(page);
+  expect(p.revealNewsTitles).toBe(true);
+  expect(p.newsCardPrefs ?? {}).toEqual({});
+  // A card's own button stays the exception.
+  await page.getByRole("button", { name: "Toggle headline reveal: r/nfl" }).click();
+  await expect(titles).toHaveAttribute("aria-pressed", "false");
+});
+
+test("Reddit bar Posts switch filters every sub; a sub's own chip filters that sub only", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn" });
+  await expect.poll(() => headersIn(page, "news-espn-reddit"), LOAD).toEqual(["R/BASEBALL", "R/NFL", "R/HOCKEY"]);
+  await expect.poll(() => shownTextPosts(page), LOAD).toBeGreaterThan(0);
+  expect(await segPressed(page)).toEqual(["true", "false", "false"]);
+
+  await barSwitch(page).getByRole("button", { name: "No text" }).click();
+  expect(await segPressed(page)).toEqual(["false", "true", "false"]);
+  await expect.poll(() => shownTextPosts(page)).toBe(0);
+  await expect(page.getByText("reddit-mlb post 2", { exact: true })).toBeVisible();
+  // ESPN Top Headlines is not a sub: its rows stay.
+  await expect(page.getByText("espn-top post 1", { exact: true })).toBeVisible();
+
+  await barSwitch(page).getByRole("button", { name: "Videos" }).click();
+  expect(await segPressed(page)).toEqual(["false", "false", "true"]);
+  for (const sub of ["mlb", "nfl", "nhl"]) {
+    await expect(page.getByText(`reddit-${sub} post 1`, { exact: true })).toHaveCount(0);
+    await expect(page.getByText(`reddit-${sub} post 2`, { exact: true })).toHaveCount(1);
+  }
+  let p = await saved(page);
+  expect(p.newsVideosOnly).toBe(true);
+
+  await barSwitch(page).getByRole("button", { name: "All" }).click();
+  expect(await segPressed(page)).toEqual(["true", "false", "false"]);
+  await expect(page.getByText("reddit-nfl post 1", { exact: true })).toBeVisible();
+
+  // r/nfl's own chip: All → No text on that sub only; the bar shows no segment.
+  const nflChip = page.locator(".news-source-sticky-top", { hasText: "r/nfl" }).getByRole("button", { name: /^Post filter:/ });
+  await expect(nflChip).toHaveAttribute("aria-label", "Post filter: All");
+  await expect(nflChip).toHaveAttribute("title", "Posts: All. Tap for No text.");
+  await nflChip.click();
+  await expect(nflChip).toHaveAttribute("aria-label", "Post filter: No text");
+  expect(await nflChip.locator("svg line[data-slash]").count()).toBe(1);
+  await expect(page.getByText("reddit-nfl post 1", { exact: true })).toBeHidden();
+  await expect(page.getByText("reddit-mlb post 1", { exact: true })).toBeVisible();
+  expect(await segPressed(page)).toEqual(["false", "false", "false"]);
+  p = await saved(page);
+  expect(p.newsCardPrefs?.["reddit-nfl"]).toEqual({ videosOnly: false, textPosts: false });
+  await nflChip.click();
+  await expect(nflChip).toHaveAttribute("aria-label", "Post filter: Videos");
+  await expect(page.getByText("reddit-nfl post 1", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("reddit-nfl post 2", { exact: true })).toHaveCount(1);
+  await nflChip.click();
+  await expect(nflChip).toHaveAttribute("aria-label", "Post filter: All");
+});
+
+for (const width of [575, 360]) {
+  test(`${width}px: the Reddit bar sits over the first sub, one row, the label gives way`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await gotoNews(page, { newsLayout: "espn" });
+    await expect.poll(() => headersIn(page, "news-espn-reddit"), LOAD).toContain("R/BASEBALL");
+    const m = await page.evaluate(() => {
+      const b = document.querySelector("[data-testid=news-reddit-bar]")!;
+      const br = b.getBoundingClientRect();
+      const h2 = b.querySelector("h2")!;
+      const first = document.querySelector("[data-testid=news-espn-reddit] .news-source-sticky-top")!.getBoundingClientRect();
+      const ctrls = Array.from(b.querySelectorAll("button")).map((x) => x.getBoundingClientRect());
+      return {
+        h: br.height, barBottom: br.bottom, barLeft: br.left, barRight: br.right, firstTop: first.top,
+        tops: [...new Set(ctrls.map((r) => Math.round(r.top + r.height / 2)))],
+        inside: ctrls.every((r) => r.left >= br.left - 0.5 && r.right <= br.right + 0.5),
+        label: { sw: h2.scrollWidth, cw: h2.clientWidth, w: h2.getBoundingClientRect().width },
+      };
+    });
+    expect(m.h).toBeLessThanOrEqual(46);
+    expect(m.firstTop).toBeGreaterThanOrEqual(m.barBottom - 1);
+    // One row: every control centred on the same line, inside the bar.
+    expect(Math.max(...m.tops) - Math.min(...m.tops)).toBeLessThanOrEqual(2);
+    expect(m.inside).toBe(true);
+    expect(m.label.w).toBeGreaterThan(20);
+    if (width === 360) expect(m.label.sw).toBeGreaterThan(m.label.cw);
+    // The ESPN cards sit above the bar.
+    expect(await headersIn(page, "news-espn-layout")).toEqual(["VIDEOS", "TOP HEADLINES", "R/BASEBALL", "R/NFL", "R/HOCKEY"]);
+  });
+}
+
+test("Cards toolbar Media tap clears a card's own Media: ESPN then follows the global value", async ({ page }) => {
+  await gotoNews(page, { newsCardPrefs: { "espn-videos": { revealMedia: true, revealTitles: true } } });
+  await expect(chips(page)).toHaveCount(3, LOAD);
+  await pill(page, "Toggle media reveal").click();
+  await pill(page, "Toggle media reveal").click();
+  const p = await saved(page);
+  expect(p.revealNewsMedia).toBe(false);
+  expect(p.newsCardPrefs).toEqual({ "espn-videos": { revealTitles: true } });
+  await pill(page, "ESPN").click();
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["ESPN VIDEOS", "ESPN TOP HEADLINES"]);
+  expect((await cardStates(page, "media")).every((v) => v === "off")).toBe(true);
+  await expect(page.getByRole("button", { name: "Toggle media reveal: ESPN Videos" })).toHaveAttribute("aria-pressed", "false");
+});
+
+// ── Jacob 10/9: gaps on the live ESPN tab ───────────────────────────────
+test("ESPN 2 columns: Top Headlines rides beside the clips while you scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await gotoNews(page, { newsLayout: "espn" });
+  const pin = page.getByTestId("news-espn-headlines-pin");
+  await expect(pin.locator(".news-source-sticky-top")).toBeVisible(LOAD);
+  await expect(page.locator("[data-inline-video]")).toHaveCount(10, LOAD);
+  await page.evaluate(() => window.scrollTo(0, 1500));
+  await expect.poll(async () => {
+    const b = await pin.boundingBox();
+    return b!.y >= 0 && b!.y < 200 && b!.y + b!.height <= 801;
+  }).toBe(true);
+});
+
+test("ESPN 2 columns, short screen: Top Headlines scrolls to its end, then stays", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 300 });
+  await gotoNews(page, { newsLayout: "espn" });
+  const pin = page.getByTestId("news-espn-headlines-pin");
+  await expect(pin.locator(".news-source-sticky-top")).toBeVisible(LOAD);
+  await expect(page.locator("[data-inline-video]")).toHaveCount(10, LOAD);
+  const height = (await pin.boundingBox())!.height;
+  expect(height).toBeGreaterThan(300);
+  await page.evaluate(() => window.scrollTo(0, 2000));
+  // Its bottom edge sits 1rem above the screen bottom: every headline is reachable.
+  await expect.poll(async () => { const b = await pin.boundingBox(); return Math.round(b!.y + b!.height); }).toBe(300 - 16);
+});
+
+test("390px phone at the page top: the first clip plays, not the one nearest the middle", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await gotoNews(page, { ...PLAY, newsLayout: "espn" });
+  await expect(page.locator('[data-inline-video="auto"]').first()).toBeVisible(LOAD);
+  await expect.poll(() => playing(page), { timeout: 3000 }).toEqual([0]);
+  // Scrolled down, the clip nearest the middle plays again.
+  await page.locator('[data-inline-video="auto"]').nth(3).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([3]);
+});
+
+test("Big: three subs sit in one row of three columns", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn", newsEspnBig: true });
+  await expect.poll(() => headersIn(page, "news-espn-reddit"), LOAD).toEqual(["R/BASEBALL", "R/NFL", "R/HOCKEY"]);
+  const tops = await page.getByTestId("news-espn-reddit").locator(".news-source-sticky-top")
+    .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(tops).size).toBe(1);
 });

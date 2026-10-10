@@ -2,7 +2,7 @@
 
 import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LeagueData, Sport } from "@/lib/types";
-import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortRank } from "@/lib/espn";
+import { fetchSportTeams, getSeasonOpener, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortRank } from "@/lib/espn";
 import { TEAM_PICKER_SKIP } from "@/lib/teamLogos";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL } from "@/lib/bestYesterday";
@@ -897,6 +897,7 @@ export default function SettingsPanel({
     hideTeamStars: undefined,
     favoritesOnly: undefined,
     favoritesOnlyStrict: undefined,
+    offseasonKeep: undefined,
     hideWatchLaterPill: undefined,
     watchQueue: undefined,
     upcomingRecordLeagues: undefined,
@@ -1471,16 +1472,16 @@ export default function SettingsPanel({
                   );
                 })}
               </div>
-              {/* A pinned league between seasons keeps its pill; say what the
-                  board shows meanwhile. */}
+              {/* A pinned league between seasons keeps its pill and its
+                  column (Jacob 10/9); say when it returns. */}
               {(isWideBoard ? [0, 1, 2, 3, 4] : [0, 1, 2]).map((idx) => {
                 const saved = slotValues[idx];
                 const option = saved && saved !== "empty" ? leagueOptions.find((o) => o.sport === saved) : undefined;
                 if (!option?.offseason) return null;
-                const showing = displayedLeagues[idx]?.label;
+                const opener = getSeasonOpener(option.sport, option.label, new Date());
                 return (
-                  <p key={idx} className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
-                    Column {idx + 1}: Offseason · saved for its return{showing ? `; showing ${showing}` : ""}
+                  <p key={idx} data-offseason-slot-note className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
+                    Column {idx + 1}: Offseason{opener ? ` · returns ${opener.approximate ? "~" : ""}${opener.label}` : ""}
                   </p>
                 );
               })}

@@ -302,6 +302,9 @@ export interface NewsCardPrefs {
 
 export type NewsLayout = "cards" | "feed" | "espn";
 
+// The Posts switch (All / No text / Videos) over videosOnly + textPosts.
+export { type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField } from "./postFilter";
+
 // The news layout to render. newsLayout wins; a blob from before it existed
 // carries only newsFeedView (true = Feed).
 export function newsLayoutOf(prefs: { newsLayout?: NewsLayout; newsFeedView?: boolean }): NewsLayout {
@@ -400,6 +403,10 @@ export interface Preferences {
   // starred. See lib/favoritesFilter.ts.
   favoritesOnly?: boolean;
   favoritesOnlyStrict?: Sport[];
+  // A pinned league between seasons keeps its column, which asks once
+  // "Close this column?" (Jacob 10/9). Keep puts the league here and the
+  // question does not come back for it. Close empties the slot instead.
+  offseasonKeep?: Sport[];
   // Games queued with the card's "Later" pill, shown in the Watch queue strip
   // above the board until marked Done (Jacob 9/27). Newest last, at most 20;
   // anything older than 3 days is dropped on load. Syncs like favoriteTeams.
@@ -465,6 +472,12 @@ export interface Preferences {
   // would fall back to it takes the next league instead. Best of yesterday is
   // turned off the same way, through hiddenLeagues ("best" is a Sport).
   topNewsHidden?: boolean;
+  // The Best of yesterday column's span row (Jacob 10/10, lib/topGames.ts):
+  // which span it shows and whether "All leagues" is on. Unset = Yesterday,
+  // the user's own leagues. Only read while ratings show (the row hides with
+  // them, and the column falls back to Yesterday).
+  bestSpan?: "yesterday" | "week" | "month" | "year";
+  bestAllLeagues?: boolean;
   // Which POSITION the generic "Top news" column occupies on the news board
   // (0-2, default 2 = last). Picking "Top news" from any column's
   // switcher moves the column here rather than doing nothing — before this,

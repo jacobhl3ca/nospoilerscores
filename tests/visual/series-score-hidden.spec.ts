@@ -72,7 +72,9 @@ for (const width of [390, 1440]) {
       }));
 
       await page.goto("/");
-      await expect(page.getByText("Game 2", { exact: true }).locator("visible=true").first()).toBeVisible();
+      // The game number now sits once in the column subtitle ("… · Game 2"),
+      // not on the card (series-note-once.spec.ts).
+      await expect(page.locator('[data-league-column="mlb"]')).toContainText(/Game 2|G2/);
       const body = await page.locator("body").innerText();
       expect(body).not.toMatch(/\bleads\b/i);
       expect(body).not.toMatch(/\btied\s+\d/i);
