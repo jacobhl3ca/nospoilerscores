@@ -13,6 +13,9 @@ import { AutoplayVideo, TapForSound } from "@/components/InlineVideoCard";
 interface Props {
   sources: NewsSource[];
   onPlay?: PlayHandler;
+  // Gets each column's ‹ › list (see NewsColumn's prop of the same name), for
+  // a modal reopened by a page reload.
+  onSiblingList?: (list: PlayOpts[]) => void;
   // Optional text-row tail for one column. ESPN top headlines slot in here
   // when col 3 is the generic cascade — fills the empty subgrid pad rows
   // beneath col 3's shorter video count without a separate ESPN card. All
@@ -46,7 +49,7 @@ interface Props {
 // gridTemplateRows: subgrid. Per-row height = tallest headline at that row,
 // shorter cells anchor align-self: start so blank space sits at the bottom.
 // Headlines stay un-clamped so long titles wrap fully (Jacob 2026-05-02).
-export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts, videosOnly, hiddenCategories, oldestFirst, hideSeenKeys, onSeenHiddenCount, autoplay }: Props) {
+export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tailFetch, tailColIdx, showTextPosts, videosOnly, hiddenCategories, oldestFirst, hideSeenKeys, onSeenHiddenCount, autoplay }: Props) {
   const [colItems, setColItems] = useState<(NewsItem[] | null)[]>(() => sources.map(() => null));
   const [tailItems, setTailItems] = useState<NewsItem[] | null>(null);
 
@@ -150,6 +153,48 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
   // header (1) + every item row. Subgrid inherits these tracks.
   const totalRows = maxItems + 1;
 
+  // Each column's layout numbers and its modal ‹ › list, worked out before
+  // the render so the lists can also go up to onSiblingList.
+  const cols = sources.map((_source, colIdx) => {
+    // The refetch effect resizes `colItems` to the current `sources` on
+    // every source-set change, so colIdx normally has a matching slot. This
+    // `?? null` stays as belt-and-suspenders for the one render between a
+    // sources change and the effect firing (a new colIdx would otherwise
+    // read `undefined`): normalize it to `null` so the `=== null` "still
+    // loading" guards below (skeleton, pad count) catch it too — otherwise
+    // `items.slice(...)` runs on `undefined` and throws, crashing the news
+    // view for that render.
+    const items = shownColItems[colIdx] ?? null;
+    const isTailCol = tailHasItems && colIdx === tailColIdx;
+    const capped = isTailCol
+      ? Math.min(items?.length || 0, Math.max(0, maxItems - TAIL_RESERVE_ROWS))
+      : Math.min(items?.length || 0, maxItems);
+    const itemCount = items === null ? 0 : capped;
+    const padCount = Math.max(0, maxItems - itemCount);
+    const tail = isTailCol ? visibleTailItems : [];
+    // Gate the tail on the column's OWN items having settled (items !== null),
+    // not just on padCount. The tail column runs two fetches: its live
+    // per-league video source (colItems[tailColIdx], slow ESPN API) AND the
+    // static ESPN-top tailFetch (fast JSON). When the static tail resolves
+    // first — the common case — items is still null so the skeleton branch
+    // renders 5 SkeletonRows at rows 2..6, while padCount == maxItems (5) made
+    // hasTail true and the tail <div> spanned `gridRow: itemCount+2 / span
+    // padCount` == `2 / span 5`, painting the ESPN headlines directly on top
+    // of those skeletons. The pad `else` branch below already guards items !==
+    // null for the same reason; mirror it so the tail simply waits for the
+    // column to load. Once items settle, this is byte-identical to before.
+    const hasTail = items !== null && tail.length > 0 && padCount > 0;
+    const modalItems = [...(items?.slice(0, itemCount) ?? []), ...(hasTail ? tail : [])];
+    const siblings: PlayOpts[] = modalItems.map(newsItemToPlayOpts);
+    return { items, itemCount, padCount, tail, hasTail, siblings };
+  });
+  // Keyed on the posts in each list: the arrays are rebuilt every render.
+  const listsKey = cols.map((c) => c.siblings.map((o) => o.seenKey).join(" ")).join("|");
+  useEffect(() => {
+    for (const c of cols) if (c.siblings.length) onSiblingList?.(c.siblings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listsKey, onSiblingList]);
+
   return (
     // Max-width tracks the column count so the strip lines up with the title row
     // and the NewsColumns below (each col 225px / 280px xl, gaps 8 / 16):
@@ -164,36 +209,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
       }}
     >
       {sources.map((source, colIdx) => {
-        // The refetch effect resizes `colItems` to the current `sources` on
-        // every source-set change, so colIdx normally has a matching slot. This
-        // `?? null` stays as belt-and-suspenders for the one render between a
-        // sources change and the effect firing (a new colIdx would otherwise
-        // read `undefined`): normalize it to `null` so the `=== null` "still
-        // loading" guards below (skeleton, pad count) catch it too — otherwise
-        // `items.slice(...)` runs on `undefined` and throws, crashing the news
-        // view for that render.
-        const items = shownColItems[colIdx] ?? null;
-        const isTailCol = tailHasItems && colIdx === tailColIdx;
-        const capped = isTailCol
-          ? Math.min(items?.length || 0, Math.max(0, maxItems - TAIL_RESERVE_ROWS))
-          : Math.min(items?.length || 0, maxItems);
-        const itemCount = items === null ? 0 : capped;
-        const padCount = Math.max(0, maxItems - itemCount);
-        const tail = isTailCol ? visibleTailItems : [];
-        // Gate the tail on the column's OWN items having settled (items !== null),
-        // not just on padCount. The tail column runs two fetches: its live
-        // per-league video source (colItems[tailColIdx], slow ESPN API) AND the
-        // static ESPN-top tailFetch (fast JSON). When the static tail resolves
-        // first — the common case — items is still null so the skeleton branch
-        // renders 5 SkeletonRows at rows 2..6, while padCount == maxItems (5) made
-        // hasTail true and the tail <div> spanned `gridRow: itemCount+2 / span
-        // padCount` == `2 / span 5`, painting the ESPN headlines directly on top
-        // of those skeletons. The pad `else` branch below already guards items !==
-        // null for the same reason; mirror it so the tail simply waits for the
-        // column to load. Once items settle, this is byte-identical to before.
-        const hasTail = items !== null && tail.length > 0 && padCount > 0;
-        const modalItems = [...(items?.slice(0, itemCount) ?? []), ...(hasTail ? tail : [])];
-        const siblings: PlayOpts[] = modalItems.map(newsItemToPlayOpts);
+        const { items, itemCount, padCount, tail, hasTail, siblings } = cols[colIdx];
         return (
           <div
             // Composite key: the strip is fed one lead source per column
