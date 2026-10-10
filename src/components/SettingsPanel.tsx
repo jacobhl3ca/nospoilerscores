@@ -12,6 +12,7 @@ import { closeHiddenPins, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPi
 import { LeagueMark } from "./LeagueMark";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
+import { BRACKET_RESULTS_ALWAYS_KEY, loadResultsAlways } from "@/lib/playoffPicture";
 import { FREQUENT_RECORD_LEAGUES, recordKeysForLeagues, toggleRecordLeague, upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import {
   boardHiddenLeagues,
@@ -289,6 +290,12 @@ export default function SettingsPanel({
   shareUrl,
 }: SettingsPanelProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
+
+  // The MLB bracket's "Always show results" flag (lib/playoffPicture). A
+  // device-local key, not a pref, so it is read when the panel opens; `bracketTick`
+  // re-reads it after the row turns it off.
+  const [bracketTick, setBracketTick] = useState(0);
+  const bracketResultsAlways = useMemo(() => (open && bracketTick >= 0 ? loadResultsAlways() : false), [open, bracketTick]);
 
   // One "Saved" mark in the header for every write (Jacob 10/1). It was only
   // under the two Links fields. "show" for 2 s, then "fade" while the opacity
@@ -1955,6 +1962,19 @@ export default function SettingsPanel({
                 checked={!prefs.skipBoxscoreWarning}
                 onChange={(v) => updatePrefs({ skipBoxscoreWarning: !v })}
               />
+              {/* Only while "Always show results" is on in the MLB bracket. */}
+              {bracketResultsAlways && (
+                <ToggleRow
+                  label="Cover MLB bracket results"
+                  hint="Hide each playoff round's series winners until you tap for that round"
+                  checked={false}
+                  onChange={(v) => {
+                    if (!v) return;
+                    try { window.localStorage.removeItem(BRACKET_RESULTS_ALWAYS_KEY); } catch {}
+                    setBracketTick((n) => n + 1);
+                  }}
+                />
+              )}
             </div>
             {/* Links (Jacob 10/4: was its own section above Account). The
                 user's own front-ends (lib/frontendLinks.ts), the Reminder link
