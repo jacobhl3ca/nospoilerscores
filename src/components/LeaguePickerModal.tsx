@@ -370,7 +370,7 @@ export function LeaguePickerModal({
             <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 5l14 14M19 5L5 19" /></svg>
           </button>
         )}
-        <h3 id={titleId} className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>{title}</h3>
+        <h2 id={titleId} className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>{title}</h2>
         {subtitle && (
           <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
             {subtitle}
