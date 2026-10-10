@@ -8,6 +8,7 @@ import { TOP_GAMES_COLUMN_LABEL, TOP_GAMES_EMPTY_LABEL, isTopGamesFile, pickTopG
 import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
+import { PLAYOFF_START_DATES } from "./playoffDates";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { parseRadioBroadcasts, type GeoBroadcast } from "./radio";
@@ -606,10 +607,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // endDate runs a week past the Grey Cup so the final's own day (and the
   // 2025-style Sunday Nov 16 slot) still resolves the column on a past tab.
   { sport: "cfl", label: "CFL", startDate: "06-04", endDate: "11-22", championshipDate: "11-15", verifiedFor: 2026, excludeFromAuto: true },
-  // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Auto-eligible
-  // in season, but low priority so it only fills open summer/fall slots after
-  // the core leagues and major tournament windows.
-  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", scheduleReleaseDate: "12-01", verifiedFor: 2026 },
+  // WNBA: regular season May 16 – mid-Sept, playoffs to the end of October.
+  // Auto-eligible in season, but low priority so it only fills open summer/fall
+  // slots after the core leagues and major tournament windows. The Finals are
+  // best-of-7 now: ESPN lists Game 1 Oct 17 … Game 7 (if necessary) Oct 31
+  // (read live 2026-10-10), so the old 10-19 end hid the column mid-Finals.
+  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "11-01", championshipDate: "10-31", scheduleReleaseDate: "12-01", verifiedFor: 2026 },
   // ── Little League World Series (three weeks in August) ──
   // Window is ESPN's own /baseball/llb calendar, read live 2026-08-11:
   // 2026-08-10 → 2026-08-30, 16 game days, championship on the last one.
@@ -5225,6 +5228,29 @@ const RANGE_LOOKAHEAD_DAYS = 80;
 // ENDGAME_WINDOW_DAYS shows all of them under today's cards (see fetchLeague).
 export const ENDGAME_MAX = 5;
 export const ENDGAME_WINDOW_DAYS = 7;
+// The same slate for a league in its playoffs (isInPlayoffs): a wider window so
+// a whole Finals series shows from Game 1 (the WNBA Finals spread 7 games over
+// 15 days), and room for a best-of-7.
+export const PLAYOFF_ENDGAME_MAX = 7;
+export const PLAYOFF_ENDGAME_WINDOW_DAYS = 30;
+
+// True between a league's PLAYOFF_START_DATES date and its season-table
+// championshipDate (inclusive). The championship MM-DD is placed in the first
+// year on or after the start date, so the NFL's Jan 9 start pairs with that
+// season's Feb 14. A stale start date (last season's row) is simply false:
+// the league keeps its regular-season slate rather than a wrong playoff one.
+export function isInPlayoffs(sport: Sport, viewDate: Date): boolean {
+  const start = PLAYOFF_START_DATES[sport]?.date;
+  const champ = ALL_LEAGUES.find((l) => l.sport === sport && l.championshipDate)?.championshipDate;
+  if (!start || !champ) return false;
+  const startDay = new Date(`${start}T12:00:00`);
+  const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12);
+  if (view < startDay) return false;
+  const [mm, dd] = champ.split("-").map(Number);
+  let end = new Date(startDay.getFullYear(), mm - 1, dd, 12);
+  if (end < startDay) end = new Date(startDay.getFullYear() + 1, mm - 1, dd, 12);
+  return view <= end;
+}
 
 async function fetchNextGameDayRange(
   sport: Sport,
@@ -5232,9 +5258,11 @@ async function fetchNextGameDayRange(
   windowDays = RANGE_LOOKAHEAD_DAYS,
   // allDays: every upcoming fixture in the window, reduced to ONE NBA/NHL
   // series. allGames: every upcoming fixture in the window, chronological, no
-  // series grouping (the endgame slate). maxDays: every fixture from the first
-  // N distinct ET match-days. Default (none): the earliest day only.
-  opts?: { allDays?: boolean; allGames?: boolean; maxDays?: number },
+  // series grouping (the endgame slate); stopAbove ends the day walk early once
+  // more than that many are in hand (the caller only wants a count past it).
+  // maxDays: every fixture from the first N distinct ET match-days. Default
+  // (none): the earliest day only.
+  opts?: { allDays?: boolean; allGames?: boolean; stopAbove?: number; maxDays?: number },
 ): Promise<{ date: string; games: Game[] } | null> {
   const base = fromDate
     ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
@@ -5278,10 +5306,16 @@ async function fetchNextGameDayRange(
   });
   const upcoming = (gs: Game[]) => gs.filter((g) => g.state === "pre" || g.state === "in");
   const distinctDays = (gs: Game[]) => new Set(gs.map((g) => dayOf(g.date)).filter(Boolean)).size;
-  // allDays wants the whole window; maxDays wants N distinct match-days; the
-  // default wants just the first day — stop as soon as that much is in hand.
-  const wanted = opts?.allDays ? Infinity : (opts?.maxDays ?? 1);
-  const games = upcoming(rangedTennis ?? await fetchGamesAcrossDays(sport, days, (gs) => distinctDays(upcoming(gs)) >= wanted));
+  // allDays and allGames want the whole window (allGames stops once it holds
+  // more than stopAbove); maxDays wants N distinct match-days; the default
+  // wants just the first day — stop as soon as that much is in hand. allGames
+  // used to stop after the first chunk with any game, which was harmless at
+  // the 7-day endgame window (one chunk) but cut the 30-day playoff window to
+  // its first week.
+  const enough = opts?.allGames
+    ? (gs: Game[]) => upcoming(gs).length > (opts.stopAbove ?? Infinity)
+    : (gs: Game[]) => distinctDays(upcoming(gs)) >= (opts?.allDays ? Infinity : (opts?.maxDays ?? 1));
+  const games = upcoming(rangedTennis ?? await fetchGamesAcrossDays(sport, days, enough));
   if (!games.length) return null;
   const chrono = (gs: Game[]) => [...gs].sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
   const leadDay = (gs: Game[]) => { let f = ""; for (const g of gs) { const d = dayOf(g.date); if (d && (!f || d < f)) f = d; } return f; };
@@ -6502,27 +6536,46 @@ export async function fetchAllLeagues(
     // an empty schedule. On a fetch failure games is also [] — falling back
     // there would render tomorrow's slate labeled "Tomorrow" on the Today
     // tab, which reads as a bug. A failed league carries fetchFailed instead.
-    // NBA/NHL in the playoffs surface their upcoming slate even when there ARE
-    // games today, so the column shows TODAY'S games AND what's coming
-    // (Jacob 6/4). Every other league — including the World Cup (Jacob 6/19) —
-    // only falls back to the lookahead when today's slate is empty, so games
+    // A league in its playoffs (isInPlayoffs: PLAYOFF_START_DATES → its
+    // championshipDate — NBA, NHL, WNBA, MLB, NFL, March Madness) surfaces its
+    // upcoming slate even when there ARE games today, so the column shows
+    // TODAY'S games AND what's coming (Jacob 6/4, widened to every playoff
+    // league 10/10). Every other league — including the World Cup (Jacob 6/19)
+    // — only falls back to the lookahead when today's slate is empty, so games
     // stay on their real days instead of stacking tomorrow's slate under today.
+    //
+    // NBA/NHL in May/June keep their own series rule (nbaNhlSeries, below): it
+    // shows ONE series so the two conference finals never interleave (Jacob
+    // 6/5), which a plain count of games cannot promise. Kept on the month
+    // check so it still holds in a season whose PLAYOFF_START_DATES row is stale.
     const isPlayoffMonth = viewDate.getMonth() === 4 /* May */ || viewDate.getMonth() === 5 /* Jun */;
-    const nbaNhlPlayoff = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth;
-    const alwaysShowUpcoming = nbaNhlPlayoff;
+    const nbaNhlSeries = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth;
+    const inPlayoffs = nbaNhlSeries || isInPlayoffs(cfg.sport, viewDate);
+    const alwaysShowUpcoming = inPlayoffs;
     // Endgame slate (Jacob 9/11–9/12): once a league has ≤ ENDGAME_MAX games
     // left in the next ENDGAME_WINDOW_DAYS, show every one of them with its
     // day/time — a Slam from the semis, the NFL from the divisional round, the
     // World Series, a UCL final. Above that count the column keeps its normal
     // today-only slate so regular weeks never stack (the 6/19 World Cup call):
     // the domestic soccer leagues run 9–10 fixtures a week, so ≤5 fires only
-    // at the very end of a bracket. NBA/NHL keep their own series rule below
-    // (it already shows the whole remaining series). Event-tile and non-ESPN
-    // sports returned before this point. ONE ranged request per column.
+    // at the very end of a bracket. Event-tile and non-ESPN sports returned
+    // before this point. ONE ranged request per column.
+    //
+    // In the playoffs (Jacob 10/10) the window widens to
+    // PLAYOFF_ENDGAME_WINDOW_DAYS and the cap to PLAYOFF_ENDGAME_MAX, so a
+    // Finals shows every listed game from a week out: the WNBA Finals read
+    // Game 1 10/17 alone from 10/10, with Games 2–4 (10/19–10/24) already on
+    // ESPN. What that admits elsewhere: NFL wild-card weekend (6 games in 30
+    // days) shows whole, as does the divisional round (4) — the intended
+    // "whole bracket" reading. MLB's Division Series (up to 4 series × 5) and
+    // the two LCS together run past 7, so MLB keeps its normal slate (today +
+    // the next game day) until the World Series.
     let endgame = false;
-    if (!failed && !isPastView && !nbaNhlPlayoff) {
-      const ahead = await fetchNextGameDayRange(cfg.sport, date, ENDGAME_WINDOW_DAYS, { allGames: true });
-      if (ahead && ahead.games.length <= ENDGAME_MAX) {
+    if (!failed && !isPastView && !nbaNhlSeries) {
+      const windowDays = inPlayoffs ? PLAYOFF_ENDGAME_WINDOW_DAYS : ENDGAME_WINDOW_DAYS;
+      const maxGames = inPlayoffs ? PLAYOFF_ENDGAME_MAX : ENDGAME_MAX;
+      const ahead = await fetchNextGameDayRange(cfg.sport, date, windowDays, { allGames: true, stopAbove: maxGames });
+      if (ahead && ahead.games.length <= maxGames) {
         nextGameDay = ahead;
         endgame = true;
       }
@@ -6534,7 +6587,7 @@ export async function fetchAllLeagues(
         // instead of a bare "No games" — not several days stacked onto today.
         // 80-day window covers the long pre-kickoff gap; maxDays:1 = one day.
         nextGameDay = await fetchNextGameDayRange(cfg.sport, date, 80, { maxDays: 1 });
-      } else if (nbaNhlPlayoff) {
+      } else if (nbaNhlSeries) {
         // NBA/NHL playoffs: only a handful of games remain (Conf Finals →
         // Cup/Finals) — surface EVERY one in a single ranged request, not just
         // the next game day. 30-day window covers a full series from Game 1.

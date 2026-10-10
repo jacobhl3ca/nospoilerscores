@@ -492,6 +492,24 @@ main:has(.hl-slot .highlight-btn) .hl-slot:not(:has([data-hl-pending])) { min-he
   main:has(.hl-slot .highlight-btn) .hl-slot:not(:has([data-hl-pending])) { min-height: calc(var(--hl-btn-h) + 0.5rem); }
 }
 
+/* Best of yesterday on the Today board (`[data-slim-hl]`, LeagueColumn): its
+   cards are finished games with a play button, beside upcoming cards whose
+   extra row is the 18px meta line (time · network) instead. At the full 28px
+   button the Best card stood ~10px taller than the MLB/NFL card next to it
+   (Jacob 10/10: "slim the play button"). An 18px button matches the meta
+   row's min-h-[18px], and the row margins already match (mt-1 sm:mt-2 here,
+   mb-1 sm:mb-2 there), so the two cards come out the same height. The
+   board-wide floor above still holds every other finished card at 28px; the
+   slim floor only applies inside the Best column. Multi-button rows (▶ 5m
+   ▶ 2m ▶ 30m) slim the same way. tests/visual/best-yesterday.spec.ts
+   measures the two cards. */
+:root { --hl-btn-h-slim: 18px; }
+[data-slim-hl] .hl-slot .highlight-btn { height: var(--hl-btn-h-slim); padding-top: 0; padding-bottom: 0; }
+main:has(.hl-slot .highlight-btn) [data-slim-hl] .hl-slot:not(:has([data-hl-pending])) { min-height: calc(var(--hl-btn-h-slim) + 0.25rem); }
+@media (min-width: 640px) {
+  main:has(.hl-slot .highlight-btn) [data-slim-hl] .hl-slot:not(:has([data-hl-pending])) { min-height: calc(var(--hl-btn-h-slim) + 0.5rem); }
+}
+
 /* Score/event CARD roots. These are divs with role="button" + tabIndex=0, and a
    div with a tabindex takes focus on MOUSEDOWN — so every ordinary tap left a
    light-blue ring painted around the card, still there once the details sheet

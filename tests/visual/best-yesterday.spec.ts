@@ -250,6 +250,50 @@ for (const { name, width, height } of [
   });
 }
 
+// Jacob 10/10: on the Today board a Best card (2 team rows + a play button)
+// stood ~10px taller than the upcoming NFL card beside it (an 18px time ·
+// network line + 2 team rows). The Best column slims its play button to that
+// line's height (globals.css [data-slim-hl]), so the two cards are equal.
+for (const { name, width, height } of [
+  { name: "phone", width: 390, height: 844 },
+  { name: "desktop", width: 1180, height: 820 },
+]) {
+  test(`a Best card is the height of an upcoming card beside it (${name} ${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await seed(page);
+    // An NFL game tonight, so the NFL column holds one upcoming card.
+    const tonight = event("511", T("5", "Giants", "NYG", ""), T("6", "Cowboys", "DAL", ""), "2026-09-24T00:15:00Z", "scheduled");
+    await page.route("**/apis/site/v2/sports/football/nfl/scoreboard**", (route) => {
+      const dates = new URL(route.request().url()).searchParams.get("dates");
+      const events = dates === YESTERDAY ? BOARDS["football/nfl"] : dates === TODAY ? [tonight] : [];
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ events }) });
+    });
+    await page.goto("/");
+    const best = page.locator('[data-league-column="best"]');
+    await expect(best.locator('button[aria-label*="ighlight" i], button[title*="ighlight" i]')).toHaveCount(5, { timeout: 30_000 });
+    const upcoming = page.locator('[data-league-column="nfl"]').getByRole("button", { name: "Giants at Cowboys — game details" });
+    await expect(upcoming).toBeVisible({ timeout: 15_000 });
+    const upH = (await upcoming.boundingBox())!.height;
+    const cards = best.getByRole("button", { name: / — game details$/ });
+    for (let i = 0; i < 5; i++) {
+      const h = (await cards.nth(i).boundingBox())!.height;
+      expect(Math.abs(h - upH), `Best card ${i} is ${h.toFixed(1)}px, the upcoming NFL card ${upH.toFixed(1)}px`).toBeLessThanOrEqual(1);
+    }
+    // The slim button is the meta line's 18px and keeps its label centred.
+    const btn = best.locator(".hl-slot .highlight-btn").first();
+    expect((await btn.boundingBox())!.height).toBeCloseTo(18, 0);
+    const label = (await btn.boundingBox())!;
+    const inner = await btn.evaluate((el) => {
+      const r = document.createRange(); r.selectNodeContents(el);
+      const b = r.getBoundingClientRect(); return { y: b.y, h: b.height };
+    });
+    expect(Math.abs((inner.y + inner.h / 2) - (label.y + label.height / 2)), "label off centre").toBeLessThanOrEqual(1.5);
+    // Other columns keep the full 28px button.
+    await expect(page.locator('[data-league-column="nfl"] [data-slim-hl], [data-league-column="wnba"][data-slim-hl]')).toHaveCount(0);
+    if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/best-slim-${width}.png` });
+  });
+}
+
 test("Best of yesterday replaces the Auto league even when that league has a game today", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page);

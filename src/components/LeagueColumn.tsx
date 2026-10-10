@@ -24,6 +24,7 @@ import { compareRatedLive } from "@/lib/liveSort";
 import { compareRankedMatchups } from "@/lib/rankedMatchupSort";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 import { applyFavoritesFilter, filterLeague } from "@/lib/favoritesFilter";
+import { PLAYOFF_START_DATES } from "@/lib/playoffDates";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
@@ -150,20 +151,6 @@ const FORCE_BIG_INNING_LIVE_PREVIEW = false;
 // gates still have to pass, so flipping this on a Tuesday shows nothing for the
 // NFL column. Set to false before shipping.
 const FORCE_WHIPAROUND_LIVE_PREVIEW = false;
-
-// 2025-26 season playoff start dates (update each season)
-// singularLabel flags a grammatically SINGULAR label so the countdown subtitle
-// below agrees in number ("Postseason starts", "March Madness starts") instead
-// of the plural "Playoffs start" default. Without it the hard-coded "start"
-// verb rendered "Postseason start Oct 6" / "March Madness start tomorrow".
-const PLAYOFF_START_DATES: Record<string, { date: string; label: string; singularLabel?: boolean; preDate?: string; preEndDate?: string; preLabel?: string }> = {
-  nba: { date: "2026-04-18", label: "Playoffs", preDate: "2026-04-14", preEndDate: "2026-04-17", preLabel: "Play-in" },
-  wnba: { date: "2026-09-14", label: "Playoffs" },
-  nhl: { date: "2026-04-18", label: "Playoffs" },
-  mlb: { date: "2026-09-29", label: "Postseason", singularLabel: true }, // Wild Card game 1 (StatsAPI postseason/series)
-  nfl: { date: "2027-01-09", label: "Playoffs" },
-  ncaam: { date: "2026-03-17", label: "March Madness", singularLabel: true },
-};
 
 interface SubtitleResult {
   tiers: string[];
@@ -1977,6 +1964,9 @@ export default function LeagueColumn({
       ref={columnRef}
       data-slot-idx={canDrag ? slotIdx : undefined}
       data-league-column={league.sport}
+      // Slim play buttons so a Best card matches an upcoming card's height
+      // (globals.css, [data-slim-hl]). Best only renders on the Today board.
+      data-slim-hl={league.sport === "best" ? "" : undefined}
       className={`${widthClassName} transition-colors`}
       style={isDragging ? { opacity: 0.55 } : undefined}
     >
