@@ -24,6 +24,7 @@ import { compareRatedLive } from "@/lib/liveSort";
 import { compareRankedMatchups } from "@/lib/rankedMatchupSort";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 import { applyFavoritesFilter, filterLeague } from "@/lib/favoritesFilter";
+import { foldRowLabel, splitFoldable, type ClinchSnapshot } from "@/lib/eliminatedFold";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
@@ -102,6 +103,9 @@ interface LeagueColumnProps {
   // Leagues whose upcoming cards show the italic W-L (picked in Settings) —
   // see lib/upcomingRecords.ts.
   upcomingRecordLeagues?: ReadonlySet<RecordLeague>;
+  // "Fold games with no playoff stakes" (Settings): the NFL standings when the
+  // setting is on, else null. See lib/eliminatedFold.ts.
+  foldClinch?: ClinchSnapshot | null;
   // Sports shown in the other columns, with the 1-based column number each
   // lives in — dropdown labels these "· col N" (still full-colour, selectable).
   shownElsewhere?: { sport: Sport; col: number }[];
@@ -971,6 +975,7 @@ export default function LeagueColumn({
   favoritesOnlyStrict = NO_STRICT,
   onSetFavoritesOnlyStrict,
   upcomingRecordLeagues,
+  foldClinch = null,
   shownElsewhere,
   onRetry,
   slotIdx,
@@ -1053,6 +1058,9 @@ export default function LeagueColumn({
   // is flagged by react-hooks/purity, and a single read is indistinguishable
   // for a label that only changes across a midnight boundary.
   const [nowMs] = useState(() => Date.now());
+  // Which "N games between eliminated teams" rows are open, keyed by day. Per
+  // column (this state) and for this visit only.
+  const [foldOpen, setFoldOpen] = useState<Record<string, boolean>>({});
   const mode = switcherMode ?? "dropdown";
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague && mode !== "off";
   // ‹ › step button. Hoisted to component scope (it used to live inside the
@@ -1548,7 +1556,12 @@ export default function LeagueColumn({
   // inside each live, then upcoming, then final, the homepage's featured
   // games first within each state (Jacob 9/26).
   // Every other column keeps its live / upcoming / final sections below.
-  const espnGroups = league.sport === "top" ? groupEspnFrontPage(sortedGames, league.espnFeatured) : null;
+  // Games between two eliminated teams leave the list for one fold row at the
+  // end of the day (lib/eliminatedFold.ts). `hasGames` still counts them, so a
+  // day of only folded games keeps its row instead of reading "No games".
+  const mainFold = splitFoldable(sortedGames, foldClinch, favoriteTeams, nowMs);
+  const hasGames = sortedGames.length > 0;
+  const espnGroups = league.sport === "top" ? groupEspnFrontPage(mainFold.shown, league.espnFeatured) : null;
   // The header subtitle already reads "NLWC · Game 3" for every game in the
   // column, so each pre-game card skips its own "Game 3" line. Same games the
   // subtitle reads (see the PlayoffSubtitle call below). A mixed column (ESPN
@@ -1560,7 +1573,7 @@ export default function LeagueColumn({
     league.games.length ? league.games : (league.previousGameDay?.games ?? []),
     null,
   )?.gameNumber;
-  const sorted = espnGroups ? espnGroups.flatMap((g) => g.games) : sortedGames;
+  const sorted = espnGroups ? espnGroups.flatMap((g) => g.games) : mainFold.shown;
   // The label over an ESPN front page league block: "NFL", or its short form
   // on a narrow column.
   const espnGroupLabel = (group: { games: Game[] }) => {
@@ -1687,6 +1700,52 @@ export default function LeagueColumn({
     </div>
   );
 
+  // The "▸ N games between eliminated teams" row and, once tapped open, its
+  // cards. `day` keys the open state; `card` draws a folded game the way its
+  // list draws the rest.
+  const renderFold = (day: string, folded: Game[], card: (game: Game) => ReactNode) => {
+    if (!folded.length) return null;
+    const open = !!foldOpen[day];
+    return (
+      <div key={`fold-${day}`} data-eliminated-fold={day} className="flex flex-col gap-1.5 sm:gap-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setFoldOpen((o) => ({ ...o, [day]: !o[day] }))}
+          className="w-full text-left text-[11px] sm:text-xs px-2 sm:px-3 py-1.5 rounded-lg cursor-pointer transition-colors"
+          style={{ color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        >
+          <span aria-hidden="true">{open ? "▾" : "▸"}</span> {foldRowLabel(folded.length)}
+        </button>
+        {open && folded.map(card)}
+      </div>
+    );
+  };
+  const foldCard = (game: Game, pastDate: boolean, today: boolean | undefined, nextGameDate?: string) => (
+    <GameCard
+      key={game.id}
+      game={game}
+      favoriteTeams={favoriteTeams}
+      onToggleFavoriteTeam={onToggleFavoriteTeam}
+      showRatings={showRatings}
+      leagueLabel={cardLeagueLabel(game)}
+      leagueTag={cardLeagueTag(game)}
+      onPlayHighlight={onPlayHighlight}
+      onPlayEmbed={onPlayEmbed}
+      nextGameDate={nextGameDate}
+      isPastDate={pastDate}
+      isToday={today}
+      useAbbreviations={useAbbreviations}
+      onSelectTeam={setTeamViewTeam}
+      onShowDetails={onShowDetails}
+      showStars={cardStars}
+      upcomingRecordLeagues={upcomingRecordLeagues}
+    />
+  );
+  const mainFoldRow = renderFinished
+    ? renderFold(selectedDate, mainFold.folded, (game) => foldCard(game, isPastDate, isToday))
+    : null;
+
   const CONDENSE_LIMIT = 3;
   const renderCondensed = (games: Game[], pastDate: boolean) => {
     const collapsible = games.length > 5;
@@ -1762,9 +1821,13 @@ export default function LeagueColumn({
   // A game keeps its FULL card unless its matchup is already spelled out above
   // it — see compactableMatchups for why a bare "@ HOME" row is only readable
   // in that case (it drops the away team).
-  const renderUpcomingSlate = (games: Game[], firstFull: boolean, alsoShown: Game[] = []) => {
+  const renderUpcomingSlate = (allGames: Game[], firstFull: boolean, alsoShown: Game[] = []) => {
+    const { shown: games, folded } = splitFoldable(allGames, foldClinch, favoriteTeams, nowMs);
     const named = compactableMatchups(games, firstFull, alsoShown);
-    return games.map((game, i) => {
+    const foldDay = league.nextGameDay?.date ?? "next";
+    const foldRow = renderFold(`next-${foldDay}`, folded, (game) =>
+      foldCard(game, false, undefined, formatDateCompact(etDayString(game.date) || foldDay)));
+    return [...games.map((game, i) => {
       const nextGameDate = formatDateCompact(etDayString(game.date) || league.nextGameDay!.date);
       // A masked pairing stays a full card: the compact row prints "@ HOME",
       // and from Game 3 of a series the home club can be the one that advanced.
@@ -1798,7 +1861,7 @@ export default function LeagueColumn({
           hideSeriesNote={hideSeriesNote}
         />
       );
-    });
+    }), foldRow];
   };
 
   // "Last played · Mon" / "Last played · Mon 6/8" for the lookback slate's day.
@@ -1820,7 +1883,8 @@ export default function LeagueColumn({
   // and busier than every other card on the board; it now takes the column
   // HEADER's otherwise-empty italic subtitle slot (Jacob 8/10). See
   // lastPlayedLabel + PlayoffSubtitle's fallbackText below.
-  const renderPreviousSlate = (games: Game[]) => {
+  const renderPreviousSlate = (allGames: Game[]) => {
+    const { shown: games, folded } = splitFoldable(allGames, foldClinch, favoriteTeams, nowMs);
     return (
       <div className="flex flex-col gap-1.5 sm:gap-2">
         {games.map((game) => (
@@ -1843,6 +1907,7 @@ export default function LeagueColumn({
             hideSeriesNote={hideSeriesNote}
           />
         ))}
+        {renderFold(`prev-${league.previousGameDay?.date ?? ""}`, folded, (game) => foldCard(game, true, undefined))}
       </div>
     );
   };
@@ -1870,7 +1935,7 @@ export default function LeagueColumn({
     !teamViewTeam
     && !league.golfTournament
     && !league.eventCard
-    && sorted.length === 0
+    && !hasGames
     && renderUpcoming
     && !league.fetchFailed
     && (league.previousGameDay?.games?.length ?? 0) > 0
@@ -1950,7 +2015,7 @@ export default function LeagueColumn({
   // each league block holds its own, over that block's cards (Jacob 10/3).
   const cardGames: Game[] = (() => {
     if (espnGroups || teamViewTeam || league.golfTournament || league.eventCard) return [];
-    if (sorted.length === 0) {
+    if (!hasGames) {
       if (!renderUpcoming || league.fetchFailed) return [];
       if (isPastDate) {
         if (league.previousGameDay?.games.length) return league.previousGameDay.games;
@@ -2409,7 +2474,7 @@ export default function LeagueColumn({
         />
       ) : league.eventCard && section !== "finished" ? (
         <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} showRatings={showRatings} />
-      ) : sorted.length === 0 ? (
+      ) : !hasGames ? (
         renderUpcoming ? (
           league.fetchFailed ? (
             // The games fetch errored AND we had no cached fallback (the
@@ -2503,10 +2568,11 @@ export default function LeagueColumn({
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>{emptyUpcomingLabel}</p>
           )
         ) : null
-      ) : condense ? (
-        renderCondensed(sorted, isPastDate)
-      ) : espnGroups ? (
-        renderEspnGroups(sorted)
+      ) : condense || espnGroups ? (
+        <div className="flex flex-col gap-1.5 sm:gap-2">
+          {condense ? renderCondensed(sorted, isPastDate) : renderEspnGroups(sorted)}
+          {mainFoldRow}
+        </div>
       ) : isPastDate ? (
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {sorted.map((game) => (
@@ -2530,6 +2596,7 @@ export default function LeagueColumn({
               hideSeriesNote={hideSeriesNote}
             />
           ))}
+          {mainFoldRow}
         </div>
       ) : (
         <div className="flex flex-col gap-1.5 sm:gap-2">
@@ -2608,6 +2675,7 @@ export default function LeagueColumn({
               hideSeriesNote={hideSeriesNote}
             />
           ))}
+          {mainFoldRow}
         </div>
       )}
       {footer}
