@@ -155,7 +155,7 @@ export default function CollegeFootballHighlightsWithoutSpoilersPage() {
         "Works the same through bowl season and the Playoff.",
       ]}
       ctaLabel="Open college football without spoilers"
-      ctaHref="/yesterday"
+      ctaHref="/yesterday?lg=ncaaf"
       links={[
         { href: "/nfl-highlights-without-spoilers", label: "NFL highlights" },
         { href: "/nba-highlights-without-spoilers", label: "NBA highlights" },
