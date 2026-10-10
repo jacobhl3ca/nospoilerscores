@@ -153,7 +153,7 @@ for (const width of [390, 1280]) {
     await expect(video).toBeAttached({ timeout: 15_000 });
     await video.evaluate((v) => v.dispatchEvent(new Event("playing")));
     await expect.poll(async () => (await events(page)).filter(([n]) => n === "video-play"))
-      .toEqual([["video-play", { player: "native", source: "MLB.com", league: "mlb" }]]);
+      .toEqual([["video-play", { player: "native", source: "MLB.com", league: "mlb", page: "yesterday" }]]);
   });
 
   test(`YouTube clip with no sourceLabel reports its channel as source at ${width}px`, async ({ page }) => {
@@ -167,7 +167,7 @@ for (const width of [390, 1280]) {
     await page.goto("/yesterday");
     await page.getByRole("button", { name: "WNBA highlights" }).first().click();
     await expect.poll(async () => (await events(page)).filter(([n]) => n === "video-play"), { timeout: 15_000 })
-      .toEqual([["video-play", { player: "youtube", source: "WNBA", league: "wnba" }]]);
+      .toEqual([["video-play", { player: "youtube", source: "WNBA", league: "wnba", page: "yesterday" }]]);
   });
 }
 
