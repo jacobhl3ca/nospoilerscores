@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { LeagueEventCard, FightBout } from "@/lib/types";
-import { openExternal } from "@/lib/openExternal";
+import { LeagueEventCard, FightBout, type Sport } from "@/lib/types";
+import { listenLinkProps, openExternal } from "@/lib/openExternal";
+import { useEventListenLinks } from "@/lib/useListenLinks";
 import { getTimeZone } from "@/lib/etDay";
 import CalendarButtons from "@/components/CalendarButtons";
 import { buildEventCalendarEvent, buildClimbRoundCalendarEvent } from "@/lib/calendarLink";
@@ -85,6 +86,7 @@ export default function EventDetailModal({
   event,
   fight,
   leagueLabel,
+  sport,
   onClose,
   reminderLinkTemplate,
 }: {
@@ -95,6 +97,9 @@ export default function EventDetailModal({
   // able to say WHICH bout it was about.
   fight?: FightBout;
   leagueLabel?: string;
+  // The column's sport, for the Listen row (series feeds and per-track rows
+  // in lib/radio.ts). Absent = no Listen row unless ESPN lists a radio feed.
+  sport?: Sport;
   onClose: () => void;
   // Settings → Reminder link. Blank = no "Remind me" button (CalendarButtons).
   reminderLinkTemplate?: string;
@@ -174,6 +179,10 @@ export default function EventDetailModal({
   const isLive = roundState === "in";
   const isPost = roundState === "post";
   const statusLabel = isPost ? (climbRound ? "Done" : "Final") : isLive ? "In progress" : "Upcoming";
+
+  // Listen links (lib/radio.ts): free station players, else one Paid line.
+  const listen = useEventListenLinks(sport, event);
+  const listenRows = listen.free.length ? listen.free : listen.paid ? [listen.paid] : [];
 
   // The headline of the sheet. A tapped bout names the bout; everything else
   // names the event. Always the FULL string — event.title, never a variant.
@@ -299,6 +308,29 @@ export default function EventDetailModal({
               button on the tile is the affordance. */}
           {event.broadcasts.length > 0 && !isPost && !climbRound ? (
             <Row label="Watch">{event.broadcasts.join(" · ")}</Row>
+          ) : null}
+          {/* Listen: the race or event's own radio (MRN / PRN at its tracks,
+              the series network), then a single Paid line only when there is
+              no free one. Gone once the event is over, like Watch. */}
+          {listenRows.length > 0 && !isPost && !climbRound ? (
+            <Row label="Listen">
+              <span className="listen-row">
+                {listenRows.flatMap((l, i) => {
+                  const a = (
+                    <a
+                      key={l.url}
+                      {...listenLinkProps(l.name, l.url)}
+                      className="underline underline-offset-2 hover:opacity-80 transition-opacity"
+                      style={{ color: "var(--accent)" }}
+                    >
+                      {l.name}
+                    </a>
+                  );
+                  const tags = l.tags.length ? <span key={`${l.url}-t`}> ({l.tags.join(" · ")})</span> : null;
+                  return i === 0 ? [a, tags] : [" · ", a, tags];
+                })}
+              </span>
+            </Row>
           ) : null}
         </div>
 

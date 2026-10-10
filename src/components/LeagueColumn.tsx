@@ -46,7 +46,7 @@ interface LeagueColumnProps {
   // `leagueLabel` is injected by the column rather than resolved by the owner:
   // an event card carries no `sport` field, so HomeContent's sport→label lookup
   // (the one GameDetailModal uses) has nothing to key on here.
-  onShowEventDetails?: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => void;
+  onShowEventDetails?: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string, sport?: Sport) => void;
   // Opens the World Cup all-groups overlay (used only by the fifa column's
   // tappable "Group Stage" subtitle).
   onShowGroups?: () => void;
@@ -2408,7 +2408,7 @@ export default function LeagueColumn({
           onPlayHighlight={onPlayHighlight}
         />
       ) : league.eventCard && section !== "finished" ? (
-        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} showRatings={showRatings} />
+        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label, league.sport) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} showRatings={showRatings} />
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
           league.fetchFailed ? (

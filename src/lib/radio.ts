@@ -16,7 +16,7 @@
 // moves that location too, which is the point. Settings → "Show local-only
 // radio links everywhere" lifts the filter. When the location is unknown the
 // links still show, tagged "local only": fail open, never hide everything.
-import type { Game, Sport } from "./types";
+import type { Game, LeagueEventCard, Sport } from "./types";
 
 export type RadioAccess = {
   cost: "free" | "paid";
@@ -45,8 +45,14 @@ export type RadioTable = {
   // ESPN geoBroadcasts media shortName ("ERADM") → its feed.
   national: Record<string, RadioSource>;
   leagues: Record<string, { free?: RadioSource[]; paid?: RadioSource[] }>;
-  // "<sport>:<eventKey>" → event radio (races, slams, majors). Phase 4.
+  // "<sport>:<text>" → radio for one event (a race track, a slam). The text
+  // is lowercase and matches when the event title or venue contains it, so
+  // "nascar:talladega" covers every Talladega race. See eventListenLinks.
   events?: Record<string, RadioSource[]>;
+  // "<sport>:<espnTeamId>" → why that team has no free row (only spoiler
+  // pages, no stream at all). The unit test holds every team in a shipped
+  // league to a row OR a reason here.
+  missing?: Record<string, string>;
 };
 
 export type Where = { country?: string; region?: string; metro?: number } | null;
@@ -62,12 +68,30 @@ export type ListenLink = {
 
 export type ListenResult = { free: ListenLink[]; paid: ListenLink | null };
 
-// Leagues with team rows in the table. A card outside these (and with no ESPN
-// radio row) never fetches the table at all. Add a league here in the same
-// change that adds its rows; tests/radio-stations.test.ts holds the two together.
-export const RADIO_SPORTS: ReadonlySet<Sport> = new Set<Sport>(["nfl", "mlb", "nba", "nhl"]);
+// Leagues with team rows in the table. A card outside these and FEED_SPORTS
+// (and with no ESPN radio row) never fetches the table at all. Add a league
+// here in the same change that adds its rows; tests/radio-stations.test.ts
+// holds the two together. College leagues list only the conferences done so
+// far (the test's TEAMS counts say which).
+export const RADIO_SPORTS: ReadonlySet<Sport> = new Set<Sport>([
+  "nfl", "mlb", "nba", "nhl",
+  "wnba", "mls", "nwsl", "cfl", "ufl", "ligamx",
+  "ncaaf", "ncaam", "ncaaw",
+]);
 
-type ListenGame = Pick<Game, "sport" | "state" | "homeTeam" | "awayTeam"> & { radio?: string[] };
+// Sports with no team rows, only a series-wide feed (leagues.<sport>.free)
+// or per-event rows (events). Same test holds this list to the table.
+export const FEED_SPORTS: ReadonlySet<Sport> = new Set<Sport>([
+  "nascar", "indycar", "f1",
+  "tennis", "golf",
+  "epl", "efl", "facup", "ucl",
+  "cricket", "cricketintl", "nrl", "afl",
+]);
+
+// venue and seriesNote let an event row match a game too: a tennis match
+// carries "Wimbledon 2026" in seriesNote (espn.ts parseTennisMatch).
+type ListenGame = Pick<Game, "sport" | "state" | "homeTeam" | "awayTeam">
+  & { radio?: string[]; venue?: string; seriesNote?: string | null };
 
 const COUNTRY_LABEL: Record<string, string> = { GB: "UK", US: "US", CA: "Canada", AU: "Australia" };
 
@@ -103,7 +127,8 @@ function toLink(src: RadioSource, where: Where, anywhere: boolean): ListenLink |
   return { name: src.name, url: src.url, tags };
 }
 
-// Order: home flagship, away flagship, national (ESPN Radio), league feeds,
+// Order: home flagship, away flagship, event rows (a slam), national (ESPN
+// Radio), league feeds,
 // then every non-English feed last in the same order. Paid only when no free
 // link survives the geo filter. A finished game gets nothing: there is no
 // live audio left, and a station page is no use after the fact.
@@ -122,10 +147,45 @@ export function listenLinks(
     const raw = id?.startsWith(`${game.sport}-`) ? id.slice(game.sport.length + 1) : id;
     return raw ? table.teams[`${game.sport}:${raw}`] ?? [] : [];
   };
-  const national = (game.radio ?? []).map((k) => table.national[k]).filter((s): s is RadioSource => !!s);
-  const league = table.leagues[game.sport];
-  const all = [...teamRows(game.homeTeam?.id), ...teamRows(game.awayTeam?.id), ...national, ...(league?.free ?? [])]
-    .filter((s) => s.access.cost === "free");
+  const own = matchEventRows(table, game.sport, `${game.venue ?? ""} ${game.seriesNote ?? ""}`);
+  return pickLinks([...teamRows(game.homeTeam?.id), ...teamRows(game.awayTeam?.id), ...own], game.sport, game.radio, table, where, anywhere);
+}
+
+// Event rows whose text appears in the event's title or venue.
+function matchEventRows(table: RadioTable, sport: Sport, text: string): RadioSource[] {
+  const hay = text.toLowerCase();
+  const prefix = `${sport}:`;
+  return Object.entries(table.events ?? {})
+    .filter(([k]) => k.startsWith(prefix) && k.length > prefix.length && hay.includes(k.slice(prefix.length)))
+    .flatMap(([, list]) => list);
+}
+
+// The Listen links for an event tile (a race, a slam, a major): rows for this
+// event first, then national ESPN Radio, then the series feed. Same geo, paid
+// and finished rules as a game.
+export function eventListenLinks(
+  sport: Sport,
+  event: Pick<LeagueEventCard, "state" | "title" | "subtitle" | "radio">,
+  table: RadioTable | null,
+  where: Where,
+  prefs: ListenPrefs,
+): ListenResult {
+  if (!table || event.state === "post" || prefs.showListenLinks === false) return { free: [], paid: null };
+  const own = matchEventRows(table, sport, `${event.title} ${event.subtitle ?? ""}`);
+  return pickLinks(own, sport, event.radio, table, where, prefs.listenAnywhere === true);
+}
+
+function pickLinks(
+  first: RadioSource[],
+  sport: Sport,
+  radio: string[] | undefined,
+  table: RadioTable,
+  where: Where,
+  anywhere: boolean,
+): ListenResult {
+  const national = (radio ?? []).map((k) => table.national[k]).filter((s): s is RadioSource => !!s);
+  const league = table.leagues[sport];
+  const all = [...first, ...national, ...(league?.free ?? [])].filter((s) => s.access.cost === "free");
   const ordered = [...all.filter((s) => s.lang === "en"), ...all.filter((s) => s.lang !== "en")];
   const seen = new Set<string>();
   const free: ListenLink[] = [];
@@ -142,8 +202,8 @@ export function listenLinks(
 }
 
 // Whether a card should bother loading the table at all.
-export function mayHaveListen(game: ListenGame): boolean {
-  return game.state !== "post" && (RADIO_SPORTS.has(game.sport) || !!game.radio?.length);
+export function mayHaveListen(game: Pick<ListenGame, "sport" | "state" | "radio">): boolean {
+  return game.state !== "post" && (RADIO_SPORTS.has(game.sport) || FEED_SPORTS.has(game.sport) || !!game.radio?.length);
 }
 
 // ESPN geoBroadcasts → the radio media short names ("ERADM"). Only type 5
@@ -251,6 +311,13 @@ export const RADIO_HOST_DENYLIST: readonly string[] = [
   "cbssports.com", "foxsports.com", "nbcsports.com", "yahoo.com", "thescore.com",
   "bleacherreport.com", "si.com", "theathletic.com", "nytimes.com", "google.com",
   "sportsnet.ca", "tsn.ca", "rds.ca", "tvasports.ca",
+  // Phase 2-4 leagues and events: league, tour and tournament sites all lead
+  // with scores, results, standings or a leaderboard.
+  "cfl.ca", "theufl.com", "nwslsoccer.com", "ligamx.net", "tudn.com", "mediotiempo.com", "record.com.mx",
+  "premierleague.com", "efl.com", "uefa.com", "skysports.com",
+  "formula1.com", "nascar.com", "indycar.com", "pgatour.com", "atptour.com", "wtatennis.com",
+  "wimbledon.com", "usopen.org", "ausopen.com", "rolandgarros.com", "masters.com", "theopen.com",
+  "espncricinfo.com", "cricbuzz.com", "afl.com.au", "nrl.com", "sidearmsports.com",
 ];
 
 export function deniedRadioHost(url: string): string | null {
