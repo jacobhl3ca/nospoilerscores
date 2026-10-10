@@ -130,7 +130,9 @@ test("the recap pill sits on top of the NFL and MLB columns on /yesterday, and t
   const nflPill = page.locator('[data-league-recap="nfl"]');
   await expect(nflPill).toBeVisible({ timeout: 15_000 });
   await expect(nflPill).toContainText("Week 1");
-  await expect(nflPill.getByRole("button")).toHaveCount(2);
+  // Two cuts + the News button (Jacob 10/10).
+  await expect(nflPill.getByRole("button")).toHaveCount(3);
+  await expect(nflPill.locator("[data-recap-news]")).toHaveCount(1);
   await expect(nflPill.getByRole("button", { name: "Top 15 plays (8m)" })).toBeVisible();
   await expect(nflPill.getByRole("button", { name: "Sunday's best plays (30m)" })).toBeVisible();
   await expect(nflPill).not.toContainText(/Best Plays From Sunday|NFL Season/);
@@ -244,13 +246,15 @@ test("phone (390px): three NFL cuts stack under \"Week 1 highlights\" and stay i
   await expect(page.getByRole("heading", { name: "NFL" })).toBeVisible({ timeout: 15_000 });
   const nflPill = page.locator('[data-league-recap="nfl"]');
   await expect(nflPill).toBeVisible({ timeout: 15_000 });
-  await expect(nflPill.getByRole("button")).toHaveCount(3);
+  // Three cuts + the News icon, last in the row.
+  await expect(nflPill.getByRole("button")).toHaveCount(4);
   await expect(page.locator('[data-league-recap="mlb"]')).toBeVisible({ timeout: 15_000 });
   await expect(nflPill).toHaveAttribute("data-recap-layout", "stacked");
 
   const nfl = await pillMetrics(page, "nfl");
   expect(nfl.width, "a phone column").toBeLessThan(200);
-  expect(nfl.buttonTexts).toEqual(["6m", "17m", "30m"]);
+  // The News icon's only text is the zero-width line-box keeper.
+  expect(nfl.buttonTexts).toEqual(["6m", "17m", "30m", "\u200B"]);
   expect(nfl.headingText).toBe("Week 1 highlights");
   expect(nfl.headingClipped).toBe(false);
   // Nothing hidden: every phone heading fits its line, so none is dropped.
@@ -351,17 +355,21 @@ test("MLB Top 5 + Oddities: word buttons in order, nothing clipped from 340px to
   await page.goto("/yesterday");
   const mlbPill = page.locator('[data-league-recap="mlb"]');
   await expect(mlbPill).toBeVisible({ timeout: 15_000 });
-  await expect(mlbPill.getByRole("button")).toHaveCount(4);
+  await expect(mlbPill.getByRole("button")).toHaveCount(5);
   // aria-labels keep the series name and minutes, whatever the visible word.
   await expect(mlbPill.getByRole("button", { name: "Top 5 plays of the day (1m)" })).toBeVisible();
   await expect(mlbPill.getByRole("button", { name: "Oddities (1m)" })).toBeVisible();
   const keys = () => mlbPill.locator("button").evaluateAll((bs) => bs.map((b) => b.getAttribute("data-recap-key")));
-  expect(await keys()).toEqual(["top5", "realfast", "fastcast", "oddities"]);
+  // Four cuts fill the phone row, so its News icon (no recap key) sits on
+  // the heading line, ahead of them.
+  expect(await keys()).toEqual([null, "top5", "realfast", "fastcast", "oddities"]);
 
   const phone = await pillMetrics(page, "mlb");
   expect(phone.layout).toBe("stacked");
-  expect(phone.buttonTexts).toEqual(["Top 5", "1m", "15m", "Odd"]);
-  expect(phone.headingText).toBe("Best of the day");
+  expect(phone.buttonTexts).toEqual(["", "Top 5", "1m", "15m", "Odd"]);
+  // The News icon shares the heading line here, so the heading takes its
+  // shorter form (10/10: the News button is worth the long phrase).
+  expect(phone.headingText).toBe("Best of day");
   expect(phone.overflow).toBe(0);
   expect(phone.buttonsPastEdge).toBe(0);
   expect(phone.buttonsClipped).toBe(0);
@@ -383,7 +391,7 @@ test("MLB Top 5 + Oddities: word buttons in order, nothing clipped from 340px to
   // Desktop row: words, the minutes buttons keep their ▶, the word ones carry none.
   const row = await pillMetrics(page, "mlb");
   expect(row.layout).toBe("row");
-  expect(row.buttonTexts).toEqual(["Top 5", "1m", "15m", "Odd"]);
+  expect(row.buttonTexts).toEqual(["Top 5", "1m", "15m", "Odd", "\u200B"]);
   expect(await mlbPill.locator('[data-recap-key="realfast"] svg').count()).toBe(1);
   expect(await mlbPill.locator('[data-recap-key="top5"] svg').count()).toBe(0);
 });

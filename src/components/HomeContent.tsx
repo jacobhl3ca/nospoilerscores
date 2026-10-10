@@ -56,6 +56,8 @@ import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
+import NewsSpoilerConfirm from "@/components/NewsSpoilerConfirm";
+import { markNewsOkDay, newsNeedsConfirm, readNewsOkDay } from "@/lib/newsOkDay";
 import { fetchPlayoffPicture, fieldIsSet } from "@/lib/playoffPicture";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
@@ -866,6 +868,9 @@ export default function HomeContent({
   const [showNews, setShowNews] = useState(false);
   // Same, for the News tab's spoiler warning.
   const [newsNotice, setNewsNotice] = useState(false);
+  // A league pill's News button waiting on "are you sure" (the league it
+  // opens). Only while it is still early; see src/lib/newsOkDay.ts.
+  const [newsConfirm, setNewsConfirm] = useState<Sport | null>(null);
   // Per-column team-name abbreviation reports (keyed by slot; null-report =
   // column left/has no names). Any abbreviated game column → namesCompact, so
   // the UFC column's fighter names shrink exactly when the team names beside
@@ -1981,18 +1986,31 @@ export default function HomeContent({
   // A pick in news column 3's own switcher. A league overrides the column;
   // undefined (Auto) hands it back to scores column 3. `autoId` is the column
   // Auto lands on, so a one-column Focus view can follow it.
+  const newsThirdLeaguePatch = (sport: Sport | undefined, autoId: Sport | "espn" = "espn"): Partial<Preferences> => ({
+    newsThirdLeague: sport,
+    newsTopNews: false,
+    // Drop an old "Top news" pull-left too, so Auto puts col 3 back third.
+    newsGenericSlot: undefined,
+    newsGenericHidden: false,
+    // Keep a one-column Focus view pointed at the replacement column.
+    newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
+  });
   const setNewsThirdLeague = (sport: Sport | undefined, autoId: Sport | "espn" = "espn", extra: Partial<Preferences> = {}) => {
-    updatePrefs({
-      ...extra,
-      newsThirdLeague: sport,
-      newsTopNews: false,
-      // Drop an old "Top news" pull-left too, so Auto puts col 3 back third.
-      newsGenericSlot: undefined,
-      newsGenericHidden: false,
-      // Keep a one-column Focus view pointed at the replacement column.
-      newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
-    });
+    updatePrefs({ ...extra, ...newsThirdLeaguePatch(sport, autoId) });
   };
+
+  // The News-ok day (src/lib/newsOkDay.ts): 5 s of News, or any highlight on
+  // screen, means spoilers are no longer a worry today, so a league pill's
+  // News button stops asking first.
+  useEffect(() => {
+    if (!showNews) return;
+    const t = setTimeout(() => markNewsOkDay(getDateString(0)), 5000);
+    return () => clearTimeout(t);
+  }, [showNews]);
+  const videoPlaying = !!(videoModal && (videoModal.videoId || videoModal.playbackUrl || videoModal.embedUrl));
+  useEffect(() => {
+    if (videoPlaying) markNewsOkDay(getDateString(0));
+  }, [videoPlaying]);
 
   // Update favicon based on ratings toggle
   useEffect(() => {
@@ -2800,6 +2818,37 @@ export default function HomeContent({
   // around could still reorder columns for users with stale localStorage prefs,
   // breaking the "Auto on col N = the column's default" guarantee.
   const sortedLeagues = leagues;
+
+  // A league pill's News button (LeagueRecapCard onOpenNews, Jacob 10/10).
+  // News has no per-league view, so it opens the tab and, when the league is
+  // not already one of the News columns, puts it in column 3 the way that
+  // column's own switcher would. One updatePrefs: two in a row would each
+  // spread the same stale `prefs` and the second would drop showNews.
+  const newsColumnShows = (sport: Sport): boolean => {
+    const queue = [...sortedLeagues];
+    const slotSports = [0, 1, 2].map((i) => (selectedSlotLeagues[i] === "empty" ? undefined : queue.shift()?.sport));
+    if (slotSports[0] === sport || slotSports[1] === sport) return true;
+    if (prefs.newsGenericHidden) return false;
+    if (prefs.newsThirdLeague) return prefs.newsThirdLeague === sport;
+    const topNewsPicked = prefs.newsTopNews ?? (prefs.newsGenericSlot !== undefined);
+    return !topNewsPicked && slotSports[2] === sport;
+  };
+  const openNewsFor = (sport: Sport, warned: boolean) => {
+    setNewsConfirm(null);
+    setShowNews(true);
+    updatePrefs({
+      showNews: true,
+      skipNewsExplainer: true,
+      ...(newsColumnShows(sport) ? {} : newsThirdLeaguePatch(sport, "espn")),
+    });
+    // The confirm already warned; the first-time bar would say it twice.
+    if (!prefs.skipNewsExplainer && !warned) setNewsNotice(true);
+    window.scrollTo({ top: 0 });
+  };
+  const requestNews = (sport: Sport) => {
+    if (newsNeedsConfirm(getETHour(), prefs.smartCutoffHour ?? 13, readNewsOkDay(), getDateString(0))) setNewsConfirm(sport);
+    else openNewsFor(sport, false);
+  };
 
   // Source cards use the current deterministic smart cascade. Ignore stale
   // newsSourceOrder values from the removed drag-reorder UI: otherwise an old
@@ -5143,6 +5192,9 @@ export default function HomeContent({
                   reviewSeason={mlbReview?.season ?? null}
                   reviewSections={reviewSections}
                   onPlayList={playNewsVideo}
+                  onOpenNews={!showNews && league.sport !== "best" && league.sport !== "top"
+                    ? () => requestNews(league.sport)
+                    : null}
                 />
               )
               : undefined;
@@ -6063,6 +6115,16 @@ export default function HomeContent({
           highlightGroup={groupsHighlight}
           selectedDate={selectedDate}
           onClose={() => { setGroupsOpen(false); setGroupsHighlight(null); }}
+        />
+      )}
+
+      {newsConfirm && (
+        <NewsSpoilerConfirm
+          onCancel={() => setNewsConfirm(null)}
+          onConfirm={() => {
+            markNewsOkDay(getDateString(0));
+            openNewsFor(newsConfirm, true);
+          }}
         />
       )}
 

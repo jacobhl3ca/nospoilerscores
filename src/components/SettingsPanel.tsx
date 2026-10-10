@@ -1660,6 +1660,7 @@ export default function SettingsPanel({
                     <option key={h} value={h}>{hourLabel(h)}</option>
                   ))}
                 </select>
+                <span className="block">after this hour, a league card&apos;s News button stops asking first</span>
               </p>
             )}
             {/* Time zone (Jacob 10/4): moved up from More settings because a
