@@ -38,7 +38,7 @@ async function scrollIntoCards(page: import("@playwright/test").Page) {
   // Same share-URL trick league-switcher-defaults.spec.ts uses: it skips the
   // first-run "Pick your leagues" modal, whose full-viewport z-50 scrim would
   // otherwise sit over the seam and make every probe meaningless.
-  await page.goto("/?l=m&s=m.0.0&dd=t&dv=s", { waitUntil: "networkidle" });
+  await page.goto("/?l=m&s=m.0.0&dd=t&dv=s", { waitUntil: "domcontentloaded" });
   // The scoreboard hydrates async; the league title only mounts with data.
   await page.locator(".league-sticky-top").first().waitFor({ timeout: 30_000 });
 
@@ -223,7 +223,7 @@ async function openSingleColumn(page: import("@playwright/test").Page) {
   await page.addInitScript(() => {
     localStorage.setItem("nss-preferences", JSON.stringify({ singleColumn: true, leaguesOnboarded: true }));
   });
-  await page.goto("/?l=m&s=m.0.0&dd=t&dv=s", { waitUntil: "networkidle" });
+  await page.goto("/?l=m&s=m.0.0&dd=t&dv=s", { waitUntil: "domcontentloaded" });
   await page.locator(".league-sticky-top").first().waitFor({ timeout: 30_000 });
 }
 
