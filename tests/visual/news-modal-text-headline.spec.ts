@@ -76,6 +76,9 @@ test("Headlines off: a text post's headline shows in the modal, the list row sta
   await setup(page);
   await expect(page.locator("html")).not.toHaveClass(/reveal-news-titles/);
 
+  // The 3s filter poll below starts only once the row is there: on a cold dev
+  // server the list can take longer than that to render.
+  await expect(row(page, TEXT)).toBeVisible({ timeout: 30_000 });
   await filterOf(row(page, TEXT).locator(".news-title")).toMatch(/blur\(/);
 
   await row(page, TEXT).click();

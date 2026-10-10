@@ -27,7 +27,25 @@ const BASE_PREFS = {
   defaultDateMode: "today",
 };
 
+// Every Reddit feed answers twelve text posts, so the list has headlines to
+// click, and the page is tall enough to scroll the toolbar away, without the
+// live feeds (the prebaked public/news/*.json files are
+// gitignored and may be missing).
+async function mockFeeds(page: import("@playwright/test").Page) {
+  await page.route("**/news/*.json", (route) => {
+    const name = new URL(route.request().url()).pathname.split("/").pop()!.replace(/\.json$/, "");
+    if (name === "highlights") return route.fulfill({ status: 200, contentType: "application/json", body: '{"games":{}}' });
+    const items = Array.from({ length: 12 }, (_, k) => k + 1).map((i) => ({
+      id: `${name}-t${i}`, headline: `${name} post ${i}: a spoiler headline`, description: "", imageUrl: null,
+      published: new Date(Date.now() - i * 3_600_000).toISOString(), byline: "u/fixture", section: `r/${name}`,
+      articleUrl: `https://www.reddit.com/r/${name}/comments/t${i}/`, body: "Text.",
+    }));
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items }) });
+  });
+}
+
 async function gotoNews(page: import("@playwright/test").Page, extra: Record<string, unknown> = {}) {
+  await mockFeeds(page);
   await page.addInitScript(({ base, update }) => {
     localStorage.setItem("nss-preferences", JSON.stringify({ ...base, ...update }));
   }, { base: BASE_PREFS, update: extra });

@@ -160,10 +160,25 @@ test("toggle off renders the column exactly as without the prefs", async ({ brow
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
     await setup(page, extra);
+    // A card's "Listen" chip lands after the radio table and /api/where load
+    // (lib/useListenLinks). Read the card once both have answered and its
+    // text holds still, so both snapshots see the same state.
+    const radio = Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/radio-stations.json")),
+      page.waitForResponse((r) => new URL(r.url()).pathname === "/api/where"),
+    ]);
     await page.goto("/");
     await expect(yankees(page).first()).toBeVisible();
+    await radio;
     const cards = column(page).locator('[role="button"][aria-label*=" at "], button[aria-label*=" at "]');
-    const out = { count: await cards.count(), first: (await cards.first().innerText()).trim(), banner: await banner(page).count() };
+    let first = "";
+    await expect.poll(async () => {
+      const now = (await cards.first().innerText()).trim();
+      const stable = now === first;
+      first = now;
+      return stable;
+    }, { intervals: [300] }).toBe(true);
+    const out = { count: await cards.count(), first, banner: await banner(page).count() };
     await ctx.close();
     return out;
   };
