@@ -784,7 +784,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; seenKey?: string | null };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; seenKey?: string | null; titlesShown?: boolean | null };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -1479,6 +1479,7 @@ export default function HomeContent({
     siblings: opts.siblings || null,
     sibIndex: opts.index ?? null,
     seenKey: opts.seenKey || null,
+    titlesShown: opts.titlesShown ?? null,
   }), []);
   const playNewsVideo = useCallback<PlayHandler>((opts) => {
     clearReopen();
@@ -4541,6 +4542,7 @@ export default function HomeContent({
               const name = source.label;
               return {
                 className: `news-card-titles-${titles ? "on" : "off"} news-card-media-${media ? "on" : "off"} news-card-textposts-${text ? "on" : "off"}`,
+                titlesShown: titles,
                 videosOnly: vOnly,
                 showTextPosts: text,
                 controls: (
@@ -5955,6 +5957,7 @@ export default function HomeContent({
           shareCard={videoModal.shareCard}
           maskVideoTitle={prefs.maskVideoTitle ?? false}
           forceTitleMask={!!videoModal.forceTitleMask}
+          titlesShown={videoModal.titlesShown}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           keysButton={!prefs.hideControlsHint}
           seekControl={prefs.videoSeekControl ?? "both"}

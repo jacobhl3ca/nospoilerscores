@@ -878,3 +878,36 @@ test("Big: three subs sit in one row of three columns", async ({ page }) => {
     .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(tops).size).toBe(1);
 });
+
+// The modal renders outside the card, so it used to read only the global
+// Headlines setting: global on + ESPN Videos card off showed the clip's
+// headline in the clear, and a tap did nothing (Jacob 10/10). The modal now
+// takes the setting of the card it opened from.
+const footerTitle = (page: Page) => page.locator('[role="dialog"] p.news-title').first();
+const titleFilter = (page: Page) => footerTitle(page).evaluate((el) => getComputedStyle(el).filter);
+const openVideosClip = async (page: Page) => {
+  await page.getByRole("button", { name: "Play highlight: espn-videos post 1", exact: true }).click(LOAD);
+  await expect(footerTitle(page)).toHaveText("espn-videos post 1", LOAD);
+};
+
+test("ESPN modal: global Headlines on + ESPN Videos card off = the clip's headline blurs; tap and H show and hide it", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, revealNewsTitles: true, newsCardPrefs: { "espn-videos": { revealTitles: false } } });
+  await openVideosClip(page);
+  await expect.poll(() => titleFilter(page)).toBe("blur(7px)");
+  await footerTitle(page).click();
+  await expect.poll(() => titleFilter(page)).toBe("none");
+  await footerTitle(page).click();
+  await expect.poll(() => titleFilter(page)).toBe("blur(7px)");
+  await page.keyboard.press("h");
+  await expect.poll(() => titleFilter(page)).toBe("none");
+  // ↓ to the next clip in the same card: blurred again, card setting kept.
+  await page.keyboard.press("ArrowDown");
+  await expect(footerTitle(page)).toHaveText("espn-videos post 2");
+  await expect.poll(() => titleFilter(page)).toBe("blur(7px)");
+});
+
+test("ESPN modal: global Headlines off + ESPN Videos card on = the clip's headline shows", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, newsCardPrefs: { "espn-videos": { revealTitles: true } } });
+  await openVideosClip(page);
+  await expect.poll(() => titleFilter(page)).toBe("none");
+});
