@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { getRecapsFor, getRecapsForSync, formatRecapDuration, recapButtonText, rowRecapHeadings, stackedRecapHeadings, RECAP_STACK_MAX_PX, RECAP_COMPACT_MAX_PX, type RecapRecord } from "@/lib/recaps";
 import { leadChannelBlocksEmbeds } from "@/lib/youtube";
 import type { PlayHandler, PlayOpts } from "@/components/NewsColumn";
@@ -47,6 +47,15 @@ import { withoutSettledOdds } from "@/lib/playoffPicture";
 // siblings, so the modal pages through them — Shift+←/→ or ↑/↓, or the
 // ‹ › buttons — without closing (Jacob 9/26: "shift click to cycle the best
 // of day highlights").
+//
+// `onOpenNews`: a "News" button, LAST in whichever row the pill shows (recap,
+// Playoff or review), that opens the News tab on this league (Jacob 10/10:
+// "where mlb has top 5 etc."). Only where a pill already renders, so a column
+// with no pill is not pushed down. The wide row: the word "News", last in the
+// button row. Stacked (phone, md): a newspaper icon at the right end of the
+// heading line, sized to that line, because a fifth button on MLB's four-cut
+// row clipped at 340px (measured 10/10). Neither changes the pill's height, so
+// the reserveSlot spacer still matches.
 
 // Outer pill and button classes per layout (see the header note). Shared by
 // the real pill and the reserveSlot spacer so their heights always agree.
@@ -92,6 +101,7 @@ export default function LeagueRecapCard({
   reviewSections,
   onDismissReview,
   onPlayList,
+  onOpenNews,
 }: {
   sport: string;
   date: string;
@@ -119,6 +129,9 @@ export default function LeagueRecapCard({
   // buttons that hides the review for the rest of the season.
   onDismissReview?: (() => void) | null;
   onPlayList?: PlayHandler;
+  // Opens News on this league. Null in News view and for columns with no
+  // league news (Best of yesterday, the ESPN front page).
+  onOpenNews?: (() => void) | null;
 }) {
   const ymd = lastPlayedDate || date;
   // Seeded from the session cache when recaps.json already landed — HomeContent
@@ -214,9 +227,55 @@ export default function LeagueRecapCard({
     </button>
   ) : null;
 
+  const newsGlyph = (
+    <svg aria-hidden="true" className="shrink-0" width={glyph + 2} height={glyph + 2} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" /><path d="M18 14h-8M15 18h-5M10 6h8v4h-8z" /></svg>
+  );
+  const openNews = (e: ReactMouseEvent) => {
+    e.stopPropagation();
+    onOpenNews?.();
+  };
+  // In the button row, last, sized like its neighbours (`btnCls`). Icon only,
+  // with the same zero-width text line box as the bracket icon, so it is as
+  // tall as a "▶ 8m" button. `up` = it sits on the heading line instead.
+  const newsButton = (btnCls: string, up: boolean) => onOpenNews && !up ? (
+    <button
+      type="button"
+      data-recap-news
+      onClick={openNews}
+      className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${btnCls}`}
+      style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+      aria-label={`Open News for ${sport.toUpperCase()}`}
+      title="Open News"
+    >
+      {newsGlyph}
+      <span aria-hidden="true" className={`${minsText} font-medium`}>{"\u200B"}</span>
+    </button>
+  ) : null;
+  // A full stacked row (`up`): the heading line becomes [heading][icon]. The
+  // icon stretches to the line's own height and no taller, so the pill keeps
+  // its height; measure() sees the narrower line and picks a shorter heading.
+  const headingLine = (heading: ReactNode, up: boolean) => onOpenNews && up ? (
+    <div className="flex items-center gap-1 min-w-0">
+      {heading}
+      <button
+        type="button"
+        data-recap-news
+        onClick={openNews}
+        className="flex shrink-0 self-stretch items-center justify-center rounded px-1 transition-opacity hover:opacity-80 cursor-pointer"
+        style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+        aria-label={`Open News for ${sport.toUpperCase()}`}
+        title="Open News"
+      >
+        {newsGlyph}
+      </button>
+    </div>
+  ) : heading;
+
   if (!records.length && onShowReview && reviewSeason) {
     const headings = reviewHeadings(reviewSeason);
     const tabs = REVIEW_TABS.filter((t) => !reviewSections || reviewSections.includes(t.key));
+    // Three word tabs fill a phone row.
+    const newsUp = stacked;
     return (
       <div
         ref={setEl}
@@ -226,14 +285,17 @@ export default function LeagueRecapCard({
         className={`relative mb-2 rounded-lg flex ${stacked ? STACKED_PILL : ROW_PILL}`}
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       >
-        <span
-          data-recap-heading
-          className={`flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate ${headingHidden ? "invisible" : ""}`}
-          aria-hidden={headingHidden || undefined}
-          style={{ color: "var(--text)" }}
-        >
-          {headings[Math.min(headingPick, headings.length - 1)]}
-        </span>
+        {headingLine(
+          <span
+            data-recap-heading
+            className={`flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate ${headingHidden ? "invisible" : ""}`}
+            aria-hidden={headingHidden || undefined}
+            style={{ color: "var(--text)" }}
+          >
+            {headings[Math.min(headingPick, headings.length - 1)]}
+          </span>,
+          newsUp,
+        )}
         {headings.map((text) => (
           <span
             key={text}
@@ -262,6 +324,7 @@ export default function LeagueRecapCard({
               <span className={`${minsText} font-medium whitespace-nowrap`}>{t.label}</span>
             </button>
           ))}
+          {newsButton(stacked ? "flex-auto gap-0.5 px-0" : ROW_BTN, newsUp)}
           {onDismissReview && (
             <button
               type="button"
@@ -286,6 +349,9 @@ export default function LeagueRecapCard({
   }
 
   if (!records.length && onShowPlayoffs) {
+    const playoffTabs = withoutSettledOdds(PLAYOFFS_TABS, hidePlayoffOdds);
+    // Bracket · Odds · Picks fill a phone row; Bracket · Picks leave room.
+    const newsUp = stacked && playoffTabs.length >= 3;
     return (
       <div
         ref={setEl}
@@ -295,15 +361,18 @@ export default function LeagueRecapCard({
         className={`mb-2 rounded-lg flex ${stacked ? STACKED_PILL : ROW_PILL}`}
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       >
-        <span
-          data-recap-heading
-          className="flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate"
-          style={{ color: "var(--text)" }}
-        >
-          Playoff
-        </span>
+        {headingLine(
+          <span
+            data-recap-heading
+            className="flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate"
+            style={{ color: "var(--text)" }}
+          >
+            Playoff
+          </span>,
+          newsUp,
+        )}
         <div className={`flex shrink-0 ${stacked ? "gap-0.5" : "gap-1"}`}>
-          {withoutSettledOdds(PLAYOFFS_TABS, hidePlayoffOdds).map((t) => (
+          {playoffTabs.map((t) => (
             <button
               key={t.key}
               type="button"
@@ -323,6 +392,7 @@ export default function LeagueRecapCard({
               <span className={`${minsText} font-medium whitespace-nowrap`}>{t.label}</span>
             </button>
           ))}
+          {newsButton(stacked ? "flex-auto gap-0.5 px-0" : ROW_BTN, newsUp)}
         </div>
       </div>
     );
@@ -385,7 +455,10 @@ export default function LeagueRecapCard({
   // Four buttons (MLB on a round-up day: Top 5, 1m, 15m, Oddities) overran a
   // 225px desktop column by 24px and a phone's 100px row (measured
   // 2026-09-25), so words take their short form, and on the phone the ▶s go.
-  const crowded = records.length + (bracketButton ? 1 : 0) >= 4;
+  const baseButtons = records.length + (bracketButton ? 1 : 0);
+  // A phone row that already holds four buttons has no room for a fifth.
+  const newsUp = stacked && baseButtons >= 4;
+  const crowded = baseButtons + (onOpenNews && !newsUp ? 1 : 0) >= 4;
   // A phone row with a word in it is sized by content plus an equal share of
   // what is left: an even third (26px at 340px) cut "▶ 15m" by a pixel.
   const fitButtons = stacked && (crowded || records.some((r) => recapButtonText(r) !== null));
@@ -398,16 +471,19 @@ export default function LeagueRecapCard({
       className={`relative mb-2 rounded-lg flex ${stacked ? STACKED_PILL : ROW_PILL}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
-      <span
-        data-recap-heading
-        // `invisible`, not unmounted: the text must stay measurable, or the
-        // next measure would see an empty span and bring it back (flicker).
-        className={`flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate ${headingHidden ? "invisible" : ""}`}
-        aria-hidden={headingHidden || undefined}
-        style={{ color: "var(--text)" }}
-      >
-        {candidates[Math.min(headingPick, candidates.length - 1)]}
-      </span>
+      {headingLine(
+        <span
+          data-recap-heading
+          // `invisible`, not unmounted: the text must stay measurable, or the
+          // next measure would see an empty span and bring it back (flicker).
+          className={`flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate ${headingHidden ? "invisible" : ""}`}
+          aria-hidden={headingHidden || undefined}
+          style={{ color: "var(--text)" }}
+        >
+          {candidates[Math.min(headingPick, candidates.length - 1)]}
+        </span>,
+        newsUp,
+      )}
       {/* Hidden, out-of-flow copies of each candidate at the heading's font,
           so measure() can pick the longest that fits. After the heading, which
           stays the pill's first span. */}
@@ -450,6 +526,7 @@ export default function LeagueRecapCard({
           );
         })}
         {bracketButton}
+        {newsButton(stacked ? (fitButtons ? STACKED_FIT_BTN : STACKED_BTN) : ROW_BTN, newsUp)}
       </div>
     </div>
   );

@@ -103,9 +103,12 @@ for (const vp of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
     const pill = page.locator('[data-league-recap="mlb"]');
     await expect(pill).toBeVisible({ timeout: 20_000 });
     await expect(pill).toHaveAttribute("data-recap-kind", "review");
-    await expect(pill.getByRole("button")).toHaveCount(3);
+    // Three sections + the News icon (Jacob 10/10): on the heading line at
+    // 390, where three words fill the row; last in the row at 1440.
+    await expect(pill.getByRole("button")).toHaveCount(4);
+    await expect(pill.locator("[data-recap-news]")).toHaveCount(1);
     const m = await pillMetrics(page);
-    expect(m.buttonTexts).toEqual(["Months", "Playoffs", "Teams"]);
+    expect(m.buttonTexts).toEqual(vp.width < 500 ? ["", "Months", "Playoffs", "Teams"] : ["Months", "Playoffs", "Teams", "\u200B"]);
     expect(m.overflow).toBe(0);
     expect(m.buttonsPastEdge).toBe(0);
     expect(m.buttonsClipped).toBe(0);
