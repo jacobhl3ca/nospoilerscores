@@ -69,6 +69,7 @@ test("offseason NBA remains labelled and manually selectable", async ({ page }) 
   const nbaOption = sheet.getByRole("button", { name: /^NBA offseason/ });
   await expect(nbaOption.locator("em")).toHaveText("offseason");
   await nbaOption.click();
+  await sheet.getByTestId("league-picker-add").click();
 
   await expect(page.getByRole("heading", { name: "NBA", exact: true })).toBeVisible();
   await expect(page.locator(NBA_TRADES)).toBeVisible();

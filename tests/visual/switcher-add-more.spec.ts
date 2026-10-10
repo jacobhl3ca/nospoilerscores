@@ -92,8 +92,9 @@ for (const width of [390, 1280]) {
       await switcher.getByTestId("news-switcher-add-more").click();
       await expect(sheet.getByRole("button", { name: "Show offseason leagues" })).toHaveAttribute("aria-pressed", "true");
 
-      // 4. A pick closes the sheet and the column shows that league.
+      // 4. A pick and Add close the sheet and the column shows that league.
       await sheet.getByRole("button", { name: /^NBA offseason/ }).click();
+      await sheet.getByTestId("league-picker-add").click();
       await expect(sheet).toHaveCount(0);
       await expect(titles.nth(col)).toHaveText("NBA", LOAD);
       // The pick sticks through a reload (news column 3 keeps only picks in
@@ -138,6 +139,7 @@ for (const width of [390, 1280]) {
 
       // 4.
       await sheet.getByRole("button", { name: /^NBA offseason/ }).click();
+      await sheet.getByTestId("league-picker-add").click();
       await expect(sheet).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "NBA", exact: true })).toBeVisible(LOAD);
       expect((await saved(page)).thirdLeague).toBe("nba");
@@ -145,18 +147,21 @@ for (const width of [390, 1280]) {
   });
 }
 
-test("Escape and Cancel close the sheet without a change", async ({ page }) => {
+test("Escape and ✕ close the sheet without a change", async ({ page }) => {
   await seedPrefs(page, { showNews: false, defaultLandingView: "scores" });
   await page.goto("/");
   const header = page.getByRole("button", { name: "WNBA", exact: true });
   await expect(header).toBeVisible(LOAD);
   const sheet = page.getByRole("dialog", { name: "More leagues" });
-  for (const close of ["Escape", "Cancel"] as const) {
+  for (const close of ["Escape", "Close"] as const) {
     await header.click();
     await page.getByTestId("league-switcher-add-more").click();
     await expect(sheet).toBeVisible();
+    // A lit pill is not an Add.
+    await sheet.getByTestId("league-picker-grid").locator('button[aria-pressed="false"]').first().click();
+    await expect(sheet.getByTestId("league-picker-add")).toHaveText("Add 1");
     if (close === "Escape") await page.keyboard.press("Escape");
-    else await sheet.getByRole("button", { name: "Cancel" }).click();
+    else await sheet.getByRole("button", { name: "Close", exact: true }).click();
     await expect(sheet).toHaveCount(0);
   }
   expect((await saved(page)).thirdLeague).toBe("wnba");
