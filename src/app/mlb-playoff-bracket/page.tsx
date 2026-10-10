@@ -28,9 +28,22 @@ import PlayoffPictureModal from "@/components/PlayoffPictureModal";
 // (playBracket), but on these pages they wait behind a "Show series results"
 // tap that lasts for the visit only. On the board the panel keeps its one
 // cover, remembered per season (REVEAL_KEY), and the pages never write it.
-const TITLE = "MLB Playoff Bracket 2026 (Seeds, Matchups, TV) | HideScore";
-const DESC =
-  "The 2026 MLB playoff bracket as it stands right now. All 12 seeds, every series pairing, who is still chasing a spot, and the TV channel for each round.";
+//
+// 2026-10-07: "mlb playoff schedule" has 1.9x the demand of "mlb playoff
+// picture" and no page answered it, so each bracket column now carries its
+// round's dates (SERIES_DATES in lib/playoffPicture, baked, never live) and the
+// FAQ has the schedule. No second page: one URL keeps the authority. From
+// Oct 21 the title and H1 lead with the World Series, the week its searches
+// overtake "bracket". The switch is decided at BUILD time (static export), so
+// it lands with the first deploy on or after Oct 21.
+const WORLD_SERIES_WEEK = Date.now() >= Date.parse("2026-10-21T04:00:00Z");
+const TITLE = WORLD_SERIES_WEEK
+  ? "World Series 2026 Bracket, Schedule and TV | HideScore"
+  : "MLB Playoff Bracket 2026: Schedule, Seeds, TV | HideScore";
+const DESC = WORLD_SERIES_WEEK
+  ? "The 2026 World Series and MLB playoff bracket: every series pairing, the dates of each round, World Series Game 1 on Friday, October 23, and the TV channel for each."
+  : "The 2026 MLB playoff bracket and schedule: all 12 seeds, every series pairing, the dates of each round through the World Series, and the TV channel for each.";
+const H1 = WORLD_SERIES_WEEK ? "MLB playoff bracket 2026 → World Series" : "MLB playoff bracket 2026";
 const CANONICAL = "/mlb-playoff-bracket";
 
 const FAQ = [
@@ -55,8 +68,16 @@ const FAQ = [
     a: "No. The bracket is fixed on the final day of the regular season. The winner of 3 against 6 always meets the 2 seed, and the winner of 4 against 5 always meets the 1 seed, however the first round goes.",
   },
   {
+    q: "What is the 2026 MLB playoff schedule?",
+    a: "Wild Card Series: Tuesday, September 29 to Thursday, October 1, on NBC and Peacock. ALDS: October 3 to 10 on TBS and HBO Max. NLDS: October 3 to 9 on FOX and FS1. NLCS: October 11 to 19 on FOX and FS1. ALCS: October 12 to 20 on TBS and HBO Max. World Series: October 23 to 31 on FOX. Each end date is the last game a series could need; one that ends early simply stops sooner.",
+  },
+  {
     q: "When is the 2026 World Series?",
-    a: "Game 1 is scheduled for Friday, October 23. A seventh game, if the series needs one, falls on Saturday, October 31. FOX has the World Series.",
+    a: "Game 1 is scheduled for Friday, October 23, and Game 2 for Saturday, October 24. Games 3, 4 and 5 move to the other park on October 26, 27 and 28. If the series needs them, Game 6 is Friday, October 30 and Game 7 is Saturday, October 31. FOX has every game.",
+  },
+  {
+    q: "What channel is the World Series on?",
+    a: "FOX, for every game of the 2026 World Series. FOX and FS1 also carry the NLCS, and TBS and HBO Max carry the ALCS.",
   },
   {
     q: "Can I fill out an MLB playoff bracket here?",
@@ -79,6 +100,9 @@ export const metadata: Metadata = {
     "mlb playoff bracket right now",
     "mlb playoff bracket if the season ended today",
     "world series bracket 2026",
+    "mlb playoff schedule 2026",
+    "world series 2026 schedule",
+    "world series 2026 tv",
   ],
   alternates: { canonical: CANONICAL },
   openGraph: {
@@ -101,7 +125,7 @@ export const metadata: Metadata = {
 export default function MlbPlayoffBracketPage() {
   return (
     <SeoLandingPage
-      h1="MLB playoff bracket 2026"
+      h1={H1}
       subject="MLB playoff bracket"
       lead={<PlayoffPictureModal variant="page" initialTab="bracket" />}
       intro={[
@@ -119,7 +143,7 @@ export default function MlbPlayoffBracketPage() {
         },
         {
           h: "Who carries each round on TV",
-          p: "Each round's column in the bracket names its network, so you can see where a series airs without leaving the page. For 2026 the Wild Card Series is on NBC and Peacock in both leagues. The ALDS and ALCS are on TBS and HBO Max. The NLDS and NLCS are on FOX and FS1, and the World Series is on FOX.",
+          p: "Each round's column in the bracket names its dates and its network, so you can see when and where a series airs without leaving the page. For 2026 the Wild Card Series is on NBC and Peacock in both leagues. The ALDS and ALCS are on TBS and HBO Max. The NLDS and NLCS are on FOX and FS1, and the World Series is on FOX.",
         },
         {
           h: "Seats that are still open",
@@ -137,7 +161,7 @@ export default function MlbPlayoffBracketPage() {
       bullets={[
         "The full 2026 bracket for both leagues, drawn live from MLB's standings.",
         "Clubs still chasing an open seat, listed under that seat with their odds.",
-        "The network for every round, from NBC's wild-card games to FOX's World Series.",
+        "The dates and the network for every round, from NBC's wild-card games to FOX's World Series.",
         "A Picks tab to call every series before the September 29 first pitch.",
         "Series winners behind one tap, so a finished series is never shown unasked.",
       ]}

@@ -741,6 +741,20 @@ export const ESPN_FRONT_PAGE_CASCADE: ColumnSource[] = [
   { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN", logoUrl: ESPN_BRAND_LOGO },
 ];
 
+// The "ESPN" news layout (Jacob 10/8): ESPN Videos in the left column, ESPN
+// Top Headlines in the right one, the user's league subreddits below. The
+// same two cards as ESPN_FRONT_PAGE_CASCADE, split one per column.
+export const ESPN_LAYOUT_VIDEOS: ColumnSource = ESPN_FRONT_PAGE_CASCADE[1];
+export const ESPN_LAYOUT_HEADLINES: ColumnSource = ESPN_FRONT_PAGE_CASCADE[0];
+// r/sports, for an ESPN layout whose leagues have no subreddit at all.
+export const GENERAL_REDDIT_SOURCE: ColumnSource = GENERIC_CASCADE[0];
+
+// A league's Reddit cards only (its own sub, plus r/soccer for the soccer
+// leagues), in cascade order. Empty for a league with no sub (poker).
+export function redditSourcesFor(sport: Sport): ColumnSource[] {
+  return leagueSourceCascade(sport).filter((s) => classifySource(s) === "reddit");
+}
+
 // Classify a news source by its origin for the funnel source filter.
 //  - reddit:    `reddit-*` keys (r/sports, r/nba, …)
 //  - topvideos: any `*-videos` feed (NBA Top Videos, MLB Most Popular, ESPN Videos)

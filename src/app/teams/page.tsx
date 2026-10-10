@@ -62,7 +62,7 @@ export default function TeamsHubPage() {
       {TEAM_PAGE_LEAGUES.map((l) => (
         <section key={l.league} id={l.league} className="mb-8 scroll-mt-20">
           <h2 className="mb-3 text-xl font-bold tracking-tight">
-            {l.label} teams
+            {l.label} team scores without spoilers
             <Link href={l.guide} className="ml-3 text-sm font-normal underline underline-offset-2" style={muted}>
               {l.label} guide
             </Link>

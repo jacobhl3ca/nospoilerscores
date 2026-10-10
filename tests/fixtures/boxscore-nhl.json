@@ -1,0 +1,687 @@
+{
+ "header": {
+  "competitions": [
+   {
+    "id": "401891820",
+    "competitors": [
+     {
+      "homeAway": "home",
+      "score": "2",
+      "linescores": [
+       {
+        "displayValue": "1"
+       },
+       {
+        "displayValue": "0"
+       },
+       {
+        "displayValue": "1"
+       }
+      ],
+      "team": {
+       "id": "14",
+       "abbreviation": "OTT",
+       "displayName": "Ottawa Senators",
+       "logos": [
+        {
+         "href": "https://a.espncdn.com/i/teamlogos/nhl/500/ott.png"
+        }
+       ]
+      }
+     },
+     {
+      "homeAway": "away",
+      "score": "1",
+      "linescores": [
+       {
+        "displayValue": "0"
+       },
+       {
+        "displayValue": "1"
+       },
+       {
+        "displayValue": "0"
+       }
+      ],
+      "team": {
+       "id": "15",
+       "abbreviation": "PHI",
+       "displayName": "Philadelphia Flyers",
+       "logos": [
+        {
+         "href": "https://a.espncdn.com/i/teamlogos/nhl/500/phi.png"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "boxscore": {
+  "players": [
+   {
+    "team": {
+     "id": "15",
+     "abbreviation": "PHI"
+    },
+    "statistics": [
+     {
+      "name": "forwards",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "3096237",
+         "shortName": "N. Acciari",
+         "displayName": "Noel Acciari"
+        },
+        "stats": [
+         "0",
+         "2",
+         "0",
+         "-1",
+         "12:29",
+         "0:00",
+         "5:03",
+         "7:26",
+         "18",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "5",
+         "3",
+         "62.5",
+         "0",
+         "0",
+         "0"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "5173105",
+         "shortName": "D. Barkey",
+         "displayName": "Denver Barkey"
+        },
+        "stats": [
+         "1",
+         "0",
+         "1",
+         "0",
+         "11:50",
+         "1:51",
+         "0:00",
+         "9:59",
+         "19",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "1",
+         "5",
+         "16.7",
+         "0",
+         "0",
+         "0"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "3149603",
+         "shortName": "M. Bunting",
+         "displayName": "Michael Bunting"
+        },
+        "stats": [
+         "0",
+         "1",
+         "0",
+         "0",
+         "10:56",
+         "2:00",
+         "0:00",
+         "8:56",
+         "14",
+         "0",
+         "0",
+         "0",
+         "2",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "1",
+         "2"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "defenses",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "4392642",
+         "shortName": "S. Benoit",
+         "displayName": "Simon Benoit"
+        },
+        "stats": [
+         "1",
+         "3",
+         "0",
+         "0",
+         "13:56",
+         "0:00",
+         "3:29",
+         "10:27",
+         "22",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "1",
+         "2"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "4697387",
+         "shortName": "J. Drysdale",
+         "displayName": "Jamie Drysdale"
+        },
+        "stats": [
+         "1",
+         "2",
+         "0",
+         "0",
+         "23:15",
+         "2:17",
+         "2:36",
+         "18:22",
+         "27",
+         "0",
+         "0",
+         "0",
+         "3",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "5080147",
+         "shortName": "D. Jiricek",
+         "displayName": "David Jiricek"
+        },
+        "stats": [
+         "1",
+         "2",
+         "0",
+         "0",
+         "18:25",
+         "3:55",
+         "0:00",
+         "14:30",
+         "25",
+         "0",
+         "0",
+         "0",
+         "2",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "skaters",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": []
+     },
+     {
+      "name": "goalies",
+      "labels": [
+       "GA",
+       "SA",
+       "SOS",
+       "SOSA",
+       "SV",
+       "SV%",
+       "ESSV",
+       "PPSV",
+       "SHSV",
+       "TOI",
+       "YTDG",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "4271575",
+         "shortName": "J. Woll",
+         "displayName": "Joseph Woll"
+        },
+        "stats": [
+         "2",
+         "26",
+         "0",
+         "0",
+         "24",
+         ".923",
+         "18",
+         "5",
+         "1",
+         "58:15",
+         "0",
+         "0"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "team": {
+     "id": "14",
+     "abbreviation": "OTT"
+    },
+    "statistics": [
+     {
+      "name": "forwards",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "3149829",
+         "shortName": "M. Amadio",
+         "displayName": "Michael Amadio"
+        },
+        "stats": [
+         "0",
+         "0",
+         "2",
+         "0",
+         "17:28",
+         "0:00",
+         "1:52",
+         "15:36",
+         "24",
+         "0",
+         "2",
+         "0",
+         "3",
+         "0",
+         "0",
+         "0",
+         "1",
+         "0.0",
+         "1",
+         "0",
+         "0"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "4271734",
+         "shortName": "D. Batherson",
+         "displayName": "Drake Batherson"
+        },
+        "stats": [
+         "0",
+         "0",
+         "1",
+         "0",
+         "16:07",
+         "4:59",
+         "0:09",
+         "10:59",
+         "24",
+         "0",
+         "2",
+         "0",
+         "3",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "1",
+         "1",
+         "2"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "2563027",
+         "shortName": "N. Cousins",
+         "displayName": "Nick Cousins"
+        },
+        "stats": [
+         "1",
+         "0",
+         "0",
+         "1",
+         "11:13",
+         "0:04",
+         "0:05",
+         "11:04",
+         "15",
+         "1",
+         "1",
+         "0",
+         "2",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "1",
+         "0",
+         "0"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "defenses",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "3900219",
+         "shortName": "T. Chabot",
+         "displayName": "Thomas Chabot"
+        },
+        "stats": [
+         "4",
+         "0",
+         "0",
+         "0",
+         "29:19",
+         "6:12",
+         "3:20",
+         "19:47",
+         "28",
+         "0",
+         "1",
+         "0",
+         "4",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "4697448",
+         "shortName": "T. Kleven",
+         "displayName": "Tyler Kleven"
+        },
+        "stats": [
+         "2",
+         "2",
+         "0",
+         "1",
+         "18:29",
+         "0:18",
+         "3:44",
+         "14:27",
+         "25",
+         "0",
+         "0",
+         "1",
+         "0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "1",
+         "2"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "5174232",
+         "shortName": "N. Matinpalo",
+         "displayName": "Nikolas Matinpalo"
+        },
+        "stats": [
+         "1",
+         "1",
+         "0",
+         "0",
+         "17:12",
+         "0:00",
+         "4:11",
+         "13:01",
+         "21",
+         "0",
+         "0",
+         "0",
+         "0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "2",
+         "0",
+         "0"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "skaters",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": []
+     },
+     {
+      "name": "goalies",
+      "labels": [
+       "GA",
+       "SA",
+       "SOS",
+       "SOSA",
+       "SV",
+       "SV%",
+       "ESSV",
+       "PPSV",
+       "SHSV",
+       "TOI",
+       "YTDG",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "3069285",
+         "shortName": "L. Ullmark",
+         "displayName": "Linus Ullmark"
+        },
+        "stats": [
+         "1",
+         "29",
+         "0",
+         "0",
+         "28",
+         ".966",
+         "22",
+         "4",
+         "2",
+         "60:00",
+         "0",
+         "0"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

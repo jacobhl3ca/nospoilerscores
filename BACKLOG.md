@@ -1,5 +1,13 @@
 # HideScore — Master Backlog
 
+## 2026-10-09 — Highlight gaps left after the 10/2–10/8 audit (no work now)
+
+**Plan:** `~/.claude-secondary/plans/frolicking-gliding-hellman.md` §3c. Fixed elsewhere: PR #285 (Pac-12, A&M `&`, SEC volleyball, college soccer, Top 14, UEL TUDN) and `fix/hl-query-fallbacks` (WNBA UTC date, URC "Cardiff", Nations one-letter typo).
+- [ ] ACC volleyball: the live lookup misses 5 of 18 games — probe the ACC channel titles.
+- [ ] Mountain West / FCS / MAC / Sun Belt football: no approved source posts per-game cuts.
+- [ ] NWSL Angel City @ Gotham (10/2–10/8): no clip on either channel — re-probe, else accept.
+- [ ] ncaah, premrugby, copadelrey: still dark by design (see the dated notes in `youtube.ts`).
+
 ## 2026-09-27 — Global sports: NRL, AFL, club rugby, international cricket, 4 landing pages
 
 **Plan:** `~/.claude/plans/hidescore-global-sports-suite-2026-09-27.md`. Four stacked branches in worktree `~/hs-global`, NOT pushed:

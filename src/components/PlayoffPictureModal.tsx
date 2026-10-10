@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Keybo
 import {
   BEST_OF,
   broadcastFor,
+  seriesDatesFor,
   buildBracket,
   contendersBySeed,
   fetchPlayoffOdds,
@@ -490,8 +491,9 @@ function MatchupBox({ matchup, bracket, odds, chasers }: {
 }
 
 // The round header is a fixed height in every column so the connector lines
-// between columns line up with the boxes rather than with the labels.
-const HEADER_H = "h-[44px]";
+// between columns line up with the boxes rather than with the labels. 56px
+// since 2026-10-07: a fourth line carries the round's dates.
+const HEADER_H = "h-[56px]";
 
 function RoundColumn({ round, league, season, matchups, bracket, odds, chasers }: {
   round: BracketRound;
@@ -503,12 +505,16 @@ function RoundColumn({ round, league, season, matchups, bracket, odds, chasers }
   chasers: Map<number, PlayoffTeam[]>;
 }) {
   const channel = broadcastFor(season, round, league);
+  const dates = seriesDatesFor(season, round, league);
   return (
     <div className="flex flex-col shrink-0">
       <div className={`${HEADER_H} text-center px-0.5 sm:px-1`}>
         <div className="text-[10px] font-bold uppercase tracking-wide leading-tight" style={{ color: "var(--text)" }}>
           {roundLabel(round, league)}
         </div>
+        {dates ? (
+          <div data-bracket-dates className="text-[9px] leading-tight whitespace-nowrap" style={{ color: "var(--text)" }}>{dates}</div>
+        ) : null}
         <div className="text-[9px] leading-tight" style={{ color: "var(--text-muted)" }}>Best of {BEST_OF[round]}</div>
         {channel ? (
           <div data-bracket-channel className="text-[9px] leading-tight" style={{ color: "var(--text-muted)", opacity: 0.85 }}>
@@ -555,6 +561,7 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
   winner: number | null;
 }) {
   const channel = broadcastFor(season, "worldSeries", "AL");
+  const dates = seriesDatesFor(season, "worldSeries", "AL");
   // `from` marks these as winner seats, so a pennant winner shows its seed and
   // no odds pill, like every other seat a series winner moves into.
   const seat = (team: PlayoffTeam | null): BracketSlot => ({ team, seed: null, from: "cs" });
@@ -564,6 +571,9 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
     <div className="flex flex-col shrink-0">
       <div className={`${HEADER_H} text-center`}>
         <div className="text-[10px] font-bold uppercase tracking-wide leading-tight" style={{ color: "var(--text)" }}>World Series</div>
+        {dates ? (
+          <div data-bracket-dates className="text-[9px] leading-tight whitespace-nowrap" style={{ color: "var(--text)" }}>{dates}</div>
+        ) : null}
         <div className="text-[9px] leading-tight" style={{ color: "var(--text-muted)" }}>Best of {BEST_OF.worldSeries}</div>
         {channel ? (
           <div data-bracket-channel className="text-[9px] leading-tight" style={{ color: "var(--text-muted)", opacity: 0.85 }}>{channel}</div>
@@ -686,6 +696,8 @@ function PicksView({ picture, post, failed }: { picture: PlayoffPicture; post: M
       lockAt={post.lockAt}
       lockTbd={post.lockTbd}
       results={post.results}
+      starts={post.starts}
+      lateClose={post.lateClose}
       note="Seeds can still move until the regular season ends. If one moves, the picks it touches clear and you pick again."
     />
   );
@@ -1052,10 +1064,15 @@ export default function PlayoffPictureModal({
                 </button>
               ) : null}
             </div>
-            <div data-picture-footer className="flex items-baseline justify-between gap-x-4 text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-              <p className="m-0">Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards.</p>
-              {updatedLabel ? <p className="m-0 ml-auto whitespace-nowrap tabular-nums">Updated {updatedLabel}</p> : null}
-            </div>
+            {/* Once the field is set the seeds are settled and the standings
+                stop moving, so the seed note says nothing new and "Updated"
+                reads as a stale stamp. */}
+            {fieldSet ? null : (
+              <div data-picture-footer className="flex items-baseline justify-between gap-x-4 text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+                <p className="m-0">Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards.</p>
+                {updatedLabel ? <p className="m-0 ml-auto whitespace-nowrap tabular-nums">Updated {updatedLabel}</p> : null}
+              </div>
+            )}
           </>
         )}
       </div>

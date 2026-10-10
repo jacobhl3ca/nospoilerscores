@@ -11,7 +11,7 @@
 // load this file directly — see tests/mlb-picks.test.ts.
 
 import type { BracketMatchupKey, BracketSlot, LeagueBracket, LeagueKey } from "./playoffPicture";
-import type { PickBracket, PickMatchup, PickRound, PickSide, PickTeam, SeriesResult } from "./bracketPicks";
+import type { PickBracket, PickMatchup, PickRound, PickSide, PickTeam, SeriesResult, SeriesStart } from "./bracketPicks";
 
 /**
  * Doubling weights: 1 point per correct wild-card winner, x2 for a division
@@ -172,6 +172,43 @@ export function lockIsPlaceholder(data: StatsApiPostseason): boolean {
   return games.some((g) => g.officialDate === first && g.status?.startTimeTBD);
 }
 
+// A game's start for the late-bracket rules: its first pitch, or noon ET on
+// its date while MLB still lists it as TBD (the same early-side rule as the
+// lock). Mirrored by `_picksGameAt` in public/_worker.js.
+function gameAt(g: StatsApiPostseasonGame): number {
+  const t = g.gameDate ? Date.parse(g.gameDate) : NaN;
+  if (!g.status?.startTimeTBD && Number.isFinite(t)) return t;
+  return g.officialDate ? Date.parse(`${g.officialDate}T16:00:00Z`) : NaN;
+}
+
+const REAL_CLUB = /^1\d{2}$/; // MLB club ids run 108–158; placeholders are 4 digits
+
+/** When each series starts and which real clubs it lists so far. */
+export function seriesStarts(data: StatsApiPostseason): SeriesStart[] {
+  const out: SeriesStart[] = [];
+  for (const s of data.series ?? []) {
+    const games = s.games ?? [];
+    const round = ROUND_BY_GAME_TYPE[games[0]?.gameType ?? ""];
+    if (round == null) continue;
+    const at = Math.min(...games.map(gameAt).filter(Number.isFinite));
+    if (!Number.isFinite(at)) continue;
+    const teams = new Set<string>();
+    for (const g of games) {
+      for (const id of [g.teams?.home?.team?.id, g.teams?.away?.team?.id]) {
+        if (id != null && REAL_CLUB.test(String(id))) teams.add(String(id));
+      }
+    }
+    out.push({ round, teams: [...teams], at });
+  }
+  return out;
+}
+
+/** First pitch of World Series Game 1: late brackets close then. */
+export function lateCloseFrom(data: StatsApiPostseason): Date | null {
+  const ws = (data.series ?? []).flatMap((s) => s.games ?? []).filter((g) => g.gameType === "W").map(gameAt).filter(Number.isFinite);
+  return ws.length ? new Date(Math.min(...ws)) : null;
+}
+
 const POSTSEASON = (season: number) =>
   `https://statsapi.mlb.com/api/v1/schedule/postseason/series?sportId=1&season=${season}`;
 
@@ -179,11 +216,19 @@ export interface MlbPostseason {
   lockAt: Date | null;
   lockTbd: boolean;
   results: SeriesResult[];
+  starts: SeriesStart[];
+  lateClose: Date | null;
 }
 
 export async function fetchMlbPostseason(season: number, signal?: AbortSignal): Promise<MlbPostseason> {
   const r = await fetch(POSTSEASON(season), { signal });
   if (!r.ok) throw new Error(`mlb postseason → ${r.status}`);
   const data = (await r.json()) as StatsApiPostseason;
-  return { lockAt: lockTimeFrom(data), lockTbd: lockIsPlaceholder(data), results: seriesResults(data) };
+  return {
+    lockAt: lockTimeFrom(data),
+    lockTbd: lockIsPlaceholder(data),
+    results: seriesResults(data),
+    starts: seriesStarts(data),
+    lateClose: lateCloseFrom(data),
+  };
 }

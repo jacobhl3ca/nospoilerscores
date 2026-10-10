@@ -57,8 +57,12 @@ test("news toolbar pills are on top of the sticky seam cover, not under it", asy
   expect(topmost.insideChip).toBe(true);
 
   // Same after scrolling, where both the toolbar and the cover are pinned.
+  // Scrolling down slides the toolbar away (r4), a small scroll up brings it
+  // back pinned.
   await page.mouse.wheel(0, 900);
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(300);
+  await page.mouse.wheel(0, -60);
+  await page.waitForTimeout(400);
   const afterScroll = await headlinesChip.evaluate((el) => {
     const r = el.getBoundingClientRect();
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);

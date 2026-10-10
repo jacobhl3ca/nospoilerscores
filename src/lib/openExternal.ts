@@ -350,3 +350,34 @@ export function handleExternalClick(
     openExternal(url);
   };
 }
+
+// Listen links (lib/radio.ts). In the iOS/Android apps a station player must
+// NOT open in the in-app browser: that sheet closes with HideScore and the
+// audio stops with it. AppLauncher.openUrl hands the https URL to the system,
+// which opens Safari/Chrome (or the station's own app where it registers the
+// link), so the stream keeps playing after HideScore goes to the background.
+// A radio host joins APP_LINK_HOSTS only after an iPhone test proves the
+// station app takes the link.
+export function openListen(url: string): void {
+  if (!url) return;
+  if (isCapacitorNative()) {
+    openViaAppLink(url);
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+export function listenLinkProps(name: string, url: string) {
+  return {
+    href: url,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    title: `Listen on ${name}`,
+    onClick: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+      e.preventDefault();
+      openListen(url);
+    },
+  };
+}

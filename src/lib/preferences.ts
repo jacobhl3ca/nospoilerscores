@@ -4,6 +4,7 @@ import { setServiceTimeZone, getEtServiceDate, toYmd } from "./etDay";
 import { pruneWatchQueue, type WatchQueueEntry } from "./watchQueue";
 import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
 import { setFrontendLinks } from "./frontendLinks";
+import { setListenPrefs } from "./radio";
 import { pushWidgetPrefs } from "./widgetBridge";
 
 const STORAGE_KEY = "nss-preferences";
@@ -292,6 +293,24 @@ export function decodeFavorites(params: URLSearchParams): DecodedShare {
   return result;
 }
 
+export interface NewsCardPrefs {
+  revealTitles?: boolean;
+  revealMedia?: boolean;
+  videosOnly?: boolean;
+  textPosts?: boolean;
+}
+
+export type NewsLayout = "cards" | "feed" | "espn";
+
+// The Posts switch (All / No text / Videos) over videosOnly + textPosts.
+export { type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField } from "./postFilter";
+
+// The news layout to render. newsLayout wins; a blob from before it existed
+// carries only newsFeedView (true = Feed).
+export function newsLayoutOf(prefs: { newsLayout?: NewsLayout; newsFeedView?: boolean }): NewsLayout {
+  return prefs.newsLayout ?? (prefs.newsFeedView ? "feed" : "cards");
+}
+
 export interface Preferences {
   favoriteLeagues: Sport[]; // ordered by priority (first = highest)
   favoriteTeams: string[]; // team IDs, ordered by priority (first = highest)
@@ -299,6 +318,9 @@ export interface Preferences {
   showRatings: boolean;
   skipExplainer: boolean;
   skipNewsExplainer: boolean;
+  // "Don't warn me again" on the box score confirm (BoxScoreDialog). A box
+  // score always shows the score, so the warning is on until the user skips it.
+  skipBoxscoreWarning: boolean;
   showNews: boolean; // persist last view across refreshes
   // "empty" hides the slot (no league rendered for that column).
   thirdLeague?: Sport | "empty"; // user-chosen 3rd league slot override
@@ -341,6 +363,13 @@ export interface Preferences {
   // league leaves every switcher and the board. A league added to the app
   // later is never on it, so it shows. Reset to defaults clears it.
   catalogHiddenLeagues?: Sport[];
+  // Leagues taken out of the switcher, newest first, one per league, capped at
+  // 20 (Jacob 10/8). Written by "Remove from list…" and a Settings untick;
+  // dropped again when the league comes back (Add more…, a Settings tick or
+  // pin, the ESPN front page's Add). Feeds only the Add more… sheet's
+  // "Previously removed" group, which also skips any league in the switcher
+  // now, so a stale entry never shows. Helpers in removedLeagues.ts.
+  removedLeagues?: Sport[];
   // The column switcher's "Add more…" sheet: draw the offseason leagues too.
   // Off by default so the sheet opens on leagues with games; saved so it
   // opens the way it was left (Jacob 9/29). No Settings row — the toggle
@@ -350,6 +379,11 @@ export interface Preferences {
   // version means this prefs blob has either received the one-time legacy
   // preservation migration or was created after the new defaults launched.
   switcherDefaultsVersion?: 2;
+  // v1 stopped a column edit on a 3-column screen from leaving columns 4-5 on
+  // Auto, where a fullscreen window filled them with leagues the user never
+  // picked (Jacob 10/8). A saved version means the blob has had the one-time
+  // repair (closeUnseenAutoSlots in HomeContent) or was created after it.
+  wideSlotsVersion?: 1;
   // Hide the favorite-star next to team names on game cards (favoriting stays
   // available via the team-schedule view + settings picker).
   //
@@ -361,6 +395,18 @@ export interface Preferences {
   // sticks — session counting has stopped by then. See STARS_AUTO_HIDE_SESSION
   // in lib/sessionVisits.ts.
   hideTeamStars?: boolean;
+  // "Only my teams" (Settings, Jacob 10/7): a league column keeps only the
+  // games a starred team plays in. Opt-in, undefined = off. A league with no
+  // starred team still shows all its games, with a cell asking the user to
+  // star one — unless the league is in `favoritesOnlyStrict`, where the user
+  // pressed that cell's ✕ and the column shows nothing until a team is
+  // starred. See lib/favoritesFilter.ts.
+  favoritesOnly?: boolean;
+  favoritesOnlyStrict?: Sport[];
+  // A pinned league between seasons keeps its column, which asks once
+  // "Close this column?" (Jacob 10/9). Keep puts the league here and the
+  // question does not come back for it. Close empties the slot instead.
+  offseasonKeep?: Sport[];
   // Games queued with the card's "Later" pill, shown in the Watch queue strip
   // above the board until marked Done (Jacob 9/27). Newest last, at most 20;
   // anything older than 3 days is dropped on load. Syncs like favoriteTeams.
@@ -426,6 +472,12 @@ export interface Preferences {
   // would fall back to it takes the next league instead. Best of yesterday is
   // turned off the same way, through hiddenLeagues ("best" is a Sport).
   topNewsHidden?: boolean;
+  // The Best of yesterday column's span row (Jacob 10/10, lib/topGames.ts):
+  // which span it shows and whether "All leagues" is on. Unset = Yesterday,
+  // the user's own leagues. Only read while ratings show (the row hides with
+  // them, and the column falls back to Yesterday).
+  bestSpan?: "yesterday" | "week" | "month" | "year";
+  bestAllLeagues?: boolean;
   // Which POSITION the generic "Top news" column occupies on the news board
   // (0-2, default 2 = last). Picking "Top news" from any column's
   // switcher moves the column here rather than doing nothing — before this,
@@ -599,6 +651,23 @@ export interface Preferences {
   // inline images + blurred top comments). Toggled by the Cards/Feed pill in the
   // news header.
   newsFeedView?: boolean;
+  // News layout, the 3-way Cards / Feed / ESPN pill (Jacob 10/8). "espn" =
+  // ESPN Videos left + ESPN Top Headlines right, the user's league subreddits
+  // below (HomeContent). Undefined = read the legacy newsFeedView above, so
+  // old blobs keep their view: see newsLayoutOf.
+  newsLayout?: NewsLayout;
+  // ESPN layout only: "Big" = one wide column of large video cards, headlines
+  // and subreddits under it. Default false.
+  newsEspnBig?: boolean;
+  // News Autoplay pill, every layout (Jacob 10/8): the video most in focus
+  // plays muted (components/InlineVideoCard). Undefined = on in every layout
+  // (Jacob 10/8 r4).
+  newsAutoplay?: boolean;
+  // ESPN layout card header buttons (Jacob 10/8 r5): per-card Headlines /
+  // Media / Videos only / Text posts, keyed by the source's feed key (or its
+  // label when it has none). Unset fields fall back to the global prefs.
+  // Cards and Feed never read this.
+  newsCardPrefs?: Record<string, NewsCardPrefs>;
   // News "Videos only" quick filter: true = show only clip-bearing items. It is
   // ITEM-level on every surface (Cards, Feed, the aligned strip's ESPN tail) —
   // a Reddit v.redd.it post counts, a headline-only post never does — via
@@ -615,6 +684,11 @@ export interface Preferences {
   // what "start from the bottom" means. Lives next to the funnel in the news
   // header rather than in Settings, since it's a per-session reading choice.
   newsOldestFirst?: boolean;
+  // Drop posts already opened on this device (Jacob 10/6, 10/8): a post counts
+  // as seen once he opens it (lib/newsSeen.ts). Only the toggle state
+  // lives here; WHICH posts were seen is a device-local store outside
+  // Preferences. Toggled by the 👁 button left of ⇅ in the news header.
+  newsHideSeen?: boolean;
   // Hide upsetting news items — deaths, fatal crashes, assault/abuse cases,
   // on-field injuries (hit in the head, collisions, carted off), serious
   // illness, harm to animals, self-harm (Jacob 8/21). Matching lives in
@@ -631,6 +705,12 @@ export interface Preferences {
   // (Jacob: "idk if 2 checkboxes needed"). A blob with only one of them set
   // still filters exactly as before until the user taps the toggle.
   hideCrashNews?: boolean;
+  // "Listen" links (lib/radio.ts): free live radio for a game, in the "Where
+  // to watch" dialog and the game details. Read as `?? true`.
+  showListenLinks?: boolean;
+  // Show local-only radio links (NFL/MLB flagships play only in the home
+  // market) wherever the visitor is, for VPN users. Read as `?? false`.
+  listenAnywhere?: boolean;
 }
 
 const defaults: Preferences = {
@@ -640,6 +720,7 @@ const defaults: Preferences = {
   showRatings: false,
   skipExplainer: false,
   skipNewsExplainer: false,
+  skipBoxscoreWarning: false,
   showNews: false,
   // Yesterday, not "smart" (2026-08-09, Jacob). A brand-new visitor — most of
   // them arriving from the no-spoiler-scores landing pages — is here to catch
@@ -665,6 +746,7 @@ const defaults: Preferences = {
   newsColCount: 3,
   smartCutoffHour: 13,
   switcherDefaultsVersion: 2,
+  wideSlotsVersion: 1,
   // Reddit-only by default (2026-08-03, ahead of the Product Hunt launch).
   // Reddit is where the game-worth-watching discussion actually lives, and it
   // is the feed a first-time visitor should land on; ESPN/homepage/top-videos
@@ -699,11 +781,16 @@ export function loadPreferences(): Preferences {
     if (stored && !Object.prototype.hasOwnProperty.call(stored, "switcherDefaultsVersion")) {
       delete prefs.switcherDefaultsVersion;
     }
+    // Same for the wide-slots repair marker.
+    if (stored && !Object.prototype.hasOwnProperty.call(stored, "wideSlotsVersion")) {
+      delete prefs.wideSlotsVersion;
+    }
     // Push the chosen zone into the shared module so the data layer + UI agree
     // before the first fetch/render after a load.
     setServiceTimeZone(prefs.timezone);
     setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
     setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
+    setListenPrefs(prefs.showListenLinks, prefs.listenAnywhere);
     // After setServiceTimeZone, so "today" is the user's chosen zone.
     prefs.watchQueue = pruneWatchQueue(prefs.watchQueue, toYmd(getEtServiceDate()));
     return prefs;
@@ -726,6 +813,7 @@ export function savePreferences(prefs: Preferences): void {
   setServiceTimeZone(prefs.timezone);
   setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
   setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
+  setListenPrefs(prefs.showListenLinks, prefs.listenAnywhere);
   // localStorage.setItem can throw — quota exceeded, or storage blocked in a
   // sandboxed/private context — and savePreferences runs straight out of click
   // handlers (e.g. toggling a setting). Mirror loadPreferences' guard so a

@@ -137,6 +137,82 @@ export function maxPoints(bracket: PickBracket): number {
   return bracket.matchups.reduce((n, m) => n + (bracket.rounds[m.round]?.weight ?? 0), 0);
 }
 
+// ── Late brackets ────────────────────────────────────────────────────────────
+//
+// A bracket sent after the lock picks only the series that had not started
+// when it came in. Its other series are not its picks: they hold the real
+// winner, so the seats they feed resolve, and they score nothing either way.
+
+/** When one series starts, and which clubs are in it so far. */
+export interface SeriesStart {
+  round: number;
+  /** Real club ids listed in the series so far; placeholders left out. */
+  teams: string[];
+  /** First pitch of its first game, ms. */
+  at: number;
+}
+
+/**
+ * matchup key → the club that really won it, for every decided series. Walked
+ * in round order so a seat fed by a decided series resolves for the next one.
+ */
+export function actualPicks(bracket: PickBracket, results: SeriesResult[]): Picks {
+  const out: Picks = {};
+  for (const m of byRound(bracket)) {
+    const [a, b] = sidesFor(bracket, out, m.key);
+    if (!a || !b) continue;
+    const r = results.find((x) => x.round === m.round &&
+      ((x.winner === a.id && x.loser === b.id) || (x.winner === b.id && x.loser === a.id)));
+    if (r) out[m.key] = r.winner;
+  }
+  return out;
+}
+
+/**
+ * Matchup keys whose series had started by `t`. A series is found by a club
+ * the real results put in one of its seats; a matchup with no club known yet
+ * (both feeders still playing) counts as started only once every series of
+ * its round has. Same rule as `_picksStarted` in public/_worker.js, which
+ * checks the picked club instead of the seats.
+ */
+export function startedKeys(bracket: PickBracket, results: SeriesResult[], starts: SeriesStart[], t: number): Set<string> {
+  const actual = actualPicks(bracket, results);
+  const out = new Set<string>();
+  for (const m of bracket.matchups) {
+    const ids = sidesFor(bracket, actual, m.key).flatMap((x) => (x ? [x.id] : []));
+    const own = ids.length ? starts.find((s) => s.round === m.round && s.teams.some((id) => ids.includes(id))) : undefined;
+    if (own) {
+      if (own.at <= t) out.add(m.key);
+      continue;
+    }
+    const round = starts.filter((s) => s.round === m.round);
+    if (round.length && round.every((s) => s.at <= t)) out.add(m.key);
+  }
+  return out;
+}
+
+/** The keys a late bracket sent at `t` could pick. */
+export function openKeysAt(bracket: PickBracket, results: SeriesResult[], starts: SeriesStart[], t: number): Set<string> {
+  const started = startedKeys(bracket, results, starts, t);
+  return new Set(bracket.matchups.map((m) => m.key).filter((k) => !started.has(k)));
+}
+
+/**
+ * A late bracket as a full one: its own picks on its open keys, the real
+ * winner everywhere else, then cleaned like any bracket. On-time brackets
+ * (`openKeys` null) are just cleaned.
+ */
+export function effectivePicks(bracket: PickBracket, raw: Picks, results: SeriesResult[], openKeys: ReadonlySet<string> | null): Picks {
+  if (!openKeys) return cleanPicks(bracket, raw).picks;
+  const actual = actualPicks(bracket, results);
+  const merged: Picks = {};
+  for (const m of bracket.matchups) {
+    const v = openKeys.has(m.key) ? raw[m.key] : actual[m.key];
+    if (v) merged[m.key] = v;
+  }
+  return cleanPicks(bracket, merged).picks;
+}
+
 export type PickStatus = "correct" | "wrong" | "pending";
 
 export interface PickScore {
@@ -168,8 +244,8 @@ export interface PickScore {
  * A pick is wrong as soon as its team is out: losing a series in the same or an
  * earlier round busts every later pick of that team.
  */
-export function scorePicks(bracket: PickBracket, raw: Picks, results: SeriesResult[]): PickScore {
-  const { picks } = cleanPicks(bracket, raw);
+export function scorePicks(bracket: PickBracket, raw: Picks, results: SeriesResult[], openKeys: ReadonlySet<string> | null = null): PickScore {
+  const picks = effectivePicks(bracket, raw, results, openKeys);
   const weight = (r: number) => bracket.rounds[r]?.weight ?? 0;
   const won = new Set(results.map((r) => `${r.round}:${r.winner}`));
   const outAt = new Map<string, number>();
@@ -180,6 +256,8 @@ export function scorePicks(bracket: PickBracket, raw: Picks, results: SeriesResu
   const status: Record<string, PickStatus> = {};
   let points = 0, correct = 0, wrong = 0, pending = 0;
   for (const m of bracket.matchups) {
+    // A late bracket's started series hold the real winner, not a pick.
+    if (openKeys && !openKeys.has(m.key)) continue;
     const id = picks[m.key];
     if (!id) continue;
     const out = outAt.get(id);
@@ -195,8 +273,15 @@ export function scorePicks(bracket: PickBracket, raw: Picks, results: SeriesResu
       pending += weight(m.round);
     }
   }
-  const possible = results.reduce((n, r) => n + weight(r.round), 0);
-  const complete = isComplete(bracket, picks);
+  // A late bracket is held to the series it could pick: its % is out of the
+  // points those series have paid so far, so missing a round costs it nothing.
+  let possible = results.reduce((n, r) => n + weight(r.round), 0);
+  if (openKeys) {
+    const actual = actualPicks(bracket, results);
+    possible = bracket.matchups.reduce((n, m) => n + (openKeys.has(m.key) && actual[m.key] ? weight(m.round) : 0), 0);
+  }
+  // Late brackets play for fun: never perfect, never a prize.
+  const complete = !openKeys && isComplete(bracket, picks);
   return {
     points,
     possible,
@@ -213,11 +298,17 @@ export function scorePicks(bracket: PickBracket, raw: Picks, results: SeriesResu
 export interface BoardEntry {
   name: string;
   picks: Picks;
+  /** Sent after the lock (see "Late brackets" above). */
+  late?: boolean;
+  /** When the late bracket first came in: its open series are the ones not started then. */
+  lateAt?: string;
 }
 
 export interface BoardRow {
   rank: number;
   name: string;
+  late: boolean;
+  entry: BoardEntry;
   score: PickScore;
   champion: PickTeam | null;
 }
@@ -226,13 +317,24 @@ export interface BoardRow {
  * Rank entries by points, then by the most they can still reach, then by name
  * so the order is stable between polls. Ties share a rank (1, 1, 3).
  */
-export function rankEntries(bracket: PickBracket, entries: BoardEntry[], results: SeriesResult[]): BoardRow[] {
-  const rows = entries.map((e) => ({
-    rank: 0,
-    name: e.name,
-    score: scorePicks(bracket, e.picks, results),
-    champion: championOf(bracket, cleanPicks(bracket, e.picks).picks),
-  }));
+export function rankEntries(
+  bracket: PickBracket,
+  entries: BoardEntry[],
+  results: SeriesResult[],
+  /** A late entry's open keys; null for an on-time entry. */
+  openKeysOf: (e: BoardEntry) => ReadonlySet<string> | null = () => null,
+): BoardRow[] {
+  const rows = entries.map((e) => {
+    const open = openKeysOf(e);
+    return {
+      rank: 0,
+      name: e.name,
+      late: !!e.late,
+      entry: e,
+      score: scorePicks(bracket, e.picks, results, open),
+      champion: championOf(bracket, effectivePicks(bracket, e.picks, results, open)),
+    };
+  });
   rows.sort((a, b) =>
     b.score.points - a.score.points ||
     b.score.maxLeft - a.score.maxLeft ||

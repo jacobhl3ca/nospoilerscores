@@ -87,6 +87,10 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // stays on as the strict 2nd slot (SECONDARY_CHANNELS) in case an older tie
   // or a stray upload still lives there. ⚠️ UCL is NOT changed here — probe it
   // the same way on its own next matchday before touching `ucl`.
+  // 2026-10-03: TUDN USA (Spanish commentary) is the fallback when CBS skips a
+  // game (the uel chain in collegeHighlightChannels.json), behind the
+  // home-first + 5-minute gates (HIGHLIGHT_MATCH_GATES). MD1 with the gates:
+  // CBS 18/18 once four clubs were aliased in public/_worker.js, TUDN 14/18.
   uel: "CBS Sports Golazo - Europe",
   // Serie A: Paramount+ / CBS holds the US rights, same as UCL/UEL, and the
   // same Golazo channel posts the per-match Extended Highlights.
@@ -212,9 +216,18 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // rounds (Sep 25 → Sep 27), 0 wrong, once ESPN's "Cardiff Blues" and
   // "Benetton Treviso" are aliased to the title forms (see TEAM_NAME_ALIASES).
   // Titles read "Highlights | Leinster Rugby v Munster Rugby | Round 1 | URC
-  // 2026/27" — no score. The other four club competitions stay DARK (see
+  // 2026/27" — no score. The other three club competitions stay DARK (see
   // NO_HIGHLIGHT_FALLBACK).
   urc: "United Rugby Championship",
+  // Top 14: "TOP 14 - Officiel", 14/14 strict over rounds 3 and 4 (Sep
+  // 19–27), 0 wrong, once ESPN's "Pau", "La Rochelle", "Bayonne", "Lyon" and
+  // "Bordeaux Begles" are aliased to the title forms (see TEAM_ALIASES in
+  // public/_worker.js). Titles read "TOP 14 2026-2027 Season - R4 - RC Toulon
+  // vs RC Vannes Highlights" or "… - Match Summary: Stade Toulousain -
+  // Montpellier Hérault Rugby" — no score, no date, home club first. ESPN has
+  // no round number, so the home-first order gate tells the two meetings of a
+  // season apart (HIGHLIGHT_MATCH_GATES).
+  top14: "TOP 14 - Officiel",
   // euro + cricket deliberately have NO entry — see the block comment below.
   //
   // ── La Liga + Ligue 1, LIT 2026-09-19. Both were dark because the LEAGUE's
@@ -449,13 +462,10 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // Re-probe once the 2026-27 knockouts exist; any relight needs ≥4/5 and a
 // competition title token.
 //
-// ncaawsoc / ncaamsoc (NCAA soccer, added 2026-09-26, both DARK). The cut
-// Jacob found for Penn State at Ohio State (women's, 9/10) is on "Real Woso
-// Fan", a fan channel, not an uploader the app can trust; no conference or
-// network channel has been probed for either sport yet. Regular-season matches
-// stream on ESPN+ with no official upload. Light either the way ncaavb was:
-// a per-school conference chain in collegeHighlightChannels.json once a
-// conference channel measures ≥4/5 strict with a title token.
+// ncaawsoc / ncaamsoc (NCAA soccer) left this set 2026-10-03: each match
+// resolves from its schools' conference chain in collegeHighlightChannels.json
+// (ACC Digital Network, Big 12 Conference and SEC for women; ACC for men),
+// like ncaavb. A match with no school in those conferences stays dark.
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "copadelrey",
   "cricket",
@@ -477,22 +487,17 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   // "nations league" token). See OFFICIAL_CHANNELS above.
   "ncaah",
   "ncaabase",
-  // Both college soccer feeds: no trusted uploader yet (see the note above).
-  "ncaamsoc",
   "ncaasoft",
-  "ncaawsoc",
   "rugbychamp",
   "rugbytest",
-  // Club rugby, probed 2026-09-27 (lib/espn.ts has the ids). Only URC lit.
+  // Club rugby, probed 2026-09-27 (lib/espn.ts has the ids). URC lit then,
+  // Top 14 on 2026-10-03 (see OFFICIAL_CHANNELS).
   // premrugby: "PREM Rugby" and "Premiership Rugby" both 0/5 strict; the
   //   league's clips carry no "A v B" pairing in the title.
-  // top14: "TOP 14 - Officiel" 2 unique hits out of 20 probed, and the older
-  //   uploads print the score in the title.
   // challengecup: no fixture played yet (pool round 1 is 2026-10-16).
   //   RE-PROBE the EPCR channel after round 1.
   // mlr: 4/8 with one WRONG match, and titles hint at the result.
   "premrugby",
-  "top14",
   "challengecup",
   "mlr",
   "ufl",
@@ -615,6 +620,24 @@ const EMBED_BLOCKED_CHANNELS = new Set(["FORMULA 1", "NFL"]);
 // would mount the player, hit 150, and only then show it.
 export function leadChannelBlocksEmbeds(channels: string[]): boolean {
   return channels.length > 0 && (EMBED_BLOCKED_CHANNELS.has(channels[0]) || isNflTeamChannel(channels[0]));
+}
+
+// Channels that refuse embeds for ONE sport only, so they cannot join
+// EMBED_BLOCKED_CHANNELS. The SEC's volleyball cuts refuse every embed
+// (oEmbed 401, playableInEmbed false: 5 of 5 on 2026-10-03) while its soccer
+// cuts play in-app. Their cards open straight on the "Watch on YouTube" card
+// (GameHighlights adds `nss_embed_blocked=1`). The YouTube description of each
+// SEC volleyball cut opens with the result ("No. 16 Texas A&M opened SEC play
+// with a dominant sweep of South Carolina, winning 25-14, 25-14, 25-18 …"), so
+// the card warns about it (`nss_desc_result=1`). Mirrored by embedOffChannelId
+// in scripts/lib/channel-search.mjs: the bake reads these ids' title and owner
+// off the watch page, since oEmbed answers 401.
+const EMBED_BLOCKED_SPORT_CHANNELS: Record<string, readonly string[]> = {
+  ncaavb: ["SEC"],
+};
+
+export function sportChannelBlocksEmbeds(sport: string, channel: string | null | undefined): boolean {
+  return !!channel && (EMBED_BLOCKED_SPORT_CHANNELS[sport]?.includes(channel) ?? false);
 }
 
 // Channels whose clip title bar must stay masked no matter what the spoiler
@@ -760,6 +783,17 @@ const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   // America's titles carry neither word, so that channel opts out through its
   // own empty list in collegeHighlightChannels.json (`ownTokens`).
   ncaawh: ["women"],
+  // NCAA soccer (2026-10-03). The conference channels post every sport, and
+  // the ACC posts the men's and the women's cut of the same two schools. ACC
+  // and Big 12 titles end "2026 ACC Women's Soccer" / "2026 Big 12 Women's
+  // Soccer"; the SEC sponsors only the women's game and titles "2026 SEC
+  // Soccer". The men's token must be "acc men's soccer": "men's soccer" alone
+  // is inside "women's soccer" once punctuation folds to spaces.
+  ncaawsoc: ["women's soccer", "sec soccer"],
+  ncaamsoc: ["acc men's soccer"],
+  // top14: every match cut on "TOP 14 - Officiel" starts "TOP 14". The token
+  // keeps out anything else the channel may post about the same two clubs.
+  top14: ["top 14"],
 };
 
 // NFL preseason — the same failure one season-phase over. The NFL channel
@@ -806,10 +840,23 @@ export function cflPlayoffTitleTokens(playoffLabel?: string | null): string[] {
 // first (99/99 TUDN titles, 8/8 FOX hits, 2026-10-03), so the title's team
 // order picks the leg: `homeFirst`. TUDN's goal clips run 50–180 s and its
 // match cuts 500–1,500 s, so anything under 5 minutes is refused: `minSec`.
+//
+// top14: each pair meets twice a season, home and away, and ESPN gives no
+// round to tell the meetings apart. "TOP 14 - Officiel" names the home club
+// first (14/14 cuts, rounds 3 and 4, Sep 19–27). Its try clips ("TOP 14 - Essai de
+// Antoine DUPONT (ST) - Stade Toulousain - Montpellier Hérault Rugby") name
+// both clubs and run 30–100 s; the match cuts run 137–306 s.
+//
+// uel: knockout ties play two legs under undated titles. CBS Sports Golazo -
+// Europe and TUDN USA both name the home club first (CBS 18/18, TUDN 14/14 on
+// MD1, 2026-09-16/17). CBS's cuts run 507–642 s, TUDN's 743–1,523 s, and
+// TUDN's goal clips 96–115 s, so the same 5-minute floor as nations.
 // Mirrored by HL_MATCH_GATES in scripts/prebake-news.mjs — keep in sync.
 export type HighlightMatchGates = { homeFirst?: boolean; minSec?: number };
 const HIGHLIGHT_MATCH_GATES: Record<string, HighlightMatchGates> = {
   nations: { homeFirst: true, minSec: 300 },
+  top14: { homeFirst: true, minSec: 120 },
+  uel: { homeFirst: true, minSec: 300 },
 };
 
 export function getHighlightMatchGates(sport: string): HighlightMatchGates | undefined {
@@ -901,6 +948,35 @@ function aliasTeam(name: string): string {
   return TEAM_NAME_ALIASES[name] ?? name;
 }
 
+// The short club name some channels use, tried only after the long alias
+// missed. URC titles "Cardiff v Zebre Parma", so "Cardiff Rugby" found nothing
+// (2026-10-02). Mirrors HL_TEAM_SHORT_ALIASES in scripts/lib/hl-retry.mjs.
+const TEAM_NAME_SHORT_ALIASES: Record<string, string> = {
+  "Cardiff Blues": "Cardiff",
+};
+
+// [away, home] pairs to query, in order: as given, then the short aliases.
+export function highlightNamePairs(awayTeam: string, homeTeam: string): [string, string][] {
+  const away = TEAM_NAME_SHORT_ALIASES[awayTeam] ?? awayTeam;
+  const home = TEAM_NAME_SHORT_ALIASES[homeTeam] ?? homeTeam;
+  const pairs: [string, string][] = [[awayTeam, homeTeam]];
+  if (away !== awayTeam || home !== homeTeam) pairs.push([away, home]);
+  return pairs;
+}
+
+// The query date in the reader's zone, then the UTC date when it differs. A
+// US night game ends after midnight UTC and some channels title the recap by
+// the UTC day: WNBA "Aces vs Valkyries … October 8" for the 9:30 PM ET 10/7
+// game. Mirrors hlDateStrs in scripts/lib/hl-retry.mjs. An invalid date gives
+// [""] — the same degrade-safely token GameHighlights uses.
+export function highlightDateStrs(date: Date, timeZone: string): string[] {
+  if (isNaN(date.getTime())) return [""];
+  const fmt = (tz: string) => date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: tz });
+  const local = fmt(timeZone);
+  const utc = fmt("UTC");
+  return utc === local ? [local] : [local, utc];
+}
+
 // Little League World Series: ESPN names a team for its CITY plus a state or
 // country code — "Tacoma WA", "Leon NCA". ESPN's own recap titles use neither;
 // they name the state or the country outright ("Washington vs. Alabama | Full
@@ -923,8 +999,9 @@ function aliasTeam(name: string): string {
 // Football: every game the short name found, the location found too, plus
 // Western Kentucky–Georgia and Eastern Michigan–Michigan State.
 // ncaavb (same date): location 11 hits over 143 conference-channel probes,
-// shortDisplayName 1 over 35.
-const LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb"]);
+// shortDisplayName 1 over 35. NCAA soccer (2026-10-03): the ACC, Big 12 and SEC
+// title with the school name too ("Alcorn State", not ESPN's "Alcorn St").
+const LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb", "ncaawsoc", "ncaamsoc"]);
 
 // Rewrite a team name into the form the sport's official uploader puts in its
 // titles. Identity for every sport but LLWS and the LOCATION_NAME_SPORTS, so
@@ -1123,10 +1200,12 @@ export async function resolveTelemundoWorldCupVideo(
 // Resolve a per-game highlight against one exact uploader. There is no
 // unscoped tier: a missing channel or strict miss returns null and the caller
 // hides the button rather than serving a re-upload.
+// `dateStr` may be a list (highlightDateStrs). After a miss it retries each
+// date, then the short team names (highlightNamePairs).
 export async function resolveHighlightVideo(
   awayTeam: string,
   homeTeam: string,
-  dateStr: string,
+  dateStr: string | string[],
   seriesNote: string | null | undefined,
   channel?: string,
   exclude?: (string | null | undefined)[],
@@ -1136,7 +1215,12 @@ export async function resolveHighlightVideo(
   compTokens?: string[],
   gates?: HighlightMatchGates,
 ): Promise<string | null> {
-  const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
   if (!channel) return null;
-  return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true, undefined, weekNumber, compTokens, gates);
+  for (const [away, home] of highlightNamePairs(awayTeam, homeTeam)) {
+    for (const d of Array.isArray(dateStr) ? dateStr : [dateStr]) {
+      const id = await fetchFirstVideoId(buildQuery(away, home, d, seriesNote, competition), channel, exclude, preferExtended, true, undefined, weekNumber, compTokens, gates);
+      if (id) return id;
+    }
+  }
+  return null;
 }

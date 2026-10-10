@@ -89,12 +89,16 @@ test("Feed: Videos only hides text posts, and says so when nothing is left", asy
   await expect(status).toHaveCount(0, { timeout: 30_000 });
 
   const posts = page.locator("article");
+  // The feed fills source by source. A slow engine (Firefox) can show zero
+  // rows for two settle polls in a row, so first wait for a row or the
+  // empty-state line.
+  await expect(posts.first().or(page.getByText("No videos here right now."))).toBeVisible({ timeout: 30_000 });
   const n = await settle(page, posts);
   if (n === 0) {
     // Cards' empty-state copy, not the bare "No posts to show." — the user
-    // needs to know it's the Videos only chip doing this.
+    // needs to know it is the Posts switch (Videos) doing this.
     await expect(page.getByText("No videos here right now.")).toBeVisible();
-    await expect(page.getByText("Turn off Videos only, or widen Source in the filter menu.")).toBeVisible();
+    await expect(page.getByText("Set Posts to All, or widen Source in the filter menu.")).toBeVisible();
     return;
   }
   for (let i = 0; i < n; i++) {

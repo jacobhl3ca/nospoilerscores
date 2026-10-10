@@ -7,6 +7,8 @@ import { handleExternalClick } from "@/lib/openExternal";
 import { frontendHref } from "@/lib/frontendLinks";
 import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
 import { isDemoModeActive } from "@/lib/demoMode";
+import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
+import { AutoplayVideo, TapForSound } from "@/components/InlineVideoCard";
 
 interface Props {
   sources: NewsSource[];
@@ -31,6 +33,12 @@ interface Props {
   // Reverse every column's cells AND the tail list (oldest first) — the ⇅
   // news-header control, applied here so the strip flips with the columns.
   oldestFirst?: boolean;
+  // 👁 Hide seen snapshot (see NewsColumn's prop of the same name), applied to
+  // the video cells and the tail alike, and the tooltip count it reports back.
+  hideSeenKeys?: Set<string>;
+  onSeenHiddenCount?: (id: string, count: number) => void;
+  // News Autoplay pill: the clip most in focus plays muted (InlineVideoCard).
+  autoplay?: boolean;
 }
 
 // 3-column video strip — CSS subgrid so video N is the same height in every
@@ -38,7 +46,7 @@ interface Props {
 // gridTemplateRows: subgrid. Per-row height = tallest headline at that row,
 // shorter cells anchor align-self: start so blank space sits at the bottom.
 // Headlines stay un-clamped so long titles wrap fully (Jacob 2026-05-02).
-export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts, videosOnly, hiddenCategories, oldestFirst }: Props) {
+export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts, videosOnly, hiddenCategories, oldestFirst, hideSeenKeys, onSeenHiddenCount, autoplay }: Props) {
   const [colItems, setColItems] = useState<(NewsItem[] | null)[]>(() => sources.map(() => null));
   const [tailItems, setTailItems] = useState<NewsItem[] | null>(null);
 
@@ -112,12 +120,18 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
   const shownColItems = useMemo(
     () => colItems.map((c) => {
       if (!c) return c;
-      const kept = hiddenCategories?.length ? c.filter((i) => !isSensitiveNews(i, hiddenCategories)) : c;
+      const unseen = dropSeen(c, hideSeenKeys);
+      const kept = hiddenCategories?.length ? unseen.filter((i) => !isSensitiveNews(i, hiddenCategories)) : unseen;
       return oldestFirst ? [...kept].reverse() : kept;
     }),
-    [colItems, hiddenCategories, oldestFirst],
+    [colItems, hiddenCategories, oldestFirst, hideSeenKeys],
   );
-  const keptTailItems = (tailItems ?? []).filter((item) => passesNewsFilters(item, !!videosOnly, !!showTextPosts) && !(hiddenCategories?.length && isSensitiveNews(item, hiddenCategories)));
+  const passingTailItems = (tailItems ?? []).filter((item) => passesNewsFilters(item, !!videosOnly, !!showTextPosts));
+  const unseenTailItems = dropSeen(passingTailItems, hideSeenKeys);
+  const keptTailItems = unseenTailItems.filter((item) => !(hiddenCategories?.length && isSensitiveNews(item, hiddenCategories)));
+  const seenHidden = colItems.reduce((n, c) => n + (c ? c.length - dropSeen(c, hideSeenKeys).length : 0), 0)
+    + passingTailItems.length - unseenTailItems.length;
+  useReportSeenHidden(onSeenHiddenCount, seenHidden);
   const visibleTailItems = oldestFirst ? [...keptTailItems].reverse() : keptTailItems;
   const tailHasItems = tailColIdx !== undefined && visibleTailItems.length > 0;
   // Reserve 2 pad rows in the tail col so the ESPN-top tail always has somewhere
@@ -222,7 +236,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
                   </>
                 )
               : items.slice(0, itemCount).map((item, rowIdx) => (
-                  <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} siblings={siblings} index={rowIdx} />
+                  <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} siblings={siblings} index={rowIdx} autoplay={autoplay} />
                 ))}
             {hasTail ? (
               // One spanning grid item that occupies col 3's empty pad rows.
@@ -328,7 +342,8 @@ function SkeletonRow({ isFirst }: { isFirst: boolean }) {
   );
 }
 
-function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings: PlayOpts[]; index: number }) {
+function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings: PlayOpts[]; index: number; autoplay?: boolean }) {
+  const [playing, setPlaying] = useState(false);
   const body = (
     <>
       {item.imageUrl && (
@@ -352,6 +367,9 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
             // item — display:none can't leak onto a later valid thumbnail.
             onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
+          {/* News Autoplay: the clip most in focus plays muted (InlineVideoCard). */}
+          <AutoplayVideo item={item} enabled={!!autoplay} onPlayingChange={setPlaying} />
+          {playing ? <TapForSound /> : (
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
             style={{ background: "linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.4))" }}
@@ -362,6 +380,7 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
               </svg>
             </div>
           </div>
+          )}
         </div>
       )}
       {/* Un-clamped — subgrid sizes the row to the tallest headline at that
@@ -378,6 +397,7 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
     return (
       <button
         type="button"
+        data-news-open=""
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
             if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
@@ -399,13 +419,14 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
         aria-label={`Play highlight: ${item.headline}`}
         className={commonCls}
         style={commonStyle}
+        data-news-key={item.articleUrl || item.id}
       >
         {body}
       </button>
     );
   }
   return (
-    <a key={item.id} href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle}>
+    <a key={item.id} href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle} data-news-key={item.articleUrl || item.id}>
       {body}
     </a>
   );
@@ -454,6 +475,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
     return (
       <button
         type="button"
+        data-news-open=""
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
             if (item.articleUrl) window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
@@ -474,6 +496,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
         aria-label={`Play highlight: ${item.headline}`}
         className={`${rowCls} cursor-pointer`}
         style={rowStyle}
+        data-news-key={item.articleUrl || item.id}
       >
         {thumb}
         <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
@@ -481,7 +504,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
     );
   }
   return (
-    <a href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle}>
+    <a href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
       {thumb}
       <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
     </a>

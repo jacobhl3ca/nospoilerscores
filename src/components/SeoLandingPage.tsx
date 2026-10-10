@@ -4,6 +4,8 @@ import DocTopBar from "@/components/DocTopBar";
 import FeedbackBox from "@/components/FeedbackBox";
 import type { ReactNode } from "react";
 import { formatUpdated, routeFirstPublished, routeLastModified } from "@/lib/routeLastModified";
+import type { TeamPageLeague } from "@/lib/teamPages";
+import { leagueMeta, teamPagePath, teamsInLeague } from "@/lib/teamPageLeagues";
 
 type FaqItem = {
   q: string;
@@ -13,6 +15,24 @@ type FaqItem = {
 type LinkItem = {
   href: string;
   label: string;
+};
+
+// A section can carry numbered sub-steps, each with an optional code block
+// (a filter line, a hosts entry, a command) and a closing note. Added
+// 2026-10-07 for /how-to-avoid-sports-spoilers, whose "block the sites" step
+// gives one method per platform with the exact line to paste. A section with
+// only h + p renders byte-identical to before.
+type SubStep = {
+  h: string;
+  p: string;
+  code?: string;
+};
+
+type Section = {
+  h: string;
+  p: string;
+  steps?: SubStep[];
+  note?: string;
 };
 
 type SeoLandingPageProps = {
@@ -32,7 +52,7 @@ type SeoLandingPageProps = {
   // passes nothing gets byte-identical output to before.
   lead?: ReactNode;
   intro: string[];
-  sections: { h: string; p: string }[];
+  sections: Section[];
   bullets: string[];
   ctaLabel: string;
   ctaHref?: string;
@@ -55,6 +75,10 @@ type SeoLandingPageProps = {
   // before the refs above were added — Google merges the graph either way, but
   // an unlinked list is not attributed to the page it describes.
   mainEntityId?: string;
+  // League whose team pages get a "Follow a team" link grid after the FAQ.
+  // Added 2026-10-07: the 144 team pages sat on page 2 in Search with no link
+  // from their own league page (only one "NFL teams" link to the /teams hub).
+  teamLeague?: TeamPageLeague;
 };
 
 export default function SeoLandingPage({
@@ -75,7 +99,10 @@ export default function SeoLandingPage({
   about,
   extraSchema = [],
   mainEntityId,
+  teamLeague,
 }: SeoLandingPageProps) {
+  const teamMeta = teamLeague ? leagueMeta(teamLeague) : undefined;
+  const teamList = teamLeague ? teamsInLeague(teamLeague) : [];
   // The date this page's own copy last changed, shown under the h1 and sent as
   // dateModified (2026-09-24, for the freshness signal answer engines read).
   // Skipped on a page with a live `lead` panel: the MLB playoff pages change
@@ -85,7 +112,12 @@ export default function SeoLandingPage({
   const topic = subject ?? h1.replace(/\s+without spoilers$/i, "");
   const route = canonical.replace(/^\//, "");
   // Read time over everything a reader scrolls past, FAQ included, at 230 wpm.
-  const words = [...intro, ...sections.flatMap((x) => [x.h, x.p]), ...bullets, ...faq.flatMap((x) => [x.q, x.a])]
+  const words = [
+    ...intro,
+    ...sections.flatMap((x) => [x.h, x.p, ...(x.steps ?? []).flatMap((s) => [s.h, s.p, s.code ?? ""]), x.note ?? ""]),
+    ...bullets,
+    ...faq.flatMap((x) => [x.q, x.a]),
+  ]
     .join(" ")
     .split(/\s+/).length;
   const readMin = Math.max(1, Math.ceil(words / 230));
@@ -182,6 +214,25 @@ export default function SeoLandingPage({
           <p className="mb-4" style={body}>
             {section.p}
           </p>
+          {section.steps?.map((step, j) => (
+            <div key={`${step.h}-${j}`} className="mb-4">
+              <h3 className="font-semibold mb-1">{step.h}</h3>
+              <p style={body}>{step.p}</p>
+              {step.code ? (
+                <pre
+                  className="mt-2 overflow-x-auto rounded-md px-3 py-2 text-[13px] leading-snug"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                >
+                  <code>{step.code}</code>
+                </pre>
+              ) : null}
+            </div>
+          ))}
+          {section.note ? (
+            <p className="mb-4" style={body}>
+              {section.note}
+            </p>
+          ) : null}
         </section>
       ))}
 
@@ -218,6 +269,34 @@ export default function SeoLandingPage({
           </div>
         ))}
       </section>
+
+      {teamMeta && teamList.length > 0 ? (
+        <section aria-labelledby="doc-teams-title">
+          <h2 id="doc-teams-title" className="text-xl font-bold tracking-tight mt-9 mb-2">
+            Follow a team
+          </h2>
+          <p className="mb-3" style={body}>
+            Each {teamMeta.label} team has its own page: its last five and next five games, with no score, record or standings shown.
+          </p>
+          <ul className="grid gap-2 grid-cols-2 sm:grid-cols-3 text-sm">
+            {teamList.map((t) => (
+              <li key={t.slug}>
+                <Link
+                  href={teamPagePath(t)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 font-semibold"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                >
+                  {t.logo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={t.logo} alt="" width={20} height={20} loading="lazy" decoding="async" className="h-5 w-5 shrink-0 object-contain" />
+                  )}
+                  <span className="min-w-0 flex-1">{t.name}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <aside
         className="mt-10 rounded-xl px-4 py-4 text-sm"
