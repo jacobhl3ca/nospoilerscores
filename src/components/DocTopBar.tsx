@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DocFloatingControls from "@/components/DocFloatingControls";
 import DocReadProgress from "@/components/DocReadProgress";
 
 // Shared top bar for the static doc pages (/about, /contact, /faq, /privacy,
@@ -26,6 +27,7 @@ export default function DocTopBar({
   return (
     <>
       <DocReadProgress />
+      <DocFloatingControls route={route} href={ctaHref} />
       <div className="doc-topbar mb-6 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           {/* A "‹" before the logo makes the link read as a way back, not
