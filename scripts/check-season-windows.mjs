@@ -151,19 +151,32 @@ async function fetchByDay(path, range) {
     // up if the whole batch failed, so one flaky response can't mark a league
     // unverified on its own.
     if (failed && batch.every((p) => p.error)) return failed;
-    events.push(...batch.flatMap((p) => p.events ?? []));
+    // Keep the day each event was ASKED for. ESPN's `dates=` day is US
+    // Eastern, so an 8 pm ET tip-off is next day in UTC: the NBA's Oct 16
+    // preseason finale read as "last game 2026-10-17" (2026-10-09).
+    batch.forEach((p, j) => {
+      const day = days[i + j];
+      for (const e of p.events ?? []) events.push({ ...e, askedDay: `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}` });
+    });
   }
   return { events };
 }
 
 async function fetchDays(path, range, preseason = false) {
   let first = await fetchRange(path, range);
-  if ((first.error === "HTTP 404" || first.error === "HTTP 400") && range.includes("-")) first = await fetchByDay(path, range);
+  let byDay = false;
+  if ((first.error === "HTTP 404" || first.error === "HTTP 400") && range.includes("-")) {
+    first = await fetchByDay(path, range);
+    byDay = true;
+  }
   if (first.error) return first;
 
   let events = first.events;
   // Only pay for slicing when the cap was actually hit — most leagues never do.
-  if (events.length >= EVENT_CAP) {
+  // A per-day walk is never capped, and its endpoint rejects the 7-day slices
+  // anyway: the NBA scoreboard 400s every range (read 2026-10-09), so slicing
+  // its 100+ day-by-day events turned both NBA probes into "HTTP 400".
+  if (!byDay && events.length >= EVENT_CAP) {
     const [from, to] = range.split("-");
     const at = (s) => new Date(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T12:00:00Z`);
     const [start, end] = [at(from), at(to)];
@@ -183,7 +196,7 @@ async function fetchDays(path, range, preseason = false) {
   // (the NFL Preseason backfill entry) measured against regular-season games
   // looks like it ends a month early. So each asks for its own game type.
   const wanted = events.filter((e) => ((e.season?.type ?? 2) === 1) === preseason);
-  return { days: [...new Set(wanted.map((e) => e.date.slice(0, 10)))].sort() };
+  return { days: [...new Set(wanted.map((e) => e.askedDay ?? e.date.slice(0, 10)))].sort() };
 }
 
 const mmddToDate = (mmdd, year) => new Date(`${year}-${mmdd}T12:00:00Z`);

@@ -58,6 +58,10 @@ interface GameCardProps {
   // jump straight to the stream from the green status / network chip — the
   // user's own TV channel link when the network is on the Settings list.)
   onShowDetails?: (game: Game) => void;
+  // The league column's subtitle already names the day's game number
+  // ("NLWC · Game 3"), so the pre-game "Game 3" line is left off this card.
+  // Only LeagueColumn sets it, and only for a single-league column.
+  hideSeriesNote?: boolean;
   // Favorite-star next to each team name (restored 6/11, off by default so the
   // team-schedule view keeps its own header star as the only one there). The
   // column suppresses it for single-matchup Finals views where the favorite
@@ -429,7 +433,7 @@ function ListenSection({ listen }: { listen: ListenResult }) {
   );
 }
 
-function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues, hideWatchLater }: GameCardProps) {
+function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues, hideWatchLater, hideSeriesNote }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // "Later" pill (Jacob 9/27): queue the game for the Watch queue strip above
   // the board. Null outside the board (no provider) or when Settings hides it.
@@ -706,7 +710,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
           Jacob 9/23: hide it. seriesStatus now only marks the game as part of
           a playoff series; the slot shows the neutral game number from the
           notes headline (game.seriesNote), or nothing when ESPN gives none. */}
-      {game.seriesStatus && game.seriesNote && isFuture && showRatings && isToday && !nextGameDate && (
+      {game.seriesStatus && game.seriesNote && !hideSeriesNote && isFuture && showRatings && isToday && !nextGameDate && (
         <div className="xl:hidden mb-1 text-[11px] text-center italic" style={{ color: "var(--text-muted)" }}>
           {game.seriesNote}
         </div>
@@ -819,10 +823,11 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
           );
         return (
           <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
-            {/* PRE — an exhibition, not a game that counts. Only the NFL gets
-                here (every other sport's season.type 1 is filtered at the
-                fetch). Suppressed when the column header ALREADY says it: the
-                dedicated "NFL Preseason" column runs 07-21 → 09-03 and would
+            {/* PRE — an exhibition, not a game that counts. Only the NFL and
+                the NBA get here (every other sport's season.type 1 is filtered
+                at the fetch). Suppressed when the column header ALREADY says it:
+                the dedicated "NFL Preseason" column runs 07-21 → 09-03 (and
+                "NBA Preseason" 10-01 → 10-16) and would
                 otherwise repeat the word on all sixteen cards. What is left is
                 exactly the two places nothing else says it — a team's schedule,
                 where preseason, regular season and playoffs share one list, and
@@ -830,7 +835,11 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 the preseason window closed (on 2026-09-04 that is an Aug 29
                 exhibition sitting under a header reading plain "NFL").
                 Rides inside the existing flex-wrap meta row rather than taking a
-                banner row of its own, so it costs no card height. */}
+                banner row of its own, so it costs no card height.
+                A team's schedule always shows it (2026-10-09): opened from the
+                "NBA Preseason" column, the Knicks list carried that label, so
+                the suppression hid the chip on the 5 exhibitions sitting next
+                to the 82 games that count. */}
             {/* Left group: the league chip, the Pre chip and the time cell.
                 Ratings mode makes it ONE flex-1 cell, the twin of the network
                 cell, so the chips count toward the left share and the badge
@@ -858,7 +867,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 {leagueTag}
               </span>
             )}
-            {game.isPreseason && !/preseason/i.test(leagueLabel ?? "") && (
+            {game.isPreseason && (teamView || !/preseason/i.test(leagueLabel ?? "")) && (
               <span
                 className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
@@ -1003,7 +1012,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
               // so this badge naturally lands at the true row center instead of
               // centering in whatever slack those two happened to leave (9/18 fix).
               <span className="shrink-0 flex justify-center"><RatingBadge rating={game.rating!} /></span>
-            ) : game.seriesStatus && game.seriesNote && isFuture && showRatings && isToday && !nextGameDate ? (
+            ) : game.seriesStatus && game.seriesNote && !hideSeriesNote && isFuture && showRatings && isToday && !nextGameDate ? (
               // Game number inline ONLY on wide (xl) columns where it fits
               // next to the bare time; narrower columns render it as the banner
               // above instead. Day-of-game only, same gate as the banner (6/12).

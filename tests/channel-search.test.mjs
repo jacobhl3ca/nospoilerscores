@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CHANNEL_FEED_IDS, CHANNEL_SEARCH_HANDLES, channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchTitleTokens, feedCoversGame, isWomensSport, parseChannelFeed,
+  CHANNEL_FEED_IDS, CHANNEL_SEARCH_HANDLES, channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchServesSport, channelSearchTitleTokens, embedOffChannelId, feedCoversGame, isWomensSport, parseChannelFeed,
   pickChannelSearchCards, titleDateYmd, titleHasCompToken, NOT_FIRST_TEAM_RX,
 } from "../scripts/lib/channel-search.mjs";
 
@@ -189,4 +189,71 @@ test("MAC: this game's dated cut, not the 2019 meeting", () => {
   const picks = pickChannelSearchCards(cards, { titleHasTeams: teams("buffalo", "robert morris"), gameMs: game });
   assert.deepEqual(picks.map((c) => c.videoId), ["NnwzIwJdfBQ", "wPGqhAcWYjM"]);
   assert.equal(channelSearchHandle("Get Some MACtion"), "GetSomeMACtion");
+});
+
+test("college soccer: the conference feeds keep the cut, not the full replay, and serve soccer (the SEC volleyball too)", () => {
+  // Uploads on the ACC Digital Network and Big 12 Conference feeds, 2026-10-03.
+  const game = Date.parse("2026-10-02T23:00Z");
+  const now = game + 17 * 3600e3;
+  const womens = ["women's soccer", "sec soccer"];
+  const accTokens = channelSearchTitleTokens("ACC Digital Network");
+  assert.deepEqual(accTokens, ["highlight", "recap"]);
+  const acc = [
+    { videoId: "yXZQGBtb5R8", title: "Florida State vs. Louisville Full Match Replay | 2026 ACC Women's Soccer", durationSec: null, publishedMs: now - 3600e3 },
+    { videoId: "V6DEfTnKZJY", title: "Florida State vs. Louisville Match Highlights | 2026 ACC Women's Soccer", durationSec: null, publishedMs: now - 2 * 3600e3 },
+    { videoId: "VS0APLJrXXo", title: "West Florida vs. North Carolina Full Match Replay | 2026 ACC Men's Soccer", durationSec: null, publishedMs: now - 3600e3 },
+  ];
+  const compOk = (tokens) => (t) => titleHasCompToken(t, tokens) && titleHasCompToken(t, accTokens);
+  assert.deepEqual(pickChannelSearchCards(acc, { titleHasTeams: teams("florida state", "louisville"), compOk: compOk(womens), gameMs: game, womensGame: isWomensSport("ncaawsoc"), limit: 3 })
+    .map((c) => c.videoId), ["V6DEfTnKZJY"]);
+  // A men's game never takes the women's cut of the same pair, nor a replay.
+  assert.deepEqual(pickChannelSearchCards(acc, { titleHasTeams: teams("florida state", "louisville"), compOk: compOk(["acc men's soccer"]), gameMs: game, womensGame: isWomensSport("ncaamsoc") }), []);
+  assert.deepEqual(pickChannelSearchCards(acc, { titleHasTeams: teams("west florida", "north carolina"), compOk: compOk(["acc men's soccer"]), gameMs: game }), []);
+
+  // The Big 12 cut names its date; "Women's" is the game itself, not a side.
+  const b12 = [{ videoId: "hB5S51HUBCY", title: "Kansas vs. Baylor Highlights (10.2.26) | 2026 Big 12 Women's Soccer", durationSec: null, publishedMs: Date.parse("2026-10-03T02:58Z") }];
+  const b12Opts = { titleHasTeams: teams("kansas", "baylor"), compOk: (t) => titleHasCompToken(t, womens) && titleHasCompToken(t, channelSearchTitleTokens("Big 12 Conference")), gameMs: game };
+  assert.deepEqual(pickChannelSearchCards(b12, { ...b12Opts, womensGame: isWomensSport("ncaawsoc") }).map((c) => c.videoId), ["hB5S51HUBCY"]);
+  assert.deepEqual(pickChannelSearchCards(b12, b12Opts), []);
+  assert.deepEqual(pickChannelSearchCards(b12, { ...b12Opts, womensGame: true, gameMs: game - DAY }), []);
+
+  // Feed only, and for soccer only: the same channels lead the ncaaf and
+  // ncaavb chains, which keep their old lookups. The SEC's feed is read for
+  // volleyball too (next test).
+  for (const channel of ["ACC Digital Network", "Big 12 Conference", "SEC"]) {
+    assert.ok(channelFeedId(channel), channel);
+    assert.equal(channelSearchHandle(channel), null, channel);
+    assert.equal(channelSearchServesSport(channel, "ncaawsoc"), true, channel);
+    assert.equal(channelSearchServesSport(channel, "ncaamsoc"), true, channel);
+    assert.equal(channelSearchServesSport(channel, "ncaaf"), false, channel);
+    assert.equal(channelSearchServesSport(channel, "ncaavb"), channel === "SEC", channel);
+    assert.equal(channelSearchNeedsEmbed(channel, "ncaawsoc"), true, channel);
+  }
+  assert.equal(channelSearchServesSport("Major League Soccer", "mls"), true);
+  assert.equal(channelSearchServesSport("Get Some MACtion", "ncaaf"), true);
+  assert.equal(isWomensSport("ncaamsoc"), false);
+});
+
+test("SEC volleyball: read from the SEC's feed with no embed check, owner checked against its channel id", () => {
+  // The SEC's volleyball cuts refuse every embed (oEmbed 401) while its soccer
+  // cuts embed, so only the volleyball pair skips the embed check.
+  assert.equal(embedOffChannelId("SEC", "ncaavb"), "UC60q_WUDde_NK-ze3frvtiA");
+  assert.equal(embedOffChannelId("SEC", "ncaawsoc"), null);
+  assert.equal(embedOffChannelId("Big 12 Conference", "ncaavb"), null);
+  assert.equal(embedOffChannelId("NFL", "nfl"), null);
+  assert.equal(channelSearchNeedsEmbed("SEC", "ncaavb"), false);
+  assert.equal(channelSearchNeedsEmbed("SEC", "ncaawsoc"), true);
+  assert.equal(channelSearchNeedsEmbed("NFL", "nfl"), false);
+  // The feed as read 2026-10-03: five volleyball cuts beside football and soccer.
+  const feed = parseChannelFeed(`<feed>
+<entry><yt:videoId>kz7C3_2-7Xo</yt:videoId><title>2025 Kentucky Wildcats vs. South Carolina Gamecocks | Full Game Replay | 2025 SEC Football</title><link rel="alternate" href="https://www.youtube.com/watch?v=kz7C3_2-7Xo"/><published>2026-10-02T17:00:00+00:00</published></entry>
+<entry><yt:videoId>BjPKAQzfEAA</yt:videoId><title>Texas Longhorns vs. Ole Miss Rebels | Game Highlights | 2026 SEC Soccer</title><link rel="alternate" href="https://www.youtube.com/watch?v=BjPKAQzfEAA"/><published>2026-10-01T21:56:00+00:00</published></entry>
+<entry><yt:videoId>BN-UOrS_eyw</yt:videoId><title>Auburn Tigers vs. Arkansas Razorbacks | Match Highlights | 2026 SEC Volleyball</title><link rel="alternate" href="https://www.youtube.com/watch?v=BN-UOrS_eyw"/><published>2026-10-01T21:40:00+00:00</published></entry>
+<entry><yt:videoId>M3Q7mzfzm6M</yt:videoId><title>No. 8 Florida Gators vs. Oklahoma Sooners | Match Highlights | 2026 SEC Volleyball</title><link rel="alternate" href="https://www.youtube.com/watch?v=M3Q7mzfzm6M"/><published>2026-10-01T21:32:00+00:00</published></entry>
+</feed>`);
+  const vbOk = (t) => titleHasCompToken(t, ["volleyball"]) && titleHasCompToken(t, channelSearchTitleTokens("SEC"));
+  const opts = { compOk: vbOk, gameMs: Date.parse("2026-09-27T23:00Z"), womensGame: isWomensSport("ncaavb"), limit: 3 };
+  assert.deepEqual(pickChannelSearchCards(feed.cards, { ...opts, titleHasTeams: teams("florida", "oklahoma") }).map((c) => c.videoId), ["M3Q7mzfzm6M"]);
+  assert.deepEqual(pickChannelSearchCards(feed.cards, { ...opts, titleHasTeams: teams("texas", "ole miss") }), []);
+  assert.deepEqual(pickChannelSearchCards(feed.cards, { ...opts, titleHasTeams: teams("kentucky", "south carolina") }), []);
 });

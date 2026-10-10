@@ -293,6 +293,24 @@ export function decodeFavorites(params: URLSearchParams): DecodedShare {
   return result;
 }
 
+export interface NewsCardPrefs {
+  revealTitles?: boolean;
+  revealMedia?: boolean;
+  videosOnly?: boolean;
+  textPosts?: boolean;
+}
+
+export type NewsLayout = "cards" | "feed" | "espn";
+
+// The Posts switch (All / No text / Videos) over videosOnly + textPosts.
+export { type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField } from "./postFilter";
+
+// The news layout to render. newsLayout wins; a blob from before it existed
+// carries only newsFeedView (true = Feed).
+export function newsLayoutOf(prefs: { newsLayout?: NewsLayout; newsFeedView?: boolean }): NewsLayout {
+  return prefs.newsLayout ?? (prefs.newsFeedView ? "feed" : "cards");
+}
+
 export interface Preferences {
   favoriteLeagues: Sport[]; // ordered by priority (first = highest)
   favoriteTeams: string[]; // team IDs, ordered by priority (first = highest)
@@ -361,6 +379,11 @@ export interface Preferences {
   // version means this prefs blob has either received the one-time legacy
   // preservation migration or was created after the new defaults launched.
   switcherDefaultsVersion?: 2;
+  // v1 stopped a column edit on a 3-column screen from leaving columns 4-5 on
+  // Auto, where a fullscreen window filled them with leagues the user never
+  // picked (Jacob 10/8). A saved version means the blob has had the one-time
+  // repair (closeUnseenAutoSlots in HomeContent) or was created after it.
+  wideSlotsVersion?: 1;
   // Hide the favorite-star next to team names on game cards (favoriting stays
   // available via the team-schedule view + settings picker).
   //
@@ -380,6 +403,10 @@ export interface Preferences {
   // starred. See lib/favoritesFilter.ts.
   favoritesOnly?: boolean;
   favoritesOnlyStrict?: Sport[];
+  // A pinned league between seasons keeps its column, which asks once
+  // "Close this column?" (Jacob 10/9). Keep puts the league here and the
+  // question does not come back for it. Close empties the slot instead.
+  offseasonKeep?: Sport[];
   // Games queued with the card's "Later" pill, shown in the Watch queue strip
   // above the board until marked Done (Jacob 9/27). Newest last, at most 20;
   // anything older than 3 days is dropped on load. Syncs like favoriteTeams.
@@ -445,6 +472,12 @@ export interface Preferences {
   // would fall back to it takes the next league instead. Best of yesterday is
   // turned off the same way, through hiddenLeagues ("best" is a Sport).
   topNewsHidden?: boolean;
+  // The Best of yesterday column's span row (Jacob 10/10, lib/topGames.ts):
+  // which span it shows and whether "All leagues" is on. Unset = Yesterday,
+  // the user's own leagues. Only read while ratings show (the row hides with
+  // them, and the column falls back to Yesterday).
+  bestSpan?: "yesterday" | "week" | "month" | "year";
+  bestAllLeagues?: boolean;
   // Which POSITION the generic "Top news" column occupies on the news board
   // (0-2, default 2 = last). Picking "Top news" from any column's
   // switcher moves the column here rather than doing nothing — before this,
@@ -618,6 +651,23 @@ export interface Preferences {
   // inline images + blurred top comments). Toggled by the Cards/Feed pill in the
   // news header.
   newsFeedView?: boolean;
+  // News layout, the 3-way Cards / Feed / ESPN pill (Jacob 10/8). "espn" =
+  // ESPN Videos left + ESPN Top Headlines right, the user's league subreddits
+  // below (HomeContent). Undefined = read the legacy newsFeedView above, so
+  // old blobs keep their view: see newsLayoutOf.
+  newsLayout?: NewsLayout;
+  // ESPN layout only: "Big" = one wide column of large video cards, headlines
+  // and subreddits under it. Default false.
+  newsEspnBig?: boolean;
+  // News Autoplay pill, every layout (Jacob 10/8): the video most in focus
+  // plays muted (components/InlineVideoCard). Undefined = on in every layout
+  // (Jacob 10/8 r4).
+  newsAutoplay?: boolean;
+  // ESPN layout card header buttons (Jacob 10/8 r5): per-card Headlines /
+  // Media / Videos only / Text posts, keyed by the source's feed key (or its
+  // label when it has none). Unset fields fall back to the global prefs.
+  // Cards and Feed never read this.
+  newsCardPrefs?: Record<string, NewsCardPrefs>;
   // News "Videos only" quick filter: true = show only clip-bearing items. It is
   // ITEM-level on every surface (Cards, Feed, the aligned strip's ESPN tail) —
   // a Reddit v.redd.it post counts, a headline-only post never does — via
@@ -696,6 +746,7 @@ const defaults: Preferences = {
   newsColCount: 3,
   smartCutoffHour: 13,
   switcherDefaultsVersion: 2,
+  wideSlotsVersion: 1,
   // Reddit-only by default (2026-08-03, ahead of the Product Hunt launch).
   // Reddit is where the game-worth-watching discussion actually lives, and it
   // is the feed a first-time visitor should land on; ESPN/homepage/top-videos
@@ -729,6 +780,10 @@ export function loadPreferences(): Preferences {
     // before the first post-deploy save overwrites the blob.
     if (stored && !Object.prototype.hasOwnProperty.call(stored, "switcherDefaultsVersion")) {
       delete prefs.switcherDefaultsVersion;
+    }
+    // Same for the wide-slots repair marker.
+    if (stored && !Object.prototype.hasOwnProperty.call(stored, "wideSlotsVersion")) {
+      delete prefs.wideSlotsVersion;
     }
     // Push the chosen zone into the shared module so the data layer + UI agree
     // before the first fetch/render after a load.

@@ -36,7 +36,7 @@ for (const viewport of [
     // "Offseason" groups); the season rides on each row instead, and a saved
     // offseason league keeps its row.
     await expect(slot.locator('option[value="nhl"]')).toHaveText("NHL · offseason");
-    await expect(page.getByText(/Offseason · saved for its return/)).toBeVisible();
+    await expect(page.getByText(/Offseason · returns/)).toBeVisible();
 
     // Every visible league is offered, plus the two cross-league columns.
     const expectedSports = [...new Set(

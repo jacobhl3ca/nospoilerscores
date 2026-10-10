@@ -8,6 +8,7 @@ import { frontendHref } from "@/lib/frontendLinks";
 import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
+import { AutoplayVideo, TapForSound } from "@/components/InlineVideoCard";
 
 interface Props {
   sources: NewsSource[];
@@ -36,6 +37,8 @@ interface Props {
   // the video cells and the tail alike, and the tooltip count it reports back.
   hideSeenKeys?: Set<string>;
   onSeenHiddenCount?: (id: string, count: number) => void;
+  // News Autoplay pill: the clip most in focus plays muted (InlineVideoCard).
+  autoplay?: boolean;
 }
 
 // 3-column video strip — CSS subgrid so video N is the same height in every
@@ -43,7 +46,7 @@ interface Props {
 // gridTemplateRows: subgrid. Per-row height = tallest headline at that row,
 // shorter cells anchor align-self: start so blank space sits at the bottom.
 // Headlines stay un-clamped so long titles wrap fully (Jacob 2026-05-02).
-export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts, videosOnly, hiddenCategories, oldestFirst, hideSeenKeys, onSeenHiddenCount }: Props) {
+export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts, videosOnly, hiddenCategories, oldestFirst, hideSeenKeys, onSeenHiddenCount, autoplay }: Props) {
   const [colItems, setColItems] = useState<(NewsItem[] | null)[]>(() => sources.map(() => null));
   const [tailItems, setTailItems] = useState<NewsItem[] | null>(null);
 
@@ -233,7 +236,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
                   </>
                 )
               : items.slice(0, itemCount).map((item, rowIdx) => (
-                  <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} siblings={siblings} index={rowIdx} />
+                  <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} siblings={siblings} index={rowIdx} autoplay={autoplay} />
                 ))}
             {hasTail ? (
               // One spanning grid item that occupies col 3's empty pad rows.
@@ -339,7 +342,8 @@ function SkeletonRow({ isFirst }: { isFirst: boolean }) {
   );
 }
 
-function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings: PlayOpts[]; index: number }) {
+function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings: PlayOpts[]; index: number; autoplay?: boolean }) {
+  const [playing, setPlaying] = useState(false);
   const body = (
     <>
       {item.imageUrl && (
@@ -363,6 +367,9 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
             // item — display:none can't leak onto a later valid thumbnail.
             onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
+          {/* News Autoplay: the clip most in focus plays muted (InlineVideoCard). */}
+          <AutoplayVideo item={item} enabled={!!autoplay} onPlayingChange={setPlaying} />
+          {playing ? <TapForSound /> : (
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
             style={{ background: "linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.4))" }}
@@ -373,6 +380,7 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
               </svg>
             </div>
           </div>
+          )}
         </div>
       )}
       {/* Un-clamped — subgrid sizes the row to the tallest headline at that

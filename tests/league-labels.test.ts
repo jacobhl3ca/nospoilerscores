@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { SHORT_LEAGUE_LABELS, SHORT_LABEL_MAX_CHARS } from "../src/lib/leagueLabels.ts";
+import { TOP_GAMES_COLUMN_LABEL } from "../src/lib/topGames.ts";
 
 // The map is keyed on the exact ALL_LEAGUES label string, and a miss is silent:
 // the header just renders the full name again and wraps to two lines in a 114px
@@ -16,6 +17,8 @@ import { SHORT_LEAGUE_LABELS, SHORT_LABEL_MAX_CHARS } from "../src/lib/leagueLab
 // silently-empty scan from passing every other test in this file for free.
 const ESPN_SRC = readFileSync(fileURLToPath(new URL("../src/lib/espn.ts", import.meta.url)), "utf8");
 const LABELS = new Set([...ESPN_SRC.matchAll(/\blabel: "([^"]+)"/g)].map((m) => m[1]));
+// The Best column's span headers (lib/topGames.ts, pure, so it imports).
+for (const label of Object.values(TOP_GAMES_COLUMN_LABEL)) LABELS.add(label);
 
 test("the label scan actually found the league catalog", () => {
   // 48 labels as of 2026-09-02. A floor, not the exact count, so adding a league
