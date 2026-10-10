@@ -139,6 +139,17 @@
   top: calc(var(--header-h, 0px) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px)) + var(--news-titlebar-h, 0px));
 }
 
+/* ESPN layout, 2 columns (Jacob 10/9): Top Headlines is far shorter than the
+   clips beside it, so it pins where the card headers pin and rides along. A
+   column taller than the screen gets a negative top (its height measured into
+   --espn-headlines-h), so it scrolls to its own end first, then stays. */
+.espn-headlines-pin {
+  top: min(
+    calc(var(--header-h, 0px) + var(--news-toolbar-pin, var(--news-toolbar-h, 0px))),
+    calc(100svh - var(--espn-headlines-h, 0px) - 1rem)
+  );
+}
+
 /* News headlines (and Reddit selftext bodies) are spoilers — they give away the
    result — so anything carrying .news-title is blurred by DEFAULT (no class
    needed, so there's no un-blurred flash before JS runs). Two ways to reveal:

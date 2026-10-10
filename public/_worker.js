@@ -31,6 +31,82 @@ function cardMetaFromKey(key) {
   };
 }
 
+// Shared edge cache (caches.default) for GET routes whose upstream is metered
+// or rate-limited. The key is built from the route's PARSED inputs, never the
+// raw URL, so an extra or reordered query param can't mint a fresh entry and
+// send one more request upstream. Inert where the Cache API is absent (tests).
+async function edgeCacheMatch(keyUrl) {
+  if (typeof caches === "undefined") return null;
+  try { return (await caches.default.match(new Request(keyUrl, { method: "GET" }))) || null; } catch { return null; }
+}
+function edgeCachePut(ctx, keyUrl, res) {
+  if (typeof caches === "undefined" || !ctx?.waitUntil) return;
+  ctx.waitUntil(caches.default.put(new Request(keyUrl, { method: "GET" }), res.clone()).catch(() => {}));
+}
+
+// /api/boxing upstream refresh interval and failure backoff (see the route).
+const BOXING_SNAPSHOT_MS = 8 * 60 * 60 * 1000;
+const BOXING_LEASE_MS = 2 * 60 * 1000;          // one isolate owns a refresh
+const BOXING_RETRY_MS = 60 * 60 * 1000;         // after a failed upstream call
+const BOXING_RETRY_429_MS = 12 * 60 * 60 * 1000; // after a 429 (quota spent)
+const BOXING_SNAP_KEY = "cache/boxing-schedule.json";
+// In-isolate single flight: concurrent requests share one refresh promise.
+let boxingRefresh = null;
+
+// One upstream call for the boxing schedule. Before the call, claim a lease
+// in the R2 snapshot (`retryAt`) with a conditional put on the etag we read,
+// so only one isolate wins; the others keep serving the stale copy (the very
+// first fetch, with no snapshot yet, claims without a condition). After the
+// call, write either the new events or a backoff `retryAt`. Resolves to the
+// new events, or null when the caller should serve the stale copy.
+async function refreshBoxing(env, obj, snap) {
+  const base = { fetchedAt: Number(snap?.fetchedAt) || 0, events: Array.isArray(snap?.events) ? snap.events : [] };
+  const write = (body, onlyIf) => env.DATA
+    ? env.DATA.put(BOXING_SNAP_KEY, JSON.stringify(body),
+      { httpMetadata: { contentType: "application/json" }, ...(onlyIf ? { onlyIf } : {}) })
+    : null;
+  if (env.DATA) {
+    try {
+      const claimed = await write({ ...base, retryAt: Date.now() + BOXING_LEASE_MS },
+        obj?.etag ? { etagMatches: obj.etag } : null);
+      if (obj?.etag && !claimed) return null; // another isolate holds the lease
+    } catch { return null; }
+  }
+  const backoff = async (ms) => { try { await write({ ...base, retryAt: Date.now() + ms }); } catch { /* lease expires */ } return null; };
+  try {
+    const host = "boxing-data-api.p.rapidapi.com";
+    const res = await fetch(`https://${host}/v2/events/schedule`, {
+      headers: {
+        "x-rapidapi-host": host,
+        "x-rapidapi-key": env.BOXING_API_KEY,
+        "Content-Type": "application/json",
+      },
+    });
+    // A 429 here means the month's 100 requests are spent. Serve the stale
+    // copy (or empty) and let the column fall back rather than surfacing an
+    // error to the user.
+    if (!res.ok) return backoff(res.status === 429 ? BOXING_RETRY_429_MS : BOXING_RETRY_MS);
+    const data = await res.json();
+    const events = (data?.data || []).map((e) => ({
+      id: String(e.id || ""),
+      title: String(e.title || ""),
+      date: e.date || null,
+      venue: e.venue || null,
+      location: e.location || null,
+      // `broadcast` is per-country: [{country, broadcasters:[...]}]. Keep
+      // only the US/UK rows — those are the ones Jacob can actually watch.
+      broadcasts: (e.broadcast || [])
+        .filter((b) => ["United States", "United Kingdom"].includes(b?.country))
+        .flatMap((b) => b?.broadcasters || []),
+      poster: e.poster_image_url || null,
+    })).filter((e) => e.id && e.title && e.date);
+    try { await write({ fetchedAt: Date.now(), events }); } catch { /* serve anyway */ }
+    return events;
+  } catch {
+    return backoff(BOXING_RETRY_MS);
+  }
+}
+
 // HTMLRewriter element handler — overwrite one attribute on a <meta> tag.
 class AttrSetter {
   constructor(attr, value) { this.attr = attr; this.value = value; }
@@ -1087,8 +1163,11 @@ export default {
       const title = newsHead
         ? (newsHead.length > 110 ? `${newsHead.slice(0, 109)}…` : newsHead)
         : "HideScore — No Spoiler Sports";
-      const desc = newsLabel
-        ? `${newsLabel} · Watch on HideScore — catch up without seeing the score.`
+      // The label is caller text too: cap it like the headline so a crafted
+      // link can't put a paragraph into a hidescore.com unfurl.
+      const label = newsLabel && newsLabel.length > 60 ? `${newsLabel.slice(0, 59)}…` : newsLabel;
+      const desc = label
+        ? `${label} · Watch on HideScore — catch up without seeing the score.`
         : "Watch the highlight on HideScore — catch up without seeing the score.";
       const assetRes = await env.ASSETS.fetch(new Request(new URL("/", url), { method: "GET" }));
       return new HTMLRewriter()
@@ -1194,6 +1273,35 @@ export default {
           },
         });
       }
+      // Real lookups are one game's "A vs B highlights <date>" (well under 200
+      // chars) with a handful of excluded ids. Anything far past that is not
+      // the app, and each call costs up to four YouTube fetches.
+      if (query.length > 300 || excludeSet.size > 25 || url.search.length > 2048) {
+        return new Response(JSON.stringify({ error: "Bad params" }), {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      }
+      // Many visitors open the same games, so the same lookup repeats. Share
+      // one answer per colo for the same max-age the browser already gets.
+      const ytKey = new URL("https://hidescore.com/api/youtube");
+      for (const [k, v] of [
+        ["q", query],
+        ["channel", (preferChannel || "").toLowerCase()],
+        ["prefer", preferExtended ? "extended" : ""],
+        ["strict", strictChannelParam ? "1" : ""],
+        ["race", raceTokens.join("|")],
+        ["comp", compTokens.join("|")],
+        ["week", queryWeek ? String(queryWeek) : ""],
+        ["order", homeFirst ? "home" : ""],
+        ["minsec", minSec ? String(minSec) : ""],
+        ["exclude", [...excludeSet].sort().join(",")],
+      ]) if (v) ytKey.searchParams.set(k, v);
+      const ytCached = await edgeCacheMatch(ytKey.toString());
+      if (ytCached) return ytCached;
 
       try {
         const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
@@ -3002,7 +3110,7 @@ export default {
           // account toward Cloudflare's 100K/day free cap. A Pages Function
           // response is NOT edge-cached, so this header saves invocations only
           // via the browser/WebView HTTP cache (the client uses a plain fetch()).
-          return new Response(JSON.stringify({ error: "No results" }), {
+          const miss = new Response(JSON.stringify({ error: "No results" }), {
             status: 404,
             headers: {
               "Content-Type": "application/json",
@@ -3010,16 +3118,22 @@ export default {
               "Access-Control-Allow-Origin": "*",
             },
           });
+          // An empty page is also what YouTube serves when it throttles us; do
+          // not pin that. Cache only a miss that came from a real results page.
+          if (html.includes('"videoRenderer"')) edgeCachePut(ctx, ytKey.toString(), miss);
+          return miss;
         }
 
         const lengthSec = lengthById.get(videoId) ?? null;
-        return new Response(JSON.stringify(lengthSec ? { videoId, lengthSec } : { videoId }), {
+        const hit = new Response(JSON.stringify(lengthSec ? { videoId, lengthSec } : { videoId }), {
           headers: {
             "Content-Type": "application/json",
             "Cache-Control": "public, max-age=300",
             "Access-Control-Allow-Origin": "*",
           },
         });
+        edgeCachePut(ctx, ytKey.toString(), hit);
+        return hit;
       } catch {
         return new Response(JSON.stringify({ error: "Search failed" }), {
           status: 500,
@@ -3065,6 +3179,11 @@ export default {
           },
         });
       const MIN_TIER = 4;
+      // Same answer for everyone, so one per colo per max-age. Without it each
+      // visitor (or crawler hit) is one more call to Lichess from our IPs.
+      const chessKey = "https://hidescore.com/api/chess";
+      const chessCached = await edgeCacheMatch(chessKey);
+      if (chessCached) return chessCached;
       try {
         const res = await fetch("https://lichess.org/api/broadcast/top?nb=20", {
           // Lichess asks API consumers to identify themselves. A generic
@@ -3118,7 +3237,9 @@ export default {
             if (row && row.id && row.name) events.push(row);
           }
         }
-        return corsJson({ events });
+        const out = corsJson({ events });
+        edgeCachePut(ctx, chessKey, out);
+        return out;
       } catch {
         return corsJson({ events: [] }, 200, 60);
       }
@@ -3162,9 +3283,14 @@ export default {
       const TITLES = ["league-of-legends", "cs-go", "cs2", "dota-2", "valorant"];
       const ALLOWED_TIERS = ["s", "a"];
       const date = url.searchParams.get("date");
+      const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(date || "");
+      // Every miss spends the PandaScore token's hourly quota. Key on the
+      // parsed date only, so junk params can't bypass the shared copy.
+      const esportsKey = `https://hidescore.com/api/esports${hasDate ? `?date=${date}` : ""}`;
+      const esportsCached = await edgeCacheMatch(esportsKey);
+      if (esportsCached) return esportsCached;
       try {
         const qs = new URLSearchParams({ per_page: "100", sort: "begin_at" });
-        const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(date || "");
         if (hasDate) qs.set("range[begin_at]", `${date}T00:00:00Z,${date}T23:59:59Z`);
         // ⚠️ `/matches` with NO range is every match PandaScore has ever
         // recorded, and `sort=begin_at` is ascending — so the dateless call
@@ -3211,7 +3337,9 @@ export default {
             winnerId: m.winner_id != null ? String(m.winner_id) : null,
           });
         }
-        return corsJson({ games });
+        const out = corsJson({ games });
+        edgeCachePut(ctx, esportsKey, out);
+        return out;
       } catch {
         return corsJson({ games: [] }, 200, 120);
       }
@@ -3299,8 +3427,11 @@ export default {
       if (url.pathname.endsWith("/standings")) return cjson({ children: [] }, 3600);
       if (url.pathname.endsWith("/teams")) return cjson({ items: [] }, 3600);
 
+      // Cache key from the parsed range only: the raw URL let any extra param
+      // (?x=1, ?x=2, …) skip the cache, and each miss is up to 49 ESPN fetches.
       const cache = typeof caches !== "undefined" ? caches.default : null;
-      const cacheKey = new Request(url.toString(), { method: "GET" });
+      const datesKey = (url.searchParams.get("dates") || "").match(/^\d{8}(?:-\d{8})?$/)?.[0] || "";
+      const cacheKey = new Request(`https://hidescore.com/api/cricket-intl${datesKey ? `?dates=${datesKey}` : ""}`, { method: "GET" });
       if (cache) {
         const hit = await cache.match(cacheKey);
         if (hit) return hit;
@@ -3656,8 +3787,7 @@ export default {
     // The plan is Basic: 100 requests/month, HARD-capped, no card on file — so
     // this cannot generate a bill, but it also cannot absorb per-user traffic.
     // Hence the long cache: boxing announces cards 6-8 weeks out and the feed
-    // only carries a handful of events, so hourly is far more than fresh
-    // enough and keeps us near ~24 requests/day worst case.
+    // only carries a handful of events, so a few refreshes a day is enough.
     if (url.pathname === "/api/boxing") {
       if (request.method === "OPTIONS") {
         return new Response(null, {
@@ -3678,36 +3808,30 @@ export default {
           },
         });
       if (!env.BOXING_API_KEY) return corsJson({ events: [], disabled: true }, 200, 300);
+      // 100 calls a month cannot ride on per-browser max-age: every new
+      // visitor (or any crawler) would spend one. Keep ONE global copy in R2
+      // and ask upstream at most once per BOXING_SNAPSHOT_MS (8 h, ≤ 93 calls
+      // in a 31-day month) while upstream answers. Only one request refreshes
+      // at a time (in-isolate promise + R2 lease); the others get the stale
+      // copy. After a failure, no retry for BOXING_RETRY_MS (12 h after a 429).
+      let obj = null;
+      let snap = null;
       try {
-        const host = "boxing-data-api.p.rapidapi.com";
-        const res = await fetch(`https://${host}/v2/events/schedule`, {
-          headers: {
-            "x-rapidapi-host": host,
-            "x-rapidapi-key": env.BOXING_API_KEY,
-            "Content-Type": "application/json",
-          },
-        });
-        // A 429 here means the month's 100 requests are spent. Serve empty and
-        // let the column fall back rather than surfacing an error to the user.
-        if (!res.ok) return corsJson({ events: [] }, 200, 900);
-        const data = await res.json();
-        const events = (data?.data || []).map((e) => ({
-          id: String(e.id || ""),
-          title: String(e.title || ""),
-          date: e.date || null,
-          venue: e.venue || null,
-          location: e.location || null,
-          // `broadcast` is per-country: [{country, broadcasters:[...]}]. Keep
-          // only the US/UK rows — those are the ones Jacob can actually watch.
-          broadcasts: (e.broadcast || [])
-            .filter((b) => ["United States", "United Kingdom"].includes(b?.country))
-            .flatMap((b) => b?.broadcasters || []),
-          poster: e.poster_image_url || null,
-        })).filter((e) => e.id && e.title && e.date);
-        return corsJson({ events });
-      } catch {
-        return corsJson({ events: [] }, 200, 300);
-      }
+        obj = env.DATA ? await env.DATA.get(BOXING_SNAP_KEY) : null;
+        if (obj) snap = await obj.json();
+      } catch { /* no snapshot */ }
+      const fresh = snap && Array.isArray(snap.events) && Date.now() - Number(snap.fetchedAt) < BOXING_SNAPSHOT_MS;
+      if (fresh) return corsJson({ events: snap.events });
+      const stale = snap && Array.isArray(snap.events) ? snap.events : null;
+      // Backoff or another isolate's lease: serve the stale copy.
+      if (snap && Date.now() < Number(snap.retryAt)) return corsJson({ events: stale || [] }, 200, 300);
+      // A refresh is already running in this isolate: serve the stale copy,
+      // or wait for it when there is none yet.
+      if (boxingRefresh) return corsJson({ events: stale || (await boxingRefresh) || [] }, 200, 300);
+      const run = refreshBoxing(env, obj, snap).finally(() => { if (boxingRefresh === run) boxingRefresh = null; });
+      boxingRefresh = run;
+      const events = await run;
+      return events ? corsJson({ events }) : corsJson({ events: stale || [] }, 200, 900);
     }
 
     if (url.pathname === "/api/mlb-videos") {
@@ -4207,6 +4331,9 @@ async function siwaCallback(request, env, url) {
 // ID, so verify against APPLE_APP_BUNDLE_ID. No client_secret / code exchange
 // needed -- the identityToken is already an Apple-signed JWT.
 async function siwaNative(request, env) {
+  // Same-origin only, like the email routes: the app's WebView loads
+  // hidescore.com, so a cross-site POST here is never the app.
+  if (!_hsMutationAllowed(request)) return _siwaJson({ error: "cross_site" }, 403);
   if (!env.SESSION_SECRET) return _siwaJson({ error: "not_configured" }, 503);
   let body;
   try { body = await request.json(); } catch { return _siwaJson({ error: "bad_request" }, 400); }
@@ -4846,6 +4973,7 @@ async function googleCallback(request, env, url) {
 // app-generated PKCE verifier, so another app claiming the same custom scheme
 // cannot redeem an intercepted callback URL.
 async function googleNativeComplete(request, env) {
+  if (!_hsMutationAllowed(request)) return _siwaJson({ error: "cross_site" }, 403);
   if (!env.DATA || !env.SESSION_SECRET) return _siwaJson({ error: "not_configured" }, 503);
   let body;
   try { body = await request.json(); } catch { return _siwaJson({ error: "bad_request" }, 400); }
