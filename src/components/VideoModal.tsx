@@ -71,6 +71,10 @@ interface VideoModalProps {
   // A /watch link someone pasted: covered like the combat channels, but the
   // cover still lifts once the title reads clean (the Settings toggle never lifts).
   forceTitleMask?: boolean;
+  // The Headlines button of the news card this post opened from (null = no
+  // card setting, the global toggle rules). The modal renders outside the
+  // card, so the dialog root carries the card's class for the footer headline.
+  titlesShown?: boolean | null;
   maskVideoBottom?: boolean;
   // Opt-in (default OFF): show YouTube's NATIVE control bar (controls:1) instead
   // of our spoiler-safe stripped player. When on, YT's own progress/seek bar +
@@ -507,7 +511,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, league, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates, trackLeague, trackPage }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, league, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, titlesShown = null, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates, trackLeague, trackPage }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   // The React-owned box the YouTube player lives INSIDE. React renders this and
   // nothing else touches it; the #yt-player node YT destroys is a plain DOM
@@ -2646,7 +2650,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // focus-management effect) without adding it to the tab order; outline
         // none suppresses the ring since it's focused only to seat assistive tech.
         tabIndex={-1}
-        className="group relative w-full max-w-7xl focus:outline-none" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
+        className={`group relative w-full max-w-7xl focus:outline-none${titlesShown == null ? "" : titlesShown ? " news-card-titles-on" : " news-card-titles-off"}`} /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
         style={{ zIndex: 1 }}
         role="dialog"
         aria-modal="true"

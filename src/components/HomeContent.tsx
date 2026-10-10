@@ -43,7 +43,7 @@ import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts, type CardOverride } from "@/components/NewsColumn";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
 import AutoplayBlockedPopover from "@/components/AutoplayBlockedPopover";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, newsCardKeyForSection, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
@@ -833,7 +833,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; league?: string | null; trackLeague?: string; seenKey?: string | null };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; league?: string | null; trackLeague?: string; seenKey?: string | null; titlesShown?: boolean | null; section?: string | null };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -1064,7 +1064,7 @@ export default function HomeContent({
         const keep = new URLSearchParams();
         // Preserve any highlight deep-link params (?v= and the h*-prefixed media
         // a non-YouTube clip carries) while stripping the consumed pref params.
-        for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c"]) {
+        for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c", "hn"]) {
           const val = params.get(k);
           if (val) keep.set(k, val);
         }
@@ -1083,6 +1083,9 @@ export default function HomeContent({
       const hLabel = params.get("hl");
       const hHead = params.get("ht");
       const hPoster = params.get("hp");
+      // The news post's section: ?hn, else ?hl (the share URL drops ?hn when
+      // the two match).
+      const hSection = params.get("hn") || hLabel || null;
       // A shared-highlight link cold-loaded with ?demo=1 still on (sessionStorage
       // sticky, see demoMode.ts) is the same real-content leak openVideoModal/
       // openEmbedModal guard against — this reopen path sets videoModal state
@@ -1095,7 +1098,7 @@ export default function HomeContent({
         // back on. So the title cover is on here whatever the Settings toggle
         // says (it defaults off since 9/8). It still lifts once the title reads clean.
         const forceTitleMask = /^\/watch\/?$/.test(window.location.pathname);
-        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster, forceTitleMask });
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster, forceTitleMask, section: hSection });
       } else if (hStream || hEmbed || hImage) {
         setVideoModal({
           videoId: "",
@@ -1106,6 +1109,7 @@ export default function HomeContent({
           poster: hImage || hPoster || null,
           sourceLabel: hLabel || null,
           headline: hHead || null,
+          section: hSection,
         });
       }
     }
@@ -1459,6 +1463,7 @@ export default function HomeContent({
     videoId?: string | null; playbackUrl?: string | null; embedUrl?: string | null;
     imageUrl?: string | null; poster?: string | null; fallbackUrl?: string | null;
     sourceLabel?: string | null; headline?: string | null; shareCard?: ShareCardMeta | null;
+    section?: string | null;
   }) => {
     const abs = buildHighlightShareUrl({
       videoId: m.videoId || null,
@@ -1470,6 +1475,7 @@ export default function HomeContent({
       sourceLabel: m.sourceLabel || null,
       headline: m.headline || null,
       cardKey: m.shareCard?.key ?? null,
+      section: m.section || null,
       path: highlightSharePath(),
     });
     return abs ? abs.replace(/^https?:\/\/[^/]+/, "") : null;
@@ -1529,6 +1535,8 @@ export default function HomeContent({
     siblings: opts.siblings || null,
     sibIndex: opts.index ?? null,
     seenKey: opts.seenKey || null,
+    titlesShown: opts.titlesShown ?? null,
+    section: opts.section || null,
   }), []);
   // `league` is only for the video-play / video-finished Umami fields: the
   // column's league key, or "news" for a feed that mixes leagues.
@@ -1598,7 +1606,7 @@ export default function HomeContent({
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     let changed = false;
-    for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c"]) {
+    for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c", "hn"]) {
       if (params.has(k)) { params.delete(k); changed = true; }
     }
     if (!changed) return;
@@ -4656,6 +4664,7 @@ export default function HomeContent({
               const name = source.label;
               return {
                 className: `news-card-titles-${titles ? "on" : "off"} news-card-media-${media ? "on" : "off"} news-card-textposts-${text ? "on" : "off"}`,
+                titlesShown: titles,
                 videosOnly: vOnly,
                 showTextPosts: text,
                 controls: (
@@ -6077,6 +6086,12 @@ export default function HomeContent({
           shareCard={videoModal.shareCard}
           maskVideoTitle={prefs.maskVideoTitle ?? false}
           forceTitleMask={!!videoModal.forceTitleMask}
+          // A tap from a card carries that card's Headlines value. A reloaded
+          // or pasted post has none, so in the ESPN layout it follows the card
+          // its section belongs to (null = the global Headlines button).
+          titlesShown={videoModal.titlesShown ?? (newsLayout === "espn"
+            ? prefs.newsCardPrefs?.[newsCardKeyForSection(videoModal.section ?? videoModal.sourceLabel) ?? ""]?.revealTitles ?? null
+            : null)}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           keysButton={!prefs.hideControlsHint}
           seekControl={prefs.videoSeekControl ?? "both"}

@@ -33,6 +33,10 @@ export interface CardOverride {
   className?: string;
   videosOnly?: boolean;
   showTextPosts?: boolean;
+  // The card's own Headlines button. The modal opens outside the card, so its
+  // posts carry this value in (PlayOpts.titlesShown) and the modal's headline
+  // blurs the same way the card's rows do.
+  titlesShown?: boolean;
 }
 
 // Single source of truth for the modal-trigger payload — used by TextRow,
@@ -62,6 +66,12 @@ export interface PlayOpts {
   // News "Hide seen" key (item.articleUrl || item.id), so paging to this post
   // inside the modal marks it opened.
   seenKey?: string;
+  // The Headlines setting of the card this post came from (CardOverride).
+  // Unset = the global Headlines toggle, as before.
+  titlesShown?: boolean;
+  // The post's feed section ("ESPN Video", "r/nba"). Clip taps clear
+  // sourceLabel, so a reloaded modal reads this to find its card.
+  section?: string | null;
 }
 export type PlayHandler = (opts: PlayOpts) => void;
 
@@ -118,6 +128,7 @@ export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
     fallbackUrl: item.articleUrl,
     poster: item.imageUrl || null,
     sourceLabel: item.section || null,
+    section: item.section || null,
     headline: item.headline,
     byline: isReddit ? null : (item.byline || null),
     published: item.published || null,
@@ -1073,6 +1084,14 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   const cardClassName = override?.className;
   if (override?.videosOnly !== undefined) videosOnly = override.videosOnly;
   if (override?.showTextPosts !== undefined) showTextPosts = override.showTextPosts;
+  const titlesShown = override?.titlesShown;
+  // Each open carries this card's Headlines setting into the modal.
+  const playOpen = onPlayVideo;
+  const playWithCard = useCallback<PlayHandler>(
+    (opts) => playOpen?.(titlesShown === undefined ? opts : { ...opts, titlesShown }),
+    [playOpen, titlesShown],
+  );
+  const onPlay = playOpen ? playWithCard : undefined;
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1171,7 +1190,7 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
         logoUrl={source.logoUrl}
         items={shown}
         loading={loading}
-        onPlay={onPlayVideo}
+        onPlay={onPlay}
         siblings={siblings}
         baseIndex={baseIndex}
         autoplay={!!autoplayVideos}
@@ -1188,7 +1207,7 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
         logoUrl={source.logoUrl}
         items={shown}
         loading={loading}
-        onPlay={onPlayVideo}
+        onPlay={onPlay}
         siblings={siblings}
         baseIndex={baseIndex}
         controls={controls}
@@ -1196,7 +1215,7 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
       />
     );
   }
-  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={shown} loading={loading} onPlay={onPlayVideo} siblings={siblings} baseIndex={baseIndex} hugRows={hugRows} controls={controls} cardClassName={cardClassName} />;
+  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={shown} loading={loading} onPlay={onPlay} siblings={siblings} baseIndex={baseIndex} hugRows={hugRows} controls={controls} cardClassName={cardClassName} />;
 }
 
 export default function NewsColumn({
@@ -1316,20 +1335,32 @@ export default function NewsColumn({
     flashRestored(keys);
   }, [hiddenItems, flashRestored]);
 
+  // Each card's own Headlines setting, one char per source ("" = none), so ‹ ›
+  // into another card's post uses that card's setting. A string keeps the memo
+  // below stable: cardOverride is a new function on every parent render.
+  const titlesBySource = sources.map((s) => {
+    const t = cardOverride?.(s)?.titlesShown;
+    return t === undefined ? "-" : t ? "1" : "0";
+  }).join("");
+
   // Walk sections in render order, append every post, and record where each
   // source starts in the shared modal list.
   const { siblings, baseIndexBySource } = useMemo(() => {
     const sib: PlayOpts[] = [];
     const base: Record<string, number> = {};
-    for (const source of sources) {
+    sources.forEach((source, i) => {
       const its = itemsBySource[source.label];
+      const t = titlesBySource[i];
       if (its && its.length) {
         base[source.label] = sib.length;
-        for (const it of its) sib.push(newsItemToPlayOpts(it));
+        for (const it of its) {
+          const opts = newsItemToPlayOpts(it);
+          sib.push(t === "-" ? opts : { ...opts, titlesShown: t === "1" });
+        }
       }
-    }
+    });
     return { siblings: sib, baseIndexBySource: base };
-  }, [sources, itemsBySource]);
+  }, [sources, itemsBySource, titlesBySource]);
 
   return (
     <div className={`${widthCls} min-h-[60vh]`}>
