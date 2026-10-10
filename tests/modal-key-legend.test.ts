@@ -36,11 +36,11 @@ const row = (c: KeyLegendContext, id: string) => buildKeyLegend(c).find((r) => r
 // Every shape the modal can be in: video / gallery / plain post, crossed with
 // each pager arm and with the headline present or not.
 const EVERY_CONTEXT: KeyLegendContext[] = [];
-for (const [canSeek, galleryCanStep] of [[false, false], [true, false], [false, true]] as const) {
+for (const [canSeek, galleryCanStep, clipSet] of [[false, false, false], [true, false, false], [false, true, false], [true, false, true]] as const) {
   for (const hasPrev of [false, true]) {
     for (const hasNext of [false, true]) {
       for (const hasHeadline of [false, true]) {
-        EVERY_CONTEXT.push({ canSeek, galleryCanStep, hasPrev, hasNext, hasHeadline });
+        EVERY_CONTEXT.push({ canSeek, galleryCanStep, clipSet, hasPrev, hasNext, hasHeadline });
       }
     }
   }
@@ -147,4 +147,12 @@ test("? stays out of typing, chords and key repeat", () => {
 test("? doesn't swallow the keys next to it", () => {
   assert.equal(routeModalKey(mkey({ key: "/" })), null);
   assert.equal(routeModalKey(mkey({ key: "7", canSeek: true })), "jump-pct");
+});
+
+test("an ESPN clip set: ←/→ step clips, J/L still skip, Shift+←/→ pages", () => {
+  const c = ctx({ canSeek: true, clipSet: true });
+  assert.equal(row(c, "arrows")?.label, "Prev / next clip");
+  assert.deepEqual(row(c, "jl")?.keys, ["J", "L"]);
+  assert.deepEqual(row(c, "page")?.keys, ["↑", "↓", "⇧←", "⇧→"]);
+  assert.ok(ids(c).includes("peek"));
 });

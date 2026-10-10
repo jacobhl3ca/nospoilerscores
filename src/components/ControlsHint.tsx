@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // A subtle "what can I press" card, parked in the bottom-right corner of the
 // page (Jacob 9/8, after Shift+←/→ turned out not to work on a video: "a guide
@@ -27,6 +27,12 @@ export type ControlsHintProps = {
   /** True while the post modal is open. The modal prints its own keys then
    *  (ModalKeyHints, above its ‹ › ✕ cluster), so this steps aside. */
   modalOpen: boolean;
+  /** Controlled open state, so the News list's "?" key can open the card —
+   *  even with the pill turned off (Jacob 10/7), like the modal's own "?". */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** The News view is up, so the News list keys (H, M, E, ?) are live. */
+  newsView?: boolean;
 };
 
 type Row = { keys: string[]; what: string };
@@ -47,6 +53,16 @@ const BOARD_PREVIEW_ROWS: Row[] = [
   { keys: ["←", "→"], what: "Skip 5s in a video" },
   { keys: ["Space"], what: "Play / pause" },
   { keys: ["F"], what: "Fullscreen" },
+  { keys: ["H"], what: "Peek headline" },
+];
+
+// The News list's own keys (useNewsListKeys), shown only in the News view
+// where they work. Each flips the toolbar chip of the same name.
+const NEWS_LIST_ROWS: Row[] = [
+  { keys: ["H"], what: "Headlines" },
+  { keys: ["M"], what: "Media" },
+  { keys: ["E"], what: "Hide seen" },
+  { keys: ["?"], what: "Show / hide this card" },
 ];
 
 function Key({ children }: { children: React.ReactNode }) {
@@ -80,8 +96,13 @@ function RowLine({ row }: { row: Row }) {
   );
 }
 
-export default function ControlsHint({ enabled, onDismiss, modalOpen }: ControlsHintProps) {
-  const [open, setOpen] = useState(false);
+export default function ControlsHint({ enabled, onDismiss, modalOpen, open: openProp, onOpenChange, newsView = false }: ControlsHintProps) {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = useCallback((v: boolean) => {
+    if (onOpenChange) onOpenChange(v);
+    else setOpenState(v);
+  }, [onOpenChange]);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Esc closes the card, not the page behind it — but only while it's open, so
@@ -97,7 +118,7 @@ export default function ControlsHint({ enabled, onDismiss, modalOpen }: Controls
     // one Esc doesn't both close this card AND the modal underneath it.
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
-  }, [open]);
+  }, [open, setOpen]);
 
   // Click away closes it. Pointerdown (not click) so it lands before a card
   // underneath opens something.
@@ -108,13 +129,14 @@ export default function ControlsHint({ enabled, onDismiss, modalOpen }: Controls
     };
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
-  }, [open]);
+  }, [open, setOpen]);
 
   // With the post modal open, its own legend (ModalKeyHints) owns the corner:
   // it is built from the same flags the key router uses, and two key lists
   // stacked over the ‹ › ✕ cluster read as clutter. This used to swap to a
   // hand-kept copy of the modal keys instead.
-  if (!enabled || modalOpen) return null;
+  // Turned off: no pill, but the "?" key can still open the card.
+  if (modalOpen || (!enabled && !open)) return null;
 
   const rows = BOARD_ROWS;
   const previewRows = BOARD_PREVIEW_ROWS;
@@ -161,6 +183,17 @@ export default function ControlsHint({ enabled, onDismiss, modalOpen }: Controls
           <ul className="space-y-1.5">
             {rows.map((r) => <RowLine key={r.what + r.keys.join()} row={r} />)}
           </ul>
+          {newsView && (
+            <>
+              <div className="mt-2.5 mb-1.5 pt-2 text-[10px] font-bold uppercase tracking-wider"
+                   style={{ color: "var(--text-muted)", borderTop: "1px solid var(--border)" }}>
+                News list
+              </div>
+              <ul className="space-y-1.5">
+                {NEWS_LIST_ROWS.map((r) => <RowLine key={r.what + r.keys.join()} row={r} />)}
+              </ul>
+            </>
+          )}
           {previewRows.length > 0 && (
             <>
               <div className="mt-2.5 mb-1.5 pt-2 text-[10px] font-bold uppercase tracking-wider"
@@ -172,21 +205,24 @@ export default function ControlsHint({ enabled, onDismiss, modalOpen }: Controls
               </ul>
             </>
           )}
-          <button
-            type="button"
-            onClick={() => { setOpen(false); onDismiss(); }}
-            className="mt-2.5 w-full text-[11px] underline underline-offset-2 cursor-pointer transition-colors"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Don&apos;t show this again
-          </button>
+          {enabled && (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onDismiss(); }}
+              className="mt-2.5 w-full text-[11px] underline underline-offset-2 cursor-pointer transition-colors"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Don&apos;t show this again
+            </button>
+          )}
         </div>
       )}
 
+      {enabled && (
       <div className="flex items-center gap-1">
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setOpen(!open)}
           aria-expanded={open}
           aria-label="Keyboard shortcuts"
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium cursor-pointer transition-opacity opacity-45 hover:opacity-100 focus-visible:opacity-100"
@@ -211,6 +247,7 @@ export default function ControlsHint({ enabled, onDismiss, modalOpen }: Controls
           <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M5 5l14 14M19 5L5 19" /></svg>
         </button>
       </div>
+      )}
     </div>
   );
 }

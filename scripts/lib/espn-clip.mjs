@@ -61,7 +61,8 @@ export function pickEspnVideoClip(payload, id) {
   const url = espnVideoMp4(v);
   if (!url) return null;
   const sec = Number(v.duration);
-  return { url, ...(Number.isFinite(sec) && sec > 0 ? { sec: Math.round(sec) } : {}) };
+  const pub = typeof v.originalPublishDate === "string" ? v.originalPublishDate : "";
+  return { url, ...(Number.isFinite(sec) && sec > 0 ? { sec: Math.round(sec) } : {}), ...(pub ? { pub } : {}) };
 }
 
 // ESPN's own clip type: videos[0].tracking.coverageType ("OnePlay",
@@ -91,14 +92,20 @@ export function isEspnTalkKind(kind) {
 // cost a request, `gapMs` apart and at most `max` per call. A failed request
 // is not recorded, so the next bake asks again; until then the item keeps
 // the carried clip (the prior feed file by id, then the state's url).
-//   off    → every videoUrl is dropped (the ESPN_VIDEO_PLAY=0 switch).
+//   off    → every clip-API videoUrl is dropped (the ESPN_VIDEO_PLAY=0
+//            switch); a feedClip keeps the mp4 the oneFeed gave it.
 //   on     → false still carries known clips and drops known talk clips,
 //            but asks nothing new.
 //   prior  → Map id → item from the last written feed.
 //   state  → { clips: { [id]: { at, url?, sec?, kind } } }, updated in place.
 //   fetchClip(id) → the API payload, or null on any failure.
-//   limit  → stop once this many items are kept (the feed's cap of 10), so a
+//   limit  → stop once this many items are kept (the feed's cap of 20), so a
 //            dropped talk clip makes room for the next item.
+// An item that brought its own mp4 from the oneFeed (feedClip: a game's clip
+// set or a module clip, see espn-onefeed-clips.mjs) is kept as is: the feed
+// already filtered its talk clips, so it costs no request. A clip the API
+// answered also gives the item its publish time when the scrape had none
+// (ICYMI).
 export async function attachEspnVideoClips(items, { on, off, prior, state, fetchClip, limit = Infinity, max = 8, gapMs = 1000, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   let requests = 0;
   let dropped = 0;
@@ -106,6 +113,7 @@ export async function attachEspnVideoClips(items, { on, off, prior, state, fetch
   const out = [];
   for (const item of items) {
     if (out.length >= limit) break;
+    if (item.feedClip && item.videoUrl && MP4_HOST_RX.test(item.videoUrl)) { out.push(item); continue; }
     const bare = { ...item };
     delete bare.videoUrl;
     delete bare.durationSec;
@@ -134,6 +142,8 @@ export async function attachEspnVideoClips(items, { on, off, prior, state, fetch
         clip = entry;
       }
     }
+    const pub = !bare.published && (clip?.pub || state.clips[item.id]?.pub);
+    if (pub) bare.published = pub;
     out.push(clip ? { ...bare, videoUrl: clip.url, ...(clip.sec ? { durationSec: clip.sec } : {}) } : bare);
   }
   return { items: out, requests, dropped };

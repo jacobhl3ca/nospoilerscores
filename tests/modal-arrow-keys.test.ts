@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { nativeVideoOwnsKey, routeArrowKey, routeModalKey, type ArrowContext, type ModalKeyContext } from "../src/lib/modalArrowKeys.ts";
+import { isChord, isTypingTarget, nativeVideoOwnsKey, nextHeadlineOverride, routeArrowKey, routeModalKey, type ArrowContext, type ModalKeyContext } from "../src/lib/modalArrowKeys.ts";
 
 // ←/→ inside the post modal (Jacob 9/4): plain arrows belong to the content —
 // a video scrubs, a gallery walks its pictures — and Shift+←/→ is the pager.
@@ -171,4 +171,57 @@ test("keys we deliberately do not handle stay the browser's", () => {
 test("a focused native <video> keeps Space and the arrows, and nothing else", () => {
   for (const k of [" ", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]) assert.equal(nativeVideoOwnsKey(k), true, k);
   for (const k of ["h", "H", "Escape", "m", "j", "l", "0", "5", "?", "k", "f"]) assert.equal(nativeVideoOwnsKey(k), false, k);
+});
+
+// ESPN clip sets (Jacob 10/7): a game's clips in one post, walked like a
+// picture gallery.
+test("a clip set: ←/→ step clips, at either end they do nothing (never seek)", () => {
+  assert.equal(routeArrowKey(ctx({ canSeek: true, inClipSet: true, clipCanStep: true })), "clip");
+  assert.equal(routeArrowKey(ctx({ canSeek: true, inClipSet: true, clipCanStep: false })), null);
+  assert.equal(routeArrowKey(ctx({ canSeek: true, inClipSet: true, clipCanStep: true, shift: true })), "page");
+});
+
+test("a clip set through the whole router: J/L still seek, Shift+→ pages, ↓ pages", () => {
+  const set = (over: Partial<ModalKeyContext>): ModalKeyContext => ({
+    key: "ArrowRight", shift: false, chord: false, repeat: false, inTextEntry: false, onControl: false,
+    canSeek: true, galleryCanStep: false, inClipSet: true, clipCanStep: true,
+    hasPrev: true, hasNext: true, hasHeadline: true, ...over,
+  });
+  assert.equal(routeModalKey(set({})), "clip");
+  assert.equal(routeModalKey(set({ key: "ArrowLeft" })), "clip");
+  assert.equal(routeModalKey(set({ key: "l" })), "seek-10");
+  assert.equal(routeModalKey(set({ key: "j" })), "seek-10");
+  assert.equal(routeModalKey(set({ shift: true })), "page-next");
+  assert.equal(routeModalKey(set({ key: "ArrowDown" })), "page-next");
+  assert.equal(routeModalKey(set({ clipCanStep: false })), null);
+});
+
+test("H fires whenever there is a headline — the Headlines chip is not an input", () => {
+  const h = (hasHeadline: boolean): ModalKeyContext => ({
+    key: "h", shift: false, chord: false, repeat: false, inTextEntry: false, onControl: false,
+    canSeek: true, galleryCanStep: false, hasPrev: false, hasNext: false, hasHeadline,
+  });
+  assert.equal(routeModalKey(h(true)), "peek-headline");
+  assert.equal(routeModalKey({ ...h(true), key: "H" }), "peek-headline");
+  assert.equal(routeModalKey(h(false)), null);
+});
+
+test("H is a two-way toggle with the chip off AND on", () => {
+  // Chip off (blurred): H shows, H again hands back to the chip (blurred).
+  assert.equal(nextHeadlineOverride(null, false), "show");
+  assert.equal(nextHeadlineOverride("show", false), null);
+  // Chip on (shown): H blurs, H again hands back to the chip (shown).
+  assert.equal(nextHeadlineOverride(null, true), "hide");
+  assert.equal(nextHeadlineOverride("hide", true), null);
+});
+
+test("shared gates: chords and text fields", () => {
+  assert.equal(isChord({ metaKey: true }), true);
+  assert.equal(isChord({ ctrlKey: true }), true);
+  assert.equal(isChord({ altKey: true }), true);
+  assert.equal(isChord({}), false);
+  for (const tagName of ["INPUT", "TEXTAREA", "SELECT"]) assert.equal(isTypingTarget({ tagName }), true, tagName);
+  assert.equal(isTypingTarget({ tagName: "DIV", isContentEditable: true }), true);
+  assert.equal(isTypingTarget({ tagName: "BUTTON" }), false);
+  assert.equal(isTypingTarget(null), false);
 });

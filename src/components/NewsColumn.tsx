@@ -5,7 +5,7 @@ import { Sport } from "@/lib/types";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
-import { NewsItem, proxyImage } from "@/lib/news";
+import { NewsItem, NewsClip, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
 import { frontendHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
@@ -45,6 +45,8 @@ export interface PlayOpts {
   imageUrl?: string | null;
   // Gallery posts: the full picture set, paged inside the lightbox.
   images?: string[] | null;
+  // ESPN Videos game clip set: the modal steps through these in place.
+  clips?: NewsClip[] | null;
   fallbackUrl: string;
   poster?: string | null;
   sourceLabel?: string | null;
@@ -114,6 +116,7 @@ export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
     // card with the thumbnail shown at its own size instead (Jacob 7/28).
     imageUrl: hasPlayableMedia ? null : (item.imageFullUrl || (item.thumbOnly ? null : item.imageUrl) || null),
     images: hasPlayableMedia ? null : (item.images ?? null),
+    clips: item.clips && item.clips.length > 1 ? item.clips : null,
     fallbackUrl: item.articleUrl,
     poster: item.imageUrl || null,
     sourceLabel: item.section || null,

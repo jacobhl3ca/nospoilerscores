@@ -4,13 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/lib/youtube";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { frontendHref } from "@/lib/frontendLinks";
-import { formatPublished, proxyImage } from "@/lib/news";
+import { formatPublished, proxyImage, type NewsClip } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { buildKeyLegend } from "@/lib/modalKeyLegend";
 import ModalKeyHints from "@/components/ModalKeyHints";
 import { shareCardUrl, buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
-import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
+import { routeModalKey, nativeVideoOwnsKey, isChord, isTypingTarget, nextHeadlineOverride, type HeadlineOverride } from "@/lib/modalArrowKeys";
 import { noteHighlightWatched } from "@/lib/rateApp";
 
 interface VideoModalProps {
@@ -34,6 +34,11 @@ interface VideoModalProps {
   // The lightbox pages through these in place — arrows / swipe / ← → keys —
   // and only steps to the next POST once you're off the end of the gallery.
   images?: string[] | null;
+  // ESPN Videos game clip set (Jacob 10/7): every clip ESPN lists under one
+  // game. The modal opens on clip 1 and steps through the rest in place —
+  // ‹ › on the video, ← → keys, a swipe — like a picture gallery. The current
+  // clip drives the stream, the poster, the headline and the source link.
+  clips?: NewsClip[] | null;
   // When set, the modal renders this URL in a plain <iframe> — used for
   // Brightcove-hosted NHL recaps, which aren't YouTube and so bypass the
   // YouTube player API / watchdog / fallback-retry machinery entirely.
@@ -396,7 +401,13 @@ const SEEK_STEP = 5;
 // independent of the global Headlines toggle — for the modal's spoiler-bearing
 // headline and the Reddit selftext body. stopPropagation so a peek tap doesn't
 // also dismiss the modal (the dark backdrop is what closes it).
-function PeekBlur({ tag = "div", className, style, children, peek: peekProp, onToggle, keyShortcut }: {
+// The Headlines chip's state as the page shows it (HomeContent keeps the class
+// on <html> in step with the pref).
+function headlinesChipOn(): boolean {
+  return typeof document !== "undefined" && document.documentElement.classList.contains("reveal-news-titles");
+}
+
+function PeekBlur({ tag = "div", className, style, children, peek: peekProp, hide = false, onToggle, keyShortcut }: {
   tag?: "div" | "h2" | "p";
   className?: string;
   style?: React.CSSProperties;
@@ -405,6 +416,9 @@ function PeekBlur({ tag = "div", className, style, children, peek: peekProp, onT
    *  the H key). Omit both props and the block keeps its own state (the Reddit
    *  body, which is tap-only). */
   peek?: boolean;
+  /** Controlled mode only: blur even with the Headlines chip on (H's other
+   *  half, Jacob 10/7). */
+  hide?: boolean;
   onToggle?: () => void;
   /** Advertised to assistive tech as this block's shortcut, when it has one. */
   keyShortcut?: string;
@@ -412,8 +426,11 @@ function PeekBlur({ tag = "div", className, style, children, peek: peekProp, onT
   const [peekState, setPeek] = useState(false);
   const controlled = peekProp !== undefined;
   const peek = controlled ? peekProp : peekState;
+  const hidden = controlled && hide && !peek;
+  // What the reader sees: forced either way, else the Headlines chip.
+  const shown = peek || (!hidden && headlinesChipOn());
   const Tag = tag as React.ElementType;
-  const cls = `news-title${peek ? " peek" : ""}${className ? ` ${className}` : ""}`;
+  const cls = `news-title${peek ? " peek" : hidden ? " peek-hide" : ""}${className ? ` ${className}` : ""}`;
   const toggle = () => { if (controlled) onToggle?.(); else setPeek((p) => !p); };
   const hint = keyShortcut ? ` (${keyShortcut.toUpperCase()})` : "";
   return (
@@ -426,13 +443,13 @@ function PeekBlur({ tag = "div", className, style, children, peek: peekProp, onT
       // (WCAG 2.1.1). aria-pressed mirrors the blur state for assistive tech.
       role="button"
       tabIndex={0}
-      aria-pressed={peek}
+      aria-pressed={shown}
       onClick={(e: React.MouseEvent) => { e.stopPropagation(); toggle(); }}
       onKeyDown={(e: React.KeyboardEvent) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); toggle(); }
       }}
-      title={(peek ? "Tap to blur" : "Tap to reveal") + hint}
-      aria-label={peek ? "Hide spoiler text" : "Reveal spoiler text"}
+      title={(shown ? "Tap to blur" : "Tap to reveal") + hint}
+      aria-label={shown ? "Hide spoiler text" : "Reveal spoiler text"}
     >
       {children}
     </Tag>
@@ -478,7 +495,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl: fallbackUrlProp, onClose, playbackUrl: playbackUrlProp, poster: posterProp, imageUrl, images, clips, embedUrl, sourceLabel, extraLink, headline: headlineProp, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   // The React-owned box the YouTube player lives INSIDE. React renders this and
   // nothing else touches it; the #yt-player node YT destroys is a plain DOM
@@ -489,6 +506,30 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // to seat focus inside the modal on open, trap Tab within it, and restore it
   // to the opener on close.
   const dialogRef = useRef<HTMLDivElement>(null);
+  // ESPN clip set: which clip of the post is playing. Everything below reads
+  // the CURRENT clip's stream / poster / headline / link through the same
+  // names the single-clip path uses, so the player, the spoiler blur and the
+  // per-post resets (postKey) treat a step to the next clip like a new post.
+  // The cursor itself resets per POST (setKey, from the props), during render
+  // for the same one-frame reason as the headline peek below.
+  const clipList = (clips ?? []).filter((c) => !!c?.videoUrl);
+  const isClipSet = clipList.length > 1 && !videoId && !embedUrl;
+  const clipLen = isClipSet ? clipList.length : 0;
+  const setKey = [videoId, playbackUrlProp, embedUrl, imageUrl, fallbackUrlProp, headlineProp]
+    .map((v) => v || "")
+    .join("\u0000");
+  const [clipIdx, setClipIdx] = useState(0);
+  const [clipFor, setClipFor] = useState(setKey);
+  if (clipFor !== setKey) {
+    setClipFor(setKey);
+    if (clipIdx !== 0) setClipIdx(0);
+  }
+  const clipAt = isClipSet && clipFor === setKey ? Math.min(clipIdx, clipLen - 1) : 0;
+  const clip = isClipSet ? clipList[clipAt] : null;
+  const playbackUrl = clip ? clip.videoUrl : playbackUrlProp;
+  const poster = clip ? (clip.imageUrl || posterProp) : posterProp;
+  const headline = clip ? clip.headline : headlineProp;
+  const fallbackUrl = clip && /^\d+$/.test(clip.id) ? `https://www.espn.com/video/clip?id=${clip.id}` : fallbackUrlProp;
   // Gallery ("more than 1 picture") posts: which picture of the post is showing.
   // Reset per post — prev/next paging REUSES this modal instance, so without the
   // reset post B would open on post A's 4th picture (same trap PeekBlur's
@@ -531,6 +572,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   }, []);
   const goPrev = useCallback(() => { if (!onPrev) return; carryFullscreen(); onPrev(); }, [onPrev, carryFullscreen]);
   const goNext = useCallback(() => { if (!onNext) return; carryFullscreen(); onNext(); }, [onNext, carryFullscreen]);
+  // Step within a clip set. Returns false at either end (and off a set) so a
+  // swipe falls through to prev/next POST, as in a picture gallery. The same
+  // <video> element takes the next clip's src (the stream effect below), so
+  // mute and the video's own fullscreen carry over.
+  const stepClip = useCallback((dir: number) => {
+    if (!isClipSet) return false;
+    const next = clipAt + dir;
+    if (next < 0 || next >= clipLen) return false;
+    setClipIdx(next);
+    return true;
+  }, [isClipSet, clipAt, clipLen]);
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
   const onSwipeStart = (e: React.TouchEvent) => {
     swipeRef.current = e.touches.length === 1
@@ -547,10 +599,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     // Decisive horizontal flick only — ignore taps and vertical scrolls.
     if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
     if (dx < 0) {
-      if (stepGallery(1)) return;
+      if (stepGallery(1) || stepClip(1)) return;
       goNext();
     } else {
-      if (stepGallery(-1)) return;
+      if (stepGallery(-1) || stepClip(-1)) return;
       goPrev();
     }
   };
@@ -821,18 +873,28 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // headline IS the spoiler (the same reason layout.tsx blurs news media in a
   // pre-paint script). Adjusting state while rendering is React's supported
   // escape hatch for exactly this; it re-renders before the browser sees the
-  // first pass. headlinePeek also gates on peekedFor, so even that discarded
-  // first pass computes `false` for the incoming post. Never written to prefs.
-  const [peeked, setPeeked] = useState(false);
+  // first pass. headlineOverride also gates on peekedFor, so even that
+  // discarded first pass computes "follow the chip" for the incoming post.
+  // Never written to prefs.
+  //
+  // Three states, not two (Jacob 10/7: H did nothing with the Headlines chip
+  // on, since a peek could only UN-blur). null follows the chip; H flips the
+  // headline to the opposite of the chip ("show" when the chip blurs, "hide"
+  // when it shows), and H again hands it back to the chip.
+  const [headlineOverride, setHeadlineOverride] = useState<HeadlineOverride>(null);
   const [peekedFor, setPeekedFor] = useState(postKey);
   if (peekedFor !== postKey) {
     setPeekedFor(postKey);
-    if (peeked) setPeeked(false);
+    if (headlineOverride) setHeadlineOverride(null);
   }
-  const headlinePeek = peeked && peekedFor === postKey;
-  const toggleHeadlinePeek = useCallback(() => setPeeked((p) => !p), []);
+  const headlineShown = peekedFor === postKey ? headlineOverride : null;
+  const toggleHeadlinePeek = useCallback(
+    () => setHeadlineOverride((o) => nextHeadlineOverride(o, headlinesChipOn())),
+    []
+  );
   // Only the clip / picture footer headline blurs; a text post's shows in the
-  // clear, so H has nothing to peek there and the legend drops its row.
+  // clear, so H has nothing to flip there and the legend drops its row. The
+  // Headlines chip does not matter: H blurs a shown headline too.
   const hasBlurredHeadline = !!headline && !textMode;
   // The dialog root's data-player-state, so a click-through test (and anything
   // else outside the cross-origin iframe) can read play/pause without asking
@@ -1373,17 +1435,19 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       const action = routeModalKey({
         key,
         shift: e.shiftKey,
-        chord: e.metaKey || e.ctrlKey || e.altKey,
+        chord: isChord(e),
         repeat: e.repeat,
         // A focused native <video controls> (the HLS path) toggles itself on
         // Space and seeks itself on the arrows, so those presses are its own;
         // every other key still routes (nativeVideoOwnsKey).
-        inTextEntry: !!t && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable || (tag === "VIDEO" && nativeVideoOwnsKey(key))),
+        inTextEntry: isTypingTarget(t) || (tag === "VIDEO" && nativeVideoOwnsKey(key)),
         onControl: !!t && (tag === "BUTTON" || tag === "A"),
         // hlsMode included: MLB/Reddit direct streams seek through the <video>
         // element (see seekBy), so ← → skip on them like they do on YouTube.
         canSeek: ytMode || hlsMode,
         galleryCanStep: isGallery && dir !== 0 && galAt + dir >= 0 && galAt + dir < galLen,
+        inClipSet: isClipSet,
+        clipCanStep: isClipSet && dir !== 0 && clipAt + dir >= 0 && clipAt + dir < clipLen,
         hasPrev: !!onPrev,
         hasNext: !!onNext,
         hasHeadline: hasBlurredHeadline,
@@ -1394,6 +1458,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       e.preventDefault();
       switch (action) {
         case "gallery": stepGallery(dir); break;
+        case "clip": stepClip(dir); break;
         case "seek": seekBy(dir * SEEK_STEP); break;
         case "page-prev": goPrev(); break;
         case "page-next": goNext(); break;
@@ -1412,7 +1477,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, seekToPct, togglePlay, toggleMute, toggleHeadlinePeek, hasBlurredHeadline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen, toggleKeyHints]);
+  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, seekToPct, togglePlay, toggleMute, toggleHeadlinePeek, hasBlurredHeadline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen, stepClip, isClipSet, clipAt, clipLen, toggleKeyHints]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
@@ -2043,11 +2108,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     () => buildKeyLegend({
       canSeek: ytMode || hlsMode,
       galleryCanStep: isGallery,
+      clipSet: isClipSet,
       hasPrev: !!onPrev,
       hasNext: !!onNext,
       hasHeadline: hasBlurredHeadline,
     }),
-    [ytMode, hlsMode, isGallery, onPrev, onNext, hasBlurredHeadline]
+    [ytMode, hlsMode, isGallery, isClipSet, onPrev, onNext, hasBlurredHeadline]
   );
   // Not in fullscreen, either kind. The fake one paints over this z-index
   // anyway, and in the native one the corner belongs to YouTube's own
@@ -3057,7 +3123,21 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               display: "flex", alignItems: "center", justifyContent: "center",
             } : undefined}
           >
-          <div ref={containerRef} className="group relative mx-auto w-full rounded-lg overflow-hidden bg-black" style={{ width: mediaFrameWidth, aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={containerRef}
+            className="group relative mx-auto w-full rounded-lg overflow-hidden bg-black"
+            style={{ width: mediaFrameWidth, aspectRatio: "16 / 9" }}
+            onClick={(e) => e.stopPropagation()}
+            // Clip set on a phone: a horizontal swipe steps clips (then posts,
+            // past either end), as on a picture gallery. Not from the bottom
+            // strip, where the native scrubber takes a horizontal drag.
+            onTouchStart={isClipSet ? (e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              if (e.touches.length === 1 && e.touches[0].clientY > r.bottom - 56) { swipeRef.current = null; return; }
+              onSwipeStart(e);
+            } : undefined}
+            onTouchEnd={isClipSet ? onSwipeEnd : undefined}
+          >
             {hlsMode ? (
               <video
                 ref={videoRef}
@@ -3150,6 +3230,56 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 </button>
               </div>
             )}
+            {/* ESPN clip set (Jacob 10/7): the picture gallery's controls, on
+                the video. Counter top-right, ‹ › at the sides (hidden at the
+                ends), dots above the native control bar. Over the load-failure
+                cover too, so a dead clip never traps you on it. */}
+            {isClipSet && (
+              <>
+                <span
+                  aria-hidden="true"
+                  data-testid="clip-counter"
+                  className="absolute top-2 right-2 z-50 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none text-white pointer-events-none"
+                  style={{ background: "rgba(0,0,0,0.6)" }}
+                >
+                  {clipAt + 1} / {clipLen}
+                </span>
+                <span role="status" aria-live="polite" className="sr-only">
+                  Clip {clipAt + 1} of {clipLen}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); stepClip(-1); }}
+                  disabled={clipAt === 0}
+                  aria-label="Previous clip"
+                  title="Previous clip (←)"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-50 w-10 h-10 flex items-center justify-center rounded-full text-white/80 hover:text-white disabled:opacity-0 disabled:pointer-events-none disabled:cursor-default transition-opacity cursor-pointer"
+                  style={{ background: "rgba(0,0,0,0.5)" }}
+                >
+                  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); stepClip(1); }}
+                  disabled={clipAt === clipLen - 1}
+                  aria-label="Next clip"
+                  title="Next clip (→)"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-50 w-10 h-10 flex items-center justify-center rounded-full text-white/80 hover:text-white disabled:opacity-0 disabled:pointer-events-none disabled:cursor-default transition-opacity cursor-pointer"
+                  style={{ background: "rgba(0,0,0,0.5)" }}
+                >
+                  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                </button>
+                <span className="absolute bottom-12 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 pointer-events-none" aria-hidden="true">
+                  {clipList.map((c, i) => (
+                    <span
+                      key={c.id}
+                      className="block w-1.5 h-1.5 rounded-full"
+                      style={{ background: i === clipAt ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.4)" }}
+                    />
+                  ))}
+                </span>
+              </>
+            )}
           </div>
           </div>
         )}
@@ -3162,7 +3292,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           <div className="mt-3 text-center px-2">
             {/* Only the text itself swallows the click (so selecting the headline
                 doesn't close); the surrounding strip stays a dismiss target. */}
-            <PeekBlur key={`f-${postKey}`} peek={headlinePeek} onToggle={toggleHeadlinePeek} keyShortcut="h" tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
+            <PeekBlur key={`f-${postKey}`} peek={headlineShown === "show"} hide={headlineShown === "hide"} onToggle={toggleHeadlinePeek} keyShortcut="h" tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
             {byline && (
               <ArticleMeta byline={byline} published={null} className="text-xs text-white/40 mt-1" />
             )}

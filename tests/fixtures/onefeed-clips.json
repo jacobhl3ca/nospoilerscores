@@ -1,0 +1,528 @@
+{
+ "feed": [
+  {
+   "type": "Feed Rule 10",
+   "data": {
+    "now": [
+     {
+      "type": "Module",
+      "header": {
+       "title": "Around the league"
+      },
+      "inlines": [
+       {
+        "type": "Collection",
+        "inlines": [
+         {
+          "type": "Story",
+          "id": 50116787,
+          "headline": "NFL Week 5 latest intel, buzz questions, news, fantasy tips: What we're hearing",
+          "video": [
+           {
+            "id": 50116472,
+            "headline": "What do Ravens have to do if Lamar Jackson misses games?",
+            "description": "What do Ravens have to do if Lamar Jackson misses games?",
+            "duration": 105,
+            "originalPublishDate": "2026-10-06T13:28:18Z",
+            "lastModified": "2026-10-06T13:32:23Z",
+            "premium": false,
+            "timeRestrictions": {
+             "embargoDate": "2026-10-06T13:28:16Z",
+             "expirationDate": "2026-11-08T15:28:00Z"
+            },
+            "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1006/ss_20261006_092822451_3686776/ss_20261006_092822451_3686776.jpg",
+            "posterImages": {
+             "default": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1006/ss_20261006_092822451_3686776/ss_20261006_092822451_3686776_default.jpg"
+             }
+            },
+            "links": {
+             "source": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/2026/1006/ss_20261006_092822451_3686776/ss_20261006_092822451_3686776.mp4",
+              "HD": {
+               "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/2026/1006/ss_20261006_092822451_3686776/ss_20261006_092822451_3686776.mp4"
+              },
+              "HLS": {
+               "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/2026/1006/ss_20261006_092822451_3686776/ss_20261006_092822451_3686776/playlist.m3u8"
+              }
+             }
+            },
+            "tracking": {
+             "coverageType": "Analysis"
+            }
+           }
+          ]
+         },
+         {
+          "type": "Media",
+          "id": 50116472,
+          "headline": "What do Ravens have to do if Lamar Jackson misses games?",
+          "video": [
+           {
+            "id": 50116472,
+            "headline": "What do Ravens have to do if Lamar Jackson misses games?",
+            "description": "What do Ravens have to do if Lamar Jackson misses games?",
+            "duration": 105,
+            "originalPublishDate": "2026-10-06T13:28:18Z",
+            "lastModified": "2026-10-06T13:32:23Z",
+            "premium": false,
+            "timeRestrictions": {
+             "embargoDate": "2026-10-06T13:28:16Z",
+             "expirationDate": "2026-11-08T15:28:00Z"
+            },
+            "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1006/ss_20261006_092822451_3686776/ss_20261006_092822451_3686776.jpg",
+            "posterImages": {
+             "default": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1006/ss_20261006_092822451_3686776/ss_20261006_092822451_3686776_default.jpg"
+             }
+            },
+            "links": {
+             "source": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/2026/1006/ss_20261006_092822451_3686776/ss_20261006_092822451_3686776.mp4",
+              "HD": {
+               "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/2026/1006/ss_20261006_092822451_3686776/ss_20261006_092822451_3686776.mp4"
+              },
+              "HLS": {
+               "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/2026/1006/ss_20261006_092822451_3686776/ss_20261006_092822451_3686776/playlist.m3u8"
+              }
+             }
+            },
+            "tracking": {
+             "coverageType": "Analysis"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feed Rule 10",
+   "data": {
+    "now": [
+     {
+      "type": "Module",
+      "header": {
+       "title": "The air up there"
+      },
+      "inlines": [
+       {
+        "type": "Collection",
+        "inlines": [
+         {
+          "type": "Media",
+          "id": 50121179,
+          "headline": "Yoshinobu Yamamoto shuts down Braves with 10-K gem",
+          "video": [
+           {
+            "id": 50121179,
+            "headline": "Yoshinobu Yamamoto shuts down Braves with 10-K gem",
+            "description": "Yoshinobu Yamamoto shuts down Braves with 10-K gem",
+            "duration": 67,
+            "originalPublishDate": "2026-10-07T00:58:49Z",
+            "lastModified": "2026-10-07T04:01:20Z",
+            "premium": false,
+            "timeRestrictions": {
+             "embargoDate": "2026-10-07T00:58:41Z",
+             "expirationDate": "2026-10-09T00:58:00Z"
+            },
+            "gameId": 401999999,
+            "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1006/556b23a137cc4b34ba70f7d731f2ac361298/556b23a137cc4b34ba70f7d731f2ac361298.jpg",
+            "posterImages": {
+             "default": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1006/556b23a137cc4b34ba70f7d731f2ac361298/556b23a137cc4b34ba70f7d731f2ac361298_default.jpg"
+             }
+            },
+            "links": {
+             "source": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/556b23a1-37cc-4b34-ba70-f7d731f2ac36/556b23a1-37cc-4b34-ba70-f7d731f2ac36.mp4",
+              "HD": {
+               "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/556b23a1-37cc-4b34-ba70-f7d731f2ac36/556b23a1-37cc-4b34-ba70-f7d731f2ac36.mp4"
+              },
+              "HLS": {
+               "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1007/556b23a1-37cc-4b34-ba70-f7d731f2ac36/556b23a1-37cc-4b34-ba70-f7d731f2ac36/playlist.m3u8"
+              }
+             }
+            },
+            "tracking": {
+             "coverageType": "OnePlay"
+            }
+           }
+          ]
+         },
+         {
+          "type": "Media",
+          "id": 50120760,
+          "headline": "Freddie Freeman smashes a home run for the Dodgers",
+          "video": [
+           {
+            "id": 50120760,
+            "headline": "Freddie Freeman smashes a home run for the Dodgers",
+            "description": "Freddie Freeman smashes a home run for the Dodgers",
+            "duration": 21,
+            "originalPublishDate": "2026-10-06T23:26:25Z",
+            "lastModified": "2026-10-07T04:01:57Z",
+            "premium": false,
+            "timeRestrictions": {
+             "embargoDate": "2026-10-06T23:26:17Z",
+             "expirationDate": "2026-10-08T23:26:00Z"
+            },
+            "gameId": 401999999,
+            "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1006/a0e60677ace74f4082ab914fc79ec9ae1289/a0e60677ace74f4082ab914fc79ec9ae1289.jpg",
+            "posterImages": {
+             "default": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1006/a0e60677ace74f4082ab914fc79ec9ae1289/a0e60677ace74f4082ab914fc79ec9ae1289_default.jpg"
+             }
+            },
+            "links": {
+             "source": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1006/a0e60677-ace7-4f40-82ab-914fc79ec9ae/a0e60677-ace7-4f40-82ab-914fc79ec9ae.mp4",
+              "HD": {
+               "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1006/a0e60677-ace7-4f40-82ab-914fc79ec9ae/a0e60677-ace7-4f40-82ab-914fc79ec9ae.mp4"
+              },
+              "HLS": {
+               "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1006/a0e60677-ace7-4f40-82ab-914fc79ec9ae/a0e60677-ace7-4f40-82ab-914fc79ec9ae/playlist.m3u8"
+              }
+             }
+            },
+            "tracking": {
+             "coverageType": "OnePlay"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "type": "Feed Rule 14",
+   "data": {
+    "now": [
+     {
+      "type": "Module",
+      "section": "Feed Manager",
+      "header": {
+       "title": "MLB"
+      },
+      "inlines": [
+       {
+        "type": "Collection",
+        "inlines": [
+         {
+          "type": "Media",
+          "id": 50122461,
+          "headline": "Padres keep season alive with game-winning double play",
+          "video": [
+           {
+            "id": 50122461,
+            "headline": "Padres keep season alive with game-winning double play",
+            "description": "Padres keep season alive with game-winning double play  ",
+            "duration": 65,
+            "originalPublishDate": "2026-10-07T05:16:25Z",
+            "lastModified": "2026-10-07T05:26:13Z",
+            "premium": false,
+            "timeRestrictions": {
+             "embargoDate": "2026-10-07T05:16:17Z",
+             "expirationDate": "2026-10-09T05:16:00Z"
+            },
+            "gameId": 401908004,
+            "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/e48c9aedbdf0489791a30679baa4513685/e48c9aedbdf0489791a30679baa4513685.jpg",
+            "posterImages": {
+             "default": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/e48c9aedbdf0489791a30679baa4513685/e48c9aedbdf0489791a30679baa4513685_default.jpg"
+             }
+            },
+            "links": {
+             "source": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/e48c9aed-bdf0-4897-91a3-0679baa45136/e48c9aed-bdf0-4897-91a3-0679baa45136.mp4",
+              "HD": {
+               "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/e48c9aed-bdf0-4897-91a3-0679baa45136/e48c9aed-bdf0-4897-91a3-0679baa45136.mp4"
+              },
+              "HLS": {
+               "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1007/e48c9aed-bdf0-4897-91a3-0679baa45136/e48c9aed-bdf0-4897-91a3-0679baa45136/playlist.m3u8"
+              }
+             }
+            },
+            "tracking": {
+             "coverageType": "OnePlay"
+            }
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "Collection",
+        "inlines": [
+         {
+          "type": "Media",
+          "id": 50122309,
+          "headline": "Xander Bogaerts' heads-up baserunning pads Padres' lead",
+          "video": [
+           {
+            "id": 50122309,
+            "headline": "Xander Bogaerts' heads-up baserunning pads Padres' lead",
+            "description": "Xander Bogaerts' heads-up baserunning pads Padres' lead",
+            "duration": 56,
+            "originalPublishDate": "2026-10-07T04:15:00Z",
+            "lastModified": "2026-10-07T05:17:35Z",
+            "premium": false,
+            "timeRestrictions": {
+             "embargoDate": "2026-10-07T04:14:52Z",
+             "expirationDate": "2026-10-09T04:14:00Z"
+            },
+            "gameId": 401908004,
+            "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/9b1a5ef20b104f378db76f0b7de8903477/9b1a5ef20b104f378db76f0b7de8903477.jpg",
+            "posterImages": {
+             "default": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/9b1a5ef20b104f378db76f0b7de8903477/9b1a5ef20b104f378db76f0b7de8903477_default.jpg"
+             }
+            },
+            "links": {
+             "source": {
+              "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034.mp4",
+              "HD": {
+               "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034.mp4"
+              },
+              "HLS": {
+               "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1007/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034/playlist.m3u8"
+              }
+             }
+            },
+            "tracking": {
+             "coverageType": "OnePlay"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "event": {
+     "id": "401908004",
+     "name": "Milwaukee Brewers at San Diego Padres",
+     "leagueInfo": {
+      "shortName": "MLB",
+      "slug": "mlb"
+     },
+     "videos": [
+      {
+       "id": 50122461,
+       "headline": "Padres keep season alive with game-winning double play",
+       "description": "Padres keep season alive with game-winning double play  ",
+       "duration": 65,
+       "originalPublishDate": "2026-10-07T05:16:25Z",
+       "lastModified": "2026-10-07T05:26:13Z",
+       "premium": false,
+       "timeRestrictions": {
+        "embargoDate": "2026-10-07T05:16:17Z",
+        "expirationDate": "2026-10-09T05:16:00Z"
+       },
+       "gameId": 401908004,
+       "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/e48c9aedbdf0489791a30679baa4513685/e48c9aedbdf0489791a30679baa4513685.jpg",
+       "posterImages": {
+        "default": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/e48c9aedbdf0489791a30679baa4513685/e48c9aedbdf0489791a30679baa4513685_default.jpg"
+        }
+       },
+       "links": {
+        "source": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/e48c9aed-bdf0-4897-91a3-0679baa45136/e48c9aed-bdf0-4897-91a3-0679baa45136.mp4",
+         "HD": {
+          "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/e48c9aed-bdf0-4897-91a3-0679baa45136/e48c9aed-bdf0-4897-91a3-0679baa45136.mp4"
+         },
+         "HLS": {
+          "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1007/e48c9aed-bdf0-4897-91a3-0679baa45136/e48c9aed-bdf0-4897-91a3-0679baa45136/playlist.m3u8"
+         }
+        }
+       },
+       "tracking": {
+        "coverageType": "OnePlay"
+       }
+      },
+      {
+       "id": 50122460,
+       "headline": "Padres stave off elimination, beat Brewers in Game 3",
+       "description": "Padres stave off elimination, beat Brewers in Game 3",
+       "duration": 77,
+       "originalPublishDate": "2026-10-07T05:16:10Z",
+       "lastModified": "2026-10-07T05:17:57Z",
+       "premium": false,
+       "timeRestrictions": {
+        "embargoDate": "2026-10-07T05:16:00Z",
+        "expirationDate": "2026-10-09T05:16:00Z"
+       },
+       "gameId": 401908004,
+       "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/wsc/2026/1007/2e6bfcba-e135-44d4-8bfb-3a787409bf39/2e6bfcba-e135-44d4-8bfb-3a787409bf39.jpg",
+       "posterImages": {
+        "default": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/wsc/2026/1007/2e6bfcba-e135-44d4-8bfb-3a787409bf39/2e6bfcba-e135-44d4-8bfb-3a787409bf39_default.jpg"
+        }
+       },
+       "links": {
+        "source": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/2e6bfcba-e135-44d4-8bfb-3a787409bf39/2e6bfcba-e135-44d4-8bfb-3a787409bf39.mp4",
+         "HD": {
+          "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/2e6bfcba-e135-44d4-8bfb-3a787409bf39/2e6bfcba-e135-44d4-8bfb-3a787409bf39.mp4"
+         },
+         "HLS": {
+          "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1007/2e6bfcba-e135-44d4-8bfb-3a787409bf39/2e6bfcba-e135-44d4-8bfb-3a787409bf39/playlist.m3u8"
+         }
+        }
+       },
+       "tracking": {
+        "coverageType": "Final Game Highlight"
+       }
+      },
+      {
+       "id": 50122309,
+       "headline": "Xander Bogaerts' heads-up baserunning pads Padres' lead",
+       "description": "Xander Bogaerts' heads-up baserunning pads Padres' lead",
+       "duration": 56,
+       "originalPublishDate": "2026-10-07T04:15:00Z",
+       "lastModified": "2026-10-07T05:17:35Z",
+       "premium": false,
+       "timeRestrictions": {
+        "embargoDate": "2026-10-07T04:14:52Z",
+        "expirationDate": "2026-10-09T04:14:00Z"
+       },
+       "gameId": 401908004,
+       "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/9b1a5ef20b104f378db76f0b7de8903477/9b1a5ef20b104f378db76f0b7de8903477.jpg",
+       "posterImages": {
+        "default": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/9b1a5ef20b104f378db76f0b7de8903477/9b1a5ef20b104f378db76f0b7de8903477_default.jpg"
+        }
+       },
+       "links": {
+        "source": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034.mp4",
+         "HD": {
+          "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034.mp4"
+         },
+         "HLS": {
+          "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1007/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034/9b1a5ef2-0b10-4f37-8db7-6f0b7de89034/playlist.m3u8"
+         }
+        }
+       },
+       "tracking": {
+        "coverageType": "OnePlay"
+       }
+      },
+      {
+       "id": 50122172,
+       "headline": "Mike Shildt on the Padres staying alive",
+       "description": "Jake Cronenworth snaps slump with go-ahead HR for Padres",
+       "duration": 30,
+       "originalPublishDate": "2026-10-07T03:31:54Z",
+       "lastModified": "2026-10-07T05:18:39Z",
+       "premium": false,
+       "timeRestrictions": {
+        "embargoDate": "2026-10-07T03:31:44Z",
+        "expirationDate": "2026-10-09T03:31:00Z"
+       },
+       "gameId": 401908004,
+       "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/17c9bd1cf427439da5d8921fa7aeb97878/17c9bd1cf427439da5d8921fa7aeb97878.jpg",
+       "posterImages": {
+        "default": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/17c9bd1cf427439da5d8921fa7aeb97878/17c9bd1cf427439da5d8921fa7aeb97878_default.jpg"
+        }
+       },
+       "links": {
+        "source": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/17c9bd1c-f427-439d-a5d8-921fa7aeb978/17c9bd1c-f427-439d-a5d8-921fa7aeb978.mp4",
+         "HD": {
+          "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/17c9bd1c-f427-439d-a5d8-921fa7aeb978/17c9bd1c-f427-439d-a5d8-921fa7aeb978.mp4"
+         },
+         "HLS": {
+          "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1007/17c9bd1c-f427-439d-a5d8-921fa7aeb978/17c9bd1c-f427-439d-a5d8-921fa7aeb978/playlist.m3u8"
+         }
+        }
+       },
+       "tracking": {
+        "coverageType": "PressConference"
+       }
+      },
+      {
+       "id": 50122066,
+       "headline": "Cooper Pratt beats the throw home to tie the score for the Brewers",
+       "description": "Cooper Pratt beats the throw home to tie the score for the Brewers",
+       "duration": 40,
+       "originalPublishDate": "2026-10-07T03:15:40Z",
+       "lastModified": "2026-10-07T05:20:31Z",
+       "premium": false,
+       "timeRestrictions": {
+        "embargoDate": "2026-10-07T03:15:33Z",
+        "expirationDate": "2026-10-09T03:15:00Z"
+       },
+       "gameId": 401908004,
+       "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/4a1954fc9f394867866ea82082f5ca4080/4a1954fc9f394867866ea82082f5ca4080.jpg",
+       "posterImages": {
+        "default": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/4a1954fc9f394867866ea82082f5ca4080/4a1954fc9f394867866ea82082f5ca4080_default.jpg"
+        }
+       },
+       "links": {
+        "source": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/4a1954fc-9f39-4867-866e-a82082f5ca40/4a1954fc-9f39-4867-866e-a82082f5ca40.mp4",
+         "HD": {
+          "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/4a1954fc-9f39-4867-866e-a82082f5ca40/4a1954fc-9f39-4867-866e-a82082f5ca40.mp4"
+         },
+         "HLS": {
+          "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1007/4a1954fc-9f39-4867-866e-a82082f5ca40/4a1954fc-9f39-4867-866e-a82082f5ca40/playlist.m3u8"
+         }
+        }
+       },
+       "tracking": {
+        "coverageType": "OnePlay"
+       }
+      },
+      {
+       "id": 50121898,
+       "headline": "William Contreras gets Brewers on the board with solo homer",
+       "description": "William Contreras gets Brewers on the board with solo homer",
+       "duration": 30,
+       "originalPublishDate": "2026-10-07T02:47:44Z",
+       "lastModified": "2026-10-07T05:20:54Z",
+       "premium": false,
+       "timeRestrictions": {
+        "embargoDate": "2026-10-07T02:47:36Z",
+        "expirationDate": "2026-10-09T02:47:00Z"
+       },
+       "gameId": 401908004,
+       "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/0973c49c50c34c389eab693d4f63b1cb80/0973c49c50c34c389eab693d4f63b1cb80.jpg",
+       "posterImages": {
+        "default": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1007/0973c49c50c34c389eab693d4f63b1cb80/0973c49c50c34c389eab693d4f63b1cb80_default.jpg"
+        }
+       },
+       "links": {
+        "source": {
+         "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/0973c49c-50c3-4c38-9eab-693d4f63b1cb/0973c49c-50c3-4c38-9eab-693d4f63b1cb.mp4",
+         "HD": {
+          "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1007/0973c49c-50c3-4c38-9eab-693d4f63b1cb/0973c49c-50c3-4c38-9eab-693d4f63b1cb.mp4"
+         },
+         "HLS": {
+          "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1007/0973c49c-50c3-4c38-9eab-693d4f63b1cb/0973c49c-50c3-4c38-9eab-693d4f63b1cb/playlist.m3u8"
+         }
+        }
+       },
+       "tracking": {
+        "coverageType": "OnePlay"
+       }
+      }
+     ]
+    }
+   }
+  }
+ ]
+}
