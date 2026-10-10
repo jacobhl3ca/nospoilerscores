@@ -27,7 +27,14 @@ const PAGE = join(homedir(), "hidescore-radio-sources.html");
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 const MAX_AGE_DAYS = 180;
-const ESPN_PATH = { nfl: "football/nfl", mlb: "baseball/mlb", nba: "basketball/nba", nhl: "hockey/nhl" };
+const ESPN_PATH = {
+  nfl: "football/nfl", mlb: "baseball/mlb", nba: "basketball/nba", nhl: "hockey/nhl",
+  wnba: "basketball/wnba", mls: "soccer/usa.1", nwsl: "soccer/usa.nwsl", cfl: "football/cfl", ufl: "football/ufl",
+  ligamx: "soccer/mex.1",
+};
+// College leagues have hundreds of ESPN teams and the table covers only some
+// conferences, so their coverage is measured against the keys the table
+// lists (rows + written reasons), not against ESPN's whole list.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const table = JSON.parse(readFileSync(DATA, "utf8"));
@@ -63,6 +70,11 @@ async function probe(url) {
   if (/^https:\/\/(www\.)?audacy\.com\/stations\//.test(url)) return probeAudacy(url);
   try {
     const res = await fetch(url, { headers: { "user-agent": UA }, redirect: "follow", signal: AbortSignal.timeout(20000) });
+    // Cloudflare's bot wall (MRN's player) answers a script 403 with
+    // cf-mitigated: challenge while a browser gets the page. That is not a
+    // dead link, but no script can prove it alive either: a warning that
+    // names the row, never a pass and never a failure.
+    if (res.status === 403 && res.headers.get("cf-mitigated") === "challenge") return { status: 403, final: res.url, title: "", challenge: true };
     const html = res.ok ? await res.text() : "";
     const title = (html.match(/<title[^>]*>([^<]*)/i)?.[1] ?? "").trim().slice(0, 90);
     return { status: res.status, final: res.url, title };
@@ -82,12 +94,13 @@ const isHomePage = (from, to) => {
 };
 
 const problems = [];
+const warnings = [];
 const results = new Map();
 const today = Date.now();
 for (const url of [...new Set(rows.map((r) => r.url))]) {
   const r = await probe(url);
   results.set(url, r);
-  const tag = r.status === 200 && !isHomePage(url, r.final) ? "ok  " : "FAIL";
+  const tag = r.challenge ? "WARN" : r.status === 200 && !isHomePage(url, r.final) ? "ok  " : "FAIL";
   console.log(`  ${tag} ${String(r.status).padEnd(3)} ${url}${r.final !== url ? ` → ${r.final}` : ""}`);
   await sleep(250);
 }
@@ -96,7 +109,8 @@ for (const row of rows) {
   if (!/^https:\/\//.test(row.url)) problems.push(`${row.where} ${row.name}: not https (${row.url})`);
   const denied = deniedRadioHost(row.url);
   if (denied) problems.push(`${row.where} ${row.name}: denylisted host ${denied}`);
-  if (r.status !== 200) problems.push(`${row.where} ${row.name}: HTTP ${r.status || r.error} ${row.url}`);
+  if (r.challenge) warnings.push(`${row.name} ${row.url}: Cloudflare challenge, check by hand in a browser`);
+  else if (r.status !== 200) problems.push(`${row.where} ${row.name}: HTTP ${r.status || r.error} ${row.url}`);
   else if (isHomePage(row.url, r.final)) problems.push(`${row.where} ${row.name}: redirects to a home page (${r.final})`);
   const age = (today - Date.parse(row.checked)) / 86400000;
   if (!Number.isFinite(age) || age > MAX_AGE_DAYS) problems.push(`${row.where} ${row.name}: checked ${row.checked} is over ${MAX_AGE_DAYS} days old`);
@@ -104,18 +118,26 @@ for (const row of rows) {
 
 // Coverage: ESPN's team list per league vs rows with at least one free feed.
 const coverage = [];
+const hasFree = (key) => (table.teams?.[key] ?? []).some((s) => s.access?.cost === "free");
 for (const sport of RADIO_SPORTS) {
   const path = ESPN_PATH[sport];
-  if (!path) continue;
-  const teams = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${path}/teams?limit=60`)
+  if (!path) {
+    const keys = [...new Set([...Object.keys(table.teams ?? {}), ...Object.keys(table.missing ?? {})])].filter((k) => k.startsWith(`${sport}:`));
+    coverage.push({ sport, total: keys.length, none: keys.filter((k) => !hasFree(k)).map((k) => (table.missing?.[k] ?? k).split(":")[0]) });
+    continue;
+  }
+  const teams = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${path}/teams?limit=100`)
     .then((r) => r.json())
     .then((d) => (d.sports?.[0]?.leagues?.[0]?.teams ?? []).map((t) => t.team))
     .catch(() => []);
-  const none = teams.filter((t) => !(table.teams?.[`${sport}:${t.id}`] ?? []).some((s) => s.access?.cost === "free"));
+  const none = teams.filter((t) => !hasFree(`${sport}:${t.id}`));
+  // An ESPN team with neither a row nor a written reason is a gap the unit
+  // test cannot see (a new expansion team): a problem, not a report line.
+  for (const t of none) if (!table.missing?.[`${sport}:${t.id}`]) problems.push(`${sport}:${t.id} ${t.displayName}: on ESPN, no row and no reason in "missing"`);
   coverage.push({ sport, total: teams.length, none: none.map((t) => t.abbreviation) });
 }
 console.log("\nCoverage (teams with no free row):");
-for (const c of coverage) console.log(`  ${c.sport.padEnd(4)} ${c.total - c.none.length}/${c.total}${c.none.length ? `  missing: ${c.none.join(", ")}` : ""}`);
+for (const c of coverage) console.log(`  ${c.sport.padEnd(6)} ${c.total - c.none.length}/${c.total}${c.none.length ? `  missing: ${c.none.join(", ")}` : ""}`);
 
 if (!process.argv.includes("--no-page")) {
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -125,13 +147,13 @@ if (!process.argv.includes("--no-page")) {
       const r = results.get(row.url) ?? {};
       const geo = a.geo === "market" ? `market ${(a.dma ?? []).join("/")}` : a.geo === "country" ? `country ${(a.countries ?? []).join("/")}` : "none";
       const ok = r.status === 200 && !isHomePage(row.url, r.final);
-      return `<tr${ok ? "" : ' class="bad"'}><td>${esc(row.where)}</td><td><a href="${esc(row.url)}">${esc(row.name)}</a></td><td>${esc(row.lang)}</td><td>${esc(geo)}</td><td>${a.signIn ? "yes" : ""}</td><td>${esc(a.vpnOk)}</td><td>${esc(a.cost)}</td><td>${esc(row.checked)}</td><td>${ok ? "200" : esc(r.status || r.error)}</td><td>${esc(row.note)}</td></tr>`;
+      return `<tr${ok ? "" : r.challenge ? ' class="warn"' : ' class="bad"'}><td>${esc(row.where)}</td><td><a href="${esc(row.url)}">${esc(row.name)}</a></td><td>${esc(row.lang)}</td><td>${esc(geo)}</td><td>${a.signIn ? "yes" : ""}</td><td>${esc(a.vpnOk)}</td><td>${esc(a.cost)}</td><td>${esc(row.checked)}</td><td>${ok ? "200" : r.challenge ? "403 Cloudflare (browser only)" : esc(r.status || r.error)}</td><td>${esc(row.note)}</td></tr>`;
     })
     .join("\n");
   const cov = coverage.map((c) => `<li>${c.sport.toUpperCase()}: ${c.total - c.none.length}/${c.total}${c.none.length ? ` (no row: ${esc(c.none.join(", "))})` : ""}</li>`).join("");
   const html = `<!doctype html><meta charset="utf-8"><title>HideScore radio sources</title>
-<style>body{font:14px system-ui;margin:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top}tr.bad{background:#fdd}th{background:#eee;position:sticky;top:0}</style>
-<h1>HideScore radio sources</h1><p>Built ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC by npm run radio:check. ${rows.length} rows, ${problems.length} problem(s). Red = the URL did not answer 200.</p>
+<style>body{font:14px system-ui;margin:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top}tr.bad{background:#fdd}tr.warn{background:#ffd}th{background:#eee;position:sticky;top:0}</style>
+<h1>HideScore radio sources</h1><p>Built ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC by npm run radio:check. ${rows.length} rows, ${problems.length} problem(s). Red = the URL did not answer 200. Yellow = Cloudflare blocks scripts; open it in a browser.</p>
 <ul>${cov}</ul>
 <table><tr><th>Where</th><th>Station</th><th>Lang</th><th>Geo</th><th>Sign-in</th><th>VPN</th><th>Cost</th><th>Checked</th><th>HTTP</th><th>Note</th></tr>
 ${body}</table>`;
@@ -140,6 +162,8 @@ ${body}</table>`;
 }
 
 console.log(`\n${rows.length} rows checked; denylist has ${RADIO_HOST_DENYLIST.length} hosts.`);
+const warned = [...new Set(warnings)];
+if (warned.length) console.log(`\n! ${warned.length} warning(s):\n` + warned.map((w) => `    - ${w}`).join("\n"));
 if (problems.length) {
   console.error(`\n✗ ${problems.length} problem(s):\n` + problems.map((p) => `    - ${p}`).join("\n"));
   process.exit(1);

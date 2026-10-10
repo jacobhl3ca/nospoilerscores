@@ -136,8 +136,11 @@ test("the 2nd button reads its baked length, and a lone 2nd button reads like th
   await page.goto("/yesterday");
   await expect(page.getByRole("heading", { name: "WNBA" })).toBeVisible({ timeout: 15_000 });
 
-  // Game 1: both slots. 1260s -> "21m" on the 2nd button.
-  await expect(page.getByRole("button", { name: "Official alternate highlights" })).toHaveText(/^21m$/, { timeout: 15_000 });
+  // Game 1: both slots. 1260s -> "21m" on the 2nd button. Scoped to its card:
+  // while game 2's 1st slot still resolves (two dates now, see
+  // highlightDateStrs), its lone button wears this name too.
+  const game1 = page.getByRole("button", { name: /^Minnesota Lynx at Atlanta/ });
+  await expect(game1.getByRole("button", { name: "Official alternate highlights" })).toHaveText(/^21m$/, { timeout: 15_000 });
 
   // Game 2: 2nd slot only. One button, named for the league, 380s -> "6m".
   const named = page.getByRole("button", { name: "WNBA highlights" });

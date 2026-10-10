@@ -10,8 +10,10 @@ import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { closeHiddenPins, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch } from "@/lib/boardSlots";
 import { LeagueMark } from "./LeagueMark";
+import { trackEvent } from "@/lib/track";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
+import { BRACKET_RESULTS_ALWAYS_KEY, loadResultsAlways } from "@/lib/playoffPicture";
 import { FREQUENT_RECORD_LEAGUES, recordKeysForLeagues, toggleRecordLeague, upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import {
   boardHiddenLeagues,
@@ -290,6 +292,23 @@ export default function SettingsPanel({
 }: SettingsPanelProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
 
+  // The MLB bracket's "Always show results" flag (lib/playoffPicture). A
+  // device-local key, not a pref, so it is read when the panel opens; `bracketTick`
+  // re-reads it after the row turns it off.
+  const [bracketTick, setBracketTick] = useState(0);
+  const bracketResultsAlways = useMemo(() => (open && bracketTick >= 0 ? loadResultsAlways() : false), [open, bracketTick]);
+
+  // Umami usage counts (2026-10-01): settings-open per open, then
+  // settings-change {key} the first time each setting changes in that open. A
+  // text box writes on every keystroke, so once per key per open keeps it to
+  // one event. The key names only, never the value.
+  const changedKeysRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!open) return;
+    changedKeysRef.current = new Set();
+    trackEvent("settings-open");
+  }, [open]);
+
   // One "Saved" mark in the header for every write (Jacob 10/1). It was only
   // under the two Links fields. "show" for 2 s, then "fade" while the opacity
   // runs out, then gone. Reduced motion skips the transition.
@@ -297,6 +316,13 @@ export default function SettingsPanel({
   const savedTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => { savedTimersRef.current.forEach(clearTimeout); }, []);
   const updatePrefs = useCallback((update: Partial<Preferences>) => {
+    // A league pin or Reset writes many keys at once: those count as "many".
+    const keys = Object.keys(update).sort();
+    const key = keys.length > 2 ? "many" : keys.join(",");
+    if (key && !changedKeysRef.current.has(key)) {
+      changedKeysRef.current.add(key);
+      trackEvent("settings-change", { key });
+    }
     savePrefs(update);
     savedTimersRef.current.forEach(clearTimeout);
     setSavedMark("show");
@@ -902,6 +928,8 @@ export default function SettingsPanel({
     watchQueue: undefined,
     upcomingRecordLeagues: undefined,
     hideUpcomingRecords: undefined,
+    hideRanks: undefined,
+    foldEliminatedGames: undefined,
     // Reset means "act like a fresh install", and on a fresh install the
     // stars are on for two visits before the app hides them itself. Leaving
     // the counter at 3 would re-hide them on the very next open, which reads
@@ -1628,6 +1656,18 @@ export default function SettingsPanel({
                 </p>
               )}
             </div>
+            <ToggleRow
+              label="Show team ranks and seeds"
+              hint="The #8 by a team name, and bracket seeds"
+              checked={!prefs.hideRanks}
+              onChange={(v) => updatePrefs({ hideRanks: !v })}
+            />
+            <ToggleRow
+              label="Fold games with no playoff stakes"
+              hint="Games between two teams already out of the playoffs fold into one row."
+              checked={!!prefs.foldEliminatedGames}
+              onChange={(v) => updatePrefs({ foldEliminatedGames: v ? true : undefined })}
+            />
           </Section>
 
           {/* Default View */}
@@ -1948,6 +1988,19 @@ export default function SettingsPanel({
                 checked={!prefs.skipBoxscoreWarning}
                 onChange={(v) => updatePrefs({ skipBoxscoreWarning: !v })}
               />
+              {/* Only while "Always show results" is on in the MLB bracket. */}
+              {bracketResultsAlways && (
+                <ToggleRow
+                  label="Cover MLB bracket results"
+                  hint="Hide each playoff round's series winners until you tap for that round"
+                  checked={false}
+                  onChange={(v) => {
+                    if (!v) return;
+                    try { window.localStorage.removeItem(BRACKET_RESULTS_ALWAYS_KEY); } catch {}
+                    setBracketTick((n) => n + 1);
+                  }}
+                />
+              )}
             </div>
             {/* Links (Jacob 10/4: was its own section above Account). The
                 user's own front-ends (lib/frontendLinks.ts), the Reminder link

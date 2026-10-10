@@ -46,8 +46,9 @@ async function gotoNews(page: Page, extra: Record<string, unknown> = {}) {
 }
 
 // `state.refreshed` flips the mock to the post-refresh payload: the same posts
-// plus NEW_PER_FEED newer ones per feed, answered after `state.delayMs`.
-async function mockFeeds(page: Page, state: { refreshed: boolean; delayMs: number }) {
+// plus NEW_PER_FEED newer ones per feed (`state.extra` more on top), answered
+// after `state.delayMs`.
+async function mockFeeds(page: Page, state: { refreshed: boolean; delayMs: number; extra?: number }) {
   await page.route("**/news/*.json", async (route) => {
     const name = new URL(route.request().url()).pathname.split("/").pop()!.replace(/\.json$/, "");
     const refreshed = state.refreshed;
@@ -64,7 +65,7 @@ async function mockFeeds(page: Page, state: { refreshed: boolean; delayMs: numbe
       section: `r/${name}`,
     });
     const items = [
-      ...(refreshed ? Array.from({ length: NEW_PER_FEED }, (_, i) => post(i, true)) : []),
+      ...(refreshed ? Array.from({ length: NEW_PER_FEED + (state.extra ?? 0) }, (_, i) => post(i, true)) : []),
       ...Array.from({ length: PER_FEED }, (_, i) => post(i, false)),
     ];
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fetchedAt: new Date(NOW).toISOString(), items }) });
@@ -107,8 +108,17 @@ async function pullToRefresh(page: Page) {
 const groupsOf = (page: Page) => posts(page).evaluateAll((els) => els.map((e) => e.getAttribute("data-feed-group")));
 const seenStore = (page: Page) => page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("hs.newsSeen.v1") || "{}")));
 
+// The league tag's logo comes from ESPN's CDN, and a logo that fails to load
+// drops its mark. Serve every off-site image a 1x1 PNG so the tag checks read
+// our markup, not the CDN's uptime (and run offline).
+const PIXEL = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date(NOW));
+  await page.route(/^https?:\/\/(?!localhost[:/])/, (route) =>
+    route.request().resourceType() === "image"
+      ? route.fulfill({ status: 200, contentType: "image/png", body: PIXEL })
+      : route.fallback());
 });
 
 test("Feed: every post shows its league tag", async ({ page }) => {
@@ -198,6 +208,45 @@ test("Feed: refresh while scrolled down keeps the place and shows the new-posts 
   await expect(posts(page)).toHaveCount(total + NEW_PER_FEED * 2);
   await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5_000 }).toBe(0);
   expect(await posts(page).first().getAttribute("data-news-key")).toContain("/new/");
+});
+
+// Jacob 10/9: the pill used to stay after a hand scroll back to the top and
+// cover the first post's source line. Near the top the waiting posts merge,
+// the pill goes, and nothing sits over the first post's header.
+test("Feed: scrolling back to the top by hand merges the new posts and the pill goes", async ({ page }) => {
+  const state = { refreshed: false, delayMs: 0, extra: 0 };
+  await mockFeeds(page, state);
+  await gotoNews(page);
+  const total = await settle(page);
+
+  state.refreshed = true;
+  state.delayMs = 1_500;
+  await pullToRefresh(page);
+  await page.evaluate(() => window.scrollTo(0, 1200));
+  await expect(pill(page)).toBeVisible({ timeout: 15_000 });
+
+  await page.mouse.wheel(0, -5_000);
+  await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5_000 }).toBeLessThan(5);
+  await expect(pill(page)).toHaveCount(0);
+  await expect(posts(page)).toHaveCount(total + NEW_PER_FEED * 2);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(await posts(page).first().getAttribute("data-news-key")).toContain("/new/");
+  // The first post's source line is on screen and nothing covers it.
+  const covered = await posts(page).first().evaluate((article) => {
+    const line = article.querySelector("[data-feed-league]")!.parentElement!;
+    const r = line.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > window.innerHeight) return "off screen";
+    const hits = [0.1, 0.5, 0.9].map((fx) => document.elementFromPoint(r.left + r.width * fx, r.top + r.height / 2));
+    return hits.every((h) => !!h && article.contains(h)) ? null : hits.map((h) => h?.outerHTML.slice(0, 80)).join(" | ");
+  });
+  expect(covered).toBeNull();
+
+  // More posts arriving while scrolled down bring the pill back.
+  state.extra = 1;
+  await pullToRefresh(page);
+  await page.evaluate(() => window.scrollTo(0, 1200));
+  await expect(pill(page)).toBeVisible({ timeout: 15_000 });
+  await expect(pill(page)).toHaveText("2 new posts↑");
 });
 
 test("Feed: refresh at the top merges the new posts with no pill", async ({ page }) => {

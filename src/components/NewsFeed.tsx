@@ -280,6 +280,17 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
     if (!incoming) return;
     if (newCount === 0 || window.scrollY < NEAR_TOP_PX) applyIncoming();
   }, [incoming, newCount, applyIncoming]);
+  // Back near the top by hand with posts still waiting: merge them, as a
+  // refresh there does, so the pill never sits over the first post's source
+  // line (Jacob 10/9). The next refresh brings the pill back.
+  useEffect(() => {
+    if (newCount === 0) return;
+    const onScroll = () => {
+      if (window.scrollY < NEAR_TOP_PX) applyIncoming();
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [newCount, applyIncoming]);
   // Scroll AFTER the merged list commits: a scroll started in the same tick
   // is cut short in WebKit when the new posts land above the viewport.
   const scrollTopAfterMergeRef = useRef(false);

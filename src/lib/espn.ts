@@ -1,4 +1,5 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout, ClimbRound } from "./types";
+import { abortOwn } from "./abort";
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
@@ -2645,7 +2646,7 @@ export function buildTennisGames(events: TennisScoreboardEvent[], when?: string 
 // competition.notes — for finished cup ties ESPN puts the RESULT there
 // ("Paris Saint-Germain win 4-3 on penalties"). Returns null for league play
 // so regular-season games show no stage line.
-function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
+function deriveStage(altGameNote?: string, seasonSlug?: string, sport?: Sport): string | null {
   const seg = (altGameNote ?? "").split(",").map((s) => s.trim()).filter(Boolean).pop() ?? "";
   // Cup rounds (FA Cup / Copa del Rey / DFB-Pokal / Conference League, read
   // 2026-09-14): altGameNote is "English FA Cup, Third Round", "German Cup,
@@ -2655,6 +2656,28 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     return seg;
   }
   const slug = (seasonSlug ?? "").toLowerCase().trim();
+  // MLS + NWSL playoffs (read 2026-10-03 off the 2025 playoffs): ESPN flags
+  // neither as postseason and the notes carry the series result ("X win series
+  // 2-0"), so the round lives only in season.slug: "eastern-conference-playoffs
+  // ---round-one", "mls-cup", "playoffs---semifinals" (NWSL). An unknown suffix
+  // still names the playoffs, so pairingMask covers it.
+  const conf = /^(eastern|western)-conference-playoffs---(.+)$/.exec(slug);
+  if (conf) {
+    const side = conf[1] === "eastern" ? "East" : "West";
+    const round: Record<string, string> = { "wild-card": "Wild Card", "round-one": "Round One", semifinals: "Semifinal", final: "Final" };
+    return `${side} ${round[conf[2]] ?? "Playoffs"}`;
+  }
+  if (slug === "mls-cup") return "MLS Cup";
+  const nwsl = /^playoffs---(.+)$/.exec(slug);
+  if (nwsl) {
+    const round: Record<string, string> = { quarterfinals: "Quarterfinal", semifinals: "Semifinal", championship: "Championship" };
+    return round[nwsl[1]] ?? "Playoffs";
+  }
+  // Any other MLS or NWSL slug that names the postseason ("mls-cup-playoffs
+  // ---round-two", "nwsl-championship") is still a playoff round, so it gets a
+  // stage and pairingMask covers it. Scoped to the two leagues: deriveStage
+  // runs for every sport.
+  if ((sport === "mls" || sport === "nwsl") && /play-?offs?|mls-cup|championship/.test(slug)) return "Playoffs";
   const slugMap: Record<string, string> = {
     "group-stage": "Group Stage",
     "round-of-32": "Round of 32",
@@ -2679,6 +2702,11 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     "fourth-round": "Fourth Round",
     "fifth-round": "Fifth Round",
     "league-phase": "League Phase",
+    // Libertadores qualifying (pairingMask covers the Third Stage: its
+    // pairings come from the Second Stage winners).
+    "first-stage": "First Stage",
+    "second-stage": "Second Stage",
+    "third-stage": "Third Stage",
     "knockout-round-playoffs": "Knockout Round Playoffs",
     "knockout-round-play-offs": "Knockout Round Playoffs",
     // Nations League (read 2026-09-26 off the 2024-25 knockouts): the altGameNote
@@ -3048,7 +3076,7 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   const awayProbable = sport === "mlb" ? probablePitcher(away) : null;
 
   const cricketInfo = sport === "cricketintl" ? cricketMatchInfo(event as CricketEventLike) : null;
-  const stage = cricketInfo ? cricketInfo.stage : deriveStage(competition?.altGameNote, event.season?.slug);
+  const stage = cricketInfo ? cricketInfo.stage : deriveStage(competition?.altGameNote, event.season?.slug, sport);
 
   // Penalty shootout: a soccer knockout decided (or being decided) by spot
   // kicks — level after extra time, the pure tune-in moment. ESPN tags it via a
@@ -3249,7 +3277,7 @@ function hasPrimeBroadcast(game: Game): boolean {
 // timeout/error rather than throwing, so callers fall back to empty data.
 async function fetchTimed(url: string, timeoutMs = 8000): Promise<Response | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => abortOwn(controller), timeoutMs);
   try {
     return await fetch(url, { cache: "no-store", signal: controller.signal });
   } catch {
@@ -3262,7 +3290,7 @@ async function fetchTimed(url: string, timeoutMs = 8000): Promise<Response | nul
 async function fetchWithRetry(url: string, retries = 2, timeoutMs = 10000): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => abortOwn(controller), timeoutMs);
     try {
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timer);
@@ -5380,6 +5408,36 @@ async function fetchPreviousGameDayRange(
   return { date: latest, games: games.filter((g) => dayOf(g.date) === latest) };
 }
 
+// The board day a league page's "Open …" button lands on: the most recent day,
+// today included, with a finished game or event in that league. A weekly league
+// (NFL, college football, F1, UFC) is empty on most "yesterdays", so the old
+// fixed /yesterday link often opened a day with nothing to watch. Null = no
+// finished game in the lookback, or a failed fetch; the caller keeps its default.
+export async function fetchLastFinishedDay(sport: Sport): Promise<string | null> {
+  const today = toYmd(getEtServiceDate());
+  if (sport === "f1" || sport === "ufc" || sport === "nascar" || sport === "indycar") {
+    try {
+      const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+      url.searchParams.set("dates", `${shiftYmd(today, -EVENT_LOOKBACK_DAYS)}-${today}`);
+      const res = await fetchWithRetry(url.toString());
+      if (!res.ok) return null;
+      const data = await res.json();
+      const done = ((data.events ?? []) as LeagueEvent[]).filter((e) => e.status?.type?.state === "post");
+      const last = done[done.length - 1];
+      if (!last) return null;
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit" })
+        .format(new Date(last.date)).replace(/-/g, "");
+      return day && day <= today ? day : null;
+    } catch {
+      return null;
+    }
+  }
+  // fetchPreviousGameDayRange walks back from the day BEFORE its anchor, so
+  // anchoring on tomorrow puts today's finished games in the walk.
+  const last = await fetchPreviousGameDayRange(sport, nextYmd(today));
+  return last && last.date <= today ? last.date : null;
+}
+
 // A finished day's scoreboard does not change. Best of yesterday reads up to
 // eight of yesterday's scoreboards on the today board, and a tap on Yesterday
 // reads the same ones again; holding a finished day here for a few minutes
@@ -5928,7 +5986,7 @@ async function fetchMlbVideos(date: string): Promise<MlbVideoEntry[]> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const timer = setTimeout(() => abortOwn(ctrl), 8000);
       const res = await fetch(`${getApiBase()}/api/mlb-videos?date=${date}`, { signal: ctrl.signal });
       clearTimeout(timer);
       if (!res.ok) continue;

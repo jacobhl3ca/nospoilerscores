@@ -77,6 +77,10 @@ async function sourceHeaders(page: Page, idx: number): Promise<string[]> {
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-09-26T15:00:00-04:00"));
   await mockEspnFeeds(page);
+  // Every scoreboard answers an empty slate. A scoreboard that fails to load
+  // (no network) changes what an Auto column resolves to, so Auto in column 1
+  // came back as ESPN front page instead of MLB.
+  await page.route(/\/scoreboard(\?|$)/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"events":[]}' }));
 });
 
 const rowsOf = async (page: Page, idx: number) => {

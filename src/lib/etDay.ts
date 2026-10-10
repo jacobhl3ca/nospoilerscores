@@ -10,6 +10,40 @@ export function setServiceTimeZone(tz: string | undefined): void {
   overrideTz = tz || undefined;
 }
 
+// The zone every fallback lands on. HideScore's slate is built around Eastern
+// time, so a device or a saved value with no usable zone reads the board as ET.
+export const DEFAULT_TIME_ZONE = "America/New_York";
+
+// True when this runtime's Intl accepts `tz` as a timeZone option. Constructing
+// a formatter is the only portable test: it throws a RangeError on a zone the
+// ICU build does not know.
+export function isValidTimeZone(tz: string | undefined | null): tz is string {
+  if (!tz) return false;
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// The device's own zone, or DEFAULT_TIME_ZONE when the device has none we can
+// use. ⛔ resolvedOptions() does NOT throw on a device with no zone data: some
+// browsers (Chromium on a host with no tz database, some WebViews) report
+// "Etc/Unknown" — a name the same runtime then REJECTS as a timeZone option.
+// Every toLocale*({ timeZone: getTimeZone() }) then threw "RangeError: Invalid
+// time zone specified: Etc/Unknown" (Sentry, GitHub #79). So validate it the
+// same way as the override.
+export function getDeviceTimeZone(): string {
+  let tz: string | undefined;
+  try {
+    tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return DEFAULT_TIME_ZONE;
+  }
+  return isValidTimeZone(tz) ? tz : DEFAULT_TIME_ZONE;
+}
+
 export function getTimeZone(): string {
   if (overrideTz) {
     // Validate the stored override before handing it to the dozens of
@@ -25,18 +59,10 @@ export function getTimeZone(): string {
     // already try/catch-guarded for the same reason; this extends the identical
     // defense to the override path. Valid zones (the universal common case)
     // validate and return unchanged, so behavior is byte-for-byte the same.
-    try {
-      new Intl.DateTimeFormat(undefined, { timeZone: overrideTz });
-      return overrideTz;
-    } catch {
-      /* bad override — fall through to the device zone */
-    }
+    if (isValidTimeZone(overrideTz)) return overrideTz;
+    /* bad override — fall through to the device zone */
   }
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
-  } catch {
-    return "America/New_York";
-  }
+  return getDeviceTimeZone();
 }
 
 // Canonical "service day" — the calendar day the app treats as "today" — in the

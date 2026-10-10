@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Sport } from "@/lib/types";
+import { planAddMorePicks } from "@/lib/addMorePicks";
 import { LeagueMark } from "./LeagueMark";
+import { trackEvent } from "@/lib/track";
 
 export interface LeaguePickerOption {
   sport: Sport;
@@ -13,21 +15,18 @@ export interface LeaguePickerOption {
   defaultInSwitcher?: boolean;
 }
 
-// The tracker script loads with defer, so on a fast first paint the sheet can
-// open before window.umami exists. Retry for ~5 s instead of losing the
-// "shown" event the drop-off count depends on.
-function trackSoon(name: string, data?: Record<string, string>, tries = 20) {
-  if (window.umami) { window.umami.track(name, data); return; }
-  if (tries > 0) setTimeout(() => trackSoon(name, data, tries - 1), 250);
-}
-
 // The league pill sheet. Two callers share one look (Jacob 9/29: "a nice modal
 // popup that we already built"):
 // - "multi": the first-run "Pick your leagues" sheet. Tap order numbers the
 //   pills, "Use defaults" / "Show N leagues" confirm.
-// - "single": a column switcher's "Add more…". One tap switches that column
-//   and closes. A "Show offseason leagues" toggle sits in the footer, so the
-//   in-season leagues lead and the offseason ones are one tap away.
+// - "single": one tap switches the column and closes. A "Show offseason
+//   leagues" toggle sits in the footer, so the in-season leagues lead and the
+//   offseason ones are one tap away.
+// - "add": a column switcher's "Add more…" (Jacob 10/1: "multi select", "add
+//   btn"). The "single" sheet, but a tap lights a pill and a second tap puts
+//   it out; one "Add N" button hands the lit pills to onAdd. N counts the
+//   leagues the board shows now; a note names offseason picks that wait for
+//   their season. ✕, Escape and the backdrop add nothing.
 export function LeaguePickerModal({
   title,
   subtitle,
@@ -36,6 +35,8 @@ export function LeaguePickerModal({
   selected,
   max = Infinity,
   onPick,
+  onAdd,
+  columnTakes,
   onConfirm,
   onClose,
   showOffseason,
@@ -50,12 +51,20 @@ export function LeaguePickerModal({
   title: string;
   subtitle?: ReactNode;
   options: LeaguePickerOption[];
-  mode: "multi" | "single";
+  mode: "multi" | "single" | "add";
   // multi: the picks in tap order. single: the league already in the column.
   selected: Sport[];
   // multi only: how many pills can be on at once.
   max?: number;
-  onPick: (sport: Sport) => void;
+  // multi, single: a pill tap. add: unused (the sheet keeps its own picks).
+  onPick?: (sport: Sport) => void;
+  // add only: the Add button, with the lit pills split by planAddMorePicks:
+  // the ones the board shows now (the column's first) and the offseason ones
+  // that wait for their season.
+  onAdd?: (now: Sport[], later: Sport[]) => void;
+  // add only: an offseason league the column can still show (NBA, or any
+  // league in news column 3). Default none.
+  columnTakes?: (sport: Sport) => boolean;
   // multi only: the confirm button.
   onConfirm?: () => void;
   // Escape, the backdrop, and the left button (multi "Use defaults", single
@@ -85,16 +94,27 @@ export function LeaguePickerModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef(trackPrefix);
   const trackedShownRef = useRef(false);
+  // trackEvent retries for ~5 s: the deferred tracker can load after the
+  // sheet opens, and the drop-off count depends on the "shown" event.
   const track = (what: string, data?: Record<string, string>) => {
-    if (trackRef.current) trackSoon(`${trackRef.current}-${what}`, data);
+    if (trackRef.current) trackEvent(`${trackRef.current}-${what}`, data, 100);
   };
   // The ref guard keeps React's dev double-mount from counting one open twice.
   useEffect(() => {
     if (trackedShownRef.current || !trackRef.current) return;
     trackedShownRef.current = true;
-    trackSoon(`${trackRef.current}-shown`);
+    trackEvent(`${trackRef.current}-shown`);
   }, []);
   const multi = mode === "multi";
+  const add = mode === "add";
+  // add only: the lit pills, in tap order. Lives only while the sheet is open.
+  const [picks, setPicks] = useState<Sport[]>([]);
+  const togglePick = (sport: Sport) =>
+    setPicks((p) => (p.includes(sport) ? p.filter((s) => s !== sport) : [...p, sport]));
+  // add only: "Add N" counts the picks the board shows now; an offseason
+  // pick past the column's waits for its season, and the note says so.
+  const plan = planAddMorePicks(picks, (s) => !!options.find((o) => o.sport === s)?.offseason, columnTakes ?? (() => false));
+  const laterNames = plan.later.map((s) => options.find((o) => o.sport === s)?.label ?? s);
   const titleId = multi ? "league-picker-title" : "league-add-more-title";
   // The column's own league stays even when offseason, so the sheet always
   // shows where you are.
@@ -127,7 +147,7 @@ export function LeaguePickerModal({
   const isRemoved = (sport: Sport) => removedOptions.some((o) => o.sport === sport);
   const shown = multi
     ? (!canCollapse || expanded ? [...core, ...rest] : [...core, ...rest.filter((o) => selected.includes(o.sport))])
-    : (showOffseason ? options : options.filter((o) => !o.offseason || selected.includes(o.sport)))
+    : (showOffseason ? options : options.filter((o) => !o.offseason || selected.includes(o.sport) || picks.includes(o.sport)))
         .filter((o) => !isRemoved(o.sport) && !isStruck(o.sport));
 
   // Escape closes the sheet too — same as tapping its backdrop. Brings it in
@@ -143,7 +163,7 @@ export function LeaguePickerModal({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (trackRef.current) trackSoon(`${trackRef.current}-escape`);
+        if (trackRef.current) trackEvent(`${trackRef.current}-escape`);
         onCloseRef.current();
         return;
       }
@@ -210,6 +230,10 @@ export function LeaguePickerModal({
     // Single mode: the column's own league is marked, never filled —
     // a filled pill reads as "picked", and nothing is picked until a tap.
     const current = !multi && on;
+    // add only: a lit pill takes the picked fill. The column's own league
+    // cannot be lit; it is already in the column.
+    const lit = add && !current && picks.includes(o.sport);
+    const filled = (multi && on) || lit;
     const elsewhere = multi || current ? undefined : shownElsewhere?.find((e) => e.sport === o.sport);
     const full = multi && selected.length >= max && !on;
     // Edit mode: a × after each pill, but not on the column's own league or a
@@ -221,7 +245,11 @@ export function LeaguePickerModal({
         key={o.sport}
         type="button"
         disabled={full}
-        onClick={() => { if (!editing) onPick(o.sport); }}
+        onClick={() => {
+          if (editing) return;
+          if (!add) onPick?.(o.sport);
+          else if (!current) togglePick(o.sport);
+        }}
         // Multi-select toggle: expose the picked state to assistive
         // tech, since it's otherwise conveyed only by the accent
         // background (and a "1. " number prefix). Matches the
@@ -229,12 +257,12 @@ export function LeaguePickerModal({
         // already uses (view tabs, the news reveal/text-post pills,
         // the World Cup groups band/day pills) — this picker was the
         // lone group missing it.
-        aria-pressed={multi ? on : undefined}
+        aria-pressed={multi ? on : add && !current ? lit : undefined}
         aria-current={current ? "true" : undefined}
         // The Settings league chip's look (Jacob 10/1: one chip
         // everywhere): rounded-md, 11px, uppercase name.
         className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-        style={multi && on
+        style={filled
           ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
           : {
               background: "var(--bg-card)",
@@ -254,15 +282,15 @@ export function LeaguePickerModal({
         {/* No white plate (Jacob 10/1), the same mark as the
             Settings chips: ESPN's dark-theme copy in dark mode and on
             the accent fill, a sport emoji for a league with none. */}
-        <LeagueMark sport={o.sport} src={demoOption?.logo} tone={multi && on ? "dark" : "auto"} className="-my-0.5" />
+        <LeagueMark sport={o.sport} src={demoOption?.logo} tone={filled ? "dark" : "auto"} className="-my-0.5" />
         <span className="uppercase tracking-wide">{demoOption?.label ?? o.label}</span>
         {/* Start dates dropped here on purpose (Jacob 8/9): six
             "· starts Aug 21" tails made the grid unreadable and are
             noise at signup. The kickoff banner still announces them
             and the column switcher still shows them. "offseason"
             stays — that one changes whether the column has games. */}
-        {o.offseason && <em className="font-normal text-[11px]" style={{ color: multi && on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
-        {elsewhere && <em className="font-normal text-[11px]" style={{ color: "var(--text-muted)" }}>· col {elsewhere.col}</em>}
+        {o.offseason && <em className="font-normal text-[11px]" style={{ color: filled ? "inherit" : "var(--text-muted)" }}>offseason</em>}
+        {elsewhere && <em className="font-normal text-[11px]" style={{ color: filled ? "inherit" : "var(--text-muted)" }}>· col {elsewhere.col}</em>}
       </button>
     );
     if (!canStrike) return pill;
@@ -272,7 +300,10 @@ export function LeaguePickerModal({
       <span key={o.sport} className="inline-flex items-center">
         {pill}
         <button type="button"
-          onClick={() => onHide?.(o.sport)}
+          onClick={() => {
+            setPicks((p) => p.filter((s) => s !== o.sport));
+            onHide?.(o.sport);
+          }}
           aria-label={`Hide ${name} from this list`}
           title="Hide from this list"
           className="w-5 h-5 -mr-1 flex items-center justify-center rounded-full cursor-pointer hover:opacity-80"
@@ -327,7 +358,19 @@ export function LeaguePickerModal({
             </svg>
           </div>
         )}
-        <h3 id={titleId} className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>{title}</h3>
+        {add && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+            className="absolute top-1 right-1 w-11 h-11 flex items-center justify-center rounded-full cursor-pointer hover:opacity-80"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 5l14 14M19 5L5 19" /></svg>
+          </button>
+        )}
+        <h2 id={titleId} className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>{title}</h2>
         {subtitle && (
           <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
             {subtitle}
@@ -433,6 +476,12 @@ export function LeaguePickerModal({
             </button>
           </div>
         ) : (
+          <>
+          {add && plan.later.length > 0 && (
+            <p data-testid="league-picker-later" role="status" className="text-xs mb-2 shrink-0" style={{ color: "var(--text-secondary)" }}>
+              {laterNames.join(", ")}: offseason. {plan.later.length > 1 ? "They join" : "It joins"} this column&apos;s list when {plan.later.length > 1 ? "their seasons start" : "its season starts"}.
+            </p>
+          )}
           <div className="flex items-center justify-between gap-2 shrink-0">
             {/* Off by default so the sheet opens on leagues with games; the
                 choice is saved (showOffseasonInPicker) so it opens the way
@@ -448,17 +497,33 @@ export function LeaguePickerModal({
             >
               Show offseason leagues
             </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-            >
-              Cancel
-            </button>
+            {add ? (
+              // Below the scrolling grid, so it stays in view however long
+              // the list is.
+              <button
+                type="button"
+                data-testid="league-picker-add"
+                disabled={picks.length === 0}
+                onClick={() => onAdd?.(plan.now, plan.later)}
+                className="px-4 py-2 min-h-11 rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }}
+              >
+                {plan.now.length ? `Add ${plan.now.length}` : "Add"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+              >
+                Cancel
+              </button>
+            )}
           </div>
+          </>
         )}
       </div>
     </div>

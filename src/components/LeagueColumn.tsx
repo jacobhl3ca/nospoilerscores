@@ -24,9 +24,12 @@ import { compareRatedLive } from "@/lib/liveSort";
 import { compareRankedMatchups } from "@/lib/rankedMatchupSort";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 import { applyFavoritesFilter, filterLeague } from "@/lib/favoritesFilter";
+import { foldRowLabel, splitFoldable, type ClinchSnapshot } from "@/lib/eliminatedFold";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
+import { useHideRanks } from "./HideRanksContext";
+import { trackEvent } from "@/lib/track";
 
 interface LeagueColumnProps {
   league: LeagueData;
@@ -36,7 +39,7 @@ interface LeagueColumnProps {
   isPastDate: boolean;
   isToday?: boolean;
   sortByMatchups?: boolean;
-  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => void;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[], league?: string) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   // Clicking a game card body opens a spoiler-safe details popup (owned by HomeContent).
   onShowDetails?: (game: Game) => void;
@@ -46,7 +49,7 @@ interface LeagueColumnProps {
   // `leagueLabel` is injected by the column rather than resolved by the owner:
   // an event card carries no `sport` field, so HomeContent's sport→label lookup
   // (the one GameDetailModal uses) has nothing to key on here.
-  onShowEventDetails?: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => void;
+  onShowEventDetails?: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string, sport?: Sport) => void;
   // Opens the World Cup all-groups overlay (used only by the fifa column's
   // tappable "Group Stage" subtitle).
   onShowGroups?: () => void;
@@ -102,6 +105,9 @@ interface LeagueColumnProps {
   // Leagues whose upcoming cards show the italic W-L (picked in Settings) —
   // see lib/upcomingRecords.ts.
   upcomingRecordLeagues?: ReadonlySet<RecordLeague>;
+  // "Fold games with no playoff stakes" (Settings): the NFL standings when the
+  // setting is on, else null. See lib/eliminatedFold.ts.
+  foldClinch?: ClinchSnapshot | null;
   // Sports shown in the other columns, with the 1-based column number each
   // lives in — dropdown labels these "· col N" (still full-colour, selectable).
   shownElsewhere?: { sport: Sport; col: number }[];
@@ -629,7 +635,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
   const hrefProps = !href
     ? null
     : result?.watchName
-      ? watchLinkProps(result.watchName, href)
+      ? watchLinkProps(result.watchName, href, undefined, sport)
       : { href, target: "_blank", rel: "noopener noreferrer", onClick: handleExternalClick(href) };
   const tiersKey = tiers.join("|");
   // A tier below suffixTiers.length is a paired one, so the trailing
@@ -971,6 +977,7 @@ export default function LeagueColumn({
   favoritesOnlyStrict = NO_STRICT,
   onSetFavoritesOnlyStrict,
   upcomingRecordLeagues,
+  foldClinch = null,
   shownElsewhere,
   onRetry,
   slotIdx,
@@ -993,6 +1000,19 @@ export default function LeagueColumn({
   const league = useMemo(() => applyFavoritesFilter(rawLeague, fav), [rawLeague, fav]);
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
+  // Tags every highlight tap with this column's sport for the video-play /
+  // video-out events. An event tile (F1, UFC) has no share card to name its
+  // league; a game card's share card key still wins in VideoModal, which keeps
+  // the mixed ESPN / Best columns right.
+  const leagueSport = league.sport;
+  // Stays undefined without a handler: children hide their buttons on that.
+  const playHighlight = useMemo(
+    () => onPlayHighlight
+      ? (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) =>
+          onPlayHighlight(videoId, fallbackUrl, shareCard, alternates, leagueSport)
+      : undefined,
+    [onPlayHighlight, leagueSport],
+  );
   const [condenseExpanded, setCondenseExpanded] = useState(false); // "Show more" in condensed single-column mode
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
   // A long league name ("NFL Preseason") wraps to two lines in a narrow mobile
@@ -1053,6 +1073,9 @@ export default function LeagueColumn({
   // is flagged by react-hooks/purity, and a single read is indistinguishable
   // for a label that only changes across a midnight boundary.
   const [nowMs] = useState(() => Date.now());
+  // Which "N games between eliminated teams" rows are open, keyed by day. Per
+  // column (this state) and for this visit only.
+  const [foldOpen, setFoldOpen] = useState<Record<string, boolean>>({});
   const mode = switcherMode ?? "dropdown";
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague && mode !== "off";
   // ‹ › step button. Hoisted to component scope (it used to live inside the
@@ -1306,6 +1329,8 @@ export default function LeagueColumn({
   // those changed — e.g. a past tab that's empty today gains a lookback game —
   // abbreviations wouldn't recompute. Keying on all four fields the body reads
   // closes that gap.
+  // No "#N" chip to make room for when Settings hides ranks.
+  const hideRanks = useHideRanks();
   const checkIfFullNamesFit = useCallback(() => {
     const el = columnRef.current;
     if (!el) return;
@@ -1350,9 +1375,9 @@ export default function LeagueColumn({
       // ("Bosnia-Herzegovina", "Trail Blazers") could spill past the cell. Shown
       // for the World Cup (static FIFA rank) and any league whose teams carry a
       // live standings rank.
-      const showsRankChip =
+      const showsRankChip = !hideRanks && (
         league.sport === "fifa" ||
-        measuredGames.some((g) => g.homeTeam.rank != null || g.awayTeam.rank != null);
+        measuredGames.some((g) => g.homeTeam.rank != null || g.awayTeam.rank != null));
       const rankAllowance = showsRankChip ? 30 : 0;
       const availableWidth = rowWidth - occupied - totalGaps - 4 - rankAllowance; // 4px safety
 
@@ -1369,7 +1394,7 @@ export default function LeagueColumn({
 
       setUseAbbreviations(longestWidth > availableWidth);
     });
-  }, [league.games, league.nextGameDay, league.previousGameDay, league.sport]);
+  }, [league.games, league.nextGameDay, league.previousGameDay, league.sport, hideRanks]);
 
   // Re-check when the rendered games change
   useEffect(() => {
@@ -1554,7 +1579,12 @@ export default function LeagueColumn({
   // games first within each state (Jacob 9/26). The Ratings view sorts each
   // block's live games and finals by rating (Jacob 10/6).
   // Every other column keeps its live / upcoming / final sections below.
-  const espnGroups = league.sport === "top" ? groupEspnFrontPage(sortedGames, league.espnFeatured, topMatchups) : null;
+  // Games between two eliminated teams leave the list for one fold row at the
+  // end of the day (lib/eliminatedFold.ts). `hasGames` still counts them, so a
+  // day of only folded games keeps its row instead of reading "No games".
+  const mainFold = splitFoldable(sortedGames, foldClinch, favoriteTeams, nowMs);
+  const hasGames = sortedGames.length > 0;
+  const espnGroups = league.sport === "top" ? groupEspnFrontPage(mainFold.shown, league.espnFeatured, topMatchups) : null;
   // The header subtitle already reads "NLWC · Game 3" for every game in the
   // column, so each pre-game card skips its own "Game 3" line. Same games the
   // subtitle reads (see the PlayoffSubtitle call below). A mixed column (ESPN
@@ -1566,7 +1596,7 @@ export default function LeagueColumn({
     league.games.length ? league.games : (league.previousGameDay?.games ?? []),
     null,
   )?.gameNumber;
-  const sorted = espnGroups ? espnGroups.flatMap((g) => g.games) : sortedGames;
+  const sorted = espnGroups ? espnGroups.flatMap((g) => g.games) : mainFold.shown;
   // The label over an ESPN front page league block: "NFL", or its short form
   // on a narrow column.
   const espnGroupLabel = (group: { games: Game[] }) => {
@@ -1676,7 +1706,7 @@ export default function LeagueColumn({
                 showRatings={showRatings}
                 leagueLabel={cardLeagueLabel(game)}
                 leagueTag={cardLeagueTag(game)}
-                onPlayHighlight={onPlayHighlight}
+                onPlayHighlight={playHighlight}
                 onPlayEmbed={onPlayEmbed}
                 isPastDate={isPastDate}
                 isToday={isToday}
@@ -1692,6 +1722,52 @@ export default function LeagueColumn({
       })}
     </div>
   );
+
+  // The "▸ N games between eliminated teams" row and, once tapped open, its
+  // cards. `day` keys the open state; `card` draws a folded game the way its
+  // list draws the rest.
+  const renderFold = (day: string, folded: Game[], card: (game: Game) => ReactNode) => {
+    if (!folded.length) return null;
+    const open = !!foldOpen[day];
+    return (
+      <div key={`fold-${day}`} data-eliminated-fold={day} className="flex flex-col gap-1.5 sm:gap-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setFoldOpen((o) => ({ ...o, [day]: !o[day] }))}
+          className="w-full text-left text-[11px] sm:text-xs px-2 sm:px-3 py-1.5 rounded-lg cursor-pointer transition-colors"
+          style={{ color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        >
+          <span aria-hidden="true">{open ? "▾" : "▸"}</span> {foldRowLabel(folded.length)}
+        </button>
+        {open && folded.map(card)}
+      </div>
+    );
+  };
+  const foldCard = (game: Game, pastDate: boolean, today: boolean | undefined, nextGameDate?: string) => (
+    <GameCard
+      key={game.id}
+      game={game}
+      favoriteTeams={favoriteTeams}
+      onToggleFavoriteTeam={onToggleFavoriteTeam}
+      showRatings={showRatings}
+      leagueLabel={cardLeagueLabel(game)}
+      leagueTag={cardLeagueTag(game)}
+      onPlayHighlight={onPlayHighlight}
+      onPlayEmbed={onPlayEmbed}
+      nextGameDate={nextGameDate}
+      isPastDate={pastDate}
+      isToday={today}
+      useAbbreviations={useAbbreviations}
+      onSelectTeam={setTeamViewTeam}
+      onShowDetails={onShowDetails}
+      showStars={cardStars}
+      upcomingRecordLeagues={upcomingRecordLeagues}
+    />
+  );
+  const mainFoldRow = renderFinished
+    ? renderFold(selectedDate, mainFold.folded, (game) => foldCard(game, isPastDate, isToday))
+    : null;
 
   const CONDENSE_LIMIT = 3;
   const renderCondensed = (games: Game[], pastDate: boolean) => {
@@ -1712,7 +1788,7 @@ export default function LeagueColumn({
         showRatings={showRatings}
         leagueLabel={cardLeagueLabel(game)}
         leagueTag={cardLeagueTag(game)}
-        onPlayHighlight={onPlayHighlight}
+        onPlayHighlight={playHighlight}
         onPlayEmbed={onPlayEmbed}
         isPastDate={pastDate}
         isToday={isToday}
@@ -1768,9 +1844,13 @@ export default function LeagueColumn({
   // A game keeps its FULL card unless its matchup is already spelled out above
   // it — see compactableMatchups for why a bare "@ HOME" row is only readable
   // in that case (it drops the away team).
-  const renderUpcomingSlate = (games: Game[], firstFull: boolean, alsoShown: Game[] = []) => {
+  const renderUpcomingSlate = (allGames: Game[], firstFull: boolean, alsoShown: Game[] = []) => {
+    const { shown: games, folded } = splitFoldable(allGames, foldClinch, favoriteTeams, nowMs);
     const named = compactableMatchups(games, firstFull, alsoShown);
-    return games.map((game, i) => {
+    const foldDay = league.nextGameDay?.date ?? "next";
+    const foldRow = renderFold(`next-${foldDay}`, folded, (game) =>
+      foldCard(game, false, undefined, formatDateCompact(etDayString(game.date) || foldDay)));
+    return [...games.map((game, i) => {
       const nextGameDate = formatDateCompact(etDayString(game.date) || league.nextGameDay!.date);
       // A masked pairing stays a full card: the compact row prints "@ HOME",
       // and from Game 3 of a series the home club can be the one that advanced.
@@ -1793,7 +1873,7 @@ export default function LeagueColumn({
           showRatings={showRatings}
           leagueLabel={cardLeagueLabel(game)}
           leagueTag={cardLeagueTag(game)}
-          onPlayHighlight={onPlayHighlight}
+          onPlayHighlight={playHighlight}
           onPlayEmbed={onPlayEmbed}
           nextGameDate={nextGameDate}
           useAbbreviations={useAbbreviations}
@@ -1804,7 +1884,7 @@ export default function LeagueColumn({
           hideSeriesNote={hideSeriesNote}
         />
       );
-    });
+    }), foldRow];
   };
 
   // "Last played · Mon" / "Last played · Mon 6/8" for the lookback slate's day.
@@ -1826,7 +1906,8 @@ export default function LeagueColumn({
   // and busier than every other card on the board; it now takes the column
   // HEADER's otherwise-empty italic subtitle slot (Jacob 8/10). See
   // lastPlayedLabel + PlayoffSubtitle's fallbackText below.
-  const renderPreviousSlate = (games: Game[]) => {
+  const renderPreviousSlate = (allGames: Game[]) => {
+    const { shown: games, folded } = splitFoldable(allGames, foldClinch, favoriteTeams, nowMs);
     return (
       <div className="flex flex-col gap-1.5 sm:gap-2">
         {lookbackGames(games).map((game) => (
@@ -1838,7 +1919,7 @@ export default function LeagueColumn({
             showRatings={showRatings}
             leagueLabel={cardLeagueLabel(game)}
             leagueTag={cardLeagueTag(game)}
-            onPlayHighlight={onPlayHighlight}
+            onPlayHighlight={playHighlight}
             onPlayEmbed={onPlayEmbed}
             isPastDate
             useAbbreviations={useAbbreviations}
@@ -1849,6 +1930,7 @@ export default function LeagueColumn({
             hideSeriesNote={hideSeriesNote}
           />
         ))}
+        {renderFold(`prev-${league.previousGameDay?.date ?? ""}`, folded, (game) => foldCard(game, true, undefined))}
       </div>
     );
   };
@@ -1876,7 +1958,7 @@ export default function LeagueColumn({
     !teamViewTeam
     && !league.golfTournament
     && !league.eventCard
-    && sorted.length === 0
+    && !hasGames
     && renderUpcoming
     && !league.fetchFailed
     && (league.previousGameDay?.games?.length ?? 0) > 0
@@ -1956,7 +2038,7 @@ export default function LeagueColumn({
   // each league block holds its own, over that block's cards (Jacob 10/3).
   const cardGames: Game[] = (() => {
     if (espnGroups || teamViewTeam || league.golfTournament || league.eventCard) return [];
-    if (sorted.length === 0) {
+    if (!hasGames) {
       if (!renderUpcoming || league.fetchFailed) return [];
       if (isPastDate) {
         if (league.previousGameDay?.games.length) return league.previousGameDay.games;
@@ -2246,7 +2328,7 @@ export default function LeagueColumn({
                       <button
                         type="button"
                         data-testid="league-switcher-add-more"
-                        onClick={() => { setSwapOpen(false); onAddMore(); }}
+                        onClick={() => { setSwapOpen(false); trackEvent("switcher-add-more"); onAddMore(); }}
                         className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                         style={{
                           color: "var(--text-muted)",
@@ -2397,7 +2479,7 @@ export default function LeagueColumn({
             favoriteTeams={favoriteTeams}
             onToggleFavoriteTeam={onToggleFavoriteTeam}
             showRatings={showRatings}
-            onPlayHighlight={onPlayHighlight}
+            onPlayHighlight={playHighlight}
             onPlayEmbed={onPlayEmbed}
             onShowDetails={onShowDetails}
             onBack={() => setTeamViewTeam(null)}
@@ -2411,11 +2493,11 @@ export default function LeagueColumn({
           showRatings={showRatings}
           leagueLabel={league.label}
           selectedDate={selectedDate}
-          onPlayHighlight={onPlayHighlight}
+          onPlayHighlight={playHighlight}
         />
       ) : league.eventCard && section !== "finished" ? (
-        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} showRatings={showRatings} />
-      ) : sorted.length === 0 ? (
+        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={playHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label, league.sport) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} showRatings={showRatings} />
+      ) : !hasGames ? (
         renderUpcoming ? (
           league.fetchFailed ? (
             // The games fetch errored AND we had no cached fallback (the
@@ -2509,10 +2591,11 @@ export default function LeagueColumn({
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>{emptyUpcomingLabel}</p>
           )
         ) : null
-      ) : condense ? (
-        renderCondensed(sorted, isPastDate)
-      ) : espnGroups ? (
-        renderEspnGroups(sorted)
+      ) : condense || espnGroups ? (
+        <div className="flex flex-col gap-1.5 sm:gap-2">
+          {condense ? renderCondensed(sorted, isPastDate) : renderEspnGroups(sorted)}
+          {mainFoldRow}
+        </div>
       ) : isPastDate ? (
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {sorted.map((game) => (
@@ -2524,7 +2607,7 @@ export default function LeagueColumn({
               showRatings={showRatings}
               leagueLabel={cardLeagueLabel(game)}
               leagueTag={cardLeagueTag(game)}
-              onPlayHighlight={onPlayHighlight}
+              onPlayHighlight={playHighlight}
               onPlayEmbed={onPlayEmbed}
               isPastDate={isPastDate}
               isToday={isToday}
@@ -2536,6 +2619,7 @@ export default function LeagueColumn({
               hideSeriesNote={hideSeriesNote}
             />
           ))}
+          {mainFoldRow}
         </div>
       ) : (
         <div className="flex flex-col gap-1.5 sm:gap-2">
@@ -2548,7 +2632,7 @@ export default function LeagueColumn({
               showRatings={showRatings}
               leagueLabel={cardLeagueLabel(game)}
               leagueTag={cardLeagueTag(game)}
-              onPlayHighlight={onPlayHighlight}
+              onPlayHighlight={playHighlight}
               onPlayEmbed={onPlayEmbed}
               isToday={isToday}
               useAbbreviations={useAbbreviations}
@@ -2568,7 +2652,7 @@ export default function LeagueColumn({
               showRatings={showRatings}
               leagueLabel={cardLeagueLabel(game)}
               leagueTag={cardLeagueTag(game)}
-              onPlayHighlight={onPlayHighlight}
+              onPlayHighlight={playHighlight}
               onPlayEmbed={onPlayEmbed}
               isToday={isToday}
               useAbbreviations={useAbbreviations}
@@ -2602,7 +2686,7 @@ export default function LeagueColumn({
               showRatings={showRatings}
               leagueLabel={cardLeagueLabel(game)}
               leagueTag={cardLeagueTag(game)}
-              onPlayHighlight={onPlayHighlight}
+              onPlayHighlight={playHighlight}
               onPlayEmbed={onPlayEmbed}
               isPastDate={false}
               isToday={isToday}
@@ -2614,6 +2698,7 @@ export default function LeagueColumn({
               hideSeriesNote={hideSeriesNote}
             />
           ))}
+          {mainFoldRow}
         </div>
       )}
       {footer}

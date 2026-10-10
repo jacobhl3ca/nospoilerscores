@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { RADIO_SPORTS, deniedRadioHost, type RadioSource, type RadioTable } from "../src/lib/radio.ts";
+import { FEED_SPORTS, RADIO_SPORTS, deniedRadioHost, type RadioSource, type RadioTable } from "../src/lib/radio.ts";
 
 // The shipped station table (public/radio-stations.json). Offline shape and
 // safety checks; the live "does every URL still answer" pass is
@@ -19,7 +19,16 @@ const all: { where: string; s: RadioSource }[] = [
 
 // League sizes on ESPN for the 2026-27 seasons. The checker compares the
 // actual team ids against ESPN live; this only catches a league dropped whole.
-const TEAMS: Record<string, number> = { nfl: 32, mlb: 30, nba: 30, nhl: 32 };
+// College counts are the conferences done so far: ncaaf = all FBS, ncaam and
+// ncaaw = ACC, Big 12, Big East, Big Ten and SEC.
+const TEAMS: Record<string, number> = {
+  nfl: 32, mlb: 30, nba: 30, nhl: 32,
+  wnba: 15, mls: 30, nwsl: 16, cfl: 9, ufl: 8, ligamx: 18,
+  ncaaf: 138, ncaam: 79, ncaaw: 79,
+};
+// Phase 1 leagues always carry a SiriusXM line; later leagues only where a
+// paid product really carries every game.
+const PAID_REQUIRED = ["nfl", "mlb", "nba", "nhl"];
 
 test("every row has the full schema", () => {
   assert.ok(all.length > 0);
@@ -43,11 +52,20 @@ test("https only, and never a denylisted (score-bar) host", () => {
   }
 });
 
-test("every team in the shipped leagues has a row, and every row's league is shipped", () => {
+test("every team in the shipped leagues has a row or a written reason, and every row's league is shipped", () => {
+  const missing = table.missing ?? {};
   for (const sport of RADIO_SPORTS) {
-    const keys = Object.keys(table.teams).filter((k) => k.startsWith(`${sport}:`));
-    assert.equal(keys.length, TEAMS[sport], `${sport}: ${keys.length} team keys`);
-    assert.ok(table.leagues[sport]?.paid?.length, `${sport}: needs a paid line`);
+    const keys = new Set([...Object.keys(table.teams), ...Object.keys(missing)].filter((k) => k.startsWith(`${sport}:`)));
+    assert.equal(keys.size, TEAMS[sport], `${sport}: ${keys.size} team keys`);
+    for (const k of keys) {
+      const hasFree = (table.teams[k] ?? []).some((s) => s.access.cost === "free");
+      assert.ok(hasFree || (missing[k] ?? "").trim().length > 10, `${k}: no free row and no reason in "missing"`);
+    }
+  }
+  for (const sport of PAID_REQUIRED) assert.ok(table.leagues[sport]?.paid?.length, `${sport}: needs a paid line`);
+  for (const k of Object.keys(missing)) {
+    assert.ok(RADIO_SPORTS.has(k.split(":")[0] as never), `missing ${k}: league not in RADIO_SPORTS`);
+    assert.match(k, /^[a-z]+:\d+$/, k);
   }
   for (const k of Object.keys(table.teams)) {
     const sport = k.split(":")[0];
@@ -61,6 +79,19 @@ test("team rows list English first, and teams carry free rows only", () => {
     const firstOther = list.findIndex((s) => s.lang !== "en");
     if (firstOther >= 0) assert.ok(list.slice(firstOther).every((s) => s.lang !== "en"), `${k}: English after another language`);
     assert.ok(list.every((s) => s.access.cost === "free"), `${k}: paid row on a team`);
+  }
+});
+
+test("feed-only sports (series and event radio) match FEED_SPORTS both ways", () => {
+  const withFeeds = new Set([
+    ...Object.entries(table.leagues).filter(([, l]) => l.free?.length || l.paid?.length).map(([k]) => k),
+    ...Object.keys(table.events ?? {}).map((k) => k.split(":")[0]),
+  ].filter((sport) => !RADIO_SPORTS.has(sport as never)));
+  assert.deepEqual([...withFeeds].sort(), [...FEED_SPORTS].sort());
+  for (const k of Object.keys(table.events ?? {})) {
+    // Lowercase, matched as a substring of the event title or venue.
+    assert.match(k, /^[a-z0-9]+:[a-z0-9][a-z0-9 .'-]+$/, k);
+    assert.ok(table.events![k].length, `${k}: empty event list`);
   }
 });
 

@@ -12,7 +12,18 @@ public class HideScoreGoogleAuthPlugin: CAPPlugin, CAPBridgedPlugin {
     private var authSession: ASWebAuthenticationSession?
     private var pendingCall: CAPPluginCall?
 
+    /// Capacitor runs plugin methods on its "bridge" queue, not main. The
+    /// session and its presentation anchor (a UIView's window) are UIKit, and
+    /// pendingCall is also touched in the completion on main, so all of it runs
+    /// on main (#268, best guess).
     @objc func authorize(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { call.reject("authentication unavailable"); return }
+            self.startSession(call)
+        }
+    }
+
+    private func startSession(_ call: CAPPluginCall) {
         guard pendingCall == nil else { call.reject("another sign-in is already in progress"); return }
         guard let raw = call.getString("url"), let url = URL(string: raw),
               url.scheme == "https", ["hidescore.com", "www.hidescore.com"].contains(url.host?.lowercased() ?? ""),

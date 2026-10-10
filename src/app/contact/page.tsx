@@ -4,6 +4,12 @@ import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import EmailLink from "@/components/EmailLink";
 import FeedbackBox from "@/components/FeedbackBox";
+import {
+  REQUESTED_BUILDS,
+  REQUESTED_BUILDS_SHOWN,
+  requestedBuildDay,
+  type RequestedBuild,
+} from "@/lib/requestedBuilds";
 import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
 
 // Added 2026-09-25. The AI-visibility scan still flagged "No Contact page" after
@@ -36,6 +42,28 @@ export const metadata: Metadata = {
   },
 };
 
+// One row of "Built from your requests": day · kind · title · thanks.
+function RequestedBuildRow({ r }: { r: RequestedBuild }) {
+  return (
+    <li>
+      <time dateTime={r.date} style={{ color: "var(--text-muted)" }}>{requestedBuildDay(r.date)}</time>
+      {" · "}
+      <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+        {r.kind}
+      </span>
+      {" · "}
+      {r.title}
+      {r.by.length > 0 && (
+        <>
+          {" · "}
+          {/* nowrap keeps "thanks K.K." on one line at 390 px. */}
+          <span className="whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{`thanks ${r.by.join(", ")}`}</span>
+        </>
+      )}
+    </li>
+  );
+}
+
 export default function ContactPage() {
   const updated = routeLastModified("/contact");
   return (
@@ -57,9 +85,9 @@ export default function ContactPage() {
 
         <h2 className="text-lg font-semibold mt-6">Email</h2>
         <p>
-          <EmailLink />. A real
-          person reads every message.
+          <EmailLink pill />
         </p>
+        <p>A real person reads every message.</p>
 
         <h2 id="feedback" className="text-lg font-semibold mt-6 scroll-mt-4">Send feedback</h2>
         <p>
@@ -71,6 +99,33 @@ export default function ContactPage() {
         <div>
           <FeedbackBox label="Send feedback" />
         </div>
+
+        {/* Added 2026-10-09. What shipped because someone asked, so a note
+            sent from here visibly goes somewhere. Data: src/lib/requestedBuilds.ts,
+            rendered in its order (grouped by person, newest first in a group).
+            The overflow is a native <details>, so the page stays free of JS. */}
+        <h2 id="built" className="text-lg font-semibold mt-6">Built from your requests</h2>
+        <p>Every item below started as a note from someone using HideScore.</p>
+        <ul className="space-y-1.5" data-testid="requested-builds">
+          {REQUESTED_BUILDS.slice(0, REQUESTED_BUILDS_SHOWN).map((r) => (
+            <RequestedBuildRow key={`${r.date}|${r.title}`} r={r} />
+          ))}
+        </ul>
+        {REQUESTED_BUILDS.length > REQUESTED_BUILDS_SHOWN && (
+          <details>
+            <summary className="cursor-pointer underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+              Show all {REQUESTED_BUILDS.length}
+            </summary>
+            <ul className="space-y-1.5 mt-1.5" data-testid="requested-builds-more">
+              {REQUESTED_BUILDS.slice(REQUESTED_BUILDS_SHOWN).map((r) => (
+                <RequestedBuildRow key={`${r.date}|${r.title}`} r={r} />
+              ))}
+            </ul>
+          </details>
+        )}
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          Want your initials added or removed? Say so in a note.
+        </p>
 
         <h2 className="text-lg font-semibold mt-6">What to send</h2>
         <ul className="list-disc pl-5 space-y-1.5">
