@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { abortOwn } from "@/lib/abort";
 import { getTimeZone } from "@/lib/etDay";
 import { fetchSlam, type Slam, type SlamDraw, type SlamMatch, type SlamRound, type DrawKey } from "@/lib/slamBracket";
 
@@ -132,7 +133,7 @@ export default function SlamBracketModal({ onClose }: { onClose: () => void }) {
         if (!ctrl.signal.aborted) setFailed(true);
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, []);
 
   useEffect(() => {

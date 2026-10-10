@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { abortOwn } from "@/lib/abort";
 import {
   BEST_OF,
   broadcastFor,
@@ -747,7 +748,7 @@ export default function PlayoffPictureModal({
         if (!ctrl.signal.aborted) setFailed(true);
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, []);
 
   // MLB's postseason feed: the Picks tab's lock time and results, and the
@@ -767,7 +768,7 @@ export default function PlayoffPictureModal({
         if (!ctrl.signal.aborted) setPostFailed(true);
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, [season]);
 
   // Odds are a second feed from a second host; if it fails the picture still
@@ -782,7 +783,7 @@ export default function PlayoffPictureModal({
         /* columns stay "—" */
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, []);
 
   // Stored view preferences, derived at render once the fetch has landed — the

@@ -2,6 +2,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
+import { toReportableError } from "@/lib/sentryEvents";
 
 // Root-level error boundary. Unlike error.tsx (which only wraps page.tsx and
 // its children), global-error.tsx catches failures in the root layout itself —
@@ -27,7 +28,10 @@ export default function GlobalError({
     // as a searchable tag (falling back to "none" for client-only errors, which
     // carry no digest) so the two records line up in the Sentry UI.
     console.error(error);
-    Sentry.captureException(error, { tags: { nextjs_digest: error.digest ?? "none" } });
+    // React hands the boundary whatever was thrown, which need not be an Error
+    // (GitHub #57: Sentry titled such events "<unknown>"). Wrap it so the issue
+    // names what was thrown, and read digest defensively for the same reason.
+    Sentry.captureException(toReportableError(error), { tags: { nextjs_digest: error?.digest ?? "none" } });
   }, [error]);
 
   return (
