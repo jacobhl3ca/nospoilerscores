@@ -68,6 +68,9 @@ export interface PlayOpts {
   // The Headlines setting of the card this post came from (CardOverride).
   // Unset = the global Headlines toggle, as before.
   titlesShown?: boolean;
+  // The post's feed section ("ESPN Video", "r/nba"). Clip taps clear
+  // sourceLabel, so a reloaded modal reads this to find its card.
+  section?: string | null;
 }
 export type PlayHandler = (opts: PlayOpts) => void;
 
@@ -124,6 +127,7 @@ export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
     fallbackUrl: item.articleUrl,
     poster: item.imageUrl || null,
     sourceLabel: item.section || null,
+    section: item.section || null,
     headline: item.headline,
     byline: isReddit ? null : (item.byline || null),
     published: item.published || null,

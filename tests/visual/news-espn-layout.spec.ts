@@ -58,7 +58,8 @@ function itemsFor(name: string) {
     published: new Date(NOW - (i + 1) * 3_600_000).toISOString(),
     articleUrl: `https://example.com/${name}/${i}`,
     byline: "",
-    section: name.startsWith("reddit-") ? `r/${name.slice(7)}` : "ESPN",
+    // espn-videos items carry "ESPN Video", as the live feed does (10/10).
+    section: name.startsWith("reddit-") ? `r/${name.slice(7)}` : name === "espn-videos" ? "ESPN Video" : "ESPN",
     // Every *-videos item is a clip; in a subreddit every 2nd post is one
     // (post 2, 4, 6), like a v.redd.it clip in a mostly-text feed.
     ...(name.endsWith("-videos") || (name.startsWith("reddit-") && i % 2 === 1)
@@ -910,4 +911,30 @@ test("ESPN modal: global Headlines off + ESPN Videos card on = the clip's headli
   await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, newsCardPrefs: { "espn-videos": { revealTitles: true } } });
   await openVideosClip(page);
   await expect.poll(() => titleFilter(page)).toBe("none");
+});
+
+// A reload (or a pasted link) reopens the modal from the URL, which carries the
+// post but not the card. The URL now carries the post's section (?hn, or ?hl
+// when they match) and the modal finds the card from it (Jacob 10/10: the
+// headline showed after a reload).
+const urlSection = (page: Page) => { const q = new URL(page.url()).searchParams; return q.get("hn") ?? q.get("hl"); };
+test("ESPN modal after a reload: global Headlines on + ESPN Videos card off = the headline stays blurred", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, revealNewsTitles: true, newsCardPrefs: { "espn-videos": { revealTitles: false } } });
+  await openVideosClip(page);
+  await expect.poll(() => titleFilter(page)).toBe("blur(7px)");
+  await expect.poll(() => urlSection(page)).toBe("ESPN Video");
+  await page.reload();
+  await expect(footerTitle(page)).toHaveText("espn-videos post 1", LOAD);
+  await expect.poll(() => titleFilter(page)).toBe("blur(7px)");
+});
+
+test("ESPN modal after a reload: global Headlines on + r/nfl card off = the headline stays blurred", async ({ page }) => {
+  await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, revealNewsTitles: true, newsCardPrefs: { "reddit-nfl": { revealTitles: false } } });
+  await page.getByText("reddit-nfl post 2", { exact: true }).click(LOAD);
+  await expect(footerTitle(page)).toHaveText("reddit-nfl post 2", LOAD);
+  await expect.poll(() => titleFilter(page)).toBe("blur(7px)");
+  await expect.poll(() => urlSection(page)).toBe("r/nfl");
+  await page.reload();
+  await expect(footerTitle(page)).toHaveText("reddit-nfl post 2", LOAD);
+  await expect.poll(() => titleFilter(page)).toBe("blur(7px)");
 });
