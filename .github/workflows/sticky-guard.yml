@@ -1,34 +1,42 @@
 name: Sticky header guard
 
-# Holds ONE invariant: the sticky league title must never be pushed off its
-# natural position onto the game card below it.
+# Holds TWO invariants, one spec each:
 #
-# Why a whole workflow for one file: this bug ("the first game card has no top
-# outline") shipped and was reported four separate times, and was "fixed" three
-# times with padding tweaks, because the real cause is a measurement race, not
-# arithmetic — page content started at the header's REAL height while the
-# sticky rows pinned at the MEASURED --header-h, and position:sticky translates
-# an element DOWN to its pin offset whenever that offset lands below where the
-# element naturally sits. The fix is structural (fixed header +
-# .header-flow-spacer sized by the same --header-h), and it is only structural
-# for as long as those two numbers stay the same number. Nothing else in CI
-# runs Playwright, so without this the guard only fires if someone remembers to
-# run it.
+# 1. tests/visual/sticky-seam.spec.ts: the sticky league title is never pushed
+#    off its natural position onto the game card below it ("the first game card
+#    has no top outline", reported four times, "fixed" three times with padding
+#    tweaks). The cause is a measurement race: content started at the header's
+#    REAL height while sticky rows pinned at the MEASURED --header-h. The fix is
+#    structural (fixed header + .header-flow-spacer sized by the same
+#    --header-h), and it holds only while those two stay the same number.
+#
+# 2. tests/visual/sticky-seams.spec.ts: no pinned sticky row, in any view
+#    (Scores, News Cards, News ESPN, desktop + phone, toolbar shown + hidden),
+#    shows page content in a crack above it (sixth report, Jacob 10/9: Firefox
+#    at 80% opened a 1-device-px row under the Reddit bar). The fix is the
+#    default-on .sticky::before "seam lip" in globals.css; the spec probes every
+#    sticky row it finds, so a new row is held without editing the spec.
 #
 # Deliberately NOT part of deploy.yml: a regression here is cosmetic, so this
 # must never be able to block a deploy. It runs alongside and alerts.
 
-# 2026-09-14: dropped the push trigger to cut Actions minutes (free quota ran
-# out). Runs once per PR update instead of again on every push to main.
+# 2026-10-09: push to main is back (the repo is public, Actions minutes are
+# free), so direct pushes that skip a PR are checked too.
 on:
   pull_request:
     paths:
-      - 'src/components/HomeContent.tsx'
-      - 'src/components/LeagueColumn.tsx'
-      - 'src/components/NewsColumn.tsx'
-      - 'src/components/TeamView.tsx'
+      - 'src/components/**'
       - 'src/app/globals.css'
-      - 'tests/visual/sticky-seam.spec.ts'
+      - 'src/lib/useNewsToolbar.ts'
+      - 'tests/visual/sticky-*.spec.ts'
+      - 'playwright.config.ts'
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/**'
+      - 'src/app/globals.css'
+      - 'src/lib/useNewsToolbar.ts'
+      - 'tests/visual/sticky-*.spec.ts'
       - 'playwright.config.ts'
   workflow_dispatch:
 
@@ -39,7 +47,7 @@ concurrency:
 jobs:
   sticky-seam:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -57,11 +65,11 @@ jobs:
       - run: npx playwright install --with-deps chromium
 
       # playwright.config's webServer starts `npm run dev` on :3000 itself.
-      # --workers=1 because all seven specs drive the same sticky geometry and
-      # the shared dev server compiles routes lazily; serial is ~17s and has
-      # been stable, parallel occasionally races the first compile.
-      - name: Run the sticky-seam invariant suite
-        run: npx playwright test tests/visual/sticky-seam.spec.ts --workers=1 --reporter=line
+      # --workers=1 because both specs drive the same sticky geometry and the
+      # shared dev server compiles routes lazily; parallel races the first
+      # compile.
+      - name: Run the sticky invariant suites
+        run: npx playwright test tests/visual/sticky-seam.spec.ts tests/visual/sticky-seams.spec.ts --workers=1 --reporter=line
 
       - name: Upload trace on failure
         if: failure()
@@ -74,8 +82,8 @@ jobs:
 
       # No grace window here, unlike staleness-check.yml: that monitor watches
       # flapping external feeds, this one watches deterministic local geometry.
-      # A failure means someone just decoupled the header from --header-h, which
-      # never self-heals — so it pages on the first failure. Playwright's own
+      # A failure means a sticky row came off its pin or a seam lost its lip,
+      # which never self-heals — so it pages on the first failure. Playwright's own
       # CI retry (retries: 1 in playwright.config) absorbs genuine flakes first.
       - name: Alert on failure
         if: failure()
@@ -96,7 +104,7 @@ jobs:
             --form-string "token=$PUSHOVER_TOKEN" \
             --form-string "user=$PUSHOVER_USER" \
             --form-string "title=HideScore sticky header regression" \
-            --form-string "message=The league title can be pushed onto the first game card again (the 'no top outline' bug)." \
+            --form-string "message=A sticky row shows page content in a crack, or the league title is pushed onto the first card. Run: $run_url" \
             --form-string "priority=-2" \
             --form-string "url=$run_url" \
             --form-string "url_title=Open the failing run" \

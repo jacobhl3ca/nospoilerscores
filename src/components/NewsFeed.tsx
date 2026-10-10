@@ -425,7 +425,7 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
         // Pinned under the news toolbar (same top as the Cards league titles).
         // Zero-height wrapper, so the pill floats over the posts and the list
         // does not shift when it appears.
-        <div className="league-sticky-top sticky z-30 h-0 flex items-start justify-center">
+        <div className="league-sticky-top sticky sticky-nolip z-30 h-0 flex items-start justify-center">
           <button
             type="button"
             data-testid="feed-new-posts"

@@ -4632,7 +4632,9 @@ export default function HomeContent({
             const subFilters = new Set(shownCards.filter((c) => !c.isEspn).map((c) => postFilterOf(c.vOnly, c.text)));
             const barPosts: PostFilter | null = subFilters.size === 1 ? [...subFilters][0] : null;
             // --news-titlebar-h = the bar's height (h-11), so each sub's own
-            // header (.news-source-sticky-top) pins under the bar.
+            // header (.news-source-sticky-top) pins under the bar. Equal pin
+            // numbers can still crack apart at a fractional zoom; each row's
+            // seam lip (globals.css) fills it.
             const redditSection = (children: ReactNode) => (
               <section
                 aria-labelledby="news-espn-reddit-h"
