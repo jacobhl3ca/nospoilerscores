@@ -168,6 +168,9 @@ interface NewsColumnProps {
   // Any news-card click → open the shared media/text modal. Receives the full
   // payload so the modal can choose video, image, embed, or text mode.
   onPlayVideo?: PlayHandler;
+  // Gets the column's post list each time it changes, so a modal reopened by a
+  // page reload can take its ‹ › list from here (HomeContent.adoptSiblings).
+  onSiblingList?: (list: PlayOpts[]) => void;
   // Forwarded to this column's own title (non-strip layout only) so HomeContent
   // can measure --news-titlebar-h from it — see NewsColumnTitle.measureRef.
   titleMeasureRef?: (el: HTMLDivElement | null) => void;
@@ -1232,6 +1235,7 @@ export default function NewsColumn({
   hideTitle,
   widthClassName,
   onPlayVideo,
+  onSiblingList,
   titleMeasureRef,
   videosOnly,
   showTextPosts,
@@ -1360,6 +1364,9 @@ export default function NewsColumn({
     });
     return { siblings: sib, baseIndexBySource: base };
   }, [sources, itemsBySource, titlesBySource]);
+  useEffect(() => {
+    if (siblings.length) onSiblingList?.(siblings);
+  }, [siblings, onSiblingList]);
 
   return (
     <div className={`${widthCls} min-h-[60vh]`}>
