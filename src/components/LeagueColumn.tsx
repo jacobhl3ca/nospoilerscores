@@ -1610,7 +1610,9 @@ export default function LeagueColumn({
   // and ESPN's strip can carry nothing we render (golf only, early morning).
   const emptyLabel = isEventTileSport
     ? "No event"
-    : league.sport === "best"
+    : league.emptyLabel
+      ? league.emptyLabel
+      : league.sport === "best"
       ? "No highlights from yesterday yet"
       : league.sport === "top"
         ? (league.espnSnapshot ? "No games from ESPN's front page that day" : "No games on ESPN's front page right now")
