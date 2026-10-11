@@ -59,7 +59,9 @@ async function openNews(page: Page) {
 
 const row = (page: Page, text: RegExp) =>
   page.locator('button[aria-label="Play highlight"], button[aria-label="Open post"]', { hasText: text }).first();
-const dialog = (page: Page) => page.getByRole("dialog").filter({ has: page.locator(".news-title") }).first();
+// The post modal, by its headline: blurred under a clip, plain under a still
+// (only a clip's headline blurs, Jacob 10/10).
+const dialog = (page: Page) => page.getByRole("dialog").filter({ has: page.locator(".news-title, [data-modal-headline]") }).first();
 
 test("an ESPN Videos item with a baked mp4 plays in the modal's <video>", async ({ page }) => {
   await openNews(page);

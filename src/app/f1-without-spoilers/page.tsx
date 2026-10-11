@@ -154,7 +154,7 @@ export default function F1WithoutSpoilersPage() {
         "Add the F1 column from Settings and it stays on your board.",
       ]}
       ctaLabel="Open F1 without spoilers"
-      ctaHref="/today"
+      ctaHref="/yesterday?lg=f1"
       links={[
         { href: "/ufc-results-without-spoilers", label: "UFC results" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },

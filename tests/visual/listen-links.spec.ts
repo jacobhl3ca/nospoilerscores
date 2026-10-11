@@ -211,3 +211,73 @@ test("no TV listed: the chip reads Listen and opens the radio list", async ({ pa
   const dialog = column(page).getByRole("dialog", { name: "Where to watch" });
   await expect(dialog.locator("a.listen-link")).toHaveText(["WFAN 101.9 FM / 660 AM", "ESPN Radio"]);
 });
+
+// Phase 4: an event tile (a NASCAR race at Talladega) gets a Listen row in its
+// detail sheet from the per-track row ("nascar:talladega" → MRN). No chip on
+// the tile face. A finished race gets none.
+const RACE_TABLE = JSON.stringify({
+  teams: {},
+  national: {},
+  leagues: { nascar: { paid: [{ name: "SiriusXM NASCAR Radio", url: "https://www.siriusxm.com/sports/nascar", lang: "en", checked: "2026-10-09", access: { cost: "paid", geo: "none", signIn: true } }] } },
+  events: { "nascar:talladega": [free("MRN Radio", "https://tunein.com/radio/Motor-Racing-Network-s1/")] },
+});
+const raceEvent = (state: "pre" | "in" | "post") => JSON.stringify({
+  events: [{
+    id: "800101",
+    date: "2026-10-18T18:00Z",
+    name: "YellaWood 500",
+    shortName: "YellaWood 500",
+    links: [{ href: "https://www.espn.com/racing/race/_/id/800101" }],
+    status: { type: { state } },
+    competitions: [{
+      date: "2026-10-18T18:00Z",
+      status: { type: { state } },
+      venue: { fullName: "Talladega Superspeedway", address: { city: "Talladega", state: "AL" } },
+      broadcasts: [{ names: ["NBC"] }],
+    }],
+  }],
+});
+
+async function setupRace(page: Page, state: "pre" | "in" | "post") {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  // Race at 2 PM ET: before it at 10:30 AM, after it (finished) at 8:30 PM.
+  await page.clock.setFixedTime(new Date(state === "post" ? "2026-10-18T20:30:00-04:00" : "2026-10-18T10:30:00-04:00"));
+  await page.addInitScript((blob) => {
+    localStorage.setItem("nss-preferences", blob);
+    localStorage.removeItem("hs-radio-stations-v1");
+    sessionStorage.removeItem("hs-where-v1");
+  }, prefs.replace(/"mlb"/g, '"nascar"'));
+  await page.route("**/api/me", (route) => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: JSON.stringify({ signedIn: false, email: null, linkedProviders: [], providers: { apple: true, google: true, email: true } }),
+  }));
+  await page.route("**/news/highlights.json", (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"games":{}}' }));
+  await page.route("**/api/youtube?**", (route) => route.fulfill({ status: 404, contentType: "application/json", body: "{}" }));
+  await page.route("**/racing/nascar-premier/scoreboard**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: raceEvent(state) }));
+  await page.route("**/radio-stations.json", (route) => route.fulfill({ status: 200, contentType: "application/json", body: RACE_TABLE }));
+  await page.route("**/api/where", (route) => route.fulfill({
+    status: 200, contentType: "application/json", body: JSON.stringify({ country: "US", region: "NY", metro: 501 }),
+  }));
+}
+
+test("event tile: the race sheet shows a Listen row with the track's network", async ({ page }) => {
+  await setupRace(page, "pre");
+  await page.goto("/");
+  const title = page.locator('[data-fit-line="title"]').first();
+  await expect(title).toHaveText(/YellaWood/);
+  await title.click();
+  const row = page.locator(".listen-row");
+  await expect(row).toBeVisible();
+  await expect(row.getByRole("link", { name: "MRN Radio" })).toHaveAttribute("href", "https://tunein.com/radio/Motor-Racing-Network-s1/");
+  await expect(row).not.toContainText("SiriusXM");
+});
+
+test("event tile: a finished race sheet has no Listen row", async ({ page }) => {
+  await setupRace(page, "post");
+  await page.goto("/");
+  const title = page.locator('[data-fit-line="title"]').first();
+  await expect(title).toHaveText(/YellaWood/);
+  await title.click();
+  await expect(page.getByRole("dialog")).toContainText("Talladega");
+  await expect(page.locator(".listen-row")).toHaveCount(0);
+});

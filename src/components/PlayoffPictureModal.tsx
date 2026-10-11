@@ -1,8 +1,12 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { abortOwn } from "@/lib/abort";
 import {
   BEST_OF,
+  BRACKET_RESULTS_ALWAYS_KEY,
+  BRACKET_ROUND_SHOW_LABELS,
+  BRACKET_ROUNDS_REVEALED_KEY,
   broadcastFor,
   seriesDatesFor,
   buildBracket,
@@ -10,12 +14,17 @@ import {
   fetchPlayoffOdds,
   fetchPlayoffPicture,
   fieldIsSet,
+  loadResultsAlways,
+  loadSeenSeries,
+  nextCoveredRound,
   playBracket,
+  revealRound,
   roundLabel,
   settledTab,
   shadeFor,
   sortTeams,
   teamLogo,
+  visibleResults,
   withoutSettledOdds,
   worldSeriesOf,
   type BracketMatchup,
@@ -36,6 +45,7 @@ import {
 } from "@/lib/playoffPicture";
 import { fetchMlbPostseason, mlbPickBracket, mlbRoundHeading, type MlbPostseason } from "@/lib/mlbPicks";
 import BracketPicks from "@/components/BracketPicks";
+import { useHideRanks } from "@/components/HideRanksContext";
 import { getTimeZone } from "@/lib/etDay";
 
 // The MLB playoff picture, behind one reveal.
@@ -193,10 +203,12 @@ function TeamRow({ team, seed, odds, showGamesBack }: {
 }) {
   const status = statusFor(team, showGamesBack);
   const row = odds?.[team.abbrev] ?? null;
+  // Settings' "Show team ranks and seeds" off: the cell stays, empty.
+  const hideRanks = useHideRanks();
   return (
     <tr style={{ background: "var(--bg-card)" }}>
       <td className="text-[11px] w-11 text-center tabular-nums font-bold px-1 py-1" style={{ color: seed ? "var(--text)" : "var(--text-muted)", opacity: seed ? 1 : 0.5 }}>
-        {seed ?? "—"}
+        {hideRanks ? "" : seed ?? "—"}
       </td>
       {/* max-w-0 is what lets the name truncate instead of widening the column:
           it gives the cell a zero min-content so the flex child can shrink. */}
@@ -369,6 +381,7 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
   // Both seats of the card are empty: no logo gutter, label centred.
   compact?: boolean;
 }) {
+  const hideRanks = useHideRanks();
   const t = slot.team;
   if (!t) {
     if (compact) {
@@ -403,8 +416,9 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
         title={outcome === "won" ? `${t.name} won the series` : outcome === "lost" ? `${t.name} lost the series` : t.name}
       >
         {slot.seed ?? t.seed ? (
-          <span className="text-[9px] font-bold tabular-nums w-2 shrink-0" style={{ color: "var(--text-muted)" }}>
-            {slot.seed ?? t.seed}
+          // Hidden seeds keep the w-2 slot, so the logos still line up.
+          <span data-bracket-seed className="text-[9px] font-bold tabular-nums w-2 shrink-0" style={{ color: "var(--text-muted)" }}>
+            {hideRanks ? null : slot.seed ?? t.seed}
           </span>
         ) : null}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -490,10 +504,12 @@ function MatchupBox({ matchup, bracket, odds, chasers }: {
   );
 }
 
-// The round header is a fixed height in every column so the connector lines
-// between columns line up with the boxes rather than with the labels. 56px
-// since 2026-10-07: a fourth line carries the round's dates.
-const HEADER_H = "h-[56px]";
+// The round header has the same minimum height in every column so the boxes
+// line up across columns. 56px since 2026-10-07: a fourth line carries the
+// round's dates. A minimum, not a fixed height, since 2026-10-09: text that
+// renders taller (browser minimum font size, zoom) grows the header instead of
+// spilling onto the first box, and pb-1.5 keeps a gap above the boxes.
+const HEADER_H = "min-h-[56px] pb-1.5";
 
 function RoundColumn({ round, league, season, matchups, bracket, odds, chasers }: {
   round: BracketRound;
@@ -507,17 +523,17 @@ function RoundColumn({ round, league, season, matchups, bracket, odds, chasers }
   const channel = broadcastFor(season, round, league);
   const dates = seriesDatesFor(season, round, league);
   return (
-    <div className="flex flex-col shrink-0">
+    <div data-bracket-round={round} className="flex flex-col shrink-0">
       <div className={`${HEADER_H} text-center px-0.5 sm:px-1`}>
         <div className="text-[10px] font-bold uppercase tracking-wide leading-tight" style={{ color: "var(--text)" }}>
           {roundLabel(round, league)}
         </div>
         {dates ? (
-          <div data-bracket-dates className="text-[9px] leading-tight whitespace-nowrap" style={{ color: "var(--text)" }}>{dates}</div>
+          <div data-bracket-dates className="text-[9px] leading-tight whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{dates}</div>
         ) : null}
         <div className="text-[9px] leading-tight" style={{ color: "var(--text-muted)" }}>Best of {BEST_OF[round]}</div>
         {channel ? (
-          <div data-bracket-channel className="text-[9px] leading-tight" style={{ color: "var(--text-muted)", opacity: 0.85 }}>
+          <div data-bracket-channel className="text-[9px] font-medium leading-tight" style={{ color: "var(--text)" }}>
             {channel}
           </div>
         ) : null}
@@ -568,15 +584,15 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
   const outcome = (team: PlayoffTeam | null) => (winner == null || !team ? null : team.id === winner ? "won" as const : "lost" as const);
   const compact = !al && !nl;
   return (
-    <div className="flex flex-col shrink-0">
+    <div data-bracket-round="worldSeries" className="flex flex-col shrink-0">
       <div className={`${HEADER_H} text-center`}>
         <div className="text-[10px] font-bold uppercase tracking-wide leading-tight" style={{ color: "var(--text)" }}>World Series</div>
         {dates ? (
-          <div data-bracket-dates className="text-[9px] leading-tight whitespace-nowrap" style={{ color: "var(--text)" }}>{dates}</div>
+          <div data-bracket-dates className="text-[9px] leading-tight whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{dates}</div>
         ) : null}
         <div className="text-[9px] leading-tight" style={{ color: "var(--text-muted)" }}>Best of {BEST_OF.worldSeries}</div>
         {channel ? (
-          <div data-bracket-channel className="text-[9px] leading-tight" style={{ color: "var(--text-muted)", opacity: 0.85 }}>{channel}</div>
+          <div data-bracket-channel className="text-[9px] font-medium leading-tight" style={{ color: "var(--text)" }}>{channel}</div>
         ) : null}
       </div>
       <div className="flex-1 flex flex-col justify-center">
@@ -595,23 +611,28 @@ function WorldSeriesColumn({ season, al, nl, winner }: {
 }
 
 // Series winners come from MLB's postseason feed and move up the bracket as
-// each series ends. `coverResults` is for the search pages, which show the
-// panel with no cover: seeds are open there, but a series winner is a result,
-// so it waits behind one tap. The tap lasts for this visit only, so coming back
-// after the next series never shows its winner unasked. On the board the whole
-// panel is already behind its own cover, and results show once that is lifted.
+// each series ends. Each round's winners wait behind their own tap ("Show Wild
+// Card results", …), on the board and on the search pages alike. A tap stores
+// the series that were final in that round at the time (lib/playoffPicture,
+// revealRound), per season, so a reload keeps what was shown, and any series
+// that ends later gets a fresh cover, in the same round or the next: a tap never
+// reveals a result the reader did not see. The first cover also offers "Always show results", a device flag that
+// turns the covers off (Settings turns it back on). On the board these covers
+// sit inside the panel's own cover.
 const NO_RESULTS: BracketResult[] = [];
 
-function BracketView({ picture, odds, fieldSet, results, coverResults, onShowResults }: {
+function BracketView({ picture, odds, fieldSet, results, seen, always, onShowRound, onAlways }: {
   picture: PlayoffPicture;
   odds: PlayoffOdds | null;
   fieldSet: boolean;
   results: BracketResult[];
-  coverResults: boolean;
-  onShowResults: () => void;
+  seen: ReadonlySet<string>;
+  always: boolean;
+  onShowRound: (round: number) => void;
+  onAlways: () => void;
 }) {
-  const hideResults = coverResults && results.length > 0;
-  const played = hideResults ? NO_RESULTS : results;
+  const covered = nextCoveredRound(results, seen, always);
+  const played = useMemo(() => visibleResults(results, seen, always), [results, seen, always]);
   const al = picture.leagues.find((l) => l.key === "AL");
   const nl = picture.leagues.find((l) => l.key === "NL");
   const alB = useMemo(() => (al ? playBracket(buildBracket(al), played) : null), [al, played]);
@@ -620,17 +641,29 @@ function BracketView({ picture, odds, fieldSet, results, coverResults, onShowRes
   const ws = worldSeriesOf(alB, nlB, played);
   return (
     <div>
-      {hideResults ? (
-        <div className="flex justify-center mb-2">
+      {covered != null ? (
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
           <button
             type="button"
             data-bracket-results-toggle
-            onClick={onShowResults}
-            className="text-xs font-medium px-3 py-1.5 rounded-full cursor-pointer"
+            data-bracket-cover-round={covered}
+            onClick={() => onShowRound(covered)}
+            className="text-xs font-medium px-4 min-h-11 rounded-full cursor-pointer"
             style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
           >
-            Show series results (spoilers)
+            {BRACKET_ROUND_SHOW_LABELS[covered] ?? "Show series results"}
           </button>
+          {seen.size === 0 ? (
+            <button
+              type="button"
+              data-bracket-results-always
+              onClick={onAlways}
+              className="text-xs px-4 min-h-11 rounded-full cursor-pointer"
+              style={{ background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border)" }}
+            >
+              Always show results
+            </button>
+          ) : null}
         </div>
       ) : null}
       {/* One DOM for both widths: the halves sit side by side with the World
@@ -707,7 +740,7 @@ function PicksView({ picture, post, failed }: { picture: PlayoffPicture; post: M
 
 // `variant="page"` renders the same panel in the document flow instead of as a
 // dialog: no backdrop, no ✕, no Escape, no focus grab, and no cover over the
-// seeds and odds (series winners still wait behind one tap). It exists for the MLB
+// seeds and odds (series winners still wait behind one tap per round). It exists for the MLB
 // search landing pages (/mlb-playoff-bracket and friends), which put the panel
 // straight under their h1 so a visitor from search sees the bracket first and
 // never meets the board's first-run league picker. `initialTab` and
@@ -747,7 +780,7 @@ export default function PlayoffPictureModal({
         if (!ctrl.signal.aborted) setFailed(true);
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, []);
 
   // MLB's postseason feed: the Picks tab's lock time and results, and the
@@ -755,7 +788,8 @@ export default function PlayoffPictureModal({
   const season = picture?.season ?? null;
   const [post, setPost] = useState<MlbPostseason | null>(null);
   const [postFailed, setPostFailed] = useState(false);
-  const [resultsShown, setResultsShown] = useState(false);
+  const [seenOverride, setSeenOverride] = useState<Set<string> | null>(null);
+  const [alwaysOverride, setAlwaysOverride] = useState<boolean | null>(null);
   useEffect(() => {
     if (season == null) return;
     const ctrl = new AbortController();
@@ -767,7 +801,7 @@ export default function PlayoffPictureModal({
         if (!ctrl.signal.aborted) setPostFailed(true);
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, [season]);
 
   // Odds are a second feed from a second host; if it fails the picture still
@@ -782,7 +816,7 @@ export default function PlayoffPictureModal({
         /* columns stay "—" */
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, []);
 
   // Stored view preferences, derived at render once the fetch has landed — the
@@ -903,9 +937,30 @@ export default function PlayoffPictureModal({
   );
   // The search pages open uncovered (Jacob, 9/23): a visitor who searched for
   // the bracket asked to see it. Nothing is written to REVEAL_KEY, so the
-  // board's copy of this panel keeps its cover. Series winners keep a cover of
-  // their own on those pages; see BracketView.
+  // board's copy of this panel keeps its cover. Series winners keep covers of
+  // their own, one per round, on the pages and the board; see BracketView.
   const revealed = override || savedReveal || inline;
+
+  // Per-round result covers (see BracketView), derived the same way.
+  const savedSeen = useMemo(() => (picture ? loadSeenSeries(picture.season) : new Set<string>()), [picture]);
+  const savedAlways = useMemo(() => (picture ? loadResultsAlways() : false), [picture]);
+  const seenSeries = seenOverride ?? savedSeen;
+  const resultsAlways = alwaysOverride ?? savedAlways;
+
+  // Stores the series final in this round now, never the round number: a
+  // series that ends after the tap stays covered.
+  const showRound = (round: number) => {
+    const next = revealRound(post?.results ?? NO_RESULTS, seenSeries, round);
+    setSeenOverride(next);
+    if (picture) {
+      try { window.localStorage.setItem(BRACKET_ROUNDS_REVEALED_KEY(picture.season), JSON.stringify([...next])); } catch {}
+    }
+  };
+
+  const alwaysShowResults = () => {
+    setAlwaysOverride(true);
+    try { window.localStorage.setItem(BRACKET_RESULTS_ALWAYS_KEY, "1"); } catch {}
+  };
 
   const reveal = () => {
     setOverride(true);
@@ -1041,8 +1096,10 @@ export default function PlayoffPictureModal({
                     odds={odds}
                     fieldSet={fieldSet}
                     results={post?.results ?? NO_RESULTS}
-                    coverResults={inline && !resultsShown}
-                    onShowResults={() => setResultsShown(true)}
+                    seen={seenSeries}
+                    always={resultsAlways}
+                    onShowRound={showRound}
+                    onAlways={alwaysShowResults}
                   />
                 ) : (
                   <PicksView picture={picture} post={post} failed={postFailed} />

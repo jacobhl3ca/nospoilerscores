@@ -159,7 +159,7 @@ export default function UfcResultsWithoutSpoilersPage() {
         "Add the UFC column from Settings and it stays on your board.",
       ]}
       ctaLabel="Open UFC without spoilers"
-      ctaHref="/today"
+      ctaHref="/yesterday?lg=ufc"
       links={[
         { href: "/f1-without-spoilers", label: "F1" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },

@@ -17,10 +17,10 @@ import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/w
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
-import { revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/pairingMask";
-import { shortenPlayoffLabel } from "@/lib/playoffSubtitle";
+import { pairingRoundLabel, revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/pairingMask";
 import { shouldShowRating } from "@/lib/ratingGate";
 import { useWatchQueue } from "@/components/WatchQueueContext";
+import { useHideRanks } from "@/components/HideRanksContext";
 
 interface GameCardProps {
   game: Game;
@@ -244,7 +244,7 @@ export function CompactUpcomingCard({
   const networkNode = network ? (
     networkHref ? (
       <a
-        {...watchLinkProps(network, networkHref, gameRef(game))}
+        {...watchLinkProps(network, networkHref, gameRef(game), game.sport)}
         className="text-[11px] hover:underline whitespace-nowrap"
         style={{ color: "var(--text-muted)" }}
       >
@@ -364,8 +364,8 @@ export function PairingRevealAll({ games, className = "" }: { games: Game[]; cla
 }
 
 function PairingMaskCard({ game, nextGameDate, leagueTag, showRatings, onReveal }: { game: Game; nextGameDate?: string; leagueTag?: string; showRatings: boolean; onReveal: () => void }) {
-  // ESPN's raw headline ("NLDS - Game 1") in the column subtitle's form ("NLDS · Game 1").
-  const round = game.playoffLabel ? shortenPlayoffLabel(game.playoffLabel) : "Finals";
+  // "NLDS · Game 1" off ESPN's headline; a soccer round ("Round One") off its stage.
+  const round = pairingRoundLabel(game);
   let time = game.state === "in" ? "Live" : game.state === "post" ? "Final" : "";
   // A series slot with no start time yet sits at local midnight in the feed
   // ("TBD @ LAD", 10/3 04:00Z) — startTimeLabel reads ESPN's "TBD" for it.
@@ -438,6 +438,8 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
   // "Later" pill (Jacob 9/27): queue the game for the Watch queue strip above
   // the board. Null outside the board (no provider) or when Settings hides it.
   const watchQueue = useWatchQueue();
+  // Settings' "Show team ranks and seeds" off: no "#N" chip, any sport or state.
+  const hideRanks = useHideRanks();
   const showWatchLater = !!watchQueue && !hideWatchLater;
   const queued = showWatchLater && watchQueue.isQueued(game);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
@@ -1060,7 +1062,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                   return (
                     <a
                       key={key}
-                      {...watchLinkProps(name, href, gameRef(game))}
+                      {...watchLinkProps(name, href, gameRef(game), game.sport)}
                       className="hover:underline transition-colors whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
                     >
@@ -1163,7 +1165,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 return (
                   <a
                     key={b}
-                    {...watchLinkProps(b, href, gameRef(game))}
+                    {...watchLinkProps(b, href, gameRef(game), game.sport)}
                     className="hover:underline whitespace-normal break-words"
                     style={{ color: "var(--text-muted)" }}
                   >
@@ -1243,7 +1245,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                     (!effectivePastDate && !isFinished). A pre-game standing
                     isn't a spoiler, so it shows on upcoming cards. */}
               {(() => {
-                if (isTBD) return null;
+                if (isTBD || hideRanks) return null;
                 let rank: number | null = null;
                 let title = "";
                 if (game.sport === "fifa") {

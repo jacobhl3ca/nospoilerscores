@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode, type CSSProperties } from "react";
+import { abortOwn } from "@/lib/abort";
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
@@ -8,10 +9,11 @@ import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, NewsLayout, type NewsCardPrefs, type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
+import { mergeAddMorePicks } from "@/lib/addMorePicks";
 import { accountPrefsBase, carryCardPrefs, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
-import { filterLeague } from "@/lib/favoritesFilter";
+import { applyFavoritesFilter, favoritesEmptied, filterLeague } from "@/lib/favoritesFilter";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import { LeaguePickerModal } from "./LeaguePickerModal";
@@ -23,26 +25,22 @@ import BestSpanBar from "./BestSpanBar";
 import { fromYmd, etSlateYmd, nextYmd, getTimeZone } from "@/lib/etDay";
 import { WATCH_QUEUE_ENABLED, toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
 import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
+import { HideRanksContext } from "@/components/HideRanksContext";
 import GameCard from "@/components/GameCard";
 import { closeHiddenPins, closeUnseenAutoSlots, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
-import { fetchAllLeagues, fetchSlateGames, fetchTopGamesSpan, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { fetchAllLeagues, fetchSlateGames, fetchTopGamesSpan, fetchLastFinishedDay, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn, { mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
 import EventDetailModal from "@/components/EventDetailModal";
-import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
-import SlamBracketModal from "@/components/SlamBracketModal";
-import PlayoffPictureModal from "@/components/PlayoffPictureModal";
-import MlbSeasonReviewModal from "@/components/MlbSeasonReviewModal";
 import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, MLB_REVIEW_HIDDEN_KEY, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts, type CardOverride } from "@/components/NewsColumn";
-import SettingsPanel from "@/components/SettingsPanel";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
 import AutoplayBlockedPopover from "@/components/AutoplayBlockedPopover";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, newsCardKeyForSection, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
@@ -59,15 +57,38 @@ import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard"
 import NewsSpoilerConfirm from "@/components/NewsSpoilerConfirm";
 import { markNewsOkDay, newsNeedsConfirm, readNewsOkDay } from "@/lib/newsOkDay";
 import { fetchPlayoffPicture, fieldIsSet } from "@/lib/playoffPicture";
+import { fetchNflPicture } from "@/lib/nflPlayoffPicture";
+import { nflClinchSnapshot, type ClinchSnapshot } from "@/lib/eliminatedFold";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
 import { OFFLINE_BOARD_KEY, formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
 import SupportLine from "@/components/SupportLine";
+
+// The league key at the front of a share-card key (`mlb-bos-nyy-20260930`),
+// for the video-play Umami field. No card (TBD teams, the MLB review cuts) =
+// "unknown".
+function shareCardLeague(card?: ShareCardMeta | null): string {
+  return card?.key.split("-")[0] || "unknown";
+}
+
+// Rarely opened modals that are closed on first paint load on first open, so
+// their code is not in the board's first-load bundle. VideoModal and the
+// game/event detail sheets stay static: a card tap must open its sheet in the
+// same frame (focus and Escape go to it at once), and a video must start from
+// the tap's user gesture.
+const WorldCupGroupsModal = dynamic(() => import("@/components/WorldCupGroupsModal"));
+const SlamBracketModal = dynamic(() => import("@/components/SlamBracketModal"));
+const PlayoffPictureModal = dynamic(() => import("@/components/PlayoffPictureModal"));
+const MlbSeasonReviewModal = dynamic(() => import("@/components/MlbSeasonReviewModal"));
+// SettingsPanel stays mounted but renders null while closed, so the static
+// HTML is the same without SSR, and its code loads after the board hydrates.
+const SettingsPanel = dynamic(() => import("@/components/SettingsPanel"), { ssr: false });
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -568,6 +589,11 @@ function HeadlinesIcon({ on, size = 16 }: { on: boolean; size?: number }) {
 function MediaIcon({ on, size = 16 }: { on: boolean; size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-media-icon={on ? "on" : "off"}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" />{!on && <line x1="1" y1="1" x2="23" y2="23" data-slash="" />}</svg>;
 }
+// Show all / Hide all (Jacob 10/11): the Media frame with the Headlines eye
+// inside, since the chip sets both. Off = crossed out, like Media.
+function ShowAllIcon({ on, size = 16 }: { on: boolean; size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-showall-icon={on ? "on" : "off"}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M6.5 12s2-3.5 5.5-3.5 5.5 3.5 5.5 3.5-2 3.5-5.5 3.5S6.5 12 6.5 12z" /><circle cx="12" cy="12" r="1" />{!on && <line x1="1" y1="1" x2="23" y2="23" data-slash="" />}</svg>;
+}
 function VideosOnlyIcon({ size = 16 }: { size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>;
 }
@@ -700,10 +726,10 @@ const BIG_REDDIT_COLS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-col
 // A new key (10/9): the r4 note under the toolbar used v1 of the old one.
 const AUTOPLAY_BLOCKED_POPUP_KEY = "hs.autoplayBlockedPopup.v1";
 
-function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, children }: {
+function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, testId, children }: {
   active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean;
   // Icon only (the toolbar row is too narrow for labels): see useToolbarFit.
-  compact?: boolean; children: ReactNode;
+  compact?: boolean; testId?: string; children: ReactNode;
 }) {
   return (
     <button
@@ -719,6 +745,7 @@ function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, 
       // icon-button convention used elsewhere (e.g. SingleColToggle above).
       aria-label={ariaLabel}
       aria-pressed={active}
+      data-testid={testId}
       className={`news-chip inline-flex shrink-0 items-center gap-1.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${compact ? "news-chip-compact px-2.5" : "px-3.5"}`}
       style={{
         background: active ? "var(--accent)" : "var(--bg-card)",
@@ -748,6 +775,10 @@ const POPULAR_WORLD_CUP_TEAMS = [
 // short enough that a new user never notices the hold.
 const PICKER_AUTH_GRACE_MS = 1500;
 
+// How long a league-page hand-off (`?lg=`) waits for that league's last
+// finished day before the board opens on its default day instead.
+const LANDING_LOOKUP_MS = 3000;
+
 export default function HomeContent({
   initialOffset,
   initialDate,
@@ -769,6 +800,12 @@ export default function HomeContent({
   // day, so the error state says "offline" instead of "Failed to load".
   const [offline, setOffline] = useState<{ savedAt: number | null } | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
+  // `?lg=nfl` from a league page's "Open …" button (SeoLandingPage ctaHref).
+  // The board opens on that league's last finished day and the first-run
+  // picker starts with it chosen. Read in the date effect below, not during
+  // render: on a client-side Link the address bar is not updated until after
+  // the new page renders. Invalid keys are ignored.
+  const landingLeagueRef = useRef<Sport | null>(null);
 
   // Compute smart default date client-side only to avoid SSG hydration mismatch.
   // Reads the persisted defaultDateMode pref so "always today" / "always yesterday"
@@ -788,7 +825,25 @@ export default function HomeContent({
         return;
       }
       const stored = loadPreferences();
-      setSelectedDate(getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode, stored.smartCutoffHour)));
+      const fallback = getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode, stored.smartCutoffHour));
+      const lg = new URLSearchParams(window.location.search).get("lg");
+      const landingLeague = ALL_LEAGUES.some((l) => l.sport === lg && !l.hidden) ? (lg as Sport) : null;
+      landingLeagueRef.current = landingLeague;
+      if (!landingLeague) {
+        setSelectedDate(fallback);
+        return;
+      }
+      // League page hand-off: wait for the league's last finished day, capped so
+      // a slow ESPN answer only costs LANDING_LOOKUP_MS before the default day.
+      let settled = false;
+      const settle = (d: string | null) => {
+        if (settled) return;
+        settled = true;
+        setSelectedDate(d ?? fallback);
+      };
+      const timer = window.setTimeout(() => settle(null), LANDING_LOOKUP_MS);
+      fetchLastFinishedDay(landingLeague).then(settle, () => settle(null));
+      return () => { settled = true; window.clearTimeout(timer); };
     }
   }, [initialOffset, initialDate, worldCupHub, selectedDate]);
   // First-time notice for the Ratings tab. Was a blocking confirm dialog until
@@ -809,7 +864,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; seenKey?: string | null; titlesShown?: boolean | null; section?: string | null; restored?: boolean };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; league?: string | null; trackLeague?: string; seenKey?: string | null; titlesShown?: boolean | null; section?: string | null; restored?: boolean };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -858,7 +913,7 @@ export default function HomeContent({
   // The same, for the EVENT tiles (races, UFC bouts, boxing, chess, poker).
   // Separate state because an event tile is not a Game; `fight` is set only
   // when one bout of a UFC card was tapped rather than the card as a whole.
-  const [detailEvent, setDetailEvent] = useState<{ event: LeagueEventCard; fight?: FightBout; leagueLabel?: string } | null>(null);
+  const [detailEvent, setDetailEvent] = useState<{ event: LeagueEventCard; fight?: FightBout; leagueLabel?: string; sport?: Sport } | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
   // The tennis draw and the MLB playoff picture. Both open from the league
   // column's subtitle line and both gate their own contents behind a reveal —
@@ -1492,7 +1547,8 @@ export default function HomeContent({
     return abs ? abs.replace(/^https?:\/\/[^/]+/, "") : null;
   }, []);
 
-  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => {
+  // `league` is appended by LeagueColumn for analytics (VideoModal's trackLeague).
+  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[], league?: string) => {
     clearReopen();
     // See demoHighlightPoster's comment in demoMode.ts: a resolved videoId can
     // still be a real clip even off an anonymized card, because it's keyed by
@@ -1503,7 +1559,7 @@ export default function HomeContent({
       setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       return;
     }
-    setVideoModal({ videoId, fallbackUrl, shareCard, alternates });
+    setVideoModal({ videoId, fallbackUrl, shareCard, alternates, league, trackLeague: shareCardLeague(shareCard) });
     const href = modalShareHref({ videoId, fallbackUrl, shareCard });
     if (href) window.history.pushState({ videoModal: true }, "", href);
   }, [modalShareHref, clearReopen]);
@@ -1520,7 +1576,7 @@ export default function HomeContent({
       setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       return;
     }
-    setVideoModal({ videoId: "", fallbackUrl, embedUrl, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard });
+    setVideoModal({ videoId: "", fallbackUrl, embedUrl, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard, trackLeague: shareCardLeague(shareCard) });
     const href = modalShareHref({ embedUrl, fallbackUrl, playbackUrl: playbackUrl || null, sourceLabel, shareCard });
     window.history.pushState({ videoModal: true }, "", href ?? window.location.href);
   }, [modalShareHref, clearReopen]);
@@ -1548,7 +1604,9 @@ export default function HomeContent({
     titlesShown: opts.titlesShown ?? null,
     section: opts.section || null,
   }), []);
-  const playNewsVideo = useCallback<PlayHandler>((opts) => {
+  // `league` is only for the video-play / video-finished Umami fields: the
+  // column's league key, or "news" for a feed that mixes leagues.
+  const openNewsVideo = useCallback((opts: PlayOpts, league: string) => {
     clearReopen();
     // News posts embed real third-party photos/clips (Reddit, ESPN) that the
     // board-side anonymizer never touches — same substitution as the two
@@ -1558,7 +1616,7 @@ export default function HomeContent({
       setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       return;
     }
-    const m = optsToModal(opts);
+    const m = { ...optsToModal(opts), trackLeague: league };
     // Opening a news post marks it seen. The card-click tracker already did;
     // this covers openers outside a card. Idempotent.
     if (m.seenKey) markSeen(m.seenKey);
@@ -1570,6 +1628,21 @@ export default function HomeContent({
     const href = modalShareHref(m);
     if (href) window.history.pushState({ videoModal: true }, "", href);
   }, [optsToModal, modalShareHref, clearReopen]);
+  const playNewsVideo = useCallback<PlayHandler>((opts) => openNewsVideo(opts, "news"), [openNewsVideo]);
+  // One stable handler per league for the per-league news columns, so a column
+  // does not see a new onPlayVideo on every board render. Each one reads the
+  // current openNewsVideo through the ref.
+  const openNewsVideoRef = useRef(openNewsVideo);
+  useEffect(() => { openNewsVideoRef.current = openNewsVideo; }, [openNewsVideo]);
+  const newsPlayHandlers = useRef(new Map<string, PlayHandler>());
+  const newsPlayFor = useCallback((league: string): PlayHandler => {
+    let h = newsPlayHandlers.current.get(league);
+    if (!h) {
+      h = (opts) => openNewsVideoRef.current(opts, league);
+      newsPlayHandlers.current.set(league, h);
+    }
+    return h;
+  }, []);
   // Page to the previous/next post in the same news list without closing the
   // modal (dir = -1 / +1). No-op past either edge. replaceState (not push) keeps
   // the URL bar pointed at the post you're actually looking at, without spamming
@@ -1579,7 +1652,7 @@ export default function HomeContent({
       if (!m?.siblings || m.sibIndex == null) return m;
       const ni = m.sibIndex + dir;
       if (ni < 0 || ni >= m.siblings.length) return m;
-      const nm = optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni });
+      const nm = { ...optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni }), trackLeague: m.trackLeague };
       // Paging to a post opens it, so it counts as seen.
       if (nm.seenKey) markSeen(nm.seenKey);
       if (typeof window !== "undefined") {
@@ -2506,7 +2579,7 @@ export default function HomeContent({
   // way Settings' catalog judges it (against today), in the first-run
   // picker's popularity order. The sheet itself hides the offseason pills
   // until its toggle is on. Settings-style, a turned-off league is listed
-  // too, and picking it turns it back on (see pickAddMore).
+  // too, and picking it turns it back on (see addFromAddMore).
   const addMoreOptions = useMemo(
     () => [...settingsLeagueOptions].sort((a, b) => pickerRank(a.sport) - pickerRank(b.sport)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pickerRank reads only the literal PICKER_RANK
@@ -2518,6 +2591,20 @@ export default function HomeContent({
     () => upcomingRecordLeagues({ upcomingRecordLeagues: prefs.upcomingRecordLeagues, hideUpcomingRecords: prefs.hideUpcomingRecords }),
     [prefs.upcomingRecordLeagues, prefs.hideUpcomingRecords],
   );
+
+  // "Fold games with no playoff stakes": ESPN's NFL standings, read only while
+  // the setting is on. Fetched again on a date change once an hour old; a
+  // failed fetch leaves null, and nothing folds (lib/eliminatedFold.ts).
+  const [nflClinch, setNflClinch] = useState<ClinchSnapshot | null>(null);
+  const nflClinchAt = nflClinch?.at ?? 0;
+  useEffect(() => {
+    if (!prefs.foldEliminatedGames || Date.now() - nflClinchAt < 60 * 60 * 1000) return;
+    const ctrl = new AbortController();
+    fetchNflPicture(ctrl.signal)
+      .then((p) => { if (p) setNflClinch(nflClinchSnapshot(p, Date.now())); })
+      .catch(() => {});
+    return () => abortOwn(ctrl);
+  }, [prefs.foldEliminatedGames, selectedDate, nflClinchAt]);
 
   const teamLeagueOptions = useMemo(() => {
     const seen = new Set<Sport>();
@@ -2545,9 +2632,12 @@ export default function HomeContent({
         updatePrefs({ leaguesOnboarded: true });
         return;
       }
+      // Arrived from a league page: that league starts chosen.
+      const landing = landingLeagueRef.current;
+      if (landing && pickerOptions.some((o) => o.sport === landing)) setPickerSel([landing]);
       setShowLeaguePicker(true);
     }
-  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled, updatePrefs]);
+  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled, updatePrefs, pickerOptions]);
 
   // How many leagues the picker lets you take = how many columns this viewport
   // will actually render (3 phone / 5 wide). It said "up to 3" on a desktop that
@@ -2704,29 +2794,45 @@ export default function HomeContent({
     });
   };
 
-  // A tap in the Add more… sheet does what the dropdown row for that column
-  // does. Like pinning in Settings, picking a turned-off league turns it back
-  // on — otherwise the column would show the next league instead. News
-  // column 3 only keeps a pick that is in the news switcher, so a league from
-  // outside it (an opt-in or offseason one) is added to shownLeagues too.
-  const pickAddMore = (sport: Sport) => {
+  // The Add more… sheet's Add (Jacob 10/1: "multi select", "add btn"). The
+  // sheet splits the picks (planAddMorePicks). The column's pick (`now[0]`) does
+  // what the dropdown row for that column does; the other in-season picks
+  // join the column's league list, so its ‹ › arrows and dropdown reach them.
+  // The other offseason picks show nowhere until their season starts, so
+  // they are only saved (the sheet's note says so). No column opens. Like pinning in
+  // Settings, every pick comes back on if it was turned off — otherwise the
+  // column would show the next league instead. News column 3 only keeps a
+  // pick that is in the news switcher, so a first pick from outside it (an
+  // opt-in one) is added to shownLeagues too.
+  const addFromAddMore = (now: Sport[], later: Sport[]) => {
     const target = addMoreFor;
     setAddMoreFor(null);
-    if (!target) return;
-    const hidden = prefs.hiddenLeagues ?? [];
-    const struck = prefs.catalogHiddenLeagues ?? [];
-    const unhide: Partial<Preferences> = {
-      ...(hidden.includes(sport) ? { hiddenLeagues: hidden.length > 1 ? hidden.filter((s) => s !== sport) : undefined } : {}),
-      ...(struck.includes(sport) ? { catalogHiddenLeagues: struck.length > 1 ? struck.filter((s) => s !== sport) : undefined } : {}),
-      ...(prefs.removedLeagues?.includes(sport) ? { removedLeagues: dropRemoved(prefs.removedLeagues, sport) } : {}),
+    const picks = [...now, ...later];
+    const first = now[0];
+    if (!target || !picks.length) return;
+    const pinned = savedSlotPrefs();
+    // In the switcher once its hides are lifted (switcherOptions' own rule).
+    const listedWhenShown = (sport: Sport) =>
+      !!thirdLeagueOptions.find((o) => o.sport === sport)?.defaultInSwitcher
+      || pinned.includes(sport)
+      || prefs.favoriteLeagues.includes(sport);
+    const lists = {
+      hiddenLeagues: prefs.hiddenLeagues,
+      catalogHiddenLeagues: prefs.catalogHiddenLeagues,
+      removedLeagues: prefs.removedLeagues,
+      shownLeagues: prefs.shownLeagues,
     };
-    if (target.kind === "news" && target.slotIdx === 2) {
-      const shown = prefs.shownLeagues ?? [];
-      const inSwitcher = newsSwitcherOptions.some((o) => o.sport === sport) || shown.includes(sport);
-      setNewsThirdLeague(sport, target.autoId ?? "espn", inSwitcher ? unhide : { ...unhide, shownLeagues: [...shown, sport] });
+    if (!first) {
+      updatePrefs(mergeAddMorePicks(picks, lists, listedWhenShown));
       return;
     }
-    setSlotLeague(target.slotIdx, sport, unhide);
+    if (target.kind === "news" && target.slotIdx === 2) {
+      const patch = mergeAddMorePicks(picks, lists, (s) =>
+        s === first ? newsSwitcherOptions.some((o) => o.sport === s) : listedWhenShown(s));
+      setNewsThirdLeague(first, target.autoId ?? "espn", patch);
+      return;
+    }
+    setSlotLeague(target.slotIdx, first, mergeAddMorePicks(picks, lists, (s) => s === first || listedWhenShown(s)));
   };
   const leagueLabelFor = (sport: Sport) =>
     thirdLeagueOptions.find((o) => o.sport === sport)?.label
@@ -3372,6 +3478,18 @@ export default function HomeContent({
   // (sport, ymd) rule as recapTopCard, same slot → league queue as
   // slotEntries — so every LeagueRecapCard can reserve the row. Cheap:
   // getRecapsFor reads the session-cached /news/recaps.json.
+  // The recap pill reads the league as its column draws it under "Only my
+  // teams" (Jacob 10/9): the "Last played" date follows the filtered slate,
+  // and a column the filter left empty gets no recap.
+  const favStrict = prefs.favoritesOnlyStrict ?? NO_FAV_STRICT;
+  const recapView = (league: LeagueData) => {
+    const f = filterLeague(league, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict);
+    const shown = applyFavoritesFilter(league, f);
+    return {
+      lastPlayedDate: shown.games.length ? null : shown.previousGameDay?.date,
+      emptied: favoritesEmptied(league, f, selectedDate < getDateString(0)),
+    };
+  };
   const recapQueryKey = (() => {
     if (selectedDate > getDateString(0)) return "";
     const queue = [...sortedLeagues];
@@ -3380,7 +3498,9 @@ export default function HomeContent({
       if (selectedSlotLeagues[slotIdx] === "empty") continue;
       const league = queue.shift();
       if (!league) continue;
-      const ymd = (league.games.length ? null : league.previousGameDay?.date) || selectedDate;
+      const view = recapView(league);
+      if (view.emptied) continue;
+      const ymd = view.lastPlayedDate || selectedDate;
       pairs.push(`${league.sport}:${ymd}`);
     }
     return pairs.join(",");
@@ -3462,7 +3582,7 @@ export default function HomeContent({
     fetchPlayoffPicture(ctrl.signal)
       .then((p) => { if (!ctrl.signal.aborted) setMlbFieldSet(!!p && fieldIsSet(p)); })
       .catch(() => {});
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, [fieldCheckDue]);
   const hidePlayoffOdds = (mlbPostDay != null && mlbPostDay >= 0) || (fieldCheckDue && mlbFieldSet);
   const reviewPillShown = reviewPillDue && mlbColumnShown;
@@ -3493,13 +3613,15 @@ export default function HomeContent({
     ? recapSportsSync.size > 0
     : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown || bestBarShown;
 
-  // Cards view: what the toolbar's Media / Headlines / Posts show. The news
-  // board sets it while it renders below; the toolbar reads it in RenderLate.
+  // What the toolbar's Show all / Media / Headlines / Posts show: the state of
+  // the cards on screen (Cards view and the ESPN layout). The news board sets
+  // it while it renders below; the toolbar reads it in RenderLate.
   // Null = no cards on screen (Feed, or the board has not loaded).
   let newsBar: NewsBarState | null = null;
 
   return (
     <WatchQueueContext.Provider value={watchQueueApi}>
+    <HideRanksContext.Provider value={!!prefs.hideRanks}>
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Keyboard skip link (WCAG 2.4.1) — visually hidden until focused, then
           jumps a Tab user past the sticky header / date nav straight to the
@@ -3965,18 +4087,35 @@ export default function HomeContent({
                 </button>
               ))}
             </div>
-            {/* ESPN layout (r5): the toolbar keeps only the layout switch;
-                every option button sits in its card's header (newsCardOverrideFor).
-                Cards view: Media / Headlines / Posts show the state of the
-                cards on screen, which the board below works out (newsBar),
-                so they render late. Feed has no cards: the global prefs. */}
-            {newsLayout !== "espn" && (<RenderLate>{() => {
+            {/* The chips show the state of the cards on screen, which the
+                board below works out (newsBar), so they render late. Feed has
+                no cards: the global prefs.
+                ESPN layout (r5): the toolbar keeps the layout switch and Show
+                all; every other option button sits in its card's header
+                (newsCardOverrideFor). */}
+            <RenderLate>{() => {
               const bar: NewsBarState = newsBar ?? {
                 media: prefs.revealNewsMedia === true,
                 titles: !!prefs.revealNewsTitles,
                 posts: postFilterOf(prefs.newsVideosOnly, prefs.showTextPosts),
               };
+              const allShown = bar.media && bar.titles;
               return (<>
+            {/* Show all / Hide all (Jacob 10/11): Media + Headlines in every
+                card, one tap, every layout. On only when every card shows
+                both (one card off = Show all, so one tap fixes the lot). */}
+            <NewsToggleChip
+              compact={toolbarFit.compact}
+              active={allShown}
+              onClick={() => setGlobalNewsPref({ revealNewsMedia: !allShown, revealNewsTitles: !allShown }, ["revealMedia", "revealTitles"])}
+              title={allShown ? "Blur every card's media and headlines" : "Show every card's media and headlines"}
+              ariaLabel="Show or hide everything in every card"
+              testId="news-show-all"
+            >
+              <ShowAllIcon on={allShown} />
+              <span>{allShown ? "Hide all" : "Show all"}</span>
+            </NewsToggleChip>
+            {newsLayout !== "espn" && (<>
             {/* Autoplay first (Jacob 10/9 r6). It dims while Media is blurred:
                 blurred clips do not play, so an on-looking chip with nothing
                 playing would read as broken. It still toggles. */}
@@ -4023,8 +4162,9 @@ export default function HomeContent({
               value={bar.posts}
               onChange={(f) => setGlobalNewsPref(globalPostFilterPatch(f), ["videosOnly", "textPosts"])}
             />
+            </>)}
             </>);
-            }}</RenderLate>)}
+            }}</RenderLate>
           </div>
           </div>
         </div>
@@ -4830,8 +4970,10 @@ export default function HomeContent({
             // pref for EVERY card (ESPN Videos, Top Headlines, each sub). A chip
             // shows on only when every shown card is on (mixed = off, so one
             // tap turns all on); Posts shows no segment while the subs differ.
-            const { media: barMedia, titles: barTitles, posts: barPosts } = barStateFor(
+            // The toolbar's Show all chip reads the same state (newsBar).
+            newsBar = barStateFor(
               [ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)]);
+            const { media: barMedia, titles: barTitles, posts: barPosts } = newsBar;
             // --news-titlebar-h = the bar's height (h-11), so each sub's own
             // header (.news-source-sticky-top) pins under the bar. Equal pin
             // numbers can still crack apart at a fractional zoom; each row's
@@ -5125,7 +5267,7 @@ export default function HomeContent({
                       autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
                       autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                       hideTitle={stripActive}
-                      onPlayVideo={playNewsVideo}
+                      onPlayVideo={newsPlayFor(entry.sport ?? entry.id)}
                       onSiblingList={adoptSiblings}
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
@@ -5224,7 +5366,6 @@ export default function HomeContent({
             // "Only my teams" decides the Final split on the games the columns
             // will actually draw, or a column could show a "Final" header with
             // no cards under it.
-            const favStrict = prefs.favoritesOnlyStrict ?? NO_FAV_STRICT;
             const shownGames = (l: LeagueData) => filterLeague(l, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
             const hasNonFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state !== "post"));
             const hasFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state === "post"));
@@ -5246,7 +5387,7 @@ export default function HomeContent({
               onPlayHighlight: openVideoModal,
               onPlayEmbed: openEmbedModal,
               onShowDetails: (g: Game) => setDetailGame(g),
-              onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
+              onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string, sport?: Sport) => setDetailEvent({ event, fight, leagueLabel, sport }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
               onAddLeague: (sport: Sport, anchor: DOMRect) => setAddLeague({ sport, anchor }),
@@ -5255,6 +5396,7 @@ export default function HomeContent({
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
               upcomingRecordLeagues: recordLeagues,
+              foldClinch: prefs.foldEliminatedGames ? nflClinch : null,
               onAbbrevReport,
               namesCompact,
             };
@@ -5309,12 +5451,15 @@ export default function HomeContent({
             // the one day it must NOT appear — the live football Sunday — is
             // held out by the record's own skipDays, not by a rule here.
             // Tomorrow and later stay clear.
-            const recapTopCard = (league: LeagueData) => isPast || isToday
-              ? (
+            const recapTopCard = (league: LeagueData) => {
+              if (!isPast && !isToday) return undefined;
+              const view = recapView(league);
+              return (
                 <LeagueRecapCard
                   sport={league.sport}
                   date={selectedDate}
-                  lastPlayedDate={league.games.length ? null : league.previousGameDay?.date}
+                  lastPlayedDate={view.lastPlayedDate}
+                  noRecap={view.emptied}
                   reserveSlot={reserveRecapSlot}
                   onShowPlayoffs={bracketPillDue && league.sport === "mlb"
                     ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
@@ -5327,8 +5472,8 @@ export default function HomeContent({
                   reviewSections={reviewSections}
                   onPlayList={playNewsVideo}
                 />
-              )
-              : undefined;
+              );
+            };
             // The ESPN front page has no recap or pill of its own, so where the
             // board reserves the row its top card is only the spacer, and its
             // first league label takes that row (see LeagueColumn leadLabelSlot).
@@ -5988,7 +6133,7 @@ export default function HomeContent({
               className="inline-block transition-opacity hover:opacity-80"
               data-umami-event="install-appstore-badge"
             >
-              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+              <img src="/app-store-badge.svg" alt="Download on the App Store" width={120} height={40} className="block h-10 w-auto" />
             </a>
             {!(prefsHydrated && prefs.playBadgeDismissed) && (
               /* relative + an absolutely placed dismiss control, the same shape
@@ -6096,15 +6241,18 @@ export default function HomeContent({
         />
       )}
 
-      {/* A column switcher's Add more… (Jacob 9/29): the same sheet, one tap
-          switches the column. */}
+      {/* A column switcher's Add more… (Jacob 9/29): the same sheet. Tap
+          several pills, then one Add (Jacob 10/1). */}
       {addMoreFor && (
         <LeaguePickerModal
           title="More leagues"
           options={addMoreOptions}
-          mode="single"
+          mode="add"
           selected={addMoreFor.current ? [addMoreFor.current] : []}
-          onPick={pickAddMore}
+          onAdd={addFromAddMore}
+          // resolveSlot keeps NBA as the one offseason slot pin; news column
+          // 3 keeps any pick through shownLeagues.
+          columnTakes={(s) => (addMoreFor.kind === "news" && addMoreFor.slotIdx === 2) || s === "nba"}
           onClose={() => setAddMoreFor(null)}
           showOffseason={!!prefs.showOffseasonInPicker}
           onToggleOffseason={() => updatePrefs({ showOffseasonInPicker: prefs.showOffseasonInPicker ? undefined : true })}
@@ -6183,6 +6331,7 @@ export default function HomeContent({
           embedUrl={videoModal.embedUrl}
           poster={videoModal.poster}
           sourceLabel={videoModal.sourceLabel}
+          league={videoModal.league}
           headline={videoModal.headline}
           byline={videoModal.byline}
           published={videoModal.published}
@@ -6206,6 +6355,8 @@ export default function HomeContent({
           onPrev={videoModal.siblings && (videoModal.sibIndex ?? 0) > 0 ? () => stepVideo(-1) : undefined}
           onNext={videoModal.siblings && (videoModal.sibIndex ?? 0) < videoModal.siblings.length - 1 ? () => stepVideo(1) : undefined}
           alternates={videoModal.alternates}
+          trackLeague={videoModal.trackLeague}
+          trackPage={worldCupHub ? "worldcup" : isToday ? "today" : selectedDate === getDateString(-1) ? "yesterday" : "other"}
           extraLink={reviewLinkDue && mlbReview && videoModal.sourceLabel === "MLB.com"
             ? { label: `All ${mlbReview.season} cuts`, onClick: () => { closeVideoModal("explicit"); setReviewOpen(true); } }
             : null}
@@ -6237,6 +6388,7 @@ export default function HomeContent({
           event={detailEvent.event}
           fight={detailEvent.fight}
           leagueLabel={detailEvent.leagueLabel}
+          sport={detailEvent.sport}
           onClose={() => setDetailEvent(null)}
           reminderLinkTemplate={prefs.reminderLinkTemplate}
         />
@@ -6366,6 +6518,7 @@ export default function HomeContent({
         <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} />
       </div>
     </div>
+    </HideRanksContext.Provider>
     </WatchQueueContext.Provider>
   );
 }

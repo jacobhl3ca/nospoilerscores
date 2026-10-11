@@ -233,6 +233,7 @@ export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tail
             // whole component is already positional (colItems[colIdx], etc.), so
             // folding colIdx into the key restores unique, stable identity.
             key={`${source.label}-${colIdx}`}
+            data-testid="aligned-strip-column"
             // overflow-clip (not overflow-hidden) so the sticky SourceHeader
             // below pins to window scroll instead of being trapped inside this
             // card. See feedback_overflow_clip_for_sticky.md.

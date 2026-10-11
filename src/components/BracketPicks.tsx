@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { abortOwn } from "@/lib/abort";
+import { useHideRanks } from "@/components/HideRanksContext";
 import {
   applyPick,
   championOf,
@@ -141,6 +143,7 @@ function PickSeat({ team, label, picked, faded, status, disabled, onPick, round 
   onPick: () => void;
   round: string;
 }) {
+  const hideRanks = useHideRanks();
   if (!team) {
     return (
       <div data-pick-empty className="flex items-center gap-1.5 px-1.5 h-[30px]">
@@ -168,7 +171,7 @@ function PickSeat({ team, label, picked, faded, status, disabled, onPick, round 
       title={team.name}
     >
       {team.seed ? (
-        <span className="text-[9px] font-bold tabular-nums w-2 shrink-0" style={{ color: "var(--text-muted)" }}>{team.seed}</span>
+        <span data-pick-seed className="text-[9px] font-bold tabular-nums w-2 shrink-0" style={{ color: "var(--text-muted)" }}>{hideRanks ? null : team.seed}</span>
       ) : null}
       <TeamLogo team={team} size={18} />
       <span
@@ -387,7 +390,7 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
         if (!ctrl.signal.aborted) setBoard({ state: "error" });
       }
     })();
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, [id, boardTick, locked]);
 
   const save = useCallback((next: Saved) => {

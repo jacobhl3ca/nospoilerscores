@@ -106,7 +106,7 @@
    padding (0.5rem at the least, same var(--bg)), so rounding can never open
    that row. News view sets it to 0: there a source header can pin flush
    under the toolbar and the overlap would clip its top border. That is safe
-   since 10/9: every News row carries its own 2px overlap (SEAM LIP below). */
+   since 10/9: every News row carries its own 3px overlap (SEAM LIP below). */
 .sticky-seam-cover {
   --seam-overlap: 2px;
   position: fixed;
@@ -132,7 +132,7 @@
    pinned Reddit bar and the R/BASEBALL / R/NFL headers). Two rows that pin at
    the same CSS number still snap to different device pixels at a fractional
    zoom, and the seam cover only sits under the header + toolbar. So each
-   sticky row paints 2px of page bg just ABOVE itself, at its own z-index.
+   sticky row paints 3px of page bg just ABOVE itself, at its own z-index.
    Every row pins under a row with a higher z (header 40 > toolbar 36 > title
    row / Reddit bar 30 > source headers / TeamView dividers 20), so the upper
    row covers the lip and it shows only inside a crack; the lower row's own
@@ -140,14 +140,16 @@
    overflow-clip clips it. Default-on, so a new sticky row is covered too.
    Opt out with .sticky-nolip for a sticky that is not a pinned row (sideways
    table cells, zero-height wrappers), and for a row that turns static at a
-   breakpoint. Guarded by tests/visual/sticky-seams.spec.ts. */
+   breakpoint. Guarded by tests/visual/sticky-seams.spec.ts.
+   3px since 10/10 (was 2px): the guard now opens a 3px crack too, and 2px left
+   the top pixel row of it open at every News seam. */
 .sticky:not(.sticky-nolip)::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   bottom: 100%;
-  height: 2px;
+  height: 3px;
   background: var(--bg);
   pointer-events: none;
 }
@@ -865,7 +867,47 @@ iframe#yt-player {
    used, adding the inset on top of the same 2.5rem of breathing room. */
 .doc-page {
   padding-top: calc(env(safe-area-inset-top, 0px) + 2.5rem);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem);
+  /* + the floating controls' offset and height (DocFloatingControls,
+     2026-10-09), so they never cover the last line. */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem + var(--doc-float-gap) + var(--doc-float-size));
+  --doc-float-size: 2.75rem;
+  --doc-float-gap: 1rem;
+}
+
+/* Floating ✕ pill (bottom centre) and scroll arrow (bottom right) on the doc
+   pages, 2026-10-09. z-45 clears the pinned top bar (40) and the progress
+   line (41) and stays under the feedback modal (70). */
+.doc-float {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--doc-float-gap));
+  z-index: 45;
+  height: var(--doc-float-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-hover);
+  border-radius: 9999px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.doc-float:hover { border-color: var(--accent); }
+.doc-float-close {
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 1.5rem;
+}
+.doc-float-arrow {
+  right: calc(env(safe-area-inset-right, 0px) + 1rem);
+  width: var(--doc-float-size);
+  font-size: 0.875rem;
+}
+@media print {
+  .doc-float { display: none !important; }
 }
 
 /* Doc-page top bar (DocTopBar), pinned on scroll 2026-09-25.

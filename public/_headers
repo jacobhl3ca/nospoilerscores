@@ -1,0 +1,5 @@
+# Cloudflare Pages static headers. /_next/* bypasses the worker (_routes.json),
+# so these apply. Build files under /_next/static/ have content hashes in their
+# names, so a browser can keep them for a year without a revalidation request.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable

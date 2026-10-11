@@ -134,7 +134,7 @@ export default function NflHighlightsWithoutSpoilersPage() {
         "Watch links that point at a broadcaster, not a scoreboard.",
       ]}
       ctaLabel="Open the NFL without spoilers"
-      ctaHref="/yesterday"
+      ctaHref="/yesterday?lg=nfl"
       links={[
         { href: "/teams#nfl", label: "NFL teams" },
         { href: "/nfl-playoff-picture", label: "NFL playoff picture" },

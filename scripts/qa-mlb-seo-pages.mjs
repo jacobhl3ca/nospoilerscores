@@ -176,7 +176,7 @@ for (const p of PAGES) {
   const { ctx, page } = await openFresh("/mlb-playoff-bracket", { width: 1440, height: 1000 }, null, feed);
   const toggle = page.locator("[data-bracket-results-toggle]");
   await toggle.waitFor({ timeout: 15000 }).catch(() => {});
-  ok("a finished series puts a Show series results button up", (await toggle.count()) === 1, `AL 3/6 ids ${three}/${six}`);
+  ok("a finished wild-card series puts a Show Wild Card results button up", (await toggle.count()) === 1 && (await toggle.innerText()) === "Show Wild Card results", `AL 3/6 ids ${three}/${six}`);
   ok("its winner stays hidden until then", (await page.locator("[data-bracket-outcome], [data-bracket-advanced]").count()) === 0);
   await toggle.click();
   const won = await page.locator('[data-bracket-outcome="won"]').count();

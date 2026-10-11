@@ -13,6 +13,7 @@
 // say precisely whether a team is through, safe-with-a-draw, or must-win.
 
 import { etSlateYmd, nextYmd } from "./etDay";
+import { abortOwn } from "./abort";
 
 const STANDINGS_URL =
   "https://site.web.api.espn.com/apis/v2/sports/soccer/fifa.world/standings";
@@ -67,7 +68,7 @@ const num = (s: unknown): number =>
 
 async function fetchJson(url: string, timeoutMs = 7000): Promise<unknown | null> {
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), timeoutMs);
+  const t = setTimeout(() => abortOwn(controller), timeoutMs);
   try {
     const res = await fetch(url, { cache: "no-store", signal: controller.signal });
     if (!res.ok) return null;
