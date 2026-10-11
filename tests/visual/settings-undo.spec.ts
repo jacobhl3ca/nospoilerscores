@@ -46,6 +46,17 @@ async function openSettings(page: Page) {
   return dialog;
 }
 
+// The logos come from ESPN's CDN. Serve every off-site image a 1x1 PNG so the
+// checks read our markup, not the CDN's uptime (and run offline). A spec that
+// blocks one logo routes it after this, and the later route wins.
+const PIXEL = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+test.beforeEach(async ({ page }) => {
+  await page.route(/^https?:\/\/(?!localhost[:/])/, (route) =>
+    route.request().resourceType() === "image"
+      ? route.fulfill({ status: 200, contentType: "image/png", body: PIXEL })
+      : route.fallback());
+});
+
 const saved = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
 
 // MLB, NFL and WNBA are in season on 9/29; NBA is not.
@@ -118,6 +129,16 @@ test("Edit list × → Undo puts the league back in the list", async ({ page }) 
 });
 
 test("remove a favorite team → Undo → the team is back", async ({ page }) => {
+  // The chip's logo comes from ESPN's team list (fetchSportTeams). Serve the
+  // two teams, so the chip does not fall back to its letter tile offline.
+  const espnTeams: Record<string, { id: string; displayName: string; abbreviation: string }> = {
+    "baseball/mlb": { id: "10", displayName: "New York Yankees", abbreviation: "NYY" },
+    "football/nfl": { id: "2", displayName: "Buffalo Bills", abbreviation: "BUF" },
+  };
+  await page.route(/sports\.core\.api\.espn\.com\/v3\/sports\/(baseball\/mlb|football\/nfl)\/teams/, (route) => {
+    const key = Object.keys(espnTeams).find((k) => route.request().url().includes(`/${k}/teams`))!;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [espnTeams[key]] }) });
+  });
   await seedPrefs(page, { favoriteTeams: ["mlb-10", "nfl-2"] });
   const dialog = await openSettings(page);
   const teams = dialog.locator("section", { has: page.locator("h3", { hasText: "Favorite teams" }) });

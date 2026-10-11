@@ -57,7 +57,27 @@ const PLAY_GLYPH = 'svg path[d="M8 5v14l11-7z"]';
 // Video-variant cards render "Play highlight" buttons, which say so in the name.
 const CARD_HEADLINE = 'button[aria-label="Open post"]:has(.news-title)';
 
+// Every Reddit feed answers two text posts and one clip, so Videos only has
+// something to drop and something to keep without the live feeds (the
+// prebaked public/news/*.json files are gitignored and may be missing).
+async function mockMixedFeeds(page: Page) {
+  await page.route("**/news/*.json", (route) => {
+    const name = new URL(route.request().url()).pathname.split("/").pop()!.replace(/\.json$/, "");
+    if (name === "highlights") return route.fulfill({ status: 200, contentType: "application/json", body: '{"games":{}}' });
+    const at = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+    const base = { description: "", byline: "u/fixture", section: `r/${name}`, imageUrl: null };
+    const id = `${name.replace(/[^a-z0-9]/gi, "").slice(0, 8)}clp`.padEnd(11, "x").slice(0, 11);
+    const items = [
+      { ...base, id: `${name}-t1`, headline: `${name} text post one`, published: at(1), articleUrl: `https://www.reddit.com/r/${name}/comments/t1/`, body: "Text." },
+      { ...base, id: `${name}-y1`, headline: `${name} clip`, published: at(2), articleUrl: `https://www.youtube.com/watch?v=${id}`, youtubeVideoId: id },
+      { ...base, id: `${name}-t2`, headline: `${name} text post two`, published: at(3), articleUrl: `https://www.reddit.com/r/${name}/comments/t2/`, body: "Text." },
+    ];
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fetchedAt: at(0), items }) });
+  });
+}
+
 test("Cards: Videos only hides text posts even with Text posts on", async ({ page }) => {
+  await mockMixedFeeds(page);
   await gotoNews(page, { newsVideosOnly: true, showTextPosts: true });
 
   // The skeletons clear per source; wait for the first column to settle.
@@ -83,6 +103,7 @@ test("Cards: Videos only hides text posts even with Text posts on", async ({ pag
 });
 
 test("Feed: Videos only hides text posts, and says so when nothing is left", async ({ page }) => {
+  await mockMixedFeeds(page);
   await gotoNews(page, { newsVideosOnly: true, showTextPosts: true, newsFeedView: true });
 
   const status = page.getByRole("status").filter({ hasText: /Loading feed/ });

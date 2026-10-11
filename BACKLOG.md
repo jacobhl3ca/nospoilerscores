@@ -1,5 +1,18 @@
 # HideScore — Master Backlog
 
+## 2026-10-09 — "Built from your requests" on /contact#feedback + optional initials on the feedback form
+
+**Plan:** `~/.claude-secondary/plans/patreon-hidescore-stuff-next-stesp-vivid-wirth.md` (item B). Branch `feat/built-from-requests`.
+- `src/lib/requestedBuilds.ts`: what shipped because a user asked (8 rows mined from the Formspree mails and the hi@ inbox). Grouped by person: K.K. (4), I.R. (1), then rows with no initials; newest first inside each group. `by` = initials only.
+- `/contact`: H2 "Built from your requests" (`#built`) after "Send feedback"; 10 rows, the rest behind a native `<details>` "Show all N".
+- FeedbackBox: optional "Initials for the thanks list" field (max 6), sent to Formspree as `initials`. Typing it is the consent.
+- Tests: `tests/requested-builds.test.ts` (dates, order, kinds, initials `^([A-Z]\.){1,3}$`, no `@`), `tests/visual/built-from-requests.spec.ts` (Chromium + WebKit on the mini).
+
+**Open:**
+- [x] Initials ticked by Jacob 10/9: K.K. on widget, scroll columns, NCAA men's + women's hockey; I.R. on time zone; CFL, Rugby Nations Championship, La Liga etc. stay blank. "Email field on this form" row dropped.
+- [ ] New request shipped → add a row here. Initials only if the note carried them or the person agreed.
+- [ ] Dec 15 (Patreon on): the $3+ perk = initials on this list under a "Patrons" line.
+
 ## 2026-10-09 — Highlight gaps left after the 10/2–10/8 audit (no work now)
 
 **Plan:** `~/.claude-secondary/plans/frolicking-gliding-hellman.md` §3c. Fixed elsewhere: PR #285 (Pac-12, A&M `&`, SEC volleyball, college soccer, Top 14, UEL TUDN) and `fix/hl-query-fallbacks` (WNBA UTC date, URC "Cardiff", Nations one-letter typo).

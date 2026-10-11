@@ -65,6 +65,41 @@ function finishedScoreboard({
   });
 }
 
+// The player is the YouTube IFrame API, which builds the embed iframe itself.
+// Stub it (same shape as the modal specs) so a test that asserts the iframe
+// does not depend on the real www.youtube.com script loading.
+const FAKE_YT_API = `
+(function () {
+  function FakePlayer(el, config) {
+    var mount = typeof el === "string" ? document.getElementById(el) : el;
+    var iframe = document.createElement("iframe");
+    iframe.id = "yt-player";
+    iframe.src = "https://www.youtube.com/embed/" + config.videoId + "?fake=1";
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
+    mount.replaceWith(iframe);
+    this._iframe = iframe;
+    setTimeout(function () { config.events.onReady && config.events.onReady({ target: this }); }.bind(this), 0);
+  }
+  var noop = function () {};
+  FakePlayer.prototype = {
+    playVideo: noop, pauseVideo: noop, mute: noop, unMute: noop, setPlaybackQuality: noop,
+    getIframe: function () { return this._iframe; }, getPlayerState: function () { return -1; },
+    getDuration: function () { return 30; }, getCurrentTime: function () { return 0; },
+    getAvailableQualityLevels: function () { return []; },
+    getVideoData: function () { return { title: "Highlights" }; },
+    destroy: function () { this._iframe && this._iframe.remove(); },
+  };
+  window.YT = { Player: FakePlayer, PlayerState: { ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5, UNSTARTED: -1 } };
+  if (window.onYouTubeIframeAPIReady) window.onYouTubeIframeAPIReady();
+})();
+`;
+
+async function stubYouTubePlayer(page: Page) {
+  await page.route("https://www.youtube.com/iframe_api", (route) => route.fulfill({ status: 200, contentType: "application/javascript", body: FAKE_YT_API }));
+  await page.route("https://www.youtube.com/embed/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<body style='margin:0;background:#111'></body>" }));
+}
+
 test("WNBA compact expansion names resolve with official full-name query", async ({ page }) => {
   let officialLookup = "";
   await page.clock.setFixedTime(new Date("2026-08-05T16:00:00-04:00"));
@@ -98,6 +133,7 @@ test("NWSL uses CBS Sports W Golazo as its strict alternate", async ({ page }) =
   const requestedChannels = new Set<string>();
   await page.clock.setFixedTime(new Date("2026-08-06T16:00:00-04:00"));
   await setSingleLeague(page, "nwsl");
+  await stubYouTubePlayer(page);
   await page.route("**/soccer/usa.nwsl/scoreboard?**", route => route.fulfill({
     status: 200,
     contentType: "application/json",

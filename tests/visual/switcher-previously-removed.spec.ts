@@ -107,8 +107,10 @@ for (const width of [390, 1280]) {
       expect(groups.removed.map(label)).toEqual(rows);
       for (const name of rows) expect(groups.main.map(label)).not.toContain(name);
 
-      // 3. Tap the newest: the column switches to it, the saved list drops it.
+      // 3. Tap the newest and Add: the column switches to it, the saved list
+      //    drops it.
       await sheet.getByRole("button", { name: new RegExp(`^${rows[0]}`) }).click();
+      await sheet.getByTestId("league-picker-add").click();
       await expect(sheet).toHaveCount(0);
       const prefs = await saved(page);
       expect(prefs.thirdLeague).toBe(removedSaved[0]);
@@ -137,10 +139,12 @@ for (const width of [390, 1280]) {
       const xs = sheet.getByRole("button", { name: /^Hide .+ from this list$/ });
       expect(await xs.count()).toBeGreaterThan(1);
 
-      // A pill-body tap keeps the sheet open and the column as it was.
+      // A pill-body tap lights nothing and the column stays as it was.
       const other = ((await xs.nth(1).getAttribute("aria-label")) ?? "").replace(/^Hide | from this list$/g, "");
       await sheet.getByRole("button", { name: new RegExp(`^${other}`) }).first().click();
       await expect(sheet).toBeVisible();
+      await expect(sheet.getByRole("button", { name: new RegExp(`^${other}`) }).first()).toHaveAttribute("aria-pressed", "false");
+      await expect(sheet.getByTestId("league-picker-add")).toBeDisabled();
       expect((await saved(page)).thirdLeague).toBe("wnba");
 
       // × → the pill leaves at once, and the struck list has it.
@@ -167,6 +171,7 @@ for (const width of [390, 1280]) {
       expect(groups.main.map(label)).not.toContain("NHL");
 
       await sheet.getByRole("button", { name: /^NHL/ }).click();
+      await sheet.getByTestId("league-picker-add").click();
       await expect(sheet).toHaveCount(0);
       const prefs = await saved(page);
       expect(prefs.thirdLeague).toBe("nhl");

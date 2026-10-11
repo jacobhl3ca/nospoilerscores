@@ -160,10 +160,25 @@ test("toggle off renders the column exactly as without the prefs", async ({ brow
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
     await setup(page, extra);
+    // A card's "Listen" chip lands after the radio table and /api/where load
+    // (lib/useListenLinks). Read the card once both have answered and its
+    // text holds still, so both snapshots see the same state.
+    const radio = Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/radio-stations.json")),
+      page.waitForResponse((r) => new URL(r.url()).pathname === "/api/where"),
+    ]);
     await page.goto("/");
     await expect(yankees(page).first()).toBeVisible();
+    await radio;
     const cards = column(page).locator('[role="button"][aria-label*=" at "], button[aria-label*=" at "]');
-    const out = { count: await cards.count(), first: (await cards.first().innerText()).trim(), banner: await banner(page).count() };
+    let first = "";
+    await expect.poll(async () => {
+      const now = (await cards.first().innerText()).trim();
+      const stable = now === first;
+      first = now;
+      return stable;
+    }, { intervals: [300] }).toBe(true);
+    const out = { count: await cards.count(), first, banner: await banner(page).count() };
     await ctx.close();
     return out;
   };
@@ -171,4 +186,60 @@ test("toggle off renders the column exactly as without the prefs", async ({ brow
   const off = await snapshot({ favoriteTeams: ["mlb-21"], favoritesOnly: false, favoritesOnlyStrict: ["mlb"] });
   expect(off).toEqual(plain);
   expect(plain.count).toBeGreaterThanOrEqual(3);
+});
+
+// Jacob 10/9: on a past tab the recap pill read the raw league, so "Best of
+// the day" sat over a column that said "No games for your teams". The pill now
+// reads the filtered list: no starred team played = no recap pill.
+const FINISHED = JSON.stringify({
+  events: JSON.parse(SCOREBOARD).events
+    .filter((e: { id: string }) => e.id !== "401999102")
+    .map((e: Record<string, unknown>) => ({
+      ...e,
+      date: "2026-09-29T23:08:00Z",
+      status: { displayClock: "0:00", period: 9, type: { name: "STATUS_FINAL", state: "post", detail: "Final", shortDetail: "Final", completed: true } },
+    })),
+});
+const RECAPS = JSON.stringify({
+  fetchedAt: "2026-09-30T14:00:00Z",
+  recaps: {
+    mlb: [
+      { sport: "mlb", key: "fastcast", heading: "Best of the day", label: "Best of the day", cadence: "daily", coversDate: "20260929", playbackUrl: "https://example.invalid/fastcast.m3u8", pageUrl: "https://www.mlb.com/video/fastcast-x1", channel: "MLB.com", durationSec: 900, t: 1, sourcePolicy: "mlb.com" },
+    ],
+  },
+});
+
+async function setupYesterday(page: Page, extra: Record<string, unknown>) {
+  await setup(page, { defaultDateMode: "yesterday", ...extra });
+  await page.route("**/baseball/mlb/scoreboard?**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: FINISHED }));
+  await page.route("**/news/recaps.json", (route) => route.fulfill({ status: 200, contentType: "application/json", body: RECAPS }));
+  await page.route("**/api/youtube?**", (route) => route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"No results"}' }));
+}
+const recapPill = (page: Page) => page.locator('[data-league-recap="mlb"]');
+
+test("past tab: no starred team played = no recap pill over 'No games for your teams'", async ({ page }) => {
+  await setupYesterday(page, { favoriteTeams: ["mlb-21"], favoritesOnly: true });
+  await page.goto("/yesterday");
+  await expect(column(page).locator("[data-fav-only-empty]")).toBeVisible({ timeout: 15_000 });
+  await expect(column(page)).toContainText("No games for your teams");
+  await expect(yankees(page)).toHaveCount(0);
+  // Give a late pill (recaps.json resolves after the scores) time to mount.
+  await page.waitForTimeout(1_000);
+  await expect(recapPill(page)).toHaveCount(0);
+});
+
+test("past tab: a starred team that played keeps the recap pill", async ({ page }) => {
+  await setupYesterday(page, { favoriteTeams: ["mlb-10"], favoritesOnly: true });
+  await page.goto("/yesterday");
+  await expect(yankees(page).first()).toBeVisible({ timeout: 15_000 });
+  await expect(orioles(page)).toHaveCount(0);
+  await expect(recapPill(page)).toBeVisible({ timeout: 15_000 });
+  await expect(recapPill(page)).toContainText("Best of the day");
+});
+
+test("past tab: toggle off shows the recap pill even with no starred team playing", async ({ page }) => {
+  await setupYesterday(page, { favoriteTeams: ["mlb-21"] });
+  await page.goto("/yesterday");
+  await expect(yankees(page).first()).toBeVisible({ timeout: 15_000 });
+  await expect(recapPill(page)).toBeVisible({ timeout: 15_000 });
 });

@@ -469,6 +469,96 @@ export interface BracketResult { round: number; winner: string; loser: string }
 
 const ROUND_INDEX: Record<BracketRound, number> = { wildCard: 0, divisionSeries: 1, championship: 2, worldSeries: 3 };
 
+// ── Per-round result covers ──────────────────────────────────────────────────
+//
+// Each round's series winners sit behind their own tap (Jacob 10/9: one tap
+// for the whole postseason let every later winner show unasked). The device
+// stores the series the reader saw, per season: a tap adds the series that
+// were final in that round at the time of the tap, and nothing else. A result
+// that is not stored is dropped before playBracket, so its winner never moves
+// up and its loser never dims, even when its round was tapped before that
+// series ended (10/9 review: a stored round number showed those winners
+// unasked). "Always show results" turns the covers off on this device.
+
+export const BRACKET_ROUNDS_REVEALED_KEY = (season: number) => `mlb-bracket-rounds-revealed-${season}`;
+export const BRACKET_RESULTS_ALWAYS_KEY = "mlb-bracket-results-always";
+
+/** The tap that lifts a round's cover. Index = round. */
+export const BRACKET_ROUND_SHOW_LABELS = [
+  "Show Wild Card results",
+  "Show Division Series results",
+  "Show LCS results",
+  "Show World Series result",
+];
+
+/** A finished series' stored ID: round and both clubs, not the winner. */
+export function seriesKey(r: BracketResult): string {
+  const [a, b] = [r.winner, r.loser].sort();
+  return `${r.round}:${a}-${b}`;
+}
+
+/** The results a reader who saw the series in `seen` may see. */
+export function visibleResults(results: BracketResult[], seen: ReadonlySet<string>, always = false): BracketResult[] {
+  return always ? results : results.filter((r) => seen.has(seriesKey(r)));
+}
+
+/**
+ * The round whose cover shows next: the lowest round with a result the reader
+ * has not seen. Null when nothing is covered. A round the reader tapped while
+ * some of its series were in play gets its cover back when one of them ends.
+ */
+export function nextCoveredRound(results: BracketResult[], seen: ReadonlySet<string>, always = false): number | null {
+  if (always) return null;
+  let next: number | null = null;
+  for (const r of results) {
+    if (!seen.has(seriesKey(r)) && (next == null || r.round < next)) next = r.round;
+  }
+  return next;
+}
+
+/** The seen set after a tap on `round`: that round's results now final, added. */
+export function revealRound(results: BracketResult[], seen: ReadonlySet<string>, round: number): Set<string> {
+  const next = new Set(seen);
+  for (const r of results) if (r.round === round) next.add(seriesKey(r));
+  return next;
+}
+
+/**
+ * Parse a stored seen set. Only a JSON array of strings counts; anything else,
+ * including the old format (a bare round number, such as "0"), is an empty set,
+ * so every cover shows.
+ */
+export function parseSeenSeries(raw: string | null): Set<string> {
+  if (!raw) return new Set();
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (!Array.isArray(v)) return new Set();
+    return new Set(v.filter((x): x is string => typeof x === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Stored seen series for a season; empty when none. SSR-safe. */
+export function loadSeenSeries(season: number): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    return parseSeenSeries(window.localStorage.getItem(BRACKET_ROUNDS_REVEALED_KEY(season)));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Whether "Always show results" is on for this device. SSR-safe. */
+export function loadResultsAlways(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(BRACKET_RESULTS_ALWAYS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The finished series between these two clubs in this round. Matched on the
  * round AND both clubs, so a result can only ever move a club out of the one

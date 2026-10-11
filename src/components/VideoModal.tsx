@@ -10,8 +10,10 @@ import { buildKeyLegend } from "@/lib/modalKeyLegend";
 import ModalKeyHints from "@/components/ModalKeyHints";
 import { shareCardUrl, buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
+import { exitDocumentFullscreen, requestElementFullscreen } from "@/lib/mediaSafe";
 import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
 import { noteHighlightWatched } from "@/lib/rateApp";
+import { trackEvent } from "@/lib/track";
 
 interface VideoModalProps {
   videoId: string;
@@ -42,6 +44,10 @@ interface VideoModalProps {
   // default (e.g. "r/baseball" instead of "Reddit", "MLB Most Popular" instead
   // of "MLB.com"). Falls back to URL-host inference when null.
   sourceLabel?: string | null;
+  // Sport key ("nfl", "f1") for the video-play / video-out events. A game
+  // highlight's share card key already leads with it, so this is only needed
+  // for clips without one (F1 / UFC event tiles); see clipLeague.
+  league?: string | null;
   // Third footer link, e.g. the MLB season-review dialog behind an MLB.com cut.
   extraLink?: { label: string; onClick: () => void } | null;
   // Post metadata — surfaced in a card layout so the modal is a useful
@@ -99,6 +105,11 @@ interface VideoModalProps {
   // overlay so a FIFA-blocked FOX clip can jump straight to an embeddable stream
   // instead of only linking out to YouTube (Jacob 7/14).
   alternates?: { label: string; videoId: string }[];
+  // Umami fields for video-play / video-finished (2026-10-01): the league key
+  // ("mlb", "news" for a merged news feed) and the page the clip opened from
+  // ("today" / "yesterday" / "team" / "worldcup" / "other").
+  trackLeague?: string | null;
+  trackPage?: string | null;
 }
 
 // Minimal slice of the YouTube IFrame Player API this modal actually drives.
@@ -126,7 +137,7 @@ interface YTPlayer {
   // Optional because they aren't guaranteed present on every API revision.
   getAvailableQualityLevels?: () => string[];
   setPlaybackQuality?: (quality: string) => void;
-  getVideoData?: () => { title?: string } | undefined;
+  getVideoData?: () => { title?: string; author?: string } | undefined;
   // Caption modules for the CC toggle. loadModule presence is verified at the
   // call site (typeof check); setOption is called with optional chaining.
   loadModule: (module: string) => void;
@@ -201,6 +212,17 @@ function strictFallbackChannels(fallbackUrl: string): string[] {
       .filter(Boolean);
   } catch {
     return [];
+  }
+}
+
+// The channel a highlight was resolved from: the first `nss_channels` entry,
+// strict or not. Game highlights and F1 / golf tiles carry it; a bare watch
+// URL does not. Used only as the analytics `source` when no sourceLabel is set.
+function leadFallbackChannel(fallbackUrl: string): string {
+  try {
+    return (new URL(fallbackUrl).searchParams.get("nss_channels") || "").split("|")[0].trim();
+  } catch {
+    return "";
   }
 }
 
@@ -396,6 +418,13 @@ const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 // Seconds skipped per ←/→ arrow press, matching YouTube's own arrow keys.
 const SEEK_STEP = 5;
 
+// The landscape player (see landscapePhone): a phone on its side, i.e. a
+// landscape viewport too short for the modal's stacked layout. 500px clears
+// every phone's landscape height; a desktop window is rarely that short.
+const LANDSCAPE_PHONE_QUERY = "(orientation: landscape) and (max-height: 500px)";
+// Its control layer fades this long after the last touch.
+const CHROME_FADE_MS = 3000;
+
 // A blurred text block whose individual tap reveals (or re-blurs) just itself,
 // independent of the global Headlines toggle — for the modal's spoiler-bearing
 // headline and the Reddit selftext body. stopPropagation so a peek tap doesn't
@@ -482,7 +511,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, titlesShown = null, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, league, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, titlesShown = null, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates, trackLeague, trackPage }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   // The React-owned box the YouTube player lives INSIDE. React renders this and
   // nothing else touches it; the #yt-player node YT destroys is a plain DOM
@@ -531,7 +560,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const fsEl = document.fullscreenElement;
     const host = fsHostRef.current;
     if (!fsEl || !host || fsEl === host || !host.contains(fsEl)) return;
-    host.requestFullscreen?.().catch(() => {});
+    requestElementFullscreen(host);
   }, []);
   const goPrev = useCallback(() => { if (!onPrev) return; carryFullscreen(); onPrev(); }, [onPrev, carryFullscreen]);
   const goNext = useCallback(() => { if (!onNext) return; carryFullscreen(); onNext(); }, [onNext, carryFullscreen]);
@@ -713,6 +742,41 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [nativeFs, setNativeFs] = useState(false);
   const [fakeFs, setFakeFs] = useState(false);
 
+  // A phone held sideways (owner 10/9). A short landscape viewport turns a
+  // clip into the landscape player: the video fills the screen and the
+  // controls float over it in a thin layer that fades after 3s and comes
+  // back on a tap. It is a CSS layout on the SAME elements, never a second
+  // player, so turning back to portrait keeps the clip where it was. That
+  // also makes it the fakeFs treatment by default: iPhone Safari and the
+  // WKWebView have no element fullscreen to ask for.
+  const [landscapePhone, setLandscapePhone] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function" &&
+    window.matchMedia(LANDSCAPE_PHONE_QUERY).matches);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia(LANDSCAPE_PHONE_QUERY);
+    const sync = () => setLandscapePhone(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  const [chromeShown, setChromeShown] = useState(true);
+  const chromeShownRef = useRef(true);
+  const chromeTimerRef = useRef<number | null>(null);
+  const revealChrome = useCallback(() => {
+    chromeShownRef.current = true;
+    setChromeShown(true);
+    if (chromeTimerRef.current) window.clearTimeout(chromeTimerRef.current);
+    chromeTimerRef.current = window.setTimeout(() => {
+      // Never fade out from under a finger that is still scrubbing; the
+      // release re-arms the timer (endBarDrag).
+      if (draggingBarRef.current) return;
+      chromeShownRef.current = false;
+      setChromeShown(false);
+    }, CHROME_FADE_MS);
+  }, []);
+  useEffect(() => () => { if (chromeTimerRef.current) window.clearTimeout(chromeTimerRef.current); }, []);
+
   // The bottom-right key legend (ModalKeyHints). Closed until asked for — the
   // cluster's "Keys" button or "?" opens it (Jacob 9/23: it used to open by
   // itself until ✕'d once per browser, which read as "sometimes"). Plain state,
@@ -751,6 +815,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
   const ytMode = !hlsMode && !embedMode && !imageMode && !textMode;
+  // The landscape player is for clips we drive ourselves: YouTube and the
+  // direct-stream <video>. A Brightcove embed keeps its own player chrome.
+  const immersive = landscapePhone && (ytMode || hlsMode);
   // Other versions of this clip still worth offering on the embed-blocked overlay
   // (drop the one that just failed).
   const embedAlternates = (alternates ?? []).filter((a) => a.videoId && a.videoId !== currentId);
@@ -781,15 +848,51 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const postKey = [videoId, playbackUrl, embedUrl, imageUrl, fallbackUrl, headline]
     .map((v) => v || "")
     .join("\u0000");
+  // Arm the landscape fade each time the landscape player comes up, or a new
+  // post lands in it.
+  useEffect(() => { if (immersive) revealChrome(); }, [immersive, postKey, revealChrome]);
+  // Analytics labels shared by video-play, video-out and video-finished. A
+  // YouTube game highlight opens with no sourceLabel, which left `source`
+  // "unknown" on more than half of all plays (Oct 3–4); the channel it was
+  // resolved from rides on the fallback URL, and the player itself knows the
+  // uploader once it loads. The league is the share card's sport, else the
+  // tile's `league`, else the opener's trackLeague ("news" for a merged feed).
+  const clipLeague = (shareCard?.key.split("-")[0] || league || trackLeague || "unknown").slice(0, 20);
+  const trackSource = useCallback(
+    () => (sourceLabel || leadFallbackChannel(fallbackUrl) || playerRef.current?.getVideoData?.()?.author || "unknown").slice(0, 40),
+    [sourceLabel, fallbackUrl],
+  );
+  // video-play and video-finished send the same four fields, so a finished
+  // count divides cleanly by the play count per league, page or player. Read
+  // through refs so the callbacks below change only with postKey: the player
+  // effect lists them, and a changed callback there reruns that effect.
+  const clipFieldsRef = useRef<Record<string, string>>({});
+  const trackSourceRef = useRef(trackSource);
+  useEffect(() => {
+    trackSourceRef.current = trackSource;
+    clipFieldsRef.current = {
+      player: ytMode ? "youtube" : hlsMode ? "native" : "other",
+      league: clipLeague,
+      page: trackPage || "other",
+    };
+  }, [ytMode, hlsMode, trackSource, clipLeague, trackPage]);
+  const clipFields = useCallback(() => ({ ...clipFieldsRef.current, source: trackSourceRef.current() }), []);
   const trackedPlayRef = useRef<string | null>(null);
   const trackVideoPlay = useCallback(() => {
     if (!postKey || trackedPlayRef.current === postKey) return;
     trackedPlayRef.current = postKey;
-    window.umami?.track("video-play", {
-      player: ytMode ? "youtube" : hlsMode ? "native" : "other",
-      source: (sourceLabel || "unknown").slice(0, 40),
-    });
-  }, [postKey, ytMode, hlsMode, sourceLabel]);
+    trackEvent("video-play", clipFields());
+  }, [postKey, clipFields]);
+  // The "Watch on YouTube" hand-off. NFL and F1 refuse embeds, so every one of
+  // their highlights ends here and video-play never fires; without this event
+  // those leagues read as unwatched. Once per clip, like video-play. `via` =
+  // the blocked-clip card or the footer link.
+  const trackedOutRef = useRef<string | null>(null);
+  const trackVideoOut = useCallback((via: "card" | "footer") => {
+    if (!postKey || trackedOutRef.current === postKey) return;
+    trackedOutRef.current = postKey;
+    trackEvent("video-out", { source: trackSourceRef.current(), league: clipFieldsRef.current.league ?? "unknown", via });
+  }, [postKey]);
   // Same reuse trap as trackedPlayRef: postKey dedupes so paging past the
   // same clip twice (or a stray double ENDED event) only counts as "finished
   // watching a highlight" once per clip, which is all the in-app rating
@@ -799,7 +902,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (!postKey || trackedEndRef.current === postKey) return;
     trackedEndRef.current = postKey;
     noteHighlightWatched();
-  }, [postKey]);
+    trackEvent("video-finished", clipFields());
+  }, [postKey, clipFields]);
   // The progress poll below (near-end auto-pause) is set up once per ytMode
   // change, not per clip, so it closes over whichever markHighlightWatched
   // existed at that time. Route it through a ref that's always current so a
@@ -843,6 +947,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // YouTube. Reveals nothing — not the position, not the duration.
   const [playerState, setPlayerState] = useState<"playing" | "paused" | "none">("none");
   useEffect(() => { setPlayerState("none"); }, [postKey]);
+  // Landscape player: a play/pause shows the controls again. So does a tap
+  // that lands in the YouTube iframe (its own controls, where no tap reaches
+  // this document): it blurs the window, the one signal a parent gets.
+  useEffect(() => { if (immersive && playerState !== "none") revealChrome(); }, [immersive, playerState, revealChrome]);
+  useEffect(() => {
+    if (!immersive) return;
+    window.addEventListener("blur", revealChrome);
+    return () => window.removeEventListener("blur", revealChrome);
+  }, [immersive, revealChrome]);
 
   const clearAutoplayBlocked = useCallback(() => {
     autoplayBlockedRef.current = false;
@@ -965,6 +1078,45 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // skipped to, or 100% when the user opts into "Allow seeking to the end".
   const seekCap = allowEnd ? 1 : 0.9;
 
+  // Back-scrub jumped ~45s AHEAD (owner report 10/9). The IFrame API's
+  // getCurrentTime() is a cached copy of what the iframe last posted, and
+  // YouTube keeps posting the OLD position until a seek has finished
+  // buffering. So: tap the bar back from 0:60 to 0:09, tap ⟲5, and ⟲5 read
+  // 0:60, sent seekTo(55), and the clip leapt forward. Every relative step
+  // (⟲5/⟳5, ← →, j/l, double-tap) and the halfway guard read that stale
+  // value. Remember where our own last seek went, and trust it over the
+  // player until the player reports a time near it (or 4s pass).
+  const seekIntentRef = useRef<{ target: number; at: number } | null>(null);
+  useEffect(() => { seekIntentRef.current = null; }, [postKey, currentId]);
+  const noteSeek = useCallback((target: number) => {
+    seekIntentRef.current = { target, at: performance.now() };
+  }, []);
+  // Current position + duration of whichever player is up, or null before
+  // metadata. Direct streams (<video>) report the new position the moment
+  // currentTime is set, so only the YouTube read needs the intent.
+  const readPosition = useCallback((): { t: number; d: number } | null => {
+    const v = videoRef.current;
+    if (v && hlsMode) {
+      const dv = v.duration;
+      if (!dv || !isFinite(dv) || dv <= 0) return null;
+      return { t: v.currentTime, d: dv };
+    }
+    const p = playerRef.current;
+    const d = p?.getDuration?.() ?? 0;
+    if (!p || !d || d <= 0) return null;
+    const reported = p.getCurrentTime?.() ?? 0;
+    const s = seekIntentRef.current;
+    if (!s) return { t: reported, d };
+    const age = (performance.now() - s.at) / 1000;
+    // While it plays, the clip has moved on from the target since the seek.
+    const expected = Math.min(d, s.target + (p.getPlayerState?.() === 1 ? age : 0));
+    if (age > 4 || Math.abs(reported - expected) <= 1.5) {
+      seekIntentRef.current = null; // the player has caught up
+      return { t: reported, d };
+    }
+    return { t: expected, d };
+  }, [hlsMode]);
+
   // Run a seek, but if warnHalfway is on and the target lands in the second
   // half while we're still in the first, hold it behind a confirm overlay
   // instead. (Only gates a deliberate forward jump from the first half — it
@@ -974,16 +1126,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     // .m3u8, v.redd.it) has no playerRef at all, and reading 0 there would nag
     // on a jump the viewer is already past (Jacob 9/5, same YouTube-only
     // oversight seekBy carried until 8/9).
-    const v = videoRef.current;
-    const p = playerRef.current;
-    const d = v && hlsMode ? (isFinite(v.duration) ? v.duration : 0) : (p?.getDuration?.() ?? 0);
-    const cur = d > 0 ? ((v && hlsMode ? v.currentTime : p?.getCurrentTime?.() ?? 0) / d) : 0;
+    const pos = readPosition();
+    const cur = pos ? pos.t / pos.d : 0;
     if (warnHalfway && targetFrac > 0.5 && cur <= 0.5) {
       setPendingSeek({ run, pct: Math.round(targetFrac * 100) });
       return;
     }
     run();
-  }, [warnHalfway, hlsMode]);
+  }, [warnHalfway, readPosition]);
 
   // Jump to a fraction of the clip. Works off the YouTube player's reported
   // duration so no timeline is ever revealed.
@@ -1010,10 +1160,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const target = Math.min(pct / 100, seekCap);
     guardSeek(target, () => {
       p.seekTo(d * target, true);
+      noteSeek(d * target);
       p.playVideo?.();
       setProgress(target);
     });
-  }, [seekCap, guardSeek, hlsMode]);
+  }, [seekCap, guardSeek, hlsMode, noteSeek]);
 
   // Fraction (capped) for a given pointer x on the bar — shared by the seek and
   // the warn-guard so they agree on the target.
@@ -1029,16 +1180,42 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // allows the end) so the ending can't be skipped to. No thumbnail preview is
   // ever shown. The warn-halfway confirm is gated at pointer-DOWN (below), not
   // here, so an active drag isn't interrupted.
-  const seekFromClientX = useCallback((clientX: number) => {
+  // `final` is false for the moves of a drag: YouTube is asked not to fetch
+  // for each one (allowSeekAhead false, as its API notes advise for a drag),
+  // and the release sends the one real seek. A stream of seekAhead requests
+  // could land out of order, so the last one sent was not always the last
+  // one played. The direct-stream <video> takes the same bar in the
+  // landscape player.
+  const seekFromClientX = useCallback((clientX: number, final = true) => {
+    const frac = fracFromClientX(clientX);
+    const v = videoRef.current;
+    if (v && hlsMode) {
+      const dv = v.duration;
+      if (!dv || !isFinite(dv) || dv <= 0) return;
+      v.currentTime = dv * frac;
+      if (final) void v.play().catch(() => { /* autoplay prompt already covers this */ });
+      setProgress(frac);
+      return;
+    }
     const p = playerRef.current;
     if (!p?.getDuration || !p?.seekTo) return;
-    const frac = fracFromClientX(clientX);
     const d = p.getDuration();
     if (!d || d <= 0) return;
-    p.seekTo(d * frac, true);
-    p.playVideo?.();
+    p.seekTo(d * frac, final);
+    noteSeek(d * frac);
+    if (final) p.playVideo?.();
     setProgress(frac);
-  }, [fracFromClientX]);
+  }, [fracFromClientX, hlsMode, noteSeek]);
+  // Last pointer x of an active bar drag, committed on release.
+  const dragXRef = useRef<number | null>(null);
+  const endBarDrag = useCallback(() => {
+    if (!draggingBarRef.current) return;
+    draggingBarRef.current = false;
+    const x = dragXRef.current;
+    dragXRef.current = null;
+    if (x !== null) seekFromClientX(x, true);
+    revealChrome();
+  }, [seekFromClientX, revealChrome]);
 
   // Skip back/forward by SEEK_STEP seconds — drives the ←/→ arrow keys and the
   // on-screen ±5s buttons. Unlike a jump or a bar-drag, stepping ±5s isn't a
@@ -1063,15 +1240,18 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       return;
     }
     const p = playerRef.current;
-    if (!p?.getDuration || !p?.seekTo) return;
-    const d = p.getDuration();
-    if (!d || d <= 0) return;
-    const t = p.getCurrentTime?.() ?? 0;
+    if (!p?.seekTo) return;
+    // readPosition, not p.getCurrentTime(): right after a seek the player
+    // still reports where it was (see seekIntentRef).
+    const pos = readPosition();
+    if (!pos) return;
+    const { t, d } = pos;
     const target = delta >= 0 ? Math.min(t + delta, d) : Math.max(0, t + delta);
     p.seekTo(target, true);
+    noteSeek(target);
     p.playVideo?.();
     setProgress(Math.min(1, target / d));
-  }, [hlsMode]);
+  }, [hlsMode, readPosition, noteSeek]);
 
   // Toggle play/pause on the YouTube player — drives both the Space/k keys and a
   // click anywhere on the video (via the click-catcher overlay). We do it through
@@ -1103,8 +1283,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const id = window.setInterval(() => {
       if (draggingBarRef.current) return; // don't fight an active drag
       const p = playerRef.current;
-      const d = p?.getDuration?.() ?? 0;
-      const t = p?.getCurrentTime?.() ?? 0;
+      const pos = readPosition();
+      const d = pos?.d ?? 0;
+      const t = pos?.t ?? 0;
       if (d > 0) setProgress(Math.min(1, t / d));
       // Stop just short of the end so the player never reaches ENDED, which is
       // what triggers YouTube's full-screen suggested-video endscreen. Pausing
@@ -1123,7 +1304,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       }
     }, 350);
     return () => window.clearInterval(id);
-  }, [ytMode]);
+  }, [ytMode, readPosition]);
 
   // Persist the volume level so it carries across clips and sessions.
   useEffect(() => {
@@ -1178,26 +1359,22 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // have no spoiler title and want the browser's own native player chrome.
   const toggleFullscreen = useCallback(() => {
     if (hlsMode || embedMode) {
-      if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
-      const el = (hlsMode ? videoRef.current : iframeRef.current) as
-        (HTMLElement & { webkitEnterFullscreen?: () => void; webkitRequestFullscreen?: () => void }) | null;
+      if (document.fullscreenElement) { exitDocumentFullscreen(); return; }
+      const el = hlsMode ? videoRef.current : iframeRef.current;
       if (!el) return;
-      if (typeof el.requestFullscreen === "function") el.requestFullscreen().catch(() => {});
-      else if (typeof el.webkitEnterFullscreen === "function") el.webkitEnterFullscreen();
-      else if (typeof el.webkitRequestFullscreen === "function") el.webkitRequestFullscreen();
+      // Through requestElementFullscreen, never bare: iPhone's
+      // webkitEnterFullscreen() THROWS InvalidStateError on a <video> that has
+      // no metadata yet (GitHub #245). A failed request leaves the clip inline.
+      requestElementFullscreen(el);
       return;
     }
     if (fakeFs) { setFakeFs(false); return; }
-    if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
-    const host = fsHostRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
+    if (document.fullscreenElement) { exitDocumentFullscreen(); return; }
+    const host = fsHostRef.current;
     if (!host) return;
-    if (typeof host.requestFullscreen === "function") {
-      host.requestFullscreen().catch(() => setFakeFs(true));
-    } else if (typeof host.webkitRequestFullscreen === "function") {
-      host.webkitRequestFullscreen();
-    } else {
-      setFakeFs(true); // iOS Safari / WKWebView — no element fullscreen
-    }
+    // No element fullscreen (iOS Safari / WKWebView), a refusal, or a throw
+    // all land on the CSS-overlay fallback.
+    requestElementFullscreen(host, () => setFakeFs(true));
   }, [hlsMode, embedMode, fakeFs]);
 
   // ── Double-tap-to-seek on the video surface (mobile) ──────────────────
@@ -1229,6 +1406,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const now = Date.now();
     const prev = surfaceTapRef.current;
     if (prev.timer) window.clearTimeout(prev.timer);
+    // Landscape player: a tap while its controls are faded only brings them
+    // back. It must not also pause the clip under the viewer's thumb.
+    const revealOnly = immersive && !chromeShownRef.current;
+    if (immersive) revealChrome();
     // A second tap on the SAME zone within 300ms is a double-tap.
     if (now - prev.t < 300 && prev.side === side) {
       if (side === "l") { seekBy(-SEEK_STEP); flashSeek("l"); }
@@ -1240,12 +1421,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     } else {
       // Maybe a single tap — defer play/pause 300ms to see if a partner lands.
       const timer = window.setTimeout(() => {
-        togglePlay();
+        if (!revealOnly) togglePlay();
         surfaceTapRef.current = { ...surfaceTapRef.current, timer: null };
       }, 300);
       surfaceTapRef.current = { t: now, side, timer };
     }
-  }, [seekBy, togglePlay, toggleFullscreen, flashSeek]);
+  }, [seekBy, togglePlay, toggleFullscreen, flashSeek, immersive, revealChrome]);
 
   // Clear pending tap/flash timers on unmount.
   useEffect(() => () => {
@@ -2094,8 +2275,209 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const mediaMaxH = imageMode
     ? (hasPager ? "min(78vh, 100dvh - min(16.5rem, 34dvh))" : "min(82vh, 100dvh - min(12rem, 25dvh))")
     : (hasPager ? "min(78vh, 100dvh - min(15rem, 31dvh))" : "min(85vh, 100dvh - min(10rem, 21dvh))");
-  const mediaFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
+  // Warn-past-halfway prompt, drawn over whichever clip player is up (the
+  // direct stream showed none, so a held seek waited there unseen).
+  const pendingSeekPrompt = pendingSeek ? (
+    <div
+      className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 px-4 text-center"
+      style={{ background: "rgba(0,0,0,0.82)" }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <p className="text-white text-sm sm:text-base font-medium max-w-xs">
+        Skip to about {pendingSeek.pct}%? That&apos;s past halfway — you might catch up to late-game action.
+      </p>
+      <div className="flex items-center gap-2">
+        <button type="button"
+          onClick={(e) => { e.stopPropagation(); setPendingSeek(null); }}
+          className="px-3 py-1.5 rounded-md text-sm font-medium text-white/80 hover:text-white cursor-pointer"
+          style={{ border: "1px solid rgba(255,255,255,0.3)" }}
+        >
+          Cancel
+        </button>
+        <button type="button"
+          onClick={(e) => { e.stopPropagation(); const run = pendingSeek.run; setPendingSeek(null); run(); }}
+          className="px-3 py-1.5 rounded-md text-sm font-semibold text-white cursor-pointer"
+          style={{ background: "var(--accent)" }}
+        >
+          Skip anyway
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  // The seek bar, shared by the strip under the video and the landscape
+  // overlay (only one of them is ever on screen, so barRef stays single).
+  const seekBar = (
+    <div
+      ref={barRef}
+      role="slider"
+      aria-label={seekFill === "off" ? "Seek through the clip (position hidden to avoid spoilers)" : "Seek through the clip"}
+      aria-valuemin={0}
+      aria-valuemax={Math.round(seekCap * 100)}
+      aria-valuenow={Math.round(Math.min(progress, seekCap) * 100)}
+      // When the fill is hidden to avoid spoilers, the numeric
+      // position must not leak through aria-valuenow either — a
+      // screen reader would announce the exact percentage the
+      // sighted track deliberately withholds. aria-valuetext takes
+      // precedence over aria-valuenow, so it's spoken instead while
+      // valuenow stays present for spec-valid relative nudging.
+      aria-valuetext={seekFill === "off" ? "Position hidden to avoid spoilers" : undefined}
+      tabIndex={0}
+      title="Tap or drag to seek"
+      onKeyDown={(e) => {
+        // A focusable role="slider" must be keyboard-operable (WCAG
+        // 2.1.1). ←/↓ nudge back, →/↑ nudge forward by the same ±5s
+        // step the on-screen buttons use — a slow, deliberate scrub
+        // that's deliberately exempt from the spoiler cap/warn (see
+        // seekBy). stopPropagation so the modal's global arrow
+        // handler doesn't ALSO fire (it would step to the prev/next
+        // post, or double-seek, instead of just nudging the bar).
+        if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+          e.preventDefault(); e.stopPropagation(); seekBy(-SEEK_STEP);
+        } else if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+          e.preventDefault(); e.stopPropagation(); seekBy(SEEK_STEP);
+        }
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        const clientX = e.clientX;
+        const frac = fracFromClientX(clientX);
+        const pos = readPosition();
+        const cur = pos ? pos.t / pos.d : 0;
+        // Gate the press itself if it would land past halfway — don't
+        // start a drag, just hold the seek behind the confirm.
+        if (warnHalfway && frac > 0.5 && cur <= 0.5) {
+          setPendingSeek({ run: () => seekFromClientX(clientX), pct: Math.round(frac * 100) });
+          return;
+        }
+        draggingBarRef.current = true;
+        dragXRef.current = clientX;
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        seekFromClientX(clientX, false);
+        revealChrome();
+      }}
+      onPointerMove={(e) => {
+        if (!draggingBarRef.current) return;
+        dragXRef.current = e.clientX;
+        seekFromClientX(e.clientX, false);
+      }}
+      // Release (or a cancel) commits the last point of the drag as THE seek.
+      onPointerUp={(e) => { e.stopPropagation(); endBarDrag(); }}
+      onPointerCancel={endBarDrag}
+      className="w-full cursor-pointer"
+      // touch-action none: a sideways drag on a phone is a scrub, not a pan.
+      // The browser took it as a pan and sent pointercancel a few px in.
+      // The landscape overlay pads the hit band out to 44px.
+      style={{ paddingTop: immersive ? "19px" : "7px", paddingBottom: immersive ? "19px" : "7px", touchAction: "none" }}
+    >
+      {seekFill === "off" ? (
+        /* Blank track — no fill, so it never shows your position. */
+        <div className="h-1.5 w-full rounded-full" style={{ background: "rgba(255,255,255,0.22)" }} />
+      ) : (
+        <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.18)" }}>
+          <div className="h-full rounded-full" style={{ width: `${Math.min(progress, 1) * 100}%`, background: seekFill === "white" ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.34)" }} />
+        </div>
+      )}
+    </div>
+  );
+
+  // Landscape player: the largest 16:9 box inside the safe area, which is
+  // object-fit: contain for the frame (the <video> contains its own picture,
+  // YouTube letterboxes inside its iframe). No room is kept for a control
+  // strip: the controls float over the video.
+  const immersiveWidth = "min(calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right)), calc((100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 16 / 9))";
+  const mediaFrameWidth = immersive ? immersiveWidth : fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
   const ytFrameWidth = mediaFrameWidth;
+  // The fixed, full-screen wrapper both clip players use in fullscreen, and
+  // the landscape player uses always. Safe-area padding keeps the frame off
+  // the notch and the home bar.
+  const fsLike = fsActive || immersive;
+  const fsWrapperStyle: React.CSSProperties = {
+    position: "fixed", inset: 0, zIndex: 10000, background: "#000",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    ...(immersive ? {
+      overflow: "hidden", overscrollBehavior: "none",
+      paddingTop: "env(safe-area-inset-top)", paddingRight: "env(safe-area-inset-right)",
+      paddingBottom: "env(safe-area-inset-bottom)", paddingLeft: "env(safe-area-inset-left)",
+    } : {}),
+  };
+  const playing = playerState === "playing";
+  const showLandscapeBar = seekControl !== "jumps" && !(ytMode && youtubeNativeControls);
+  const showLandscapeJumps = seekControl !== "bar";
+  // The landscape player's control layer. Every control is 44px. The layer
+  // fades to nothing after CHROME_FADE_MS; while faded it takes no taps, so
+  // the tap that brings it back lands on the video (handleSurfaceTap).
+  const lsBtn = `w-11 h-11 flex items-center justify-center rounded-full text-white/90 cursor-pointer disabled:opacity-30 disabled:cursor-default ${chromeShown ? "pointer-events-auto" : "pointer-events-none"}`;
+  const lsBtnStyle = { background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.22)" } as const;
+  const landscapeChrome = immersive ? (
+    <div
+      data-testid="landscape-controls"
+      data-shown={chromeShown ? "true" : "false"}
+      className="pointer-events-none absolute inset-0 z-50 flex flex-col justify-between transition-opacity duration-300"
+      style={{
+        opacity: chromeShown ? 1 : 0,
+        paddingTop: "max(0.5rem, env(safe-area-inset-top))",
+        paddingRight: "max(0.75rem, env(safe-area-inset-right))",
+        paddingBottom: "max(0.25rem, env(safe-area-inset-bottom))",
+        paddingLeft: "max(0.75rem, env(safe-area-inset-left))",
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {hasPager && (
+            <>
+              <button type="button" onClick={(e) => { e.stopPropagation(); goPrev(); }} disabled={!onPrev}
+                aria-label="Previous post" title="Previous post (↑)" className={lsBtn} style={lsBtnStyle}>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); goNext(); }} disabled={!onNext}
+                aria-label="Next post" title="Next post (↓)" className={lsBtn} style={lsBtnStyle}>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {showLandscapeJumps && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); seekBy(-SEEK_STEP); revealChrome(); }}
+              aria-label="Back 5 seconds" title="Back 5 seconds (←)" className={lsBtn} style={lsBtnStyle}>
+              <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><text x="12" y="15.5" fontSize="9" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">5</text></svg>
+            </button>
+          )}
+          <button type="button" onClick={(e) => { e.stopPropagation(); togglePlay(); revealChrome(); }}
+            aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause (k)" : "Play (k)"} className={lsBtn} style={lsBtnStyle}>
+            {playing ? (
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+            ) : (
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 20,12 7,20" /></svg>
+            )}
+          </button>
+          {showLandscapeJumps && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); seekBy(SEEK_STEP); revealChrome(); }}
+              aria-label="Forward 5 seconds" title="Forward 5 seconds (→)" className={lsBtn} style={lsBtnStyle}>
+              <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><text x="12" y="15.5" fontSize="9" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">5</text></svg>
+            </button>
+          )}
+        </div>
+        <button type="button" onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
+          aria-label="Close" title="Close (Esc)" className={lsBtn} style={lsBtnStyle}>
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      {showLandscapeBar && (
+        // YouTube's own controls (the default) bring their own bar along the
+        // bottom of the frame, so ours steps aside for it.
+        <div
+          className={`rounded-full px-3 ${chromeShown ? "pointer-events-auto" : "pointer-events-none"}`}
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {seekBar}
+        </div>
+      )}
+    </div>
+  ) : null;
 
   // Before a YouTube clip has ever played, the ONLY thing that can start it is
   // a real click on YouTube's own play button inside the iframe (see
@@ -2460,7 +2842,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // wrapper itself, not a child) dismisses when not fullscreen; clicks
             // bubbling up from the player/controls still stop here so they keep
             // working. The video surface stops propagation in handleSurfaceTap.
-            onClick={(e) => { if (!fsActive && e.target === e.currentTarget) onClose("accidental"); else e.stopPropagation(); }}
+            onClick={(e) => { if (!fsLike && e.target === e.currentTarget) onClose("accidental"); else e.stopPropagation(); }}
             // Non-fullscreen: pin the wrapper to the exact video width and centre
             // it. Without an explicit width this is a shrink-to-fit flex item, and
             // Safari resolves its width to the full viewport (not the video's) —
@@ -2468,16 +2850,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // video and the controls sprayed edge-to-edge ("doesn't fit / x
             // misaligned", Jacob 7/17). Pinning it makes the ×, video, and control
             // strip one coherent, height-capped, centred column in every browser.
-            style={fsActive ? {
-              position: "fixed", inset: 0, zIndex: 10000, background: "#000",
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            } : { width: ytFrameWidth, marginLeft: "auto", marginRight: "auto" }}
+            // Landscape player: the same fixed wrapper as fullscreen, so the
+            // title mask and the end/pause covers ride along exactly as they do
+            // there, and the player inside never remounts.
+            style={fsLike ? fsWrapperStyle : { width: ytFrameWidth, marginLeft: "auto", marginRight: "auto" }}
           >
             {/* YouTube modal controls sit above the player, right-aligned, so they
-                don't cover the iframe or collide with YouTube's own overlay. */}
+                don't cover the iframe or collide with YouTube's own overlay.
+                The landscape player has its own layer (landscapeChrome). */}
             <div
               className="mb-2 flex items-center justify-end gap-1.5"
-              style={{ width: ytFrameWidth }}
+              style={{ width: ytFrameWidth, display: immersive ? "none" : undefined }}
               onClick={(e) => e.stopPropagation()}
             >
               <button type="button"
@@ -2512,7 +2895,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             <div
               onMouseMove={bumpCursor}
               className="group relative mx-auto w-full overflow-hidden bg-black"
-              style={fsActive
+              style={fsLike
                 ? { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: 0 }
                 : { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
@@ -2552,7 +2935,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   ))}
                   <button
                     type="button"
-                    onClick={() => openExternal(sourceShareUrl || fallbackUrl)}
+                    onClick={() => { trackVideoOut("card"); openExternal(sourceShareUrl || fallbackUrl); }}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors cursor-pointer"
                     style={embedAlternates.length
                       ? { color: "rgba(255,255,255,0.7)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }
@@ -2761,7 +3144,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   (great in mobile fullscreen). Stays pinned to the video corner
                   so you can bring the controls back. Nothing to toggle when
                   YouTube's native controls replace this chrome entirely. */}
-              {!youtubeNativeControls && (
+              {!youtubeNativeControls && !immersive && (
               <button type="button"
                 onClick={(e) => { e.stopPropagation(); setControlsHidden((v) => !v); }}
                 aria-label={controlsHidden ? "Show controls" : "Hide controls"}
@@ -2781,40 +3164,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   first. Holds the seek until confirmed so you don't drop into
                   late-game action by accident. z-30 (above masks + peek);
                   stopPropagation so taps here don't pause/close the modal. */}
-              {pendingSeek && (
-                <div
-                  className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 px-4 text-center"
-                  style={{ background: "rgba(0,0,0,0.82)" }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <p className="text-white text-sm sm:text-base font-medium max-w-xs">
-                    Skip to about {pendingSeek.pct}%? That&apos;s past halfway — you might catch up to late-game action.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button type="button"
-                      onClick={(e) => { e.stopPropagation(); setPendingSeek(null); }}
-                      className="px-3 py-1.5 rounded-md text-sm font-medium text-white/80 hover:text-white cursor-pointer"
-                      style={{ border: "1px solid rgba(255,255,255,0.3)" }}
-                    >
-                      Cancel
-                    </button>
-                    <button type="button"
-                      onClick={(e) => { e.stopPropagation(); const run = pendingSeek.run; setPendingSeek(null); run(); }}
-                      className="px-3 py-1.5 rounded-md text-sm font-semibold text-white cursor-pointer"
-                      style={{ background: "var(--accent)" }}
-                    >
-                      Skip anyway
-                    </button>
-                  </div>
-                </div>
-              )}
+              {pendingSeekPrompt}
             </div>
 
             {/* Control chrome (seek bar + strip) — collapsible via the corner
                 toggle so the video can take the whole frame. Hidden entirely
                 when YouTube's native controls are on (Settings says "instead
                 of the spoiler-safe one" — showing both stacks two seek UIs). */}
-            {!controlsHidden && !youtubeNativeControls && (<>
+            {landscapeChrome}
+            {!controlsHidden && !youtubeNativeControls && !immersive && (<>
             {/* Seek bar — drag/tap to scrub. Sits BELOW the video (never over
                 footage). Default is a BLANK track (no fill) so it never reveals
                 how far through you are; the fill can be turned on (grey/white)
@@ -2824,69 +3182,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 Hidden when the user picks jumps-only in Settings. */}
             {seekControl !== "jumps" && (
               <div className="mt-2" style={fsActive ? { width: fsMediaWidth } : { width: "100%", maxWidth: 820, marginLeft: "auto", marginRight: "auto" }}>
-                <div
-                  ref={barRef}
-                  role="slider"
-                  aria-label={seekFill === "off" ? "Seek through the clip (position hidden to avoid spoilers)" : "Seek through the clip"}
-                  aria-valuemin={0}
-                  aria-valuemax={Math.round(seekCap * 100)}
-                  aria-valuenow={Math.round(Math.min(progress, seekCap) * 100)}
-                  // When the fill is hidden to avoid spoilers, the numeric
-                  // position must not leak through aria-valuenow either — a
-                  // screen reader would announce the exact percentage the
-                  // sighted track deliberately withholds. aria-valuetext takes
-                  // precedence over aria-valuenow, so it's spoken instead while
-                  // valuenow stays present for spec-valid relative nudging.
-                  aria-valuetext={seekFill === "off" ? "Position hidden to avoid spoilers" : undefined}
-                  tabIndex={0}
-                  title="Tap or drag to seek"
-                  onKeyDown={(e) => {
-                    // A focusable role="slider" must be keyboard-operable (WCAG
-                    // 2.1.1). ←/↓ nudge back, →/↑ nudge forward by the same ±5s
-                    // step the on-screen buttons use — a slow, deliberate scrub
-                    // that's deliberately exempt from the spoiler cap/warn (see
-                    // seekBy). stopPropagation so the modal's global arrow
-                    // handler doesn't ALSO fire (it would step to the prev/next
-                    // post, or double-seek, instead of just nudging the bar).
-                    if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
-                      e.preventDefault(); e.stopPropagation(); seekBy(-SEEK_STEP);
-                    } else if (e.key === "ArrowRight" || e.key === "ArrowUp") {
-                      e.preventDefault(); e.stopPropagation(); seekBy(SEEK_STEP);
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    const clientX = e.clientX;
-                    const frac = fracFromClientX(clientX);
-                    const p = playerRef.current;
-                    const d = p?.getDuration?.() ?? 0;
-                    const cur = d > 0 ? (p?.getCurrentTime?.() ?? 0) / d : 0;
-                    // Gate the press itself if it would land past halfway — don't
-                    // start a drag, just hold the seek behind the confirm.
-                    if (warnHalfway && frac > 0.5 && cur <= 0.5) {
-                      setPendingSeek({ run: () => seekFromClientX(clientX), pct: Math.round(frac * 100) });
-                      return;
-                    }
-                    draggingBarRef.current = true;
-                    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-                    seekFromClientX(clientX);
-                  }}
-                  onPointerMove={(e) => { if (draggingBarRef.current) seekFromClientX(e.clientX); }}
-                  onPointerUp={(e) => { e.stopPropagation(); draggingBarRef.current = false; }}
-                  onPointerCancel={() => { draggingBarRef.current = false; }}
-                  className="w-full cursor-pointer"
-                  style={{ paddingTop: "7px", paddingBottom: "7px" }}
-                >
-                  {seekFill === "off" ? (
-                    /* Blank track — no fill, so it never shows your position. */
-                    <div className="h-1.5 w-full rounded-full" style={{ background: "rgba(255,255,255,0.22)" }} />
-                  ) : (
-                    <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.18)" }}>
-                      <div className="h-full rounded-full" style={{ width: `${Math.min(progress, 1) * 100}%`, background: seekFill === "white" ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.34)" }} />
-                    </div>
-                  )}
-                </div>
+                {seekBar}
               </div>
             )}
 
@@ -3056,17 +3352,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // sitting in the middle of it.
           <div
             onClick={(e) => e.stopPropagation()}
-            style={fsActive ? {
-              position: "fixed", inset: 0, zIndex: 10000, background: "#000",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            } : undefined}
+            style={fsLike ? fsWrapperStyle : undefined}
           >
-          <div ref={containerRef} className="group relative mx-auto w-full rounded-lg overflow-hidden bg-black" style={{ width: mediaFrameWidth, aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
+          <div ref={containerRef} className={`group relative mx-auto w-full overflow-hidden bg-black ${immersive ? "" : "rounded-lg"}`} style={{ width: mediaFrameWidth, aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
             {hlsMode ? (
               <video
                 ref={videoRef}
-                className="absolute inset-0 w-full h-full"
-                controls
+                className="absolute inset-0 w-full h-full object-contain"
+                // The landscape player swaps the browser's controls for its own
+                // layer (landscapeChrome) and a tap surface (below).
+                controls={!immersive}
                 autoPlay
                 muted
                 playsInline
@@ -3128,7 +3423,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 allowFullScreen
               />
             )}
+            {/* Landscape player: taps on the picture reveal the controls,
+                play/pause and double-tap seek, the same surface YouTube uses. */}
+            {hlsMode && immersive && (
+              <div aria-hidden className="absolute inset-0 z-10 touch-manipulation" onClick={handleSurfaceTap} />
+            )}
             {hlsMode && autoplayPrompt}
+            {hlsMode && pendingSeekPrompt}
             {/* Direct-stream load failure — a pulled/geo-blocked clip (common on
                 r/soccer, whose goal clips rotate through fragile external hosts
                 and get taken down fast) 403/404s its segments while the manifest
@@ -3155,6 +3456,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               </div>
             )}
           </div>
+          {hlsMode && landscapeChrome}
           </div>
         )}
         {/* Footer — headline + source/copy actions. The pre-7/13 look Jacob
@@ -3190,7 +3492,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               // openExternal) instead of opening the in-app browser. The helper
               // still stopPropagation()s — so the click doesn't dismiss the
               // modal — and leaves modifier/middle-clicks to the browser.
-              onClick={handleExternalClick(sourceShareUrl)}
+              onClick={(e) => { if (ytMode) trackVideoOut("footer"); handleExternalClick(sourceShareUrl)(e); }}
               className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
             >
               {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
