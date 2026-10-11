@@ -7,7 +7,7 @@ import { handleExternalClick } from "@/lib/openExternal";
 import { frontendHref } from "@/lib/frontendLinks";
 import { CardOverride, NewsSource, PlayHandler, PlayOpts, SourceHeader, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
 import { isDemoModeActive } from "@/lib/demoMode";
-import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
+import { dropSeen, seenAttr, useIsSeen, useReportSeenHidden } from "@/lib/newsSeen";
 import { AutoplayVideo, TapForSound } from "@/components/InlineVideoCard";
 
 interface Props {
@@ -307,6 +307,7 @@ function SkeletonRow({ isFirst }: { isFirst: boolean }) {
 
 function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings: PlayOpts[]; index: number; autoplay?: boolean }) {
   const [playing, setPlaying] = useState(false);
+  const seen = useIsSeen(item.articleUrl || item.id);
   const body = (
     <>
       {item.imageUrl && (
@@ -383,13 +384,14 @@ function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: 
         className={commonCls}
         style={commonStyle}
         data-news-key={item.articleUrl || item.id}
+        {...seenAttr(seen)}
       >
         {body}
       </button>
     );
   }
   return (
-    <a key={item.id} href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle} data-news-key={item.articleUrl || item.id}>
+    <a key={item.id} href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle} data-news-key={item.articleUrl || item.id} {...seenAttr(seen)}>
       {body}
     </a>
   );
@@ -401,6 +403,7 @@ function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: 
 // items than reserved rows, taller rows distribute the available height.
 function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings: PlayOpts[]; index: number }) {
   const shouldPopModal = !!onPlay;
+  const seen = useIsSeen(item.articleUrl || item.id);
   // Real article thumbs win when present; otherwise fall back to the league
   // sport-icon (mirrors TextRow's 18px badge) so cross-league rows always
   // have a visual anchor instead of a wall of plain text.
@@ -460,6 +463,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
         className={`${rowCls} cursor-pointer`}
         style={rowStyle}
         data-news-key={item.articleUrl || item.id}
+        {...seenAttr(seen)}
       >
         {thumb}
         <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
@@ -467,7 +471,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
     );
   }
   return (
-    <a href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
+    <a href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id} {...seenAttr(seen)}>
       {thumb}
       <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
     </a>

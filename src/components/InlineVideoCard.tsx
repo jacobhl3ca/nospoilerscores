@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
+import { seenAttr, useIsSeen } from "@/lib/newsSeen";
 
 // News Autoplay (Jacob 10/8: "autoplay is for videos in the feed when they're
 // in focus"). With the toolbar's Autoplay pill on, the ONE clip most in focus
@@ -267,6 +268,7 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
   ariaLabel: string;
 }) {
   const [playing, setPlaying] = useState(false);
+  const seen = useIsSeen(item.articleUrl || item.id);
   const canAutoplay = autoplay && !!inlineMediaUrl(item);
 
   const open = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -281,6 +283,7 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
       aria-label={ariaLabel}
       className="block w-full text-left cursor-pointer transition-opacity hover:opacity-95"
       data-news-key={item.articleUrl || item.id}
+      {...seenAttr(seen)}
       data-inline-video={canAutoplay ? "auto" : "still"}
     >
       {/* Big: cap the clip so it plus its headline fits under the sticky app

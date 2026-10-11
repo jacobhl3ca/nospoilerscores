@@ -10,7 +10,7 @@ import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
 import { LeagueMark } from "@/components/LeagueMark";
-import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
+import { dropSeen, seenAttr, useIsSeen, useReportSeenHidden } from "@/lib/newsSeen";
 import { AutoplayVideo, TapForSound } from "@/components/InlineVideoCard";
 import {
   NewsSource,
@@ -484,6 +484,7 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, onSiblingList
 function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: FeedGroup; onOpen: () => void; autoplay: boolean }) {
   const [showComments, setShowComments] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const seen = useIsSeen(item.articleUrl || item.id);
   // Stable, SSR-safe id tying the comments disclosure button to the strip it
   // reveals. useId() (not a hard-coded id) keeps every FeedPost in the merged
   // scroll unique — many posts render this toggle at once, so a constant id
@@ -507,6 +508,7 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
       className="rounded-xl overflow-hidden"
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       data-news-key={item.articleUrl || item.id}
+      {...seenAttr(seen)}
       data-feed-group={group?.id}
     >
       {/* League + source + time. The league comes first: ESPN and YouTube

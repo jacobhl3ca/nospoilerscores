@@ -10,7 +10,7 @@ import { handleExternalClick } from "@/lib/openExternal";
 import { frontendHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
-import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
+import { dropSeen, seenAttr, useIsSeen, useReportSeenHidden, useSeenLookup } from "@/lib/newsSeen";
 import { trackEvent } from "@/lib/track";
 import InlineVideoCard from "@/components/InlineVideoCard";
 
@@ -653,6 +653,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
 // clean text instead of showing an empty grey placeholder box.
 function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; index?: number; hugRows?: boolean }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const seen = useIsSeen(item.articleUrl || item.id);
   // NO per-row reveal gesture here. The list headline OPENS the post, full stop
   // (Jacob 8/10, reversing the tri-state toggle added earlier the same day):
   // "should only have that happen when I'm in a modal — not on the news
@@ -797,6 +798,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
         // it re-enters the feed (see NewsColumn's flashRestored) — otherwise a
         // restored post reappears with no signal of what changed or where.
         data-news-key={item.articleUrl || item.id}
+        {...seenAttr(seen)}
       >
         {/* The thumbnail always opens the post — that's the escape hatch for a
             row whose headline is still blurred (and the same split the Feed
@@ -868,7 +870,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
     );
   }
   return (
-    <div className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
+    <div className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id} {...seenAttr(seen)}>
       {thumbIsTile ? (
         <a
           href={frontendHref(item.articleUrl)}
@@ -912,6 +914,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
 }
 
 function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex, controls, cardClassName }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null; controls?: ReactNode; cardClassName?: string }) {
+  const isSeen = useSeenLookup();
   return (
     // overflow-clip — see TextSourceCard for why (sticky SourceHeader needs
     // window as the scroll container). box-shadow inset for the card outline
@@ -1037,6 +1040,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                   className={commonCls}
                   style={commonStyle}
                   data-news-key={item.articleUrl || item.id}
+                  {...seenAttr(isSeen(item.articleUrl || item.id))}
                 >
                   {body}
                 </button>
@@ -1052,6 +1056,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                 className={commonCls}
                 style={commonStyle}
                 data-news-key={item.articleUrl || item.id}
+                {...seenAttr(isSeen(item.articleUrl || item.id))}
               >
                 {body}
               </a>

@@ -11,6 +11,7 @@ import {
   pruneSeen,
   resetSeenCache,
   seenKeys,
+  subscribeSeen,
 } from "../src/lib/newsSeen.ts";
 
 // Minimal localStorage for node: the store reads globalThis.localStorage.
@@ -101,4 +102,23 @@ test("a snapshot does not grow: a post seen after it is not dropped", () => {
   assert.deepEqual(dropSeen(items, snapshot).map((i) => i.id), ["2"]);
   // The next snapshot picks it up.
   assert.deepEqual(dropSeen(items, seenKeys()).map((i) => i.id), []);
+});
+
+test("subscribeSeen fires on a mark and on a prune that drops entries, not after unsubscribe", () => {
+  const now = Date.UTC(2026, 9, 11, 12);
+  let fired = 0;
+  const unsubscribe = subscribeSeen(() => { fired++; });
+  markSeen("https://x/1", now - SEEN_MAX_AGE_MS - 1);
+  assert.equal(fired, 1);
+  markSeen("https://x/2", now);
+  assert.equal(fired, 2);
+  // Nothing to drop = no call; the old entry going = one call.
+  pruneSeen(now - SEEN_MAX_AGE_MS);
+  assert.equal(fired, 2);
+  pruneSeen(now);
+  assert.equal(fired, 3);
+  assert.equal(isSeen("https://x/1"), false);
+  unsubscribe();
+  markSeen("https://x/3", now);
+  assert.equal(fired, 3);
 });
