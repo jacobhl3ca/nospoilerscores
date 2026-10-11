@@ -8,6 +8,8 @@ import { expect, test } from "@playwright/test";
 //   2. Same rule in the Feed view, plus the Videos-only empty-state copy.
 //   3. Oldest first flips the aligned video strip's cells, not just the columns.
 //   4. Reset to defaults clears newsOldestFirst.
+//   5. Show all / Hide all (Jacob 10/11): one chip after the layout pill, in
+//      every layout, sets Media + Headlines in every card.
 // Run against `localhost` (not 127.0.0.1) — the dev QA cookie/prefs path keys
 // on the host name.
 
@@ -205,4 +207,139 @@ test("Reset to defaults clears Oldest first", async ({ page }) => {
     const raw = localStorage.getItem("nss-preferences");
     return raw ? Object.prototype.hasOwnProperty.call(JSON.parse(raw), "newsOldestFirst") : "missing";
   }), { timeout: 5_000 }).toBe(false);
+});
+
+// ── Show all / Hide all (Jacob 10/11) ────────────────────────────────────
+// One chip right after the layout pill, in all three layouts: Media +
+// Headlines on in every card in one tap. It reads Hide all (pressed) only
+// when every card on screen shows both.
+const SHOW_ALL_PREFS = {
+  firstLeague: "mlb",
+  secondLeague: "nfl",
+  thirdLeague: "nhl",
+  fourthLeague: "empty",
+  fifthLeague: "empty",
+  showTextPosts: true,
+};
+const showAll = (page: Page) => page.getByTestId("news-show-all");
+// A card header's own Media / Headlines button (its aria name ends in the
+// card's label), on screen only.
+const cardChips = (page: Page, kind: "media" | "headline") =>
+  page.locator(`[data-card-chip][aria-label^="Toggle ${kind} reveal: "]`);
+const cardStates = (page: Page) =>
+  page.locator('[data-card-chip][aria-label^="Toggle media reveal: "], [data-card-chip][aria-label^="Toggle headline reveal: "]')
+    .evaluateAll((els) => els.filter((e) => e.getClientRects().length > 0).map((e) => e.getAttribute("aria-pressed")));
+const allAre = (states: (string | null)[], want: string) => states.length > 0 && states.every((s) => s === want);
+const savedPrefs = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+
+async function expectShowAll(page: Page, shown: boolean) {
+  await expect(showAll(page)).toHaveText(shown ? "Hide all" : "Show all");
+  await expect(showAll(page)).toHaveAttribute("aria-pressed", String(shown));
+  await expect(showAll(page).locator("svg")).toHaveAttribute("data-showall-icon", shown ? "on" : "off");
+  await expect(showAll(page).locator("svg line[data-slash]")).toHaveCount(shown ? 0 : 1);
+}
+
+for (const [name, layoutPrefs] of [["ESPN", { newsLayout: "espn" }], ["Cards", { newsLayout: "cards" }]] as const) {
+  test(`${name}: Show all / Hide all sets Media + Headlines in every card`, async ({ page }) => {
+    await mockMixedFeeds(page);
+    await gotoNews(page, { ...SHOW_ALL_PREFS, ...layoutPrefs });
+
+    // A fresh visitor: everything blurred, the chip offers Show all. It sits
+    // right after the layout pill.
+    await expect(showAll(page)).toBeVisible({ timeout: 30_000 });
+    await expectShowAll(page, false);
+    expect(await page.locator(".news-toolbar-sticky").getByRole("button").evaluateAll((els) => els.slice(0, 4).map((e) => e.textContent)))
+      .toEqual(["ESPN", "Cards", "Feed", "Show all"]);
+    await expect(cardChips(page, "media").first()).toBeVisible({ timeout: 30_000 });
+    const n = await settle(page, cardChips(page, "media"));
+    expect(n).toBeGreaterThan(1);
+    expect(allAre(await cardStates(page), "false")).toBe(true);
+
+    // One tap: every card shows media and headlines.
+    await showAll(page).click();
+    await expectShowAll(page, true);
+    await expect.poll(async () => allAre(await cardStates(page), "true")).toBe(true);
+    let p = await savedPrefs(page);
+    expect(p.revealNewsMedia).toBe(true);
+    expect(p.revealNewsTitles).toBe(true);
+
+    // One card's Media off: the chip offers Show all again.
+    const oneCard = cardChips(page, "media").first();
+    await oneCard.click();
+    await expect(oneCard).toHaveAttribute("aria-pressed", "false");
+    await expectShowAll(page, false);
+
+    // One tap fixes the lot (the card's own setting is cleared).
+    await showAll(page).click();
+    await expectShowAll(page, true);
+    await expect.poll(async () => allAre(await cardStates(page), "true")).toBe(true);
+    p = await savedPrefs(page);
+    for (const card of Object.values(p.newsCardPrefs ?? {}) as Record<string, unknown>[]) {
+      expect(card).not.toHaveProperty("revealMedia");
+      expect(card).not.toHaveProperty("revealTitles");
+    }
+
+    // Hide all: every card blurs both again.
+    await showAll(page).click();
+    await expectShowAll(page, false);
+    await expect.poll(async () => allAre(await cardStates(page), "false")).toBe(true);
+    p = await savedPrefs(page);
+    expect(p.revealNewsMedia).toBe(false);
+    expect(p.revealNewsTitles).toBe(false);
+  });
+}
+
+test("Feed: Show all / Hide all sets the Media + Headlines chips", async ({ page }) => {
+  await mockMixedFeeds(page);
+  await gotoNews(page, { ...SHOW_ALL_PREFS, newsLayout: "feed", newsFeedView: true });
+  const toolbar = page.locator(".news-toolbar-sticky");
+  const media = toolbar.getByRole("button", { name: "Toggle media reveal", exact: true });
+  const titles = toolbar.getByRole("button", { name: "Toggle headline reveal", exact: true });
+  const both = async (want: string) => {
+    await expect(media).toHaveAttribute("aria-pressed", want);
+    await expect(titles).toHaveAttribute("aria-pressed", want);
+  };
+
+  await expect(showAll(page)).toBeVisible({ timeout: 30_000 });
+  await expectShowAll(page, false);
+  await both("false");
+
+  await showAll(page).click();
+  await expectShowAll(page, true);
+  await both("true");
+  await expect(page.locator("html")).not.toHaveClass(/blur-news-media/);
+
+  // Media off alone: the chip offers Show all again.
+  await media.click();
+  await expect(media).toHaveAttribute("aria-pressed", "false");
+  await expectShowAll(page, false);
+
+  await showAll(page).click();
+  await expectShowAll(page, true);
+  await both("true");
+
+  await showAll(page).click();
+  await expectShowAll(page, false);
+  await both("false");
+  await expect(page.locator("html")).toHaveClass(/blur-news-media/);
+});
+
+test("390px: the Show all chip is on screen; the ESPN row does not scroll sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockMixedFeeds(page);
+  await gotoNews(page, { ...SHOW_ALL_PREFS, newsLayout: "espn" });
+  await expect(showAll(page)).toBeVisible({ timeout: 30_000 });
+  await expect(showAll(page)).toBeInViewport({ ratio: 1 });
+  const row = await page.locator(".news-toolbar-scroll").evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
+  expect(row.sw).toBeLessThanOrEqual(row.cw);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  // Cards: more chips than the row has room for, so they go icon-only (the
+  // name stays) and Show all, first after the pill, is still fully on screen.
+  await page.locator(".news-toolbar-sticky").getByRole("button", { name: "Cards", exact: true }).click();
+  await expect(page.locator(".news-toolbar-sticky").getByRole("button", { name: "Toggle media reveal", exact: true })).toBeVisible();
+  await expect(showAll(page).locator("span")).toBeHidden();
+  await expect(showAll(page)).toHaveAttribute("aria-label", "Show or hide everything in every card");
+  await expect(showAll(page)).toBeInViewport({ ratio: 1 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

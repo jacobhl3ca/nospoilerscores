@@ -411,7 +411,7 @@ test("Autoplay is on by default in every layout; a saved off still wins", async 
 test("575px: the pill row is one row of icon-only pills, names kept; 1280px shows labels", async ({ page }) => {
   await page.setViewportSize({ width: 575, height: 900 });
   await gotoNews(page, { ...PLAY, newsLayout: "feed", newsFeedView: true });
-  await expect(chips(page)).toHaveCount(3, LOAD);
+  await expect(chips(page)).toHaveCount(4, LOAD);
   const ys = await chips(page).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(ys).size).toBe(1);
   // The Posts switch sits on the same row, icon-only with names kept.
@@ -433,7 +433,7 @@ test("575px: the pill row is one row of icon-only pills, names kept; 1280px show
 test("360px: still one row; the row scrolls sideways when icons do not fit", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
-  await expect(chips(page)).toHaveCount(3, LOAD);
+  await expect(chips(page)).toHaveCount(4, LOAD);
   const ys = await chips(page).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(ys).size).toBe(1);
   const sc = await page.locator(".news-toolbar-scroll").evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, ox: getComputedStyle(el).overflowX }));
@@ -584,10 +584,10 @@ const headerButtons = (page: Page, label: string) =>
   cardHeader(page, label).locator("[data-card-chip]")
     .evaluateAll((els) => els.filter((e) => e.getClientRects().length > 0).map((e) => (e.getAttribute("aria-label") ?? "").replace(/:.*$/, "")));
 
-test("ESPN: the toolbar keeps only the layout switch; each card header has exactly its buttons", async ({ page }) => {
+test("ESPN: the toolbar keeps only the layout switch and Show all; each card header has exactly its buttons", async ({ page }) => {
   await gotoNews(page, { newsLayout: "espn" });
   await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
-  await expect(toolbar(page).getByRole("button")).toHaveText(["ESPN", "Cards", "Feed"]);
+  await expect(toolbar(page).getByRole("button")).toHaveText(["ESPN", "Cards", "Feed", "Show all"]);
   // r6 order: Autoplay first, Media before Headlines.
   expect(await headerButtons(page, "ESPN Videos")).toEqual(["Toggle news autoplay", "Toggle big ESPN videos", "Toggle media reveal", "Toggle headline reveal"]);
   expect(await headerButtons(page, "ESPN Top Headlines")).toEqual(["Toggle media reveal", "Toggle headline reveal"]);
@@ -642,12 +642,12 @@ test("ESPN: Headlines on the ESPN Videos card reveals that card only", async ({ 
 
 test("Cards and Feed keep the full toolbar", async ({ page }) => {
   await gotoNews(page);
-  await expect(chips(page)).toHaveCount(3, LOAD);
+  await expect(chips(page)).toHaveCount(4, LOAD);
   await expect(postSwitch(page)).toHaveCount(1);
   // Cards view cards carry their own buttons too (10/10); Feed has no cards.
   await expect(page.locator("[data-card-chip]").first()).toBeVisible(LOAD);
   await pill(page, "Feed").click();
-  await expect(chips(page)).toHaveCount(3);
+  await expect(chips(page)).toHaveCount(4);
   await expect(postSwitch(page)).toHaveCount(1);
   await expect(page.locator("[data-card-chip]")).toHaveCount(0);
 });
@@ -673,11 +673,11 @@ test("360px phone: header buttons fit, the label gives way", async ({ page }) =>
 });
 
 // ── Round 6 (Jacob 7:26 AM 10/9): icon order, Autoplay off icon, dim under blur ──
-test("Cards/Feed toolbar order: Autoplay, Media, Headlines, Posts", async ({ page }) => {
+test("Cards/Feed toolbar order: Show all, Autoplay, Media, Headlines, Posts", async ({ page }) => {
   await gotoNews(page, { newsLayout: "feed", newsFeedView: true });
-  await expect(chips(page)).toHaveCount(3, LOAD);
+  await expect(chips(page)).toHaveCount(4, LOAD);
   expect(await toolbar(page).locator("button.news-chip, [data-testid=post-filter-switch]").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")))).toEqual([
-    "Toggle news autoplay", "Toggle media reveal", "Toggle headline reveal", "Post filter",
+    "Show or hide everything in every card", "Toggle news autoplay", "Toggle media reveal", "Toggle headline reveal", "Post filter",
   ]);
   await expect(postSwitch(page).getByRole("button")).toHaveText(["All", "No text", "Videos"]);
 });
@@ -863,7 +863,7 @@ for (const width of [575, 360]) {
 
 test("Cards toolbar Media tap clears a card's own Media: ESPN then follows the global value", async ({ page }) => {
   await gotoNews(page, { newsCardPrefs: { "espn-videos": { revealMedia: true, revealTitles: true } } });
-  await expect(chips(page)).toHaveCount(3, LOAD);
+  await expect(chips(page)).toHaveCount(4, LOAD);
   await pill(page, "Toggle media reveal").click();
   await pill(page, "Toggle media reveal").click();
   const p = await saved(page);
