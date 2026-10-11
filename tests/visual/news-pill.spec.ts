@@ -1,22 +1,29 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
-// The News button on a league's recap pill (Jacob 10/10), and its day-aware
-// "are you sure": the confirm shows ONLY while it is still early — before the
-// Settings cutoff hour (smartCutoffHour, default 1 PM) and with no
-// `nss-news-ok-day` record for today. 5 s of News, a highlight, or one
-// "Open News" writes the record. See src/lib/newsOkDay.ts.
+// The News button on the ESPN front page column's league label rows (Jacob
+// 10/10: "i just wanted that news thing on the espn frontpage one in that row
+// … not added to mlb or nfl row"), and its day-aware "are you sure": the
+// confirm shows ONLY while it is still early — before the Settings cutoff hour
+// (smartCutoffHour, default 1 PM) and with no `nss-news-ok-day` record for
+// today. 5 s of News, a highlight, or one "Open News" writes the record. See
+// src/lib/newsOkDay.ts.
 //
-// Same mocked /yesterday board as league-recap-card.spec.ts: NFL + MLB
-// columns, a recap pill on each.
+// The league recap / Playoff pills carry NO News button (#344 put one there;
+// this spec keeps its file name from that).
+//
+// Same mocked today board as espn-front-page.spec.ts: MLB · NFL · ESPN front
+// page, whose strip gives the column three league blocks: NCAAF, NHL, MLB.
+// MLB's Playoff pill and an NFL weekly recap hold the pill row, so the
+// column's first label (NCAAF) sits in that row.
 
 test.use({ timezoneId: "America/New_York" });
 
-const EARLY = new Date("2026-09-14T09:00:00-04:00"); // Mon 9 AM ET → /yesterday = Sun 9/13
-const LATE = new Date("2026-09-14T15:00:00-04:00"); // Mon 3 PM, past the 1 PM cutoff
-const TODAY = "20260914";
+const EARLY = new Date("2026-09-26T09:00:00-04:00"); // Sat 9 AM ET
+const LATE = new Date("2026-09-26T15:00:00-04:00"); // Sat 3 PM, past the 1 PM cutoff
+const TODAY = "20260926";
 
 const BASE_PREFS = {
-  favoriteLeagues: ["nfl", "mlb"],
+  favoriteLeagues: [],
   favoriteTeams: [],
   theme: "light",
   showRatings: false,
@@ -24,20 +31,24 @@ const BASE_PREFS = {
   skipNewsExplainer: true,
   showNews: false,
   leaguesOnboarded: true,
-  firstLeague: "nfl",
-  secondLeague: "mlb",
-  thirdLeague: "empty",
+  firstLeague: "mlb",
+  secondLeague: "nfl",
+  thirdLeague: "top",
   fourthLeague: "empty",
   fifthLeague: "empty",
-  defaultDateMode: "yesterday",
+  hiddenLeagues: ["best"],
+  defaultDateMode: "today",
   defaultLandingView: "scores",
 };
 
-type TeamSpec = { name: string; abbr: string; score: string };
-function finishedEvent(id: string, away: TeamSpec, home: TeamSpec, iso: string, week?: number) {
-  const team = (t: TeamSpec, suffix: string) => ({
-    id: `${id}${suffix}`, displayName: t.name, shortDisplayName: t.name, abbreviation: t.abbr, score: t.score,
-    logo: "", color: "666666",
+type TeamSpec = { id: string; name: string; abbr: string };
+function event(id: string, away: TeamSpec, home: TeamSpec, iso: string) {
+  const competitor = (t: TeamSpec, side: "home" | "away") => ({
+    homeAway: side,
+    team: { id: t.id, displayName: t.name, shortDisplayName: t.name, abbreviation: t.abbr, logo: "", color: "666666" },
+    score: "",
+    winner: false,
+    records: [{ summary: "3-0" }],
   });
   return {
     id,
@@ -45,57 +56,41 @@ function finishedEvent(id: string, away: TeamSpec, home: TeamSpec, iso: string, 
     name: `${away.name} at ${home.name}`,
     shortName: `${away.abbr} @ ${home.abbr}`,
     season: { type: 2, year: 2026 },
-    ...(week ? { week: { number: week } } : {}),
-    status: {
-      displayClock: "0:00",
-      period: week ? 4 : 9,
-      type: { name: "STATUS_FINAL", state: "post", detail: "Final", shortDetail: "Final", completed: true },
-    },
-    competitions: [{
-      competitors: [
-        { homeAway: "home", team: team(home, "h"), score: home.score, winner: true, records: [{ summary: "1-0" }] },
-        { homeAway: "away", team: team(away, "a"), score: away.score, winner: false, records: [{ summary: "0-1" }] },
-      ],
-      broadcasts: [],
-      headlines: [],
-      notes: [],
-    }],
+    status: { displayClock: "0:00", period: 0, type: { name: "STATUS_SCHEDULED", state: "pre", detail: "Sat, September 26th at 7:30 PM EDT", shortDetail: "9/26 - 7:30 PM EDT", completed: false } },
+    competitions: [{ competitors: [competitor(home, "home"), competitor(away, "away")], broadcasts: [], headlines: [], notes: [] }],
   };
 }
-
-const NFL_EVENTS = JSON.stringify({
-  season: { type: 2, year: 2026 },
-  week: { number: 1 },
-  events: [
-    finishedEvent("401872923", { name: "Saints", abbr: "NO", score: "17" }, { name: "Lions", abbr: "DET", score: "27" }, "2026-09-13T17:00:00Z", 1),
-    finishedEvent("401872925", { name: "Buccaneers", abbr: "TB", score: "20" }, { name: "Bengals", abbr: "CIN", score: "23" }, "2026-09-13T17:00:00Z", 1),
+const T = (id: string, name: string, abbr: string): TeamSpec => ({ id, name, abbr });
+const BOARDS: Record<string, unknown[]> = {
+  "football/college-football": [
+    event("c1", T("1", "Texas", "TEX"), T("2", "Tennessee", "TENN"), "2026-09-26T23:00:00Z"),
+    event("c2", T("3", "Oklahoma", "OU"), T("4", "Georgia", "UGA"), "2026-09-26T23:30:00Z"),
   ],
-});
-const MLB_EVENTS = JSON.stringify({
-  events: [
-    finishedEvent("776001", { name: "Mets", abbr: "NYM", score: "4" }, { name: "Phillies", abbr: "PHI", score: "2" }, "2026-09-13T17:35:00Z"),
+  "baseball/mlb": [
+    event("m1", T("11", "Dodgers", "LAD"), T("12", "Giants", "SF"), "2026-09-26T23:05:00Z"),
   ],
-});
-const RECAP_RECORDS = {
-  fetchedAt: "2026-09-14T12:00:00Z",
+  "hockey/nhl": [
+    event("h1", T("21", "Hurricanes", "CAR"), T("22", "Predators", "NSH"), "2026-09-26T23:00:00Z"),
+  ],
+};
+const STRIP = {
+  sports: [
+    { slug: "football", leagues: [{ slug: "college-football", events: [{ id: "c1", priority: 0 }, { id: "c2", priority: 1 }] }] },
+    { slug: "hockey", leagues: [{ slug: "nhl", events: [{ id: "h1", priority: 2 }] }] },
+    { slug: "baseball", leagues: [{ slug: "mlb", events: [{ id: "m1", priority: 3 }] }] },
+  ],
+};
+const BLOCKS = ["ncaaf", "nhl", "mlb"];
+// An NFL weekly cut over today: a real recap pill, and a highlight to play.
+const RECAPS = JSON.stringify({
+  fetchedAt: "2026-09-26T12:00:00Z",
   recaps: {
     nfl: [
-      { sport: "nfl", key: "bestsunday", heading: "Week 1", label: "Sunday's best plays", cadence: "weekly", coversWeek: 1, windowStart: "20260909", windowEnd: "20260916", videoId: "AGzdTAjWr7U", pageUrl: "https://www.youtube.com/watch?v=AGzdTAjWr7U", channel: "NFL", durationSec: 1801, t: 1, sourcePolicy: "official-channel" },
-      { sport: "nfl", key: "top15", heading: "Week 1", label: "Top 15 plays", cadence: "weekly", coversWeek: 1, windowStart: "20260909", windowEnd: "20260916", videoId: "XUpaSUiyy5I", pageUrl: "https://www.youtube.com/watch?v=XUpaSUiyy5I", channel: "NFL", durationSec: 481, t: 1, sourcePolicy: "official-channel" },
-    ],
-  },
-};
-// NFL only, so the MLB column holds the invisible spacer row.
-const RECAPS = JSON.stringify(RECAP_RECORDS);
-const RECAPS_WITH_MLB = JSON.stringify({
-  ...RECAP_RECORDS,
-  recaps: {
-    ...RECAP_RECORDS.recaps,
-    mlb: [
-      { sport: "mlb", key: "fastcast", heading: "Best of the day", label: "Best of the day", cadence: "daily", coversDate: "20260913", playbackUrl: "https://example.invalid/fastcast.m3u8", pageUrl: "https://www.mlb.com/video/fastcast-x8085", channel: "MLB.com", durationSec: 900, t: 1, sourcePolicy: "mlb.com" },
+      { sport: "nfl", key: "top15", heading: "Week 3", label: "Top 15 plays", cadence: "weekly", coversWeek: 3, windowStart: "20260923", windowEnd: "20260930", videoId: "XUpaSUiyy5I", pageUrl: "https://www.youtube.com/watch?v=XUpaSUiyy5I", channel: "NFL", durationSec: 481, t: 1, sourcePolicy: "official-channel" },
     ],
   },
 });
+const NO_RECAPS = JSON.stringify({ fetchedAt: "2026-09-26T12:00:00Z", recaps: {} });
 
 async function setUp(page: Page, now: Date, prefs: Record<string, unknown> = {}, okDay?: string, recaps = RECAPS) {
   await page.clock.setFixedTime(now);
@@ -107,11 +102,20 @@ async function setUp(page: Page, now: Date, prefs: Record<string, unknown> = {},
   }, { p: { ...BASE_PREFS, ...prefs }, ok: okDay ?? null });
   // Nothing off-site: no clip ever loads, the News feeds stay empty.
   await page.route("**/api/youtube?**", route => route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"No results"}' }));
-  await page.route("**/football/nfl/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: NFL_EVENTS }));
-  await page.route("**/baseball/mlb/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: MLB_EVENTS }));
+  await page.route("**/oneFeed/frontpage**", (route: Route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: '{"feed":[]}' }));
+  await page.route("**/apis/v2/scoreboard/header**", (route: Route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(STRIP) }));
+  await page.route("**/apis/site/v2/sports/**", (route: Route) => {
+    const url = new URL(route.request().url());
+    const m = /\/sports\/(.+)\/scoreboard$/.exec(url.pathname);
+    if (!m) return route.fallback();
+    const events = url.searchParams.get("dates") === TODAY ? (BOARDS[m[1]] ?? []) : [];
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ events }) });
+  });
   await page.route("**/news/recaps.json", route => route.fulfill({ status: 200, contentType: "application/json", body: recaps }));
-  await page.goto("/yesterday");
-  await expect(page.locator('[data-league-recap="nfl"]')).toBeVisible({ timeout: 30_000 });
+  await page.goto("/");
+  await expect(page.locator('[data-league-column="top"]').getByRole("button", { name: / — game details$/ })).toHaveCount(4, { timeout: 30_000 });
 }
 
 // The seam cover carries data-news in News view (news-tab-keeps-view.spec.ts).
@@ -120,8 +124,17 @@ async function view(page: Page) {
 }
 const storedPrefs = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
 const okDay = (page: Page) => page.evaluate(() => localStorage.getItem("nss-news-ok-day"));
-const newsButton = (page: Page, sport = "nfl") => page.locator(`[data-league-recap="${sport}"] [data-recap-news]`);
+const newsButton = (page: Page, sport = "nhl") => page.locator(`[data-league-column="top"] [data-espn-news="${sport}"]`);
 const dialog = (page: Page) => page.getByRole("dialog", { name: "News shows scores" });
+// The first game card's top in every column.
+const firstCardTops = (page: Page) => page.evaluate(() => {
+  const tops: number[] = [];
+  for (const col of document.querySelectorAll<HTMLElement>("[data-league-column]")) {
+    const card = col.querySelector<HTMLElement>('[aria-label$="game details"]');
+    if (card) tops.push(Math.round(card.getBoundingClientRect().top));
+  }
+  return tops;
+});
 
 const DEVICES = [
   { name: "desktop", use: { viewport: { width: 1280, height: 800 } } },
@@ -132,10 +145,54 @@ for (const device of DEVICES) {
   test.describe(device.name, () => {
     test.use(device.use);
 
-    test("9 AM, no record: the pill's News asks first; Not yet stays, Open News opens and marks today", async ({ page }) => {
+    test("no pill has a News button; every ESPN front page label row has one at its right end", async ({ page }) => {
+      await setUp(page, LATE);
+      // MLB's Playoff pill and the NFL recap pill: back to their own buttons.
+      const mlbPill = page.locator('[data-league-recap="mlb"]');
+      const nflPill = page.locator('[data-league-recap="nfl"]');
+      await expect(mlbPill).toBeVisible({ timeout: 15_000 });
+      await expect(mlbPill).toHaveAttribute("data-recap-kind", "playoffs");
+      await expect(nflPill).toBeVisible();
+      await expect(nflPill.getByRole("button")).toHaveCount(1);
+      await expect(page.locator("[data-recap-news]")).toHaveCount(0);
+      await expect(mlbPill.getByRole("button", { name: /News/ })).toHaveCount(0);
+      await expect(nflPill.getByRole("button", { name: /News/ })).toHaveCount(0);
+
+      // One per league block, in block order. The first sits in the pill row.
+      const col = page.locator('[data-league-column="top"]');
+      const sports = await col.locator("[data-espn-news]").evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-news")));
+      expect(sports).toEqual(BLOCKS);
+      await expect(col.locator("[data-espn-lead-label] [data-espn-news]")).toHaveAttribute("data-espn-news", "ncaaf");
+      await expect(newsButton(page, "ncaaf")).toHaveAccessibleName("Open News for NCAAF");
+      await expect(newsButton(page, "ncaaf")).toHaveAttribute("title", "Open News");
+      // Only that column: a league column of its own has no such button.
+      await expect(page.locator("[data-espn-news]")).toHaveCount(3);
+
+      // Right end of its row, after the hairline, and no taller than the row's
+      // text line, so the row keeps its height.
+      const rows = await col.locator("[data-espn-news]").evaluateAll((els) => els.map((el) => {
+        const row = el.parentElement!.getBoundingClientRect();
+        const b = el.getBoundingClientRect();
+        const label = el.parentElement!.firstElementChild!.getBoundingClientRect();
+        return {
+          atRightEnd: Math.abs(b.right - row.right) <= 1,
+          afterLabel: b.left > label.right,
+          rowTallerThanLabel: Math.round(row.height - label.height),
+          insideRow: b.top >= row.top - 0.5 && b.bottom <= row.bottom + 0.5,
+        };
+      }));
+      for (const r of rows) expect(r).toEqual({ atRightEnd: true, afterLabel: true, rowTallerThanLabel: 0, insideRow: true });
+
+      // The columns' first cards stay level.
+      const tops = await firstCardTops(page);
+      expect(tops.length).toBe(2); // MLB and ESPN front page; NFL has no game
+      expect(Math.max(...tops) - Math.min(...tops), `first card tops ${tops}`).toBeLessThanOrEqual(1);
+      if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/espn-news-${device.name}.png`, animations: "disabled" });
+    });
+
+    test("9 AM, no record: the label's News asks first; Not yet stays, Open News opens that league and marks today", async ({ page }) => {
       await setUp(page, EARLY);
       await expect(newsButton(page)).toBeVisible();
-      await expect(newsButton(page)).toHaveAccessibleName("Open News for NFL");
 
       await newsButton(page).click();
       await expect(dialog(page)).toBeVisible();
@@ -159,13 +216,22 @@ for (const device of DEVICES) {
       expect(await okDay(page)).toBe(TODAY);
       const prefs = await storedPrefs(page);
       expect(prefs.showNews).toBe(true);
-      // NFL is news column 1 already, so column 3 is left alone.
-      expect(prefs.newsThirdLeague).toBeUndefined();
-      // In News view the board (and its pills) is gone.
-      await expect(page.locator("[data-recap-news]")).toHaveCount(0);
+      // NHL has no News column of its own (MLB · NFL · ESPN), so it takes column 3.
+      expect(prefs.newsThirdLeague).toBe("nhl");
+      // In News view the board (and its label rows) is gone.
+      await expect(page.locator("[data-espn-news]")).toHaveCount(0);
     });
 
-    test("3 PM: past the cutoff, the pill's News opens straight away", async ({ page }) => {
+    test("a league that is a News column already: column 3 is left alone", async ({ page }) => {
+      await setUp(page, LATE);
+      await newsButton(page, "mlb").click();
+      await expect.poll(() => view(page)).toBe("news");
+      const prefs = await storedPrefs(page);
+      expect(prefs.showNews).toBe(true);
+      expect(prefs.newsThirdLeague).toBeUndefined();
+    });
+
+    test("3 PM: past the cutoff, the label's News opens straight away", async ({ page }) => {
       await setUp(page, LATE);
       await newsButton(page).click();
       await expect.poll(() => view(page)).toBe("news");
@@ -180,12 +246,12 @@ for (const device of DEVICES) {
     });
 
     test("9 AM with yesterday's record: the confirm shows", async ({ page }) => {
-      await setUp(page, EARLY, {}, "20260913");
+      await setUp(page, EARLY, {}, "20260925");
       await newsButton(page).click();
       await expect(dialog(page)).toBeVisible();
     });
 
-    test("9 AM: 5 s in News from the toolbar marks the day, so the pill no longer asks", async ({ page }) => {
+    test("9 AM: 5 s in News from the toolbar marks the day, so the label no longer asks", async ({ page }) => {
       await setUp(page, EARLY);
       await page.locator('[data-tab="news"]:visible').click();
       await expect.poll(() => view(page)).toBe("news");
@@ -216,48 +282,33 @@ for (const device of DEVICES) {
       await expect.poll(() => okDay(page)).toBe(TODAY);
     });
 
-    test("a league that is not a News column goes into column 3", async ({ page }) => {
-      // MLB is scores column 3, and news column 3 holds an explicit NHL pick,
-      // so MLB has no News column.
-      await page.route("**/soccer/**/scoreboard?**", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"events":[]}' }));
-      await setUp(page, LATE, {
-        favoriteLeagues: ["nfl", "mls", "mlb"],
-        secondLeague: "mls",
-        thirdLeague: "mlb",
-        newsThirdLeague: "nhl",
-      }, undefined, RECAPS_WITH_MLB);
-      await newsButton(page, "mlb").click();
-      await expect.poll(() => view(page)).toBe("news");
-      await expect.poll(async () => (await storedPrefs(page)).newsThirdLeague).toBe("mlb");
-    });
-
-    test("the columns' first game cards stay level with the News button in the pill", async ({ page }) => {
-      await setUp(page, EARLY);
-      await expect(newsButton(page, "mlb")).toHaveCount(0); // MLB has no recap here: spacer only
-      const tops = await page.evaluate(() => {
-        const cards = [...document.querySelectorAll<HTMLElement>('[aria-label$="game details"]')];
-        const byCol = new Map<number, number>();
-        for (const c of cards) {
-          const r = c.getBoundingClientRect();
-          const col = Math.round(r.left / 10);
-          byCol.set(col, Math.min(byCol.get(col) ?? Infinity, Math.round(r.top)));
-        }
-        return [...byCol.values()];
-      });
-      expect(tops.length).toBeGreaterThanOrEqual(2);
-      expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(1);
-      // And nothing in the pill runs past its edge or clips.
-      const m = await page.evaluate(() => {
-        const pill = document.querySelector<HTMLElement>('[data-league-recap="nfl"]')!;
-        const pr = pill.getBoundingClientRect();
-        const buttons = [...pill.querySelectorAll<HTMLElement>("button")];
+    test("no pill row on the board: the first label's News sits at the end of the header's italic line", async ({ page }) => {
+      // No MLB column (no Playoff pill) and no recap: the row is not reserved,
+      // so NCAAF's label is the italic line under "ESPN front page".
+      await setUp(page, LATE, { firstLeague: "nfl", secondLeague: "wnba" }, undefined, NO_RECAPS);
+      const col = page.locator('[data-league-column="top"]');
+      await expect(col.locator("[data-espn-lead-label]")).toHaveCount(0);
+      const sports = await col.locator("[data-espn-news]").evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-news")));
+      expect(sports).toEqual(BLOCKS);
+      const lead = newsButton(page, "ncaaf");
+      await expect(lead).toBeVisible();
+      // On the label's own line, right of it, inside the column.
+      const m = await col.evaluate((el) => {
+        const b = el.querySelector<HTMLElement>('[data-espn-news="ncaaf"]')!.getBoundingClientRect();
+        const c = el.getBoundingClientRect();
+        const label = [...el.querySelectorAll<HTMLElement>("span")].find((s) => s.textContent === "NCAAF" && s.getBoundingClientRect().bottom < b.bottom + 4)!.getBoundingClientRect();
+        const card = el.querySelector<HTMLElement>('[aria-label$="game details"]')!.getBoundingClientRect();
         return {
-          overflow: pill.scrollWidth - pill.clientWidth,
-          past: buttons.filter((b) => b.getBoundingClientRect().right > pr.right + 0.5).length,
-          clipped: buttons.filter((b) => b.scrollWidth > b.clientWidth).length,
+          sameLine: Math.abs((b.top + b.bottom) / 2 - (label.top + label.bottom) / 2) <= 2,
+          rightOfLabel: b.left >= label.left,
+          insideColumn: b.right <= c.right + 0.5,
+          aboveCard: b.bottom <= card.top,
         };
       });
-      expect(m).toEqual({ overflow: 0, past: 0, clipped: 0 });
+      expect(m).toEqual({ sameLine: true, rightOfLabel: true, insideColumn: true, aboveCard: true });
+      await lead.click();
+      await expect.poll(() => view(page)).toBe("news");
+      await expect.poll(async () => (await storedPrefs(page)).newsThirdLeague).toBe("ncaaf");
     });
   });
 }

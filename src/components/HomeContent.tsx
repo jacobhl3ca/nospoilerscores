@@ -868,8 +868,8 @@ export default function HomeContent({
   const [showNews, setShowNews] = useState(false);
   // Same, for the News tab's spoiler warning.
   const [newsNotice, setNewsNotice] = useState(false);
-  // A league pill's News button waiting on "are you sure" (the league it
-  // opens). Only while it is still early; see src/lib/newsOkDay.ts.
+  // An ESPN front page label's News button waiting on "are you sure" (the
+  // league it opens). Only while it is still early; see src/lib/newsOkDay.ts.
   const [newsConfirm, setNewsConfirm] = useState<Sport | null>(null);
   // Per-column team-name abbreviation reports (keyed by slot; null-report =
   // column left/has no names). Any abbreviated game column → namesCompact, so
@@ -2000,8 +2000,8 @@ export default function HomeContent({
   };
 
   // The News-ok day (src/lib/newsOkDay.ts): 5 s of News, or any highlight on
-  // screen, means spoilers are no longer a worry today, so a league pill's
-  // News button stops asking first.
+  // screen, means spoilers are no longer a worry today, so an ESPN front
+  // page label's News button stops asking first.
   useEffect(() => {
     if (!showNews) return;
     const t = setTimeout(() => markNewsOkDay(getDateString(0)), 5000);
@@ -2819,7 +2819,8 @@ export default function HomeContent({
   // breaking the "Auto on col N = the column's default" guarantee.
   const sortedLeagues = leagues;
 
-  // A league pill's News button (LeagueRecapCard onOpenNews, Jacob 10/10).
+  // The News button on an ESPN front page league label (LeagueColumn
+  // onOpenNews, Jacob 10/10; not on the league recap pills).
   // News has no per-league view, so it opens the tab and, when the league is
   // not already one of the News columns, puts it in column 3 the way that
   // column's own switcher would. One updatePrefs: two in a row would each
@@ -2845,6 +2846,14 @@ export default function HomeContent({
     if (!prefs.skipNewsExplainer && !warned) setNewsNotice(true);
     window.scrollTo({ top: 0 });
   };
+  // The leagues that button shows for: the ones News can give a column. A
+  // column 3 pick only holds for a league in the user's switcher (see
+  // newsThirdPick), so a front-page league outside it gets no button.
+  const newsCanShow = (sport: Sport): boolean =>
+    sport !== "best" && sport !== "top"
+    && (newsColumnShows(sport)
+      || newsSwitcherOptions.some((o) => o.sport === sport)
+      || (!!prefs.shownLeagues?.includes(sport) && !prefs.hiddenLeagues?.includes(sport)));
   const requestNews = (sport: Sport) => {
     if (newsNeedsConfirm(getETHour(), prefs.smartCutoffHour ?? 13, readNewsOkDay(), getDateString(0))) setNewsConfirm(sport);
     else openNewsFor(sport, false);
@@ -3389,6 +3398,11 @@ export default function HomeContent({
     .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
     .some((l) => l.sport === "mlb");
   const bracketPillShown = bracketPillDue && mlbColumnShown;
+  // The Best column's span pill (BestSpanBar, ratings on) sits in the same
+  // row, so it reserves it on sibling columns too.
+  const bestBarShown = prefs.showRatings && sortedLeagues
+    .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
+    .some((l) => l.sport === "best");
   // Odds leave the pill once the field is set (Jacob 9/29). From the
   // postseason's first day that is a given; in the last week before it the
   // standings say so, fetched only then since no earlier day can have all
@@ -3431,7 +3445,7 @@ export default function HomeContent({
   };
   const anyRecap = (recapSportsSync
     ? recapSportsSync.size > 0
-    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown;
+    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown || bestBarShown;
 
   return (
     <WatchQueueContext.Provider value={watchQueueApi}>
@@ -5117,6 +5131,8 @@ export default function HomeContent({
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
               onAddLeague: (sport: Sport, anchor: DOMRect) => setAddLeague({ sport, anchor }),
+              onOpenNews: !showNews ? requestNews : null,
+              canOpenNews: newsCanShow,
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
@@ -5137,19 +5153,19 @@ export default function HomeContent({
               if (bestSpanData?.key === bestSpanKey) return bestSpanData.data;
               return { sport: "best", label: TOP_GAMES_COLUMN_LABEL[bestSpan], games: [], emptyLabel: "Loading…" };
             };
+            // With ratings on, the Best column's span pill IS its top card: it
+            // takes the recap / Playoff pill row (BestSpanBar matches a pill's
+            // height), so there is no spacer above it. Ratings off: no pill,
+            // the spacer as before.
             const bestTopCard = (league: LeagueData) => {
-              const recap = recapTopCard(league);
-              if (league.sport !== "best" || !prefs.showRatings) return recap;
+              if (league.sport !== "best" || !prefs.showRatings) return recapTopCard(league);
               return (
-                <>
-                  {recap}
-                  <BestSpanBar
-                    span={bestSpan}
-                    allLeagues={bestAllLeagues}
-                    onSpan={(span) => updatePrefs({ bestSpan: span === "yesterday" ? undefined : span })}
-                    onAllLeagues={(on) => updatePrefs({ bestAllLeagues: on ? true : undefined })}
-                  />
-                </>
+                <BestSpanBar
+                  span={bestSpan}
+                  allLeagues={bestAllLeagues}
+                  onSpan={(span) => updatePrefs({ bestSpan: span === "yesterday" ? undefined : span })}
+                  onAllLeagues={(on) => updatePrefs({ bestAllLeagues: on ? true : undefined })}
+                />
               );
             };
             // Per-slot swap dropdowns: every column lists every in-season
@@ -5192,9 +5208,6 @@ export default function HomeContent({
                   reviewSeason={mlbReview?.season ?? null}
                   reviewSections={reviewSections}
                   onPlayList={playNewsVideo}
-                  onOpenNews={!showNews && league.sport !== "best" && league.sport !== "top"
-                    ? () => requestNews(league.sport)
-                    : null}
                 />
               )
               : undefined;
