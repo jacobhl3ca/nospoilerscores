@@ -290,30 +290,38 @@ async function checkTourEvent(cfg, path, now) {
 // months at a time keeps each response under the size that times out.
 const TENNIS_TOUR_LABEL = "Tennis";
 const TENNIS_TOUR_FEEDS = ["/tennis/atp/scoreboard", "/tennis/wta/scoreboard"];
+// ESPN listed 166 events for 2026 across the two feeds.
+const TENNIS_YEAR_MIN_EVENTS = 100;
 
+// `declared` counts the rows a second, looser way (every `id: "…"` in the
+// table), so a row the strict pattern can no longer read is a failure, not a
+// row this check silently stops covering.
 function parseTennisTourEvents() {
   const start = SRC.indexOf("export const TENNIS_TOUR_EVENTS");
   const body = start < 0 ? "" : SRC.slice(start, SRC.indexOf("\n];", start));
-  return [...body.matchAll(/\{\s*id:\s*"(\d+)",\s*city:\s*"([^"]+)",\s*name:\s*\/(.+)\/i,\s*draws:\s*"(\w+)"\s*\}/g)]
+  const rows = [...body.matchAll(/\{\s*id:\s*"(\d+)",\s*city:\s*"([^"]+)",\s*name:\s*\/(.+)\/i,\s*draws:\s*"(\w+)"\s*\}/g)]
     .map((m) => ({ id: m[1], city: m[2], name: new RegExp(m[3], "i"), draws: m[4] }));
+  return { rows, declared: (body.match(/\bid:\s*"/g) ?? []).length };
 }
 
 async function checkTennisTour(cfg, now) {
   const issues = [];
   const notes = [];
-  const rows = parseTennisTourEvents();
-  if (rows.length < 10) {
-    issues.push(`only ${rows.length} TENNIS_TOUR_EVENTS rows could be read out of espn.ts — the table's shape changed and this check is blind`);
+  const { rows, declared } = parseTennisTourEvents();
+  if (!rows.length || rows.length !== declared) {
+    issues.push(`${rows.length} of ${declared} TENNIS_TOUR_EVENTS rows could be read out of espn.ts — the table's shape changed and this check is blind to the rest`);
     return { cfg, issues, notes };
   }
 
   const year = now.getUTCFullYear();
   const events = new Map();
+  let feedErrors = 0;
   for (const path of TENNIS_TOUR_FEEDS) {
     for (let month = 0; month < 12; month += 2) {
       const range = `${ymd(new Date(Date.UTC(year, month, 1, 12)))}-${ymd(new Date(Date.UTC(year, month + 2, 0, 12)))}`;
       const r = await fetchRange(path, range);
       if (r.error) {
+        feedErrors++;
         notes.push(`${path} ${range}: ${r.error}`);
         continue;
       }
@@ -334,12 +342,18 @@ async function checkTennisTour(cfg, now) {
   const inside = (day, c) => mmdd(day) >= c.startDate && mmdd(day) <= c.endDate;
   const slams = parseLeagues().filter((l) => l.sport === "tennis" && l.label !== TENNIS_TOUR_LABEL && l.startDate && l.endDate);
 
+  // A whole year's calendar read with no error: a row with no event is then a
+  // row ESPN dropped or re-keyed, and its tournament shows nowhere. With a
+  // failed request, or a year ESPN has barely listed yet, it is only a note.
+  const wholeYear = !feedErrors && events.size >= TENNIS_YEAR_MIN_EVENTS;
   let firstDay = null;
   for (const row of rows) {
     const byId = events.get(`${row.id}-${year}`);
     const ev = byId ?? [...events.values()].find((e) => !e.major && row.name.test(e.name ?? ""));
     if (!ev) {
-      notes.push(`${row.city}: no ${year} event with id ${row.id} or a name matching ${row.name} — moved, renamed and re-numbered, or not listed yet`);
+      const missing = `${row.city}: no ${year} event with id ${row.id} or a name matching ${row.name}`;
+      if (wholeYear) issues.push(`${missing} — moved, or renamed and re-numbered: the column no longer shows it`);
+      else notes.push(`${missing} — not listed yet, or the read was incomplete`);
       continue;
     }
     if (!byId) notes.push(`${row.city}: found by name only ("${ev.name}" is now id ${ev.id}, the table says ${row.id}) — update the id`);

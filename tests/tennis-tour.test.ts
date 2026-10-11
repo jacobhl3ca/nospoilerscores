@@ -49,7 +49,8 @@ const espn = await jiti.import<{
   isTennisTourDay: (ymd: string) => boolean;
   isLeagueActive: (l: unknown, d: Date) => boolean;
   tennisRoundShort: (label: string) => string;
-  buildTennisGames: (events: unknown[], when?: string | { from: string; to: string }) => GameLike[];
+  buildTennisGames: (events: unknown[], when?: string | { from: string; to: string }, tourColumn?: boolean) => GameLike[];
+  isTennisTourConfig: (l: { sport: string; label: string }) => boolean;
   sportDisplayLabel: (sport: string, d: Date) => string;
   pickAndAssignLeagues: (d: Date, count?: number, hidden?: string[]) => Cfg[];
   getSeasonOpener: (sport: string, label: string, d: Date) => { label: string } | null;
@@ -287,16 +288,36 @@ test("a Slam day shows the Slam alone: a tour event is not let onto it", () => {
   assert.ok(asSlam.every((g) => !g.formatTag));
 });
 
-test("a Slam's qualifying before its window opens stays out of the Tennis column", () => {
+test("the Tennis column never shows a Slam match; a Slam column keeps its qualifying", () => {
   // Roland Garros qualifying starts May 18; the French Open window opens May 20.
   const wuhan = FIXTURE.wta.events.find((e) => e.id === "381-2026")!;
   const asSlam = redated(wuhan, "20260518", { id: "172-2026", name: "Roland Garros", major: true });
-  const games = espn.buildTennisGames([asSlam], "20260518");
-  assert.ok(games.length > 0, "main-draw Slam matches on a tour day still show");
-  assert.ok(games.every((g) => !/^Qualifying/.test(g.playoffLabel ?? "")));
+  assert.deepEqual(espn.buildTennisGames([asSlam], "20260518"), []);
   // Inside the Slam's own window nothing is dropped, as before.
   const inWindow = espn.buildTennisGames([redated(wuhan, "20260521", { id: "172-2026", name: "Roland Garros", major: true })], "20260521");
   assert.ok(inWindow.some((g) => /^Qualifying/.test(g.playoffLabel ?? "")));
+});
+
+// A range is one column's read, set by the day it is viewed from, not by the
+// days the matches are on (PR #353 review: the Aus Open's last day looked a
+// week ahead and put Doha cards under the "Aus Open" header).
+test("a range builds one column: the asking column's, whatever days the matches are on", () => {
+  const shanghai = FIXTURE.atp.events.find((e) => e.id === "315-2026")!;
+  const slam = redated(shanghai, "20270131", { id: "154-2027", name: "Australian Open", major: true });
+  const tour = redated(shanghai, "20270208");
+  const range = { from: "20270125", to: "20270210" };
+  const asSlam = espn.buildTennisGames([slam, tour], range, false);
+  assert.ok(asSlam.length > 0);
+  assert.ok(asSlam.every((g) => !g.formatTag), "no tour card in a Slam column's range");
+  const asTour = espn.buildTennisGames([slam, tour], range, true);
+  assert.ok(asTour.length > 0);
+  assert.ok(asTour.every((g) => g.formatTag?.startsWith("Shanghai")), "no Slam card in the Tennis column's range");
+});
+
+test("only the year-round row is the tour config", () => {
+  const rows = espn.ALL_LEAGUES.filter((l) => l.sport === "tennis");
+  assert.deepEqual(rows.filter((l) => espn.isTennisTourConfig(l)).map((l) => l.label), ["Tennis"]);
+  assert.equal(espn.isTennisTourConfig({ sport: "golf", label: "Tennis" }), false);
 });
 
 test("the round chip", () => {
@@ -435,6 +456,51 @@ test("a Slam day reads the ATP feed alone, as before", async () => {
   assert.notEqual(league.label, "Tennis");
   assert.ok(asked("atp").length >= 1);
   assert.equal(asked("wta").length, 0, requested.join("\n"));
+});
+
+// The boundary: the last day of a Slam window, with the Tennis column's first
+// day right after it (Feb 1 → Feb 2, Sep 15 → Sep 16).
+function lastSlamDayBeforeTour(from: string): string {
+  for (let i = 0; i < 800; i++) {
+    const ymd = plusDays(from, i);
+    const slam = espn.ALL_LEAGUES.some((l) => l.sport === "tennis" && !espn.isTennisTourConfig(l) && espn.isLeagueActive(l, dayAt(ymd)));
+    if (slam && espn.isTennisTourDay(plusDays(ymd, 1))) return ymd;
+  }
+  throw new Error("no Slam-to-Tennis boundary found");
+}
+
+test("a Slam's last day does not look ahead into the tour, and still reads the ATP feed alone", async () => {
+  const day = lastSlamDayBeforeTour(TODAY);
+  const ahead = shanghaiOn({ ahead: [plusDays(day, 3), plusDays(day, 4)] });
+  serve({ atp: ahead, wta: ahead });
+  const league = await column(day);
+  assert.ok(league);
+  assert.notEqual(league.label, "Tennis");
+  assert.equal(league.games.length, 0);
+  assert.ok(!league.nextGameDay, "no tour card under a Slam header");
+  assert.equal(asked("wta").length, 0, requested.join("\n"));
+});
+
+test("the Tennis column's first day does not look back into the Slam", async () => {
+  const day = plusDays(lastSlamDayBeforeTour(TODAY), 1);
+  const slam = shanghaiOn({ finished: plusDays(day, -2) });
+  slam.events[0] = { ...slam.events[0], id: "154-2027", name: "Australian Open", major: true };
+  serve({ atp: slam, wta: { events: [] } });
+  const league = await column(day);
+  assert.ok(league);
+  assert.equal(league.label, "Tennis");
+  assert.equal(league.games.length, 0);
+  assert.ok(!league.previousGameDay, "no Slam card under the Tennis header");
+});
+
+test("a ranged read that lost one feed is not held", async () => {
+  const day = tourDayFrom(plusDays(tourDayFrom(plusDays(tourDayFrom(plusDays(TODAY, 20)), 40)), 40));
+  serve({ atp: shanghaiOn({ finished: day, ahead: [plusDays(day, 1)] }), wta: null });
+  await column(day);
+  const first = ranged("atp").length;
+  assert.ok(first >= 1);
+  await column(day);
+  assert.equal(ranged("atp").length, first * 2, "the range is read again: the WTA half was missing");
 });
 
 // ── The column subtitle ─────────────────────────────────────────────────────
