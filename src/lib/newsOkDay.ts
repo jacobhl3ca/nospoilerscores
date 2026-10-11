@@ -1,4 +1,4 @@
-// The day News is "safe" for (Jacob 10/10). A league pill's News button asks
+// The day News is "safe" for (Jacob 10/10). An ESPN front page label's News button asks
 // "are you sure" only while it is still early: before the Settings cutoff hour
 // (smartCutoffHour, the "yesterday → today" switch) AND nothing today has
 // shown he is already past spoilers. Any of these marks the day:

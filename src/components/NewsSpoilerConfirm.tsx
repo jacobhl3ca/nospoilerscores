@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
-// "Are you sure" before a league pill's News button opens News (Jacob 10/10).
+// "Are you sure" before an ESPN front page label's News button opens News
+// (Jacob 10/10).
 // HomeContent mounts it only while it is still early (src/lib/newsOkDay.ts);
 // after the cutoff hour, 5 s of News, a highlight, or one "Open News" today,
 // the button goes straight through. Same box as WorldCupGroupsModal's bracket

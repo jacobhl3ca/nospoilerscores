@@ -66,6 +66,12 @@ interface LeagueColumnProps {
   // ESPN front page only: tapping a league block's label opens the "Add
   // {league}" popover (owned by HomeContent) to give it a column of its own.
   onAddLeague?: (sport: Sport, anchor: DOMRect) => void;
+  // ESPN front page only: a newspaper button at the right end of each league
+  // label row that opens News on that league (Jacob 10/10: "i just wanted
+  // that news thing on the espn frontpage one in that row"). Null in News
+  // view. `canOpenNews`: the leagues News can show a column for.
+  onOpenNews?: ((sport: Sport) => void) | null;
+  canOpenNews?: (sport: Sport) => boolean;
   // "Add more…" row above Remove col: opens HomeContent's league sheet for
   // this column, where the offseason leagues live now (Jacob 9/29).
   onAddMore?: () => void;
@@ -946,6 +952,8 @@ export default function LeagueColumn({
   autoSport,
   onSwapLeague,
   onAddLeague,
+  onOpenNews,
+  canOpenNews,
   onAddMore,
   onRemoveFromList,
   onCloseOffseason,
@@ -1627,6 +1635,25 @@ export default function LeagueColumn({
   // A league that already has a column on the board shows its plain label (10/9).
   const canAddFromLabel = league.sport === "top" && !!onAddLeague && !isDemoModeActive();
   const hasOwnColumn = (sport: Sport) => !!shownElsewhere?.some((e) => e.sport === sport);
+  // The News button on a label row (see onOpenNews). No taller than the
+  // row's own text line, so the label row keeps its height and the cards under
+  // it stay level with the next column's; the ::after widens the tap target
+  // into the gaps around the row.
+  const showsNewsFor = (sport: Sport) =>
+    league.sport === "top" && !!onOpenNews && !isDemoModeActive() && (canOpenNews?.(sport) ?? true);
+  const espnNewsButton = (sport: Sport, text: string, glyph: number) => showsNewsFor(sport) ? (
+    <button
+      type="button"
+      data-espn-news={sport}
+      onClick={(e) => { e.stopPropagation(); onOpenNews!(sport); }}
+      className="relative flex shrink-0 items-center justify-center rounded px-1 py-0.5 transition-opacity hover:opacity-80 cursor-pointer after:absolute after:-inset-1.5 after:content-['']"
+      style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+      aria-label={`Open News for ${text}`}
+      title="Open News"
+    >
+      <svg aria-hidden="true" className="shrink-0" width={glyph} height={glyph} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" /><path d="M18 14h-8M15 18h-5M10 6h8v4h-8z" /></svg>
+    </button>
+  ) : null;
   const espnLabelRow = (text: string, sport: Sport) => (
     <div className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
       {canAddFromLabel && !hasOwnColumn(sport) ? (
@@ -1645,6 +1672,7 @@ export default function LeagueColumn({
         <span className="text-[11px] font-semibold uppercase tracking-wide">{text}</span>
       )}
       <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+      {espnNewsButton(sport, text, 11)}
     </div>
   );
   const renderEspnGroups = (games: Game[]) => (
@@ -2325,6 +2353,14 @@ export default function LeagueColumn({
           ) : (
             <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : canAddFromLabel && leadLabelSlot === "subtitle" && espnGroups?.length && !hasOwnColumn(espnGroups[0].sport) ? () => onAddLeague!(espnGroups[0].sport, columnRef.current!.getBoundingClientRect()) : undefined} fallbackText={lastPlayedLabel ?? (leadLabelSlot === "subtitle" ? leadLabel : undefined)} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
           )}
+          {leadLabelSlot === "subtitle" && !lastPlayedLabel && espnGroups?.length ? (
+            // The first league label sits in the italic line above, so its
+            // News button takes the right end of that line. Out of flow: the
+            // header keeps its height.
+            <div className="absolute right-0 bottom-3 sm:bottom-4 flex h-[13.5px] sm:h-[15px] items-center">
+              {espnNewsButton(espnGroups[0].sport, leadLabel!, 9)}
+            </div>
+          ) : null}
         </div>
       )}
       {leadLabelSlot === "top-row" ? (

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { newsNeedsConfirm } from "../src/lib/newsOkDay.ts";
 
-// The league pill's News confirm (Jacob 10/10): ask only while it is early
+// The ESPN front page label's News confirm (Jacob 10/10): ask only while it is early
 // and nothing today has marked News as safe.
 const TODAY = "20261010";
 const YESTERDAY = "20261009";

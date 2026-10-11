@@ -79,3 +79,15 @@ test("the span files never carry a score field the bake added", async () => {
   const y = await read("yesterday");
   assert.deepEqual(Object.keys(y).sort(), ["days", "from", "generatedAt", "leagues", "span", "to", "v"]);
 });
+
+// The mini's bake failed on every run until 10/10: jiti was only a transitive
+// dependency, so nothing promised it was installed.
+test("jiti is a declared dependency and resolves from the bake", async () => {
+  const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.ok(pkg.devDependencies?.jiti ?? pkg.dependencies?.jiti, "jiti must be declared in package.json");
+  assert.ok(import.meta.resolve("jiti"));
+  const { loadTopGamesDeps } = await import("../scripts/lib/top-games-bake.mjs");
+  const deps = await loadTopGamesDeps({ highlights: { games: {} } });
+  assert.equal(typeof deps.fetchDay, "function");
+  assert.ok(deps.sportsForDay("20261009").length > 0);
+});
