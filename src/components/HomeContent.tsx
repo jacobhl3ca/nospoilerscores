@@ -2839,12 +2839,14 @@ export default function HomeContent({
   // breaking the "Auto on col N = the column's default" guarantee.
   const sortedLeagues = leagues;
 
-  // The News button on an ESPN front page league label (LeagueColumn
-  // onOpenNews, Jacob 10/10; not on the league recap pills).
-  // News has no per-league view, so it opens the tab and, when the league is
-  // not already one of the News columns, puts it in column 3 the way that
-  // column's own switcher would. One updatePrefs: two in a row would each
-  // spread the same stale `prefs` and the second would drop showNews.
+  // The "News" link under the ESPN front page column's header (LeagueColumn
+  // onOpenNews, Jacob 10/10; not on the league rows or the recap pills). It
+  // passes "top": the reader is looking at espn.com's front page, so News
+  // opens on the ESPN layout and column 3 is left alone.
+  // A league (no caller today) opens the tab and, when it is not already one
+  // of the News columns, takes column 3 the way that column's own switcher
+  // would. One updatePrefs: two in a row would each spread the same stale
+  // `prefs` and the second would drop showNews.
   const newsColumnShows = (sport: Sport): boolean => {
     const queue = [...sortedLeagues];
     const slotSports = [0, 1, 2].map((i) => (selectedSlotLeagues[i] === "empty" ? undefined : queue.shift()?.sport));
@@ -2860,20 +2862,14 @@ export default function HomeContent({
     updatePrefs({
       showNews: true,
       skipNewsExplainer: true,
-      ...(newsColumnShows(sport) ? {} : newsThirdLeaguePatch(sport, "espn")),
+      ...(sport === "top"
+        ? { newsLayout: "espn" as const, newsFeedView: false }
+        : newsColumnShows(sport) ? {} : newsThirdLeaguePatch(sport, "espn")),
     });
     // The confirm already warned; the first-time bar would say it twice.
     if (!prefs.skipNewsExplainer && !warned) setNewsNotice(true);
     window.scrollTo({ top: 0 });
   };
-  // The leagues that button shows for: the ones News can give a column. A
-  // column 3 pick only holds for a league in the user's switcher (see
-  // newsThirdPick), so a front-page league outside it gets no button.
-  const newsCanShow = (sport: Sport): boolean =>
-    sport !== "best" && sport !== "top"
-    && (newsColumnShows(sport)
-      || newsSwitcherOptions.some((o) => o.sport === sport)
-      || (!!prefs.shownLeagues?.includes(sport) && !prefs.hiddenLeagues?.includes(sport)));
   const requestNews = (sport: Sport) => {
     if (newsNeedsConfirm(getETHour(), prefs.smartCutoffHour ?? 13, readNewsOkDay(), getDateString(0))) setNewsConfirm(sport);
     else openNewsFor(sport, false);
@@ -5225,7 +5221,6 @@ export default function HomeContent({
               onShowSlamBracket: () => setSlamBracketOpen(true),
               onAddLeague: (sport: Sport, anchor: DOMRect) => setAddLeague({ sport, anchor }),
               onOpenNews: !showNews ? requestNews : null,
-              canOpenNews: newsCanShow,
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
