@@ -50,13 +50,14 @@ import { withoutSettledOdds } from "@/lib/playoffPicture";
 
 // Outer pill and button classes per layout (see the header note). Shared by
 // the real pill and the reserveSlot spacer so their heights always agree.
-const ROW_PILL = "items-center gap-2 px-2.5 py-1.5";
-const STACKED_PILL = "flex-col gap-1 px-1.5 py-1.5";
+// Exported for BestSpanBar, the Best column's pill in the same row.
+export const ROW_PILL = "items-center gap-2 px-2.5 py-1.5";
+export const STACKED_PILL = "flex-col gap-1 px-1.5 py-1.5";
 const ROW_BTN = "gap-1 px-2";
 const STACKED_BTN = "flex-1 min-w-0 gap-0.5 px-0";
 // A phone row with a word button (see fitButtons): each button sized by its
 // text plus an equal share of what is left.
-const STACKED_FIT_BTN = "flex-auto gap-0.5 px-0";
+export const STACKED_FIT_BTN = "flex-auto gap-0.5 px-0";
 
 export type PlayoffsTab = "bracket" | "odds" | "picks";
 const PLAYOFFS_TABS: { key: PlayoffsTab; label: string }[] = [

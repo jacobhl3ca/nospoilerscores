@@ -22,7 +22,7 @@ function periodLabels(sport: Sport, count: number, isPlayoff: boolean): string[]
 }
 
 const cell = "px-1.5 py-1 text-right whitespace-nowrap";
-const nameCell = "px-1.5 py-1 text-left whitespace-nowrap sticky left-0 z-[1]";
+const nameCell = "px-1.5 py-1 text-left whitespace-nowrap sticky sticky-nolip left-0 z-[1]";
 
 // Each table scrolls sideways on its own (sticky name column), so the line
 // score and the team tabs never slide out of view on a phone.

@@ -65,7 +65,8 @@ const titles = (page: Page) => page.locator('button[title="Switch news league"]'
 const saved = (page: Page) =>
   page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
 
-// The source-card headers of news column `idx` (0-based), in order.
+// The source-card headers of news column `idx` (0-based), in order. Next to
+// the ESPN mark a header drops the word "ESPN" (Jacob 10/10).
 async function sourceHeaders(page: Page, idx: number): Promise<string[]> {
   return page.locator('button[title="Switch news league"]').nth(idx)
     .locator("xpath=ancestor::div[contains(@class,'min-h-[60vh]')][1]")
@@ -109,7 +110,7 @@ test("turned on: ESPN front page is a league row in news column 3, headlines the
   await menu.getByRole("button", { name: "ESPN front page" }).click();
 
   await expect(titles(page).nth(2)).toHaveText("ESPN front page");
-  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["ESPN TOP HEADLINES", "ESPN VIDEOS"]);
+  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["TOP HEADLINES", "VIDEOS"]);
   for (const h of HEADLINES) await expect(page.getByText(h)).toHaveCount(1);
   await expect(page.getByText(CLIP)).toHaveCount(1);
   const prefs = await saved(page);
@@ -142,7 +143,7 @@ test("under an ESPN front page scores column 3, news column 3 is ESPN front page
   await page.goto("/");
   await expect(titles(page)).toHaveCount(3, LOAD);
   await expect(titles(page).nth(2)).toHaveText("ESPN front page");
-  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["ESPN TOP HEADLINES", "ESPN VIDEOS"]);
+  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["TOP HEADLINES", "VIDEOS"]);
   const { rows } = await rowsOf(page, 2);
   expect(rows.find((r) => r.startsWith("ESPN front page"))).toBe("ESPN front page");
   expect((await saved(page)).newsThirdLeague).toBeUndefined();

@@ -5,7 +5,7 @@ import { Sport } from "@/lib/types";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
-import { NewsItem, proxyImage } from "@/lib/news";
+import { NewsItem, proxyImage, ESPN_BRAND_LOGO } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
 import { frontendHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
@@ -37,6 +37,11 @@ export interface CardOverride {
   // posts carry this value in (PlayOpts.titlesShown) and the modal's headline
   // blurs the same way the card's rows do.
   titlesShown?: boolean;
+  // Cards view (10/10): this card has Media + Headlines but no Posts control
+  // of its own (ESPN and video cards follow the toolbar's Posts switch). So
+  // it still goes away when that switch empties it: its own buttons cannot
+  // bring the posts back.
+  noPostFilter?: boolean;
 }
 
 // Single source of truth for the modal-trigger payload — used by TextRow,
@@ -169,6 +174,9 @@ interface NewsColumnProps {
   // Any news-card click → open the shared media/text modal. Receives the full
   // payload so the modal can choose video, image, embed, or text mode.
   onPlayVideo?: PlayHandler;
+  // Gets the column's post list each time it changes, so a modal reopened by a
+  // page reload can take its ‹ › list from here (HomeContent.adoptSiblings).
+  onSiblingList?: (list: PlayOpts[]) => void;
   // Forwarded to this column's own title (non-strip layout only) so HomeContent
   // can measure --news-titlebar-h from it — see NewsColumnTitle.measureRef.
   titleMeasureRef?: (el: HTMLDivElement | null) => void;
@@ -485,8 +493,23 @@ export function NewsColumnTitle({
   );
 }
 
-function SourceHeader({ label, logoUrl, controls }: { label: string; logoUrl?: string; controls?: ReactNode }) {
-  const mobileLabel = stripLeaguePrefixForMobile(label);
+// The header text for a source card. Next to the ESPN mark the word "ESPN"
+// repeats the logo (Jacob 10/10), so "ESPN Videos" reads "Videos" at every
+// width. Only the text on screen changes: the source's own label (aria names,
+// card keys, sibling lists) stays whole. `narrow` is the text below `sm`,
+// where league tokens go too (stripLeaguePrefixForMobile).
+export function sourceHeaderText(label: string, logoUrl?: string): { wide: string; narrow: string } {
+  const wide = logoUrl === ESPN_BRAND_LOGO ? label.replace(/^ESPN\s+/i, "").trim() || label : label;
+  const stripped = stripLeaguePrefixForMobile(label);
+  // "ESPN NBA" strips to nothing and falls back to the whole label; next to
+  // the ESPN mark it keeps the wide text ("NBA").
+  return { wide, narrow: stripped !== label ? stripped : wide };
+}
+
+// Also the header of each AlignedVideoStrip column.
+export function SourceHeader({ label, logoUrl, controls }: { label: string; logoUrl?: string; controls?: ReactNode }) {
+  const showLogo = !!logoUrl && !isDemoModeActive();
+  const { wide, narrow } = sourceHeaderText(label, showLogo ? logoUrl : undefined);
   return (
     // Outer wrapper carries sticky + page bg so the corner triangles outside
     // the inner div's rounded-t-lg curve fill with var(--bg) (matching the
@@ -505,7 +528,7 @@ function SourceHeader({ label, logoUrl, controls }: { label: string; logoUrl?: s
         className="rounded-t-lg px-3 py-2.5 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-wide"
         style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
       >
-        {logoUrl && !isDemoModeActive() && (
+        {showLogo && (
           // These are real league/broadcaster marks (ESPN CDN + Wikimedia
           // hotlinks — MLB/NFL shields on r/baseball, r/nfl, etc.), rendered
           // as app chrome the same way the league picker's logos were —
@@ -518,8 +541,7 @@ function SourceHeader({ label, logoUrl, controls }: { label: string; logoUrl?: s
             loading="lazy"
             // Decode off the main thread so a heavy source mark can't block
             // scroll/paint as sticky headers come into view (loading="lazy"
-            // defers the fetch, not the decode). Matches the decoding hint
-            // already on this header's twin in AlignedVideoStrip.SourceHeader.
+            // defers the fetch, not the decode).
             decoding="async"
             width={24}
             height={24}
@@ -535,13 +557,13 @@ function SourceHeader({ label, logoUrl, controls }: { label: string; logoUrl?: s
         )}
         {/* min-w-0 + truncate: with header buttons the label gives way,
             never the buttons (r5). */}
-        {mobileLabel !== label ? (
+        {narrow !== wide ? (
           <>
-            <span className="sm:hidden min-w-0 truncate">{mobileLabel}</span>
-            <span className="hidden sm:inline min-w-0 truncate">{label}</span>
+            <span className="sm:hidden min-w-0 truncate">{narrow}</span>
+            <span className="hidden sm:inline min-w-0 truncate">{wide}</span>
           </>
         ) : (
-          <span className="min-w-0 truncate">{label}</span>
+          <span className="min-w-0 truncate">{wide}</span>
         )}
         {controls && (
           <div className="ml-auto flex shrink-0 items-center gap-1 normal-case tracking-normal" data-testid="card-header-controls">
@@ -554,7 +576,8 @@ function SourceHeader({ label, logoUrl, controls }: { label: string; logoUrl?: s
 }
 
 // Strip league/network tokens from the source label on narrow screens so the
-// logo + remaining text isn't redundant. Repeats so "ESPN NBA" → "" → keep
+// logo + remaining text isn't redundant ("MLB MLB MOST POPULAR" effect when
+// the logo already conveys the league). Repeats so "ESPN NBA" → "" → keep
 // original. Empty after strip falls back to the full label.
 function stripLeaguePrefixForMobile(label: string): string {
   let s = label;
@@ -567,7 +590,7 @@ function stripLeaguePrefixForMobile(label: string): string {
   return s || label;
 }
 
-function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex, hugRows, controls, cardClassName }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null; hugRows?: boolean; controls?: ReactNode; cardClassName?: string }) {
+function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex, hugRows, controls, cardClassName, noPostFilter }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null; hugRows?: boolean; controls?: ReactNode; cardClassName?: string; noPostFilter?: boolean }) {
   // The sibling list spans every source in the column. baseIndex is this card's
   // offset; a row's global index = baseIndex + its row index.
   const columnSiblings = baseIndex != null ? (siblings ?? null) : null;
@@ -575,9 +598,9 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
   // card), collapse the whole card while text posts are hidden — otherwise a
   // bare header with no rows would sit there. Mixed cards keep the header and
   // just hide their individual text rows.
-  // A card with its own header buttons never collapses: they are how the
+  // A card with its own Posts control never collapses: that is how the
   // reader turns Text posts back on for it.
-  const allText = !controls && items.length > 0 && items.every(itemIsTextPost);
+  const allText = (!controls || !!noPostFilter) && items.length > 0 && items.every(itemIsTextPost);
   return (
     // overflow-clip (not overflow-hidden) so position: sticky on SourceHeader
     // pins to the window, not to this card. overflow-hidden establishes a
@@ -1082,6 +1105,7 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   const override = cardOverride?.(source);
   const controls = override?.controls;
   const cardClassName = override?.className;
+  const noPostFilter = override?.noPostFilter;
   if (override?.videosOnly !== undefined) videosOnly = override.videosOnly;
   if (override?.showTextPosts !== undefined) showTextPosts = override.showTextPosts;
   const titlesShown = override?.titlesShown;
@@ -1171,9 +1195,9 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   const hidden = !loading && items.length > 0 && shown.length === 0;
   const renderState: SourceRenderState = loading ? "loading" : hidden ? "hidden" : "shown";
   useEffect(() => { onRenderState?.(source.label, renderState); }, [renderState, source.label, onRenderState]);
-  // A card with its own buttons stays, so they can undo the filter that
+  // A card with its own Posts control stays, so it can undo the filter that
   // emptied it (r5).
-  if (hidden && controls) {
+  if (hidden && controls && !noPostFilter) {
     return (
       <div className={`rounded-lg overflow-clip${cardClassName ? ` ${cardClassName}` : ""}`} style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)" }}>
         <SourceHeader label={source.label} logoUrl={source.logoUrl} controls={controls} />
@@ -1215,7 +1239,7 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
       />
     );
   }
-  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={shown} loading={loading} onPlay={onPlay} siblings={siblings} baseIndex={baseIndex} hugRows={hugRows} controls={controls} cardClassName={cardClassName} />;
+  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={shown} loading={loading} onPlay={onPlay} siblings={siblings} baseIndex={baseIndex} hugRows={hugRows} controls={controls} cardClassName={cardClassName} noPostFilter={noPostFilter} />;
 }
 
 export default function NewsColumn({
@@ -1233,6 +1257,7 @@ export default function NewsColumn({
   hideTitle,
   widthClassName,
   onPlayVideo,
+  onSiblingList,
   titleMeasureRef,
   videosOnly,
   showTextPosts,
@@ -1361,6 +1386,9 @@ export default function NewsColumn({
     });
     return { siblings: sib, baseIndexBySource: base };
   }, [sources, itemsBySource, titlesBySource]);
+  useEffect(() => {
+    if (siblings.length) onSiblingList?.(siblings);
+  }, [siblings, onSiblingList]);
 
   return (
     <div className={`${widthCls} min-h-[60vh]`}>

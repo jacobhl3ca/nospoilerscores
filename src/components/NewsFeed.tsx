@@ -50,6 +50,9 @@ interface NewsFeedProps {
   // "N new posts" pill instead of moving the page.
   refreshKey?: number;
   onPlay: PlayHandler;
+  // See NewsColumn's prop of the same name: the feed's ‹ › list, for a modal
+  // reopened by a page reload.
+  onSiblingList?: (list: PlayOpts[]) => void;
   showTextPosts: boolean;
   // Reverse the merged feed so the oldest post is first (⇅ in the news header).
   oldestFirst?: boolean;
@@ -202,7 +205,7 @@ function useAggregatedFeed(groups: FeedGroup[], refreshKey: number) {
 // new posts wait behind the pill so the page does not move under him.
 const NEAR_TOP_PX = 200;
 
-export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts, videosOnly, oldestFirst, hiddenCategories, hideSeenKeys, onSeenHiddenCount, autoplay }: NewsFeedProps) {
+export default function NewsFeed({ groups, refreshKey = 0, onPlay, onSiblingList, showTextPosts, videosOnly, oldestFirst, hiddenCategories, hideSeenKeys, onSeenHiddenCount, autoplay }: NewsFeedProps) {
   const { feed, incoming, applyIncoming } = useAggregatedFeed(groups, refreshKey);
   const items = feed?.items ?? null;
   const groupOf = feed?.groupOf;
@@ -354,6 +357,9 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
     () => visible.map((it) => newsItemToPlayOpts(it)),
     [visible]
   );
+  useEffect(() => {
+    if (playList.length) onSiblingList?.(playList);
+  }, [playList, onSiblingList]);
 
   // Only with 2+ columns: one league has nothing to pick between. Same neutral
   // selected segment as the Cards / Feed switch in the news toolbar.
@@ -436,7 +442,7 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
         // Pinned under the news toolbar (same top as the Cards league titles).
         // Zero-height wrapper, so the pill floats over the posts and the list
         // does not shift when it appears.
-        <div className="league-sticky-top sticky z-30 h-0 flex items-start justify-center">
+        <div className="league-sticky-top sticky sticky-nolip z-30 h-0 flex items-start justify-center">
           <button
             type="button"
             data-testid="feed-new-posts"

@@ -22,6 +22,7 @@ import {
   DefaultDateMode,
   DefaultLandingView,
   DefaultRatings,
+  FRESH_NEWS_LAYOUT,
 } from "@/lib/preferences";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { clearRememberedPairings, restoreRememberedPairings } from "@/lib/pairingMask";
@@ -974,12 +975,14 @@ export default function SettingsPanel({
     // a value left in localStorage from an earlier build hides sources with no
     // UI to clear it — a reset is the only way out. All four have no non-
     // undefined default, so clearing to undefined restores the fresh-install
-    // default (Cards view, no video filter, default order, nothing hidden).
+    // default (no video filter, default order, nothing hidden).
     // newsOldestFirst (the ⇅ control) was the last toolbar pref still
     // surviving a reset; it has no non-undefined default either. Same for
     // newsHideSeen (the 👁 control).
+    // The layout is the one a new visitor gets (ESPN since 10/10), set by
+    // name: undefined would read as Cards (newsLayoutOf).
     newsFeedView: undefined,
-    newsLayout: undefined,
+    newsLayout: FRESH_NEWS_LAYOUT,
     newsEspnBig: undefined,
     newsAutoplay: undefined,
     newsCardPrefs: undefined,
@@ -1700,6 +1703,7 @@ export default function SettingsPanel({
                     <option key={h} value={h}>{hourLabel(h)}</option>
                   ))}
                 </select>
+                <span className="block">after this hour, a league card&apos;s News button stops asking first</span>
               </p>
             )}
             {/* Time zone (Jacob 10/4): moved up from More settings because a

@@ -54,6 +54,8 @@ import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
+import NewsSpoilerConfirm from "@/components/NewsSpoilerConfirm";
+import { markNewsOkDay, newsNeedsConfirm, readNewsOkDay } from "@/lib/newsOkDay";
 import { fetchPlayoffPicture, fieldIsSet } from "@/lib/playoffPicture";
 import { fetchNflPicture } from "@/lib/nflPlayoffPicture";
 import { nflClinchSnapshot, type ClinchSnapshot } from "@/lib/eliminatedFold";
@@ -580,8 +582,9 @@ function HeadlinesIcon({ on, size = 16 }: { on: boolean; size?: number }) {
     ? <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
     : <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>;
 }
-function MediaIcon({ size = 16 }: { size?: number }) {
-  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>;
+// Media off = the same picture crossed out (Jacob 10/10), like Autoplay.
+function MediaIcon({ on, size = 16 }: { on: boolean; size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-media-icon={on ? "on" : "off"}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" />{!on && <line x1="1" y1="1" x2="23" y2="23" data-slash="" />}</svg>;
 }
 function VideosOnlyIcon({ size = 16 }: { size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>;
@@ -627,15 +630,22 @@ function CardChip({ active, onClick, title, ariaLabel, disabled, pressed, dataAt
 // Posts switch in a labeled row (Cards/Feed toolbar, the Reddit bar): one
 // segmented control, All / No text / Videos (Jacob 10/9). `value` null = the
 // cards differ, so no segment shows pressed. Compact = the same 3 icons.
-function PostFilterSwitch({ value, onChange, compact }: {
-  value: PostFilter | null; onChange: (f: PostFilter) => void; compact?: boolean;
+// `card` (that card's name) = the switch in a subreddit card's header (Jacob
+// 10/10: all 3 choices in view beat one cycling chip): 3 icons at the 28px
+// CardChip height, so the header row does not grow. `roomy` = wider segments,
+// for a wide card (a phone, the 1-column board).
+function PostFilterSwitch({ value, onChange, compact, card, roomy }: {
+  value: PostFilter | null; onChange: (f: PostFilter) => void; compact?: boolean; card?: string; roomy?: boolean;
 }) {
+  const inCard = card !== undefined;
+  const icons = compact || inCard;
   return (
     <div
       role="group"
-      aria-label="Post filter"
+      aria-label={inCard ? `Post filter: ${card}` : "Post filter"}
       data-testid="post-filter-switch"
-      className="inline-flex shrink-0 rounded-full p-0.5"
+      data-card={card}
+      className={`inline-flex shrink-0 rounded-full p-0.5${inCard ? " h-7" : ""}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
       {POST_FILTERS.map((f) => {
@@ -646,17 +656,17 @@ function PostFilterSwitch({ value, onChange, compact }: {
             key={f}
             onClick={() => onChange(f)}
             aria-pressed={on}
-            aria-label={compact ? `Posts: ${POST_FILTER_NAMES[f]}` : undefined}
-            title={`Posts: ${POST_FILTER_NAMES[f]}`}
+            aria-label={icons ? `Posts: ${POST_FILTER_NAMES[f]}` : undefined}
+            title={inCard ? `Posts in ${card}: ${POST_FILTER_NAMES[f]}` : `Posts: ${POST_FILTER_NAMES[f]}`}
             data-post-filter={f}
-            className={`inline-flex items-center gap-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${compact ? "px-2 py-1" : "px-3 py-1"}`}
+            className={`inline-flex items-center gap-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${inCard ? (roomy ? "h-full px-2" : "h-full px-1") : compact ? "px-2 py-1" : "px-3 py-1"}`}
             // Blue = a filter narrows the posts; All is the neutral raised fill.
             style={{
               background: on ? (f === "all" ? "var(--bg-card-hover)" : "var(--accent)") : "transparent",
               color: on ? (f === "all" ? "var(--text)" : "white") : "var(--text-muted)",
             }}
           >
-            {compact ? <PostFilterIcon value={f} size={16} /> : POST_FILTER_NAMES[f]}
+            {icons ? <PostFilterIcon value={f} size={inCard ? 14 : 16} /> : POST_FILTER_NAMES[f]}
           </button>
         );
       })}
@@ -664,8 +674,8 @@ function PostFilterSwitch({ value, onChange, compact }: {
   );
 }
 
-// Posts in a card header (no room for 3 segments at 575px): one chip that
-// cycles All → No text → Videos.
+// Posts in a card header too narrow for the 3-segment switch (a 225px
+// column): one chip that cycles All → No text → Videos.
 function PostFilterCardChip({ value, onChange, name }: {
   value: PostFilter; onChange: (f: PostFilter) => void; name: string;
 }) {
@@ -682,6 +692,18 @@ function PostFilterCardChip({ value, onChange, name }: {
       <PostFilterIcon value={value} size={14} />
     </CardChip>
   );
+}
+
+// Media / Headlines / Posts as a labeled row shows them (the Cards toolbar,
+// the Reddit bar). posts null = the cards differ.
+type NewsBarState = { media: boolean; titles: boolean; posts: PostFilter | null };
+
+// Calls `children` when React renders THIS component, which is after
+// HomeContent's own render has run to its end. The Cards toolbar sits above
+// the news board in the tree, but its chips show state the board works out
+// further down the same render (which cards are on screen).
+function RenderLate({ children }: { children: () => ReactNode }) {
+  return <>{children()}</>;
 }
 
 // Autoplay chip titles (toolbar + ESPN Videos header).
@@ -833,7 +855,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; league?: string | null; trackLeague?: string; seenKey?: string | null; titlesShown?: boolean | null; section?: string | null };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; league?: string | null; trackLeague?: string; seenKey?: string | null; titlesShown?: boolean | null; section?: string | null; restored?: boolean };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -850,6 +872,11 @@ export default function HomeContent({
   const REOPEN_MS = 8000;
   const videoModalRef = useRef<VideoModalState | null>(null);
   useEffect(() => { videoModalRef.current = videoModal; }, [videoModal]);
+  // The post a reloaded modal reopened (its source link = the item's seen key).
+  // 👁 Hide seen leaves it in its card while that modal is open, so the card's
+  // list still holds it and the modal gets its ‹ › back (see adoptSiblings).
+  const restoredSeenKeyRef = useRef<string | null>(null);
+  useEffect(() => { if (!videoModal?.restored) restoredSeenKeyRef.current = null; }, [videoModal]);
   const [reopenVideo, setReopenVideo] = useState<VideoModalState | null>(null);
   const reopenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearReopen = useCallback(() => {
@@ -910,6 +937,9 @@ export default function HomeContent({
   const [showNews, setShowNews] = useState(false);
   // Same, for the News tab's spoiler warning.
   const [newsNotice, setNewsNotice] = useState(false);
+  // An ESPN front page label's News button waiting on "are you sure" (the
+  // league it opens). Only while it is still early; see src/lib/newsOkDay.ts.
+  const [newsConfirm, setNewsConfirm] = useState<Sport | null>(null);
   // Per-column team-name abbreviation reports (keyed by slot; null-report =
   // column left/has no names). Any abbreviated game column → namesCompact, so
   // the UFC column's fighter names shrink exactly when the team names beside
@@ -1086,6 +1116,8 @@ export default function HomeContent({
       // The news post's section: ?hn, else ?hl (the share URL drops ?hn when
       // the two match).
       const hSection = params.get("hn") || hLabel || null;
+      // A game card's highlight (?c=) is not a news post, so no card list is its own.
+      const restored = !params.get("c");
       // A shared-highlight link cold-loaded with ?demo=1 still on (sessionStorage
       // sticky, see demoMode.ts) is the same real-content leak openVideoModal/
       // openEmbedModal guard against — this reopen path sets videoModal state
@@ -1098,8 +1130,10 @@ export default function HomeContent({
         // back on. So the title cover is on here whatever the Settings toggle
         // says (it defaults off since 9/8). It still lifts once the title reads clean.
         const forceTitleMask = /^\/watch\/?$/.test(window.location.pathname);
-        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster, forceTitleMask, section: hSection });
+        restoredSeenKeyRef.current = hSource || null;
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster, forceTitleMask, section: hSection, restored });
       } else if (hStream || hEmbed || hImage) {
+        restoredSeenKeyRef.current = hSource || null;
         setVideoModal({
           videoId: "",
           fallbackUrl: hSource,
@@ -1110,6 +1144,7 @@ export default function HomeContent({
           sourceLabel: hLabel || null,
           headline: hHead || null,
           section: hSection,
+          restored,
         });
       }
     }
@@ -1597,6 +1632,29 @@ export default function HomeContent({
     });
   }, [optsToModal, modalShareHref]);
 
+  // A modal reopened from the address bar (a reload) has no post list, so no
+  // ‹ › arrows. Every news card reports its list here once it loads; the first
+  // one that holds the open post gives the modal its list. A later, longer list
+  // that holds it too replaces it while the modal is still the reloaded post: a
+  // card's list grows as its sources load. Only the list changes, never the
+  // media (that would reload the player) or the address bar.
+  const adoptSiblings = useCallback((list: PlayOpts[]) => {
+    // No reloaded modal open (the usual case): skip the state update entirely.
+    if (!videoModalRef.current?.restored) return;
+    setVideoModal((m) => {
+      if (!m?.restored || (m.siblings && m.siblings.length >= list.length)) return m;
+      const pick = (o: PlayOpts): string | null | undefined =>
+        m.videoId ? o.videoId : m.playbackUrl ? o.playbackUrl : m.embedUrl ? o.embedUrl : m.imageUrl ? o.imageUrl : o.fallbackUrl;
+      const want = m.videoId || m.playbackUrl || m.embedUrl || m.imageUrl || m.fallbackUrl;
+      if (!want) return m;
+      // Same media AND same source link first: one clip can sit in two posts.
+      let i = list.findIndex((o) => pick(o) === want && (!m.fallbackUrl || o.fallbackUrl === m.fallbackUrl));
+      if (i < 0) i = list.findIndex((o) => pick(o) === want);
+      if (i < 0) return m;
+      return { ...m, siblings: list, sibIndex: i, seenKey: list[i].seenKey ?? m.seenKey, titlesShown: m.titlesShown ?? list[i].titlesShown ?? null };
+    });
+  }, []);
+
   // Wipe the highlight deep-link params (?v / ?h* / ?c) out of the address bar,
   // leaving anything else on the URL alone. Used on every dismiss that does NOT
   // rewind history — a COLD-LOADED share link has no videoModal entry to pop,
@@ -2015,18 +2073,31 @@ export default function HomeContent({
   // A pick in news column 3's own switcher. A league overrides the column;
   // undefined (Auto) hands it back to scores column 3. `autoId` is the column
   // Auto lands on, so a one-column Focus view can follow it.
+  const newsThirdLeaguePatch = (sport: Sport | undefined, autoId: Sport | "espn" = "espn"): Partial<Preferences> => ({
+    newsThirdLeague: sport,
+    newsTopNews: false,
+    // Drop an old "Top news" pull-left too, so Auto puts col 3 back third.
+    newsGenericSlot: undefined,
+    newsGenericHidden: false,
+    // Keep a one-column Focus view pointed at the replacement column.
+    newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
+  });
   const setNewsThirdLeague = (sport: Sport | undefined, autoId: Sport | "espn" = "espn", extra: Partial<Preferences> = {}) => {
-    updatePrefs({
-      ...extra,
-      newsThirdLeague: sport,
-      newsTopNews: false,
-      // Drop an old "Top news" pull-left too, so Auto puts col 3 back third.
-      newsGenericSlot: undefined,
-      newsGenericHidden: false,
-      // Keep a one-column Focus view pointed at the replacement column.
-      newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
-    });
+    updatePrefs({ ...extra, ...newsThirdLeaguePatch(sport, autoId) });
   };
+
+  // The News-ok day (src/lib/newsOkDay.ts): 5 s of News, or any highlight on
+  // screen, means spoilers are no longer a worry today, so an ESPN front
+  // page label's News button stops asking first.
+  useEffect(() => {
+    if (!showNews) return;
+    const t = setTimeout(() => markNewsOkDay(getDateString(0)), 5000);
+    return () => clearTimeout(t);
+  }, [showNews]);
+  const videoPlaying = !!(videoModal && (videoModal.videoId || videoModal.playbackUrl || videoModal.embedUrl));
+  useEffect(() => {
+    if (videoPlaying) markNewsOkDay(getDateString(0));
+  }, [videoPlaying]);
 
   // Update favicon based on ratings toggle
   useEffect(() => {
@@ -2868,6 +2939,42 @@ export default function HomeContent({
   // breaking the "Auto on col N = the column's default" guarantee.
   const sortedLeagues = leagues;
 
+  // The "News" link under the ESPN front page column's header (LeagueColumn
+  // onOpenNews, Jacob 10/10; not on the league rows or the recap pills). It
+  // passes "top": the reader is looking at espn.com's front page, so News
+  // opens on the ESPN layout and column 3 is left alone.
+  // A league (no caller today) opens the tab and, when it is not already one
+  // of the News columns, takes column 3 the way that column's own switcher
+  // would. One updatePrefs: two in a row would each spread the same stale
+  // `prefs` and the second would drop showNews.
+  const newsColumnShows = (sport: Sport): boolean => {
+    const queue = [...sortedLeagues];
+    const slotSports = [0, 1, 2].map((i) => (selectedSlotLeagues[i] === "empty" ? undefined : queue.shift()?.sport));
+    if (slotSports[0] === sport || slotSports[1] === sport) return true;
+    if (prefs.newsGenericHidden) return false;
+    if (prefs.newsThirdLeague) return prefs.newsThirdLeague === sport;
+    const topNewsPicked = prefs.newsTopNews ?? (prefs.newsGenericSlot !== undefined);
+    return !topNewsPicked && slotSports[2] === sport;
+  };
+  const openNewsFor = (sport: Sport, warned: boolean) => {
+    setNewsConfirm(null);
+    setShowNews(true);
+    updatePrefs({
+      showNews: true,
+      skipNewsExplainer: true,
+      ...(sport === "top"
+        ? { newsLayout: "espn" as const, newsFeedView: false }
+        : newsColumnShows(sport) ? {} : newsThirdLeaguePatch(sport, "espn")),
+    });
+    // The confirm already warned; the first-time bar would say it twice.
+    if (!prefs.skipNewsExplainer && !warned) setNewsNotice(true);
+    window.scrollTo({ top: 0 });
+  };
+  const requestNews = (sport: Sport) => {
+    if (newsNeedsConfirm(getETHour(), prefs.smartCutoffHour ?? 13, readNewsOkDay(), getDateString(0))) setNewsConfirm(sport);
+    else openNewsFor(sport, false);
+  };
+
   // Source cards use the current deterministic smart cascade. Ignore stale
   // newsSourceOrder values from the removed drag-reorder UI: otherwise an old
   // local preference can silently bury a newly added source forever.
@@ -3147,7 +3254,10 @@ export default function HomeContent({
   ].join("|");
   useEffect(() => {
     // localStorage is client-only, so the snapshot is read here, not in render.
-    if (showNews && prefs.newsHideSeen) setSeenSnapshot(seenKeys());
+    if (!(showNews && prefs.newsHideSeen)) return;
+    const keys = seenKeys();
+    if (restoredSeenKeyRef.current) keys.delete(restoredSeenKeyRef.current);
+    setSeenSnapshot(keys);
   }, [seenSnapshotTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
   const hideSeenKeys = prefs.newsHideSeen ? seenSnapshot : undefined;
   // Per-surface "dropped as seen" counts, summed for the 👁 tooltip.
@@ -3418,6 +3528,11 @@ export default function HomeContent({
     .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
     .some((l) => l.sport === "mlb");
   const bracketPillShown = bracketPillDue && mlbColumnShown;
+  // The Best column's span pill (BestSpanBar, ratings on) sits in the same
+  // row, so it reserves it on sibling columns too.
+  const bestBarShown = prefs.showRatings && sortedLeagues
+    .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
+    .some((l) => l.sport === "best");
   // Odds leave the pill once the field is set (Jacob 9/29). From the
   // postseason's first day that is a given; in the last week before it the
   // standings say so, fetched only then since no earlier day can have all
@@ -3460,7 +3575,12 @@ export default function HomeContent({
   };
   const anyRecap = (recapSportsSync
     ? recapSportsSync.size > 0
-    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown;
+    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown || bestBarShown;
+
+  // Cards view: what the toolbar's Media / Headlines / Posts show. The news
+  // board sets it while it renders below; the toolbar reads it in RenderLate.
+  // Null = no cards on screen (Feed, or the board has not loaded).
+  let newsBar: NewsBarState | null = null;
 
   return (
     <WatchQueueContext.Provider value={watchQueueApi}>
@@ -3903,7 +4023,7 @@ export default function HomeContent({
           <div ref={toolbarFit.scrollerRef} className="news-toolbar-scroll max-w-6xl mx-auto px-4 overflow-x-auto" data-compact={toolbarFit.compact ? "" : undefined}>
           <div ref={toolbarFit.rowRef} className="w-max mx-auto flex flex-nowrap items-center gap-2 pt-2 pb-2">
             <div className="inline-flex shrink-0 rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-              {([["Cards", "cards"], ["Feed", "feed"], ["ESPN", "espn"]] as const).map(([label, layout]) => (
+              {([["ESPN", "espn"], ["Cards", "cards"], ["Feed", "feed"]] as const).map(([label, layout]) => (
                 <button
                   type="button"
                   key={label}
@@ -3931,8 +4051,17 @@ export default function HomeContent({
               ))}
             </div>
             {/* ESPN layout (r5): the toolbar keeps only the layout switch;
-                every option button sits in its card's header (espnCardOverride). */}
-            {newsLayout !== "espn" && (<>
+                every option button sits in its card's header (newsCardOverrideFor).
+                Cards view: Media / Headlines / Posts show the state of the
+                cards on screen, which the board below works out (newsBar),
+                so they render late. Feed has no cards: the global prefs. */}
+            {newsLayout !== "espn" && (<RenderLate>{() => {
+              const bar: NewsBarState = newsBar ?? {
+                media: prefs.revealNewsMedia === true,
+                titles: !!prefs.revealNewsTitles,
+                posts: postFilterOf(prefs.newsVideosOnly, prefs.showTextPosts),
+              };
+              return (<>
             {/* Autoplay first (Jacob 10/9 r6). It dims while Media is blurred:
                 blurred clips do not play, so an on-looking chip with nothing
                 playing would read as broken. It still toggles. */}
@@ -3953,22 +4082,22 @@ export default function HomeContent({
                 first (Jacob 10/9 r6). */}
             <NewsToggleChip
               compact={toolbarFit.compact}
-              active={prefs.revealNewsMedia === true}
-              onClick={() => setGlobalNewsPref({ revealNewsMedia: prefs.revealNewsMedia !== true }, ["revealMedia"])}
+              active={bar.media}
+              onClick={() => setGlobalNewsPref({ revealNewsMedia: !bar.media }, ["revealMedia"])}
               title="Show or spoiler-blur news image and video previews"
               ariaLabel="Toggle media reveal"
             >
-              <MediaIcon />
+              <MediaIcon on={bar.media} />
               <span>Media</span>
             </NewsToggleChip>
             <NewsToggleChip
               compact={toolbarFit.compact}
-              active={!!prefs.revealNewsTitles}
-              onClick={() => setGlobalNewsPref({ revealNewsTitles: !prefs.revealNewsTitles }, ["revealTitles"])}
+              active={bar.titles}
+              onClick={() => setGlobalNewsPref({ revealNewsTitles: !bar.titles }, ["revealTitles"])}
               title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
               ariaLabel="Toggle headline reveal"
             >
-              <HeadlinesIcon on={!!prefs.revealNewsTitles} />
+              <HeadlinesIcon on={bar.titles} />
               <span>Headlines</span>
             </NewsToggleChip>
             {/* One Posts switch, All / No text / Videos (Jacob 10/9): it
@@ -3976,10 +4105,11 @@ export default function HomeContent({
                 states (with Videos only on, Text posts did nothing). */}
             <PostFilterSwitch
               compact={toolbarFit.compact}
-              value={postFilterOf(prefs.newsVideosOnly, prefs.showTextPosts)}
+              value={bar.posts}
               onChange={(f) => setGlobalNewsPref(globalPostFilterPatch(f), ["videosOnly", "textPosts"])}
             />
-            </>)}
+            </>);
+            }}</RenderLate>)}
           </div>
           </div>
         </div>
@@ -4243,6 +4373,135 @@ export default function HomeContent({
                 ? () => fetchLeagueNews(c.sport!, 10)
                 : () => fetchPrebaked(c.key),
             }));
+          // Each news card's header carries its own buttons (ESPN layout:
+          // Jacob 10/8 r5, order 10/9 r6; Cards view: 10/10). ESPN Videos in
+          // the ESPN layout = Autoplay, Big, Media, Headlines; every other
+          // ESPN or video card = Media, Headlines; each subreddit = Media,
+          // Headlines, Posts. Media / Headlines / Posts act on that card only
+          // (newsCardPrefs, falling back to the global pref); Big and Autoplay
+          // stay global. Autoplay dims while this card's Media is blurred.
+          // The labeled rows (Cards toolbar, Reddit bar) set the global prefs
+          // and clear these per-card values.
+          const inEspnLayout = newsLayout === "espn";
+          const cardPrefs = prefs.newsCardPrefs ?? {};
+          const setCardPref = (key: string, patch: Partial<NonNullable<typeof cardPrefs[string]>>) =>
+            updatePrefs({ newsCardPrefs: { ...cardPrefs, [key]: { ...cardPrefs[key], ...patch } } });
+          // What one card shows: its own pref, else the global one. The card
+          // headers and the labeled rows' state both read this.
+          const resolveCard = (key: string) => {
+            const cp = cardPrefs[key] ?? {};
+            // Posts is a subreddit card's control. A card without it shows
+            // every post in the ESPN layout (its two ESPN cards) and follows
+            // the toolbar's Posts switch in Cards view, as it always did.
+            const isSub = classifySource({ key }) === "reddit";
+            return {
+              isSub,
+              titles: cp.revealTitles ?? !!prefs.revealNewsTitles,
+              media: cp.revealMedia ?? prefs.revealNewsMedia === true,
+              vOnly: isSub ? cp.videosOnly ?? !!prefs.newsVideosOnly : !inEspnLayout && !!prefs.newsVideosOnly,
+              text: isSub ? cp.textPosts ?? !!prefs.showTextPosts : inEspnLayout || !!prefs.showTextPosts,
+            };
+          };
+          // A labeled row's state over the cards on screen: a chip shows on
+          // only when every card is on (mixed = off, so one tap turns all
+          // on); Posts shows no segment while the subs differ.
+          const barStateFor = (shown: { key?: string; label: string }[]): NewsBarState => {
+            const cards = shown.map((c) => resolveCard(c.key ?? c.label));
+            const subFilters = new Set(cards.filter((c) => c.isSub).map((c) => postFilterOf(c.vOnly, c.text)));
+            return {
+              media: cards.length > 0 ? cards.every((c) => c.media) : prefs.revealNewsMedia === true,
+              titles: cards.length > 0 ? cards.every((c) => c.titles) : !!prefs.revealNewsTitles,
+              posts: subFilters.size === 0
+                ? postFilterOf(prefs.newsVideosOnly, prefs.showTextPosts)
+                : subFilters.size === 1 ? [...subFilters][0] : null,
+            };
+          };
+          // The form of a subreddit card's Posts control, by its column. ONE
+          // width test, both layouts: is the column 280px or wider?
+          //   "switch"    a wide column (a phone, the 1-column board, an ESPN
+          //               layout with 1-2 subs): the 3-icon switch, always.
+          //   "switch-xl" a narrowCol column, 225px below the xl breakpoint
+          //               and 280px from it: the switch from xl up, else the
+          //               one cycling chip. At 225px the switch leaves the
+          //               label 2 letters, and under ~210px it does not fit.
+          //   "chip"      a column that stays under 280px at every width
+          //               (ESPN Big with 3 subs).
+          type PostsForm = "switch" | "switch-xl" | "chip";
+          const newsCardOverrideFor = (postsForm: PostsForm) => (source: NewsSource): CardOverride => {
+            const key = source.key ?? source.label;
+            const isVideos = inEspnLayout && key === ESPN_LAYOUT_VIDEOS.key;
+            const { isSub, titles, media, vOnly, text } = resolveCard(key);
+            const name = source.label;
+            const posts = postFilterOf(vOnly, text);
+            const setPosts = (f: PostFilter) => setCardPref(key, postFilterPatch(f));
+            // A Cards-view card with no Posts control leaves text posts to
+            // the global class (html.show-text-posts), as before.
+            const ownPosts = isSub || inEspnLayout;
+            return {
+              className: `news-card-titles-${titles ? "on" : "off"} news-card-media-${media ? "on" : "off"}${ownPosts ? ` news-card-textposts-${text ? "on" : "off"}` : ""}`,
+              titlesShown: titles,
+              videosOnly: vOnly,
+              showTextPosts: text,
+              noPostFilter: !ownPosts,
+              controls: (
+                <>
+                  {isVideos && (
+                    <CardChip
+                      active={newsAutoplay}
+                      onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
+                      title={newsAutoplay && !media ? AUTOPLAY_PAUSED_TITLE : AUTOPLAY_TITLE}
+                      ariaLabel="Toggle news autoplay"
+                      disabled={newsAutoplay && !media}
+                    >
+                      <AutoplayIcon on={newsAutoplay} size={14} />
+                    </CardChip>
+                  )}
+                  {isVideos && (
+                    <CardChip
+                      active={!!prefs.newsEspnBig}
+                      onClick={() => { window.scrollTo(0, 0); updatePrefs({ newsEspnBig: !prefs.newsEspnBig }); }}
+                      title="One wide column of big ESPN clips"
+                      ariaLabel="Toggle big ESPN videos"
+                    >
+                      <BigIcon size={14} />
+                    </CardChip>
+                  )}
+                  <CardChip
+                    active={media}
+                    onClick={() => setCardPref(key, { revealMedia: !media })}
+                    title={`Show or blur the images and videos in ${name}`}
+                    ariaLabel={`Toggle media reveal: ${name}`}
+                  >
+                    <MediaIcon on={media} size={14} />
+                  </CardChip>
+                  <CardChip
+                    active={titles}
+                    onClick={() => setCardPref(key, { revealTitles: !titles })}
+                    title={`Show or blur the headlines in ${name}`}
+                    ariaLabel={`Toggle headline reveal: ${name}`}
+                  >
+                    <HeadlinesIcon on={titles} size={14} />
+                  </CardChip>
+                  {isSub && postsForm === "switch" && (
+                    <PostFilterSwitch card={name} roomy value={posts} onChange={setPosts} />
+                  )}
+                  {isSub && postsForm === "switch-xl" && (
+                    <>
+                      <span className="hidden xl:contents">
+                        <PostFilterSwitch card={name} value={posts} onChange={setPosts} />
+                      </span>
+                      <span className="contents xl:hidden">
+                        <PostFilterCardChip value={posts} onChange={setPosts} name={name} />
+                      </span>
+                    </>
+                  )}
+                  {isSub && postsForm === "chip" && (
+                    <PostFilterCardChip value={posts} onChange={setPosts} name={name} />
+                  )}
+                </>
+              ),
+            };
+          };
           // Build visible news entries. Each of the three mirrors its scores
           // column; column 3 can also be set on its own (see thirdColEntry).
           // Type/hidden filters are applied at render-time so the dropdown
@@ -4632,91 +4891,6 @@ export default function HomeContent({
             }
             const redditShown = redditCols.slice(0, 3);
             const big = !!prefs.newsEspnBig;
-            // Each card's header carries its own buttons (Jacob 10/8 r5, order
-            // 10/9 r6): ESPN Videos = Autoplay, Big, Media, Headlines; Top
-            // Headlines = Media, Headlines; each subreddit = Media, Headlines,
-            // Posts (one chip that cycles All / No text / Videos, Jacob 10/9).
-            // Media / Headlines / Posts act on that card only (newsCardPrefs,
-            // falling back to the global pref); Big and Autoplay stay global.
-            // Autoplay dims while this card's Media is blurred. The Reddit bar
-            // sets the global prefs and clears these per-card values.
-            const cardPrefs = prefs.newsCardPrefs ?? {};
-            const setCardPref = (key: string, patch: Partial<NonNullable<typeof cardPrefs[string]>>) =>
-              updatePrefs({ newsCardPrefs: { ...cardPrefs, [key]: { ...cardPrefs[key], ...patch } } });
-            // What one card shows: its own pref, else the global one. The card
-            // headers and the Reddit bar's state both read this.
-            const resolveCard = (key: string) => {
-              const cp = cardPrefs[key] ?? {};
-              const isEspn = key === ESPN_LAYOUT_VIDEOS.key || key === ESPN_LAYOUT_HEADLINES.key;
-              return {
-                isEspn,
-                titles: cp.revealTitles ?? !!prefs.revealNewsTitles,
-                media: cp.revealMedia ?? prefs.revealNewsMedia === true,
-                // Posts does not apply to the ESPN cards.
-                vOnly: isEspn ? false : cp.videosOnly ?? !!prefs.newsVideosOnly,
-                text: isEspn ? true : cp.textPosts ?? !!prefs.showTextPosts,
-              };
-            };
-            const espnCardOverride = (source: NewsSource): CardOverride => {
-              const key = source.key ?? source.label;
-              const isVideos = key === ESPN_LAYOUT_VIDEOS.key;
-              const { isEspn, titles, media, vOnly, text } = resolveCard(key);
-              const name = source.label;
-              return {
-                className: `news-card-titles-${titles ? "on" : "off"} news-card-media-${media ? "on" : "off"} news-card-textposts-${text ? "on" : "off"}`,
-                titlesShown: titles,
-                videosOnly: vOnly,
-                showTextPosts: text,
-                controls: (
-                  <>
-                    {isVideos && (
-                      <CardChip
-                        active={newsAutoplay}
-                        onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
-                        title={newsAutoplay && !media ? AUTOPLAY_PAUSED_TITLE : AUTOPLAY_TITLE}
-                        ariaLabel="Toggle news autoplay"
-                        disabled={newsAutoplay && !media}
-                      >
-                        <AutoplayIcon on={newsAutoplay} size={14} />
-                      </CardChip>
-                    )}
-                    {isVideos && (
-                      <CardChip
-                        active={big}
-                        onClick={() => { window.scrollTo(0, 0); updatePrefs({ newsEspnBig: !big }); }}
-                        title="One wide column of big ESPN clips"
-                        ariaLabel="Toggle big ESPN videos"
-                      >
-                        <BigIcon size={14} />
-                      </CardChip>
-                    )}
-                    <CardChip
-                      active={media}
-                      onClick={() => setCardPref(key, { revealMedia: !media })}
-                      title={`Show or blur the images and videos in ${name}`}
-                      ariaLabel={`Toggle media reveal: ${name}`}
-                    >
-                      <MediaIcon size={14} />
-                    </CardChip>
-                    <CardChip
-                      active={titles}
-                      onClick={() => setCardPref(key, { revealTitles: !titles })}
-                      title={`Show or blur the headlines in ${name}`}
-                      ariaLabel={`Toggle headline reveal: ${name}`}
-                    >
-                      <HeadlinesIcon on={titles} size={14} />
-                    </CardChip>
-                    {!isEspn && (
-                      <PostFilterCardChip
-                        value={postFilterOf(vOnly, text)}
-                        onChange={(f) => setCardPref(key, postFilterPatch(f))}
-                        name={name}
-                      />
-                    )}
-                  </>
-                ),
-              };
-            };
             // No column titles (Jacob 10/8): each card's own header already
             // says ESPN Videos / ESPN Top Headlines / r/<sub>, and the titles
             // pushed Big's first clip half a screen down. Rows hug their
@@ -4732,7 +4906,8 @@ export default function HomeContent({
               hiddenCategories: hiddenNewsCategories,
               hideSeenKeys,
               onSeenHiddenCount: reportSeenHidden,
-              cardOverride: espnCardOverride,
+              cardOverride: newsCardOverrideFor("switch"),
+              onSiblingList: adoptSiblings,
             };
             const k = `espn-${newsRefreshKey}`;
             // The Reddit bar (Jacob 10/9): a pinned, labeled row on top of the
@@ -4740,14 +4915,12 @@ export default function HomeContent({
             // pref for EVERY card (ESPN Videos, Top Headlines, each sub). A chip
             // shows on only when every shown card is on (mixed = off, so one
             // tap turns all on); Posts shows no segment while the subs differ.
-            const shownCards = [ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)]
-              .map((c) => resolveCard(c.key ?? c.label));
-            const barMedia = shownCards.every((c) => c.media);
-            const barTitles = shownCards.every((c) => c.titles);
-            const subFilters = new Set(shownCards.filter((c) => !c.isEspn).map((c) => postFilterOf(c.vOnly, c.text)));
-            const barPosts: PostFilter | null = subFilters.size === 1 ? [...subFilters][0] : null;
+            const { media: barMedia, titles: barTitles, posts: barPosts } = barStateFor(
+              [ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)]);
             // --news-titlebar-h = the bar's height (h-11), so each sub's own
-            // header (.news-source-sticky-top) pins under the bar.
+            // header (.news-source-sticky-top) pins under the bar. Equal pin
+            // numbers can still crack apart at a fractional zoom; each row's
+            // seam lip (globals.css) fills it.
             const redditSection = (children: ReactNode) => (
               <section
                 aria-labelledby="news-espn-reddit-h"
@@ -4772,7 +4945,7 @@ export default function HomeContent({
                         title="Show or blur the images and videos in every card"
                         ariaLabel="Toggle media reveal: every card"
                       >
-                        <MediaIcon />
+                        <MediaIcon on={barMedia} />
                         <span>Media</span>
                       </NewsToggleChip>
                       <NewsToggleChip
@@ -4824,6 +4997,8 @@ export default function HomeContent({
               );
             }
             const redditWidth = redditShown.length >= 3 ? narrowCol : "flex-1 min-w-0 max-w-[360px]";
+            // 3 subs: narrowCol columns (Big: a 720px grid, 229px each).
+            const redditOverride = newsCardOverrideFor(redditShown.length >= 3 ? (big ? "chip" : "switch-xl") : "switch");
             return (
               <div className="flex flex-col gap-6 pt-2" data-testid="news-espn-layout">
                 {big ? (
@@ -4879,6 +5054,7 @@ export default function HomeContent({
                         sources={cascadeToSources(c.cascade)}
                         widthClassName={big ? "min-w-0" : redditWidth}
                         {...columnProps}
+                        cardOverride={redditOverride}
                       />
                     ))}
                   </div>,
@@ -4902,6 +5078,7 @@ export default function HomeContent({
                 groups={feedGroups}
                 refreshKey={newsRefreshKey}
                 onPlay={playNewsVideo}
+                onSiblingList={adoptSiblings}
                 showTextPosts={!!prefs.showTextPosts}
                 videosOnly={!!prefs.newsVideosOnly}
                 oldestFirst={!!prefs.newsOldestFirst}
@@ -4913,6 +5090,18 @@ export default function HomeContent({
             );
           }
 
+          // Cards view: the toolbar's Media / Headlines / Posts read like the
+          // Reddit bar, over every card on screen (the ESPN headlines folded
+          // into the strip's tail are rows of that strip card, not a card).
+          const mergedMobile = isMobile && renderedEntries.length > 1;
+          // wideCol (1 column) or narrowCol: see widthClassFor.
+          const cardsOverride = newsCardOverrideFor(effectiveColCount === 1 ? "switch" : "switch-xl");
+          newsBar = barStateFor(mergedMobile
+            ? mobileMergedSources()
+            : renderedEntries.flatMap((entry, idx) => [
+                ...(stripActive ? stripCols[idx].slice(0, 1) : []),
+                ...sourcesForEntry(entry, idx),
+              ]));
           return (
             <>
               {stripActive && (
@@ -4957,6 +5146,7 @@ export default function HomeContent({
                     key={`avs-${newsRefreshKey}`}
                     sources={stripCols.map((s) => s[0])}
                     onPlay={playNewsVideo}
+                    onSiblingList={adoptSiblings}
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
                     tailColIdx={useEspnTopTail ? espnColIdx : undefined}
                     showTextPosts={!!prefs.showTextPosts}
@@ -4966,6 +5156,7 @@ export default function HomeContent({
                     hideSeenKeys={hideSeenKeys}
                     autoplay={newsAutoplay}
                     onSeenHiddenCount={reportSeenHidden}
+                    cardOverride={cardsOverride}
                   />
                 </>
               )}
@@ -4977,7 +5168,7 @@ export default function HomeContent({
                     columns stay centered (multi-column only; 1-col centers the
                     + below the single column). */}
                 {newsOnAddColumn && effectiveColCount !== 1 && <div aria-hidden className="shrink-0" style={{ width: 44 }} />}
-                {isMobile && renderedEntries.length > 1 ? (
+                {mergedMobile ? (
                   // Phones: one merged, hand-ordered feed (no per-league titles —
                   // the cards span every league, so a single league header would
                   // be misleading). See mobileMergedSources for the order.
@@ -4987,6 +5178,7 @@ export default function HomeContent({
                     sources={mobileMergedSources()}
                     hideTitle
                     onPlayVideo={playNewsVideo}
+                    onSiblingList={adoptSiblings}
                     widthClassName={widthClassFor()}
                     videosOnly={!!prefs.newsVideosOnly}
                     showTextPosts={!!prefs.showTextPosts}
@@ -4995,6 +5187,7 @@ export default function HomeContent({
                     hideSeenKeys={hideSeenKeys}
                     autoplayVideos={newsAutoplay}
                     onSeenHiddenCount={reportSeenHidden}
+                    cardOverride={cardsOverride}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -5018,6 +5211,7 @@ export default function HomeContent({
                       autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                       hideTitle={stripActive}
                       onPlayVideo={newsPlayFor(entry.sport ?? entry.id)}
+                      onSiblingList={adoptSiblings}
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
                       showTextPosts={!!prefs.showTextPosts}
@@ -5026,6 +5220,7 @@ export default function HomeContent({
                       hideSeenKeys={hideSeenKeys}
                       autoplayVideos={newsAutoplay}
                       onSeenHiddenCount={reportSeenHidden}
+                      cardOverride={cardsOverride}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).
                       removable={renderedEntries.length > 1}
@@ -5139,6 +5334,7 @@ export default function HomeContent({
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
               onAddLeague: (sport: Sport, anchor: DOMRect) => setAddLeague({ sport, anchor }),
+              onOpenNews: !showNews ? requestNews : null,
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
@@ -5160,19 +5356,19 @@ export default function HomeContent({
               if (bestSpanData?.key === bestSpanKey) return bestSpanData.data;
               return { sport: "best", label: TOP_GAMES_COLUMN_LABEL[bestSpan], games: [], emptyLabel: "Loading…" };
             };
+            // With ratings on, the Best column's span pill IS its top card: it
+            // takes the recap / Playoff pill row (BestSpanBar matches a pill's
+            // height), so there is no spacer above it. Ratings off: no pill,
+            // the spacer as before.
             const bestTopCard = (league: LeagueData) => {
-              const recap = recapTopCard(league);
-              if (league.sport !== "best" || !prefs.showRatings) return recap;
+              if (league.sport !== "best" || !prefs.showRatings) return recapTopCard(league);
               return (
-                <>
-                  {recap}
-                  <BestSpanBar
-                    span={bestSpan}
-                    allLeagues={bestAllLeagues}
-                    onSpan={(span) => updatePrefs({ bestSpan: span === "yesterday" ? undefined : span })}
-                    onAllLeagues={(on) => updatePrefs({ bestAllLeagues: on ? true : undefined })}
-                  />
-                </>
+                <BestSpanBar
+                  span={bestSpan}
+                  allLeagues={bestAllLeagues}
+                  onSpan={(span) => updatePrefs({ bestSpan: span === "yesterday" ? undefined : span })}
+                  onAllLeagues={(on) => updatePrefs({ bestAllLeagues: on ? true : undefined })}
+                />
               );
             };
             // Per-slot swap dropdowns: every column lists every in-season
@@ -6087,9 +6283,10 @@ export default function HomeContent({
           maskVideoTitle={prefs.maskVideoTitle ?? false}
           forceTitleMask={!!videoModal.forceTitleMask}
           // A tap from a card carries that card's Headlines value. A reloaded
-          // or pasted post has none, so in the ESPN layout it follows the card
-          // its section belongs to (null = the global Headlines button).
-          titlesShown={videoModal.titlesShown ?? (newsLayout === "espn"
+          // or pasted post has none, so where cards have their own buttons
+          // (ESPN layout, Cards view) it follows the card its section belongs
+          // to (null = the global Headlines button).
+          titlesShown={videoModal.titlesShown ?? (newsLayout !== "feed"
             ? prefs.newsCardPrefs?.[newsCardKeyForSection(videoModal.section ?? videoModal.sourceLabel) ?? ""]?.revealTitles ?? null
             : null)}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
@@ -6145,6 +6342,16 @@ export default function HomeContent({
           highlightGroup={groupsHighlight}
           selectedDate={selectedDate}
           onClose={() => { setGroupsOpen(false); setGroupsHighlight(null); }}
+        />
+      )}
+
+      {newsConfirm && (
+        <NewsSpoilerConfirm
+          onCancel={() => setNewsConfirm(null)}
+          onConfirm={() => {
+            markNewsOkDay(getDateString(0));
+            openNewsFor(newsConfirm, true);
+          }}
         />
       )}
 
