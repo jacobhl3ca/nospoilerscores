@@ -305,6 +305,13 @@ export type NewsLayout = "cards" | "feed" | "espn";
 // The Posts switch (All / No text / Videos) over videosOnly + textPosts.
 export { type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField } from "./postFilter";
 
+// The news layout a visitor with no stored blob gets (Jacob 10/10: ESPN is
+// the first pill and the default). loadPreferences sets it for that visitor
+// only. It is NOT in `defaults`: those spread under every stored blob, and a
+// blob from before newsLayout has none, so a default there would move every
+// old Cards user to ESPN.
+export const FRESH_NEWS_LAYOUT: NewsLayout = "espn";
+
 // The news layout to render. newsLayout wins; a blob from before it existed
 // carries only newsFeedView (true = Feed).
 export function newsLayoutOf(prefs: { newsLayout?: NewsLayout; newsFeedView?: boolean }): NewsLayout {
@@ -774,7 +781,9 @@ export function loadPreferences(): Preferences {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const stored = raw ? JSON.parse(raw) : null;
-    const prefs = stored ? { ...defaults, ...stored } : { ...defaults };
+    // No blob = a new visitor: News opens on the ESPN layout. A stored blob
+    // keeps its own layout (none = Cards or Feed, see newsLayoutOf).
+    const prefs = stored ? { ...defaults, ...stored } : { ...defaults, newsLayout: FRESH_NEWS_LAYOUT };
     // Do not let the v2 value from defaults disguise a legacy stored blob.
     // HomeContent needs this missing marker to preserve every old checkmark
     // before the first post-deploy save overwrites the blob.

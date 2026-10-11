@@ -5,7 +5,7 @@ import { NewsItem, proxyImage } from "@/lib/news";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import { handleExternalClick } from "@/lib/openExternal";
 import { frontendHref } from "@/lib/frontendLinks";
-import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
+import { CardOverride, NewsSource, PlayHandler, PlayOpts, SourceHeader, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
 import { AutoplayVideo, TapForSound } from "@/components/InlineVideoCard";
@@ -42,6 +42,10 @@ interface Props {
   onSeenHiddenCount?: (id: string, count: number) => void;
   // News Autoplay pill: the clip most in focus plays muted (InlineVideoCard).
   autoplay?: boolean;
+  // Each column's own header buttons and reveal classes (see NewsColumn's
+  // prop of the same name). Only controls, className and titlesShown apply:
+  // every cell here is a clip, so Posts has nothing to filter.
+  cardOverride?: (source: NewsSource) => CardOverride | undefined;
 }
 
 // 3-column video strip — CSS subgrid so video N is the same height in every
@@ -49,7 +53,7 @@ interface Props {
 // gridTemplateRows: subgrid. Per-row height = tallest headline at that row,
 // shorter cells anchor align-self: start so blank space sits at the bottom.
 // Headlines stay un-clamped so long titles wrap fully (Jacob 2026-05-02).
-export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tailFetch, tailColIdx, showTextPosts, videosOnly, hiddenCategories, oldestFirst, hideSeenKeys, onSeenHiddenCount, autoplay }: Props) {
+export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tailFetch, tailColIdx, showTextPosts, videosOnly, hiddenCategories, oldestFirst, hideSeenKeys, onSeenHiddenCount, autoplay, cardOverride }: Props) {
   const [colItems, setColItems] = useState<(NewsItem[] | null)[]>(() => sources.map(() => null));
   const [tailItems, setTailItems] = useState<NewsItem[] | null>(null);
 
@@ -155,7 +159,9 @@ export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tail
 
   // Each column's layout numbers and its modal ‹ › list, worked out before
   // the render so the lists can also go up to onSiblingList.
-  const cols = sources.map((_source, colIdx) => {
+  const cols = sources.map((source, colIdx) => {
+    const override = cardOverride?.(source);
+    const titlesShown = override?.titlesShown;
     // The refetch effect resizes `colItems` to the current `sources` on
     // every source-set change, so colIdx normally has a matching slot. This
     // `?? null` stays as belt-and-suspenders for the one render between a
@@ -185,11 +191,17 @@ export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tail
     // column to load. Once items settle, this is byte-identical to before.
     const hasTail = items !== null && tail.length > 0 && padCount > 0;
     const modalItems = [...(items?.slice(0, itemCount) ?? []), ...(hasTail ? tail : [])];
-    const siblings: PlayOpts[] = modalItems.map(newsItemToPlayOpts);
-    return { items, itemCount, padCount, tail, hasTail, siblings };
+    // Each post carries its column's Headlines setting into the modal.
+    const siblings: PlayOpts[] = modalItems.map(newsItemToPlayOpts)
+      .map((o) => (titlesShown === undefined ? o : { ...o, titlesShown }));
+    const play: PlayHandler | undefined = onPlay && titlesShown !== undefined
+      ? (opts) => onPlay({ ...opts, titlesShown })
+      : onPlay;
+    return { items, itemCount, padCount, tail, hasTail, siblings, override, play };
   });
-  // Keyed on the posts in each list: the arrays are rebuilt every render.
-  const listsKey = cols.map((c) => c.siblings.map((o) => o.seenKey).join(" ")).join("|");
+  // Keyed on the posts in each list (and its Headlines setting): the arrays
+  // are rebuilt every render.
+  const listsKey = cols.map((c) => `${c.override?.titlesShown ?? ""}:${c.siblings.map((o) => o.seenKey).join(" ")}`).join("|");
   useEffect(() => {
     for (const c of cols) if (c.siblings.length) onSiblingList?.(c.siblings);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,7 +221,7 @@ export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tail
       }}
     >
       {sources.map((source, colIdx) => {
-        const { items, itemCount, padCount, tail, hasTail, siblings } = cols[colIdx];
+        const { items, itemCount, padCount, tail, hasTail, siblings, override, play } = cols[colIdx];
         return (
           <div
             // Composite key: the strip is fed one lead source per column
@@ -229,7 +241,7 @@ export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tail
             // parent's top edge as a single 1px line — real borders on the
             // parent would push the inner 1px inward, producing a 2px nested-
             // curve at the top corners.
-            className="rounded-lg overflow-clip grid"
+            className={`rounded-lg overflow-clip grid${override?.className ? ` ${override.className}` : ""}`}
             style={{
               background: "var(--bg-card)",
               boxShadow: "inset 0 0 0 1px var(--border)",
@@ -237,7 +249,7 @@ export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tail
               gridTemplateRows: "subgrid",
             }}
           >
-            <SourceHeader label={source.label} logoUrl={source.logoUrl} />
+            <SourceHeader label={source.label} logoUrl={source.logoUrl} controls={override?.controls} />
             {items === null
               ? (
                   // Announce the loading state; the pulsing SkeletonRows are
@@ -252,7 +264,7 @@ export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tail
                   </>
                 )
               : items.slice(0, itemCount).map((item, rowIdx) => (
-                  <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} siblings={siblings} index={rowIdx} autoplay={autoplay} />
+                  <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={play} siblings={siblings} index={rowIdx} autoplay={autoplay} />
                 ))}
             {hasTail ? (
               // One spanning grid item that occupies col 3's empty pad rows.
@@ -263,7 +275,7 @@ export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tail
                 className="flex flex-col h-full overflow-hidden"
               >
                 {tail.map((item, i) => (
-                  <CompactTailRow key={`tail-${item.id}`} item={item} isFirst={i === 0} onPlay={onPlay} siblings={siblings} index={itemCount + i} />
+                  <CompactTailRow key={`tail-${item.id}`} item={item} isFirst={i === 0} onPlay={play} siblings={siblings} index={itemCount + i} />
                 ))}
               </div>
             ) : (
@@ -277,72 +289,6 @@ export default function AlignedVideoStrip({ sources, onPlay, onSiblingList, tail
       })}
     </div>
   );
-}
-
-function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
-  const mobileLabel = stripLeaguePrefixForMobile(label);
-  return (
-    // See NewsColumn.SourceHeader for the wrapper rationale.
-    <div
-      className="news-source-sticky-top sticky z-20"
-      style={{ background: "var(--bg)" }}
-    >
-      {/* borderTop here is what the user sees as the top edge when this bar
-          is pinned to the viewport (parent card's borderTop has scrolled
-          off-screen by then). At natural state it sits 1px below parent's
-          borderTop — slight 2px-line visual on a faint var(--border), which
-          is the lesser evil vs. an unbordered pinned bar. */}
-      <div
-        className="rounded-t-lg px-3 py-2.5 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-wide"
-        style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
-      >
-        {logoUrl && !isDemoModeActive() && (
-          // Same drop as NewsColumn.SourceHeader — a real league/broadcaster
-          // mark used as app chrome under ?demo=1.
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={logoUrl}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            width={24}
-            height={24}
-            className="w-6 h-6 object-contain shrink-0"
-            draggable={false}
-            // Remote source mark (ESPN CDN + Wikimedia hotlinks) — a 404 or
-            // blocked hotlink would otherwise leave the browser's broken-image
-            // glyph in the sticky header. Hide it so the header degrades to its
-            // always-present label text, matching the identical guard on its
-            // twin NewsColumn.SourceHeader (this one was missed when that landed).
-            onError={(e) => { e.currentTarget.style.display = "none"; }}
-          />
-        )}
-        {mobileLabel !== label ? (
-          <>
-            <span className="sm:hidden">{mobileLabel}</span>
-            <span className="hidden sm:inline">{label}</span>
-          </>
-        ) : (
-          <span>{label}</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Strip league/network tokens from the source label on narrow screens so the
-// logo + remaining text isn't redundant ("MLB MLB MOST POPULAR" effect when
-// the logo already conveys the league). Repeats so "ESPN NBA" → "" → keep
-// original. Empty after strip falls back to the full label.
-function stripLeaguePrefixForMobile(label: string): string {
-  let s = label;
-  for (let i = 0; i < 3; i++) {
-    const m = s.match(/^(?:NBA|MLB|NHL|NFL|EPL|MLS|UCL|UEL|NCAAM|NCAAW|NCAAF|ESPN|GOLF|TENNIS|F1|WNBA)\s+/i);
-    if (!m) break;
-    s = s.slice(m[0].length);
-  }
-  s = s.trim();
-  return s || label;
 }
 
 function SkeletonRow({ isFirst }: { isFirst: boolean }) {
