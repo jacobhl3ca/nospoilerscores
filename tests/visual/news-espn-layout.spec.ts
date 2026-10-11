@@ -1183,7 +1183,13 @@ test("Media icon: a slash when off, none when on (toolbar, card headers, Reddit 
 });
 
 test("a new visitor's News opens on ESPN; a stored blob with no layout stays on Cards", async ({ page, browser }) => {
-  // No stored prefs at all.
+  // No stored prefs at all. The first-run "Pick your leagues" sheet comes up
+  // once the day's leagues load (often after the page is usable), and its
+  // scrim swallows clicks: take Use defaults whenever it turns up, as
+  // settings-shape.spec.ts does.
+  await page.addLocatorHandler(page.getByRole("button", { name: "Use defaults" }), async (defaults) => {
+    await defaults.evaluate((el) => (el as HTMLElement).click());
+  });
   await mockFeeds(page);
   await page.goto("/");
   await page.getByRole("button", { name: /^News/ }).first().click();
