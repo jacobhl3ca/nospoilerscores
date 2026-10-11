@@ -131,7 +131,7 @@ export async function openFakeStreamClip(page: Page) {
   }));
   await page.route("https://clips.example.test/**", (route) => route.fulfill({ status: 404, body: "" }));
   await page.goto("/");
-  await page.locator('button[aria-label^="Play highlight:"], button[aria-label="Open post"]', { hasText: /Clip one/ }).first().click();
+  await page.locator('button[aria-label="Play highlight"], button[aria-label="Open post"]', { hasText: /Clip one/ }).first().click();
   const dialog = page.getByRole("dialog", { name: "Video player" });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator("video")).toBeAttached();

@@ -2252,22 +2252,10 @@ export default function LeagueColumn({
                       const elsewhere = isCurrent ? undefined : shownElsewhere?.find((e) => e.sport === opt.sport);
                       const isAutoDefault = opt.sport === autoSport;
                       if (removeMode) {
-                        // A league on the board stays: taking it off the list
-                        // would also swap out the column showing it. Plain
-                        // text, not a button, so it reads as not pickable.
-                        if (isCurrent || elsewhere) {
-                          return (
-                            <div
-                              key={opt.sport}
-                              className="w-full px-3 py-1.5 text-xs text-left"
-                              style={{ color: "var(--text-muted)" }}
-                              title="On the board. Change that column first"
-                            >
-                              {opt.label}
-                              <em className="font-normal"> · {elsewhere ? `col ${elsewhere.col}` : "this col"}</em>
-                            </div>
-                          );
-                        }
+                        // A league on the board is pickable too (Jacob 10/10):
+                        // removing it closes the column showing it, and the tag
+                        // says which one before the tap.
+                        const closes = isCurrent ? "closes this col" : elsewhere ? `closes col ${elsewhere.col}` : null;
                         const picked = toRemove.includes(opt.sport);
                         return (
                           <button
@@ -2285,6 +2273,7 @@ export default function LeagueColumn({
                           >
                             {opt.label}
                             {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
+                            {closes && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · {closes}</em>}
                           </button>
                         );
                       }
@@ -2315,7 +2304,8 @@ export default function LeagueColumn({
                       );
                     })}
                     {/* Pick mode footer: Remove N saves every pick in one go and
-                        leaves the panel open without those rows; Cancel drops
+                        leaves the panel open without those rows (closed when
+                        a league on the board is one of them); Cancel drops
                         the picks. */}
                     {removeMode && (
                       <>
@@ -2323,7 +2313,15 @@ export default function LeagueColumn({
                           type="button"
                           data-testid="league-switcher-remove-confirm"
                           disabled={toRemove.length === 0}
-                          onClick={() => { onRemoveFromList!(toRemove); setToRemove([]); setRemoveMode(false); }}
+                          onClick={() => {
+                            // A board league closes its column and the board
+                            // re-lays out, so the panel closes first rather
+                            // than sit on a column that unmounts or moves.
+                            if (toRemove.some((s) => s === league.sport || hasOwnColumn(s))) setSwapOpen(false);
+                            onRemoveFromList!(toRemove);
+                            setToRemove([]);
+                            setRemoveMode(false);
+                          }}
                           className="w-full px-3 py-1.5 text-xs text-left cursor-pointer disabled:cursor-default transition-colors"
                           style={{
                             color: toRemove.length ? "var(--accent)" : "var(--text-muted)",

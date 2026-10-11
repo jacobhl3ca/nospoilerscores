@@ -986,7 +986,9 @@ export default function SettingsPanel({
     newsLayout: FRESH_NEWS_LAYOUT,
     newsEspnBig: undefined,
     newsAutoplay: undefined,
-    newsCardPrefs: undefined,
+    // {} and not undefined: an emptied set is one the account copy holds, so
+    // the reset reaches the other devices (prefsMerge carryCardPrefs).
+    newsCardPrefs: {},
     newsVideosOnly: undefined,
     newsOldestFirst: undefined,
     newsHideSeen: undefined,

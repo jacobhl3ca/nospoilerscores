@@ -436,6 +436,18 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('nss-preferences');var reveal=false;if(t){var p=JSON.parse(t);reveal=p.revealNewsMedia===true}if(!reveal){document.documentElement.classList.add('blur-news-media')}}catch(e){document.documentElement.classList.add('blur-news-media')}})()`,
           }}
         />
+        {/* News headlines stay blurred for a signed-in tab until its account
+            prefs are in (Jacob 10/10). nss-auth is prefsSync's cached /api/me
+            answer; the pull behind it lands 1-3 s after first paint, and until
+            then this device's copy could show a headline the account copy
+            hides. HomeContent lifts the class when the pull is applied. The
+            8 s timer is the cap for a page that never pulls or a pull that
+            hangs, so headlines the user turned on are never held for good. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var a=localStorage.getItem('nss-auth');if(a){var j=JSON.parse(a);if(j&&j.state&&j.state.signedIn){var d=document.documentElement;d.classList.add('hs-prefs-settling');setTimeout(function(){d.classList.remove('hs-prefs-settling')},8000)}}}catch(e){}})()`,
+          }}
+        />
         {/* Text posts are SHOWN by default (Jacob 8/9) — a Reddit feed with its
             discussion threads stripped out is mostly empty, and a first-time
             visitor has no idea a hidden "Text posts" chip is why. The CSS rule

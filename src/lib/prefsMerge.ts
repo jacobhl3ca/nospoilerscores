@@ -31,3 +31,18 @@ function stableJson(value: unknown): string {
     return Object.fromEntries(Object.keys(obj).sort().map((k) => [k, obj[k]]));
   });
 }
+
+/**
+ * The per-card news values (each card's Headlines / Media / Posts) through a
+ * pull: the one key this device keeps when the account copy has none.
+ *
+ * An account copy with no `newsCardPrefs` key was written before the per-card
+ * buttons existed, or by a device that never used them. Reading that as
+ * "default" put every card back on the toolbar's Headlines value 1-3 s after
+ * load, so a card set to hide its headlines showed them (Jacob 10/10). A set
+ * the user emptied is `{}`, which the account copy does hold, so a real clear
+ * still reaches every device.
+ */
+export function carryCardPrefs<T extends object>(local: T | undefined, remote: T | undefined): T | undefined {
+  return remote === undefined ? local : remote;
+}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { accountPrefsBase, samePrefs } from "../src/lib/prefsMerge.ts";
+import { accountPrefsBase, carryCardPrefs, samePrefs } from "../src/lib/prefsMerge.ts";
 
 // Jacob 9/25: news column 3 kept coming back as CFL. The account copy had the
 // pick cleared (JSON drops undefined, so the key was simply gone), but the pull
@@ -27,4 +27,18 @@ test("samePrefs ignores key order and undefined values", () => {
   assert.equal(samePrefs({ a: 1, b: undefined }, { a: 1 }), true);
   assert.equal(samePrefs({ a: 1, n: "cfl" }, { a: 1 }), false);
   assert.equal(samePrefs({ l: [1, 2] }, { l: [2, 1] }), false);
+});
+
+// Jacob 10/10: an account copy with no per-card news values put a card that
+// hides its headlines back on the toolbar's Headlines value after the pull.
+test("carryCardPrefs keeps this device's per-card values when the account copy has none", () => {
+  const local = { "espn-videos": { revealTitles: false } };
+  assert.deepEqual(carryCardPrefs(local, undefined), local);
+});
+
+test("carryCardPrefs: the account copy wins when it holds the key, an emptied set included", () => {
+  const local: Record<string, { revealTitles?: boolean }> = { "espn-videos": { revealTitles: false } };
+  assert.deepEqual(carryCardPrefs(local, { "reddit-mlb": { revealTitles: true } }), { "reddit-mlb": { revealTitles: true } });
+  assert.deepEqual(carryCardPrefs(local, {}), {});
+  assert.equal(carryCardPrefs(undefined, undefined), undefined);
 });

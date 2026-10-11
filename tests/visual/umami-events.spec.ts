@@ -84,7 +84,7 @@ async function openNewsClip(page: Page) {
   }));
   await page.route("https://clips.example.test/**", (route) => route.fulfill({ status: 200, contentType: "video/webm", body: CLIP }));
   await page.goto("/");
-  await page.locator('button[aria-label^="Play highlight:"], button[aria-label="Open post"]', { hasText: /Clip one/ }).first().click();
+  await page.locator('button[aria-label="Play highlight"], button[aria-label="Open post"]', { hasText: /Clip one/ }).first().click();
   await expect(page.getByRole("dialog", { name: "Video player" })).toBeVisible();
   await expect(page.locator('[role="dialog"] video')).toBeVisible();
 }
