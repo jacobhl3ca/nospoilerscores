@@ -133,6 +133,48 @@ export function frontendConfig(): FrontendConfig {
   return current ?? {};
 }
 
+// A post link without the headline in it (Jacob 10/10). A Reddit permalink
+// and an ESPN story URL both end in a slug of the headline, and a browser
+// shows a link's URL in its status bar on hover, so the blurred headline was
+// readable there. Both sites resolve the link by its id alone:
+//   reddit.com/r/<sub>/comments/<id>/<slug>/  ->  /r/<sub>/comments/<id>/
+//   espn.com/<…>/story/_/id/<id>/<slug>       ->  /<…>/story/_/id/<id>
+// A Reddit comment permalink keeps its comment id behind a "_" placeholder.
+// Any other link is returned as is. Never throws.
+const REDDIT_POST_PATH = /^(\/(?:r|u|user)\/[^/]+\/comments\/[^/]+)\/[^/]+(\/.*)?$/;
+const ESPN_ID_PATH = /^(.*\/_\/id\/\d+)\/[^/]+\/?$/;
+const ESPN_HOST = /(^|\.)espn\.(com|co\.uk|com\.au|com\.mx|com\.br|in)$/;
+
+export function spoilerSafeHref(url: string): string {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  const host = u.hostname.toLowerCase();
+  if (REDDIT_HOSTS.has(host)) {
+    const m = REDDIT_POST_PATH.exec(u.pathname);
+    if (!m) return url;
+    const rest = m[2] && m[2] !== "/" ? `/_${m[2]}` : "/";
+    return `${u.origin}${m[1]}${rest}${u.search}${u.hash}`;
+  }
+  if (ESPN_HOST.test(host)) {
+    const m = ESPN_ID_PATH.exec(u.pathname);
+    return m ? `${u.origin}${m[1]}${u.search}${u.hash}` : url;
+  }
+  return url;
+}
+
+/**
+ * The `href` of a link to a news post: spoilerSafeHref, then the user's own
+ * frontend. For every link drawn on a post whose headline may be blurred.
+ */
+export function postHref(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  return rewriteExternalUrl(spoilerSafeHref(url), frontendConfig());
+}
+
 /**
  * Shorthand for an `href`: the rewritten link under the current settings.
  * Blank → undefined, so an empty URL drops the attribute (as `url || undefined`

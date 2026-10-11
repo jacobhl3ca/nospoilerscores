@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeFrontend, rewriteExternalUrl } from "../src/lib/frontendLinks.ts";
+import { normalizeFrontend, rewriteExternalUrl, spoilerSafeHref } from "../src/lib/frontendLinks.ts";
 
 // Settings → Links (9/28): Reddit / YouTube links open on the user's own
 // Redlib / Invidious instead of reddit.com / youtube.com.
@@ -75,4 +75,31 @@ test("instance: trailing slash trimmed, http allowed, a sub-path kept", () => {
     rewriteExternalUrl("https://youtu.be/dQw4w9WgXcQ", { youtube: "https://home.test/invidious/" }),
     "https://home.test/invidious/watch?v=dQw4w9WgXcQ",
   );
+});
+
+// Jacob 10/10: a blurred headline was readable in the browser's status bar on
+// hover, because a Reddit permalink and an ESPN story URL end in a slug of it.
+const safe: Array<[string, string, string]> = [
+  ["reddit post", "https://www.reddit.com/r/baseball/comments/1abc23/yankees_walk_it_off_in_the_9th/", "https://www.reddit.com/r/baseball/comments/1abc23/"],
+  ["reddit post, no trailing slash, query kept", "https://old.reddit.com/r/nfl/comments/xyz9/chiefs_lose?sort=top", "https://old.reddit.com/r/nfl/comments/xyz9/?sort=top"],
+  ["reddit comment keeps its id", "https://www.reddit.com/r/nba/comments/abc/lakers_win/k1x2y3/", "https://www.reddit.com/r/nba/comments/abc/_/k1x2y3/"],
+  ["reddit post with no slug", "https://reddit.com/r/nba/comments/xyz/", "https://reddit.com/r/nba/comments/xyz/"],
+  ["reddit sub page", "https://www.reddit.com/r/soccer/", "https://www.reddit.com/r/soccer/"],
+  ["espn story", "https://www.espn.com/nfl/story/_/id/46512345/chiefs-beat-bills-overtime", "https://www.espn.com/nfl/story/_/id/46512345"],
+  ["espn story, top level", "https://www.espn.com/story/_/id/123/who-won-the-world-series", "https://www.espn.com/story/_/id/123"],
+  ["espn clip has no slug", "https://www.espn.com/video/clip/_/id/46512345", "https://www.espn.com/video/clip/_/id/46512345"],
+  ["espn game page", "https://www.espn.com/mlb/recap/_/gameId/401581234", "https://www.espn.com/mlb/recap/_/gameId/401581234"],
+  ["another site", "https://www.mlb.com/news/yankees-walk-off", "https://www.mlb.com/news/yankees-walk-off"],
+  ["not a URL", "not a url", "not a url"],
+];
+
+for (const [name, input, expected] of safe) {
+  test(`spoilerSafeHref: ${name}`, () => {
+    assert.equal(spoilerSafeHref(input), expected);
+  });
+}
+
+test("spoilerSafeHref: the stripped Reddit link still moves to the user's Redlib", () => {
+  const stripped = spoilerSafeHref("https://www.reddit.com/r/baseball/comments/1abc23/yankees_walk_it_off/");
+  assert.equal(rewriteExternalUrl(stripped, { reddit: RED }), `${RED}/r/baseball/comments/1abc23/`);
 });

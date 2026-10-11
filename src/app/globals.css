@@ -185,15 +185,19 @@
    (modal headline + body). cursor:pointer hints the tap-to-reveal. */
 .news-title {
   filter: blur(7px);
-  transition: filter 0.15s ease;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
 }
+/* The fade lives on the reveal rules only: a transition runs from the style a
+   change lands on, so showing a headline fades and hiding one is instant. A
+   class set wrong for one frame and then corrected can never fade a headline
+   out through half-readable (Jacob 10/10). */
 html.reveal-news-titles .news-title,
 .news-card-titles-on .news-title,
 .news-title.peek {
   filter: none;
+  transition: filter 0.15s ease;
   cursor: auto;
   user-select: auto;
   -webkit-user-select: auto;
@@ -203,6 +207,20 @@ html.reveal-news-titles .news-title,
    CardOverride); a single tapped .peek row still shows. */
 html.reveal-news-titles .news-card-titles-off .news-title:not(.peek) {
   filter: blur(7px);
+  transition: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* A signed-in tab, until the account copy of the prefs is in: every headline
+   stays blurred whatever this device's copy says, because the account may
+   hide what this device shows. Set pre-paint by layout.tsx from the cached
+   sign-in, lifted by HomeContent once the pull has landed (the inline script
+   lifts it itself after 8 s, for a page with no pull). A tapped .peek row
+   still shows. */
+html.hs-prefs-settling .news-title:not(.peek) {
+  filter: blur(7px);
+  transition: none;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;

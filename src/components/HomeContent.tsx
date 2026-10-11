@@ -8,7 +8,7 @@ import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, NewsLayout, type NewsCardPrefs, type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
-import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
+import { accountPrefsBase, carryCardPrefs, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { filterLeague } from "@/lib/favoritesFilter";
@@ -123,6 +123,9 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
     // See lib/dismissals.ts.
     kickoffBannersDismissed: mergeDismissedKeys(local.kickoffBannersDismissed, remote.kickoffBannersDismissed),
     wcBannerDismissed: local.wcBannerDismissed || remote.wcBannerDismissed || undefined,
+    // An account copy without per-card news values must not put a card that
+    // hides its headlines back on the toolbar's value — see carryCardPrefs.
+    newsCardPrefs: carryCardPrefs(local.newsCardPrefs, remote.newsCardPrefs),
     // The account copy wins, but pruned like a local load (3 days, cap 20),
     // so a stale queue is not written back and re-pushed to every device.
     watchQueue: pruneWatchQueue(remote.watchQueue, getDateString(0)),
@@ -983,6 +986,9 @@ export default function HomeContent({
   // Whether the sign-in reconcile has had its say about this device's prefs.
   // Only the first-run league picker waits on it — see the mount effect.
   const [authSettled, setAuthSettled] = useState(false);
+  // The launch pull itself is done (applied, skipped, or signed out), with no
+  // grace timer: it lifts the headline hold below, which must outlast the pull.
+  const [pullSettled, setPullSettled] = useState(false);
   // A signed-in account that has already used the downloaded app does not need
   // an install prompt on the web. This is account history from /api/me, not a
   // guess based on the current browser's user agent.
@@ -1109,7 +1115,9 @@ export default function HomeContent({
     //     off            → always off on launch
     //     on             → always on on launch
     //   News view: see the landing-view rule below (it can drop to Scores).
-    const applyLaunchState = (p: Preferences) => {
+    // `keepView` = the re-run on the account copy: the view is the one this
+    // launch already chose, so a pull 1-3 s in never opens or closes News.
+    const applyLaunchState = (p: Preferences, keepView = false) => {
       const landing = p.defaultLandingView ?? "remember";
       const ratingsMode = p.defaultRatings ?? "auto";
       if (ratingsMode === "on") {
@@ -1146,13 +1154,15 @@ export default function HomeContent({
       const newDayPassed = !!p.lastOpenDay && p.lastOpenDay !== getDateString(0);
       const demoNews = isDemoNewsRequested();
       const tabView = readTabView();
-      if (demoNews || landing === "news") setShowNews(true);
-      else if (landing === "scores" || landing === "ratings") setShowNews(false);
-      else if (tabView) setShowNews(tabView === "news");
-      else if (p.showNews && !newDayPassed) setShowNews(true);
-      // ?demo=1&view=news wants the first-time spoiler-warning bar ON SCREEN
-      // for the shot, not skipped like every other first-time explainer here.
-      if (demoNews) setNewsNotice(true);
+      if (!keepView) {
+        if (demoNews || landing === "news") setShowNews(true);
+        else if (landing === "scores" || landing === "ratings") setShowNews(false);
+        else if (tabView) setShowNews(tabView === "news");
+        else if (p.showNews && !newDayPassed) setShowNews(true);
+        // ?demo=1&view=news wants the first-time spoiler-warning bar ON SCREEN
+        // for the shot, not skipped like every other first-time explainer here.
+        if (demoNews) setNewsNotice(true);
+      }
       document.documentElement.setAttribute("data-theme", getResolvedTheme(p.theme));
       // Apply the headline reveal state at launch (mirrored in the effect below)
       // so reveal-on users don't see a one-frame blur flash before it runs.
@@ -1225,7 +1235,7 @@ export default function HomeContent({
           if (pullIsStale(mark)) return;
           const merged = mergeRemotePreferences(loadPreferences(), remote);
           savePreferences(merged); // persist locally (and re-affirm to server via the hook)
-          applyLaunchState(merged);
+          applyLaunchState(merged, true);
         } else {
           pushRemotePrefs(loadPreferences()); // first sign-in for this account
         }
@@ -1233,10 +1243,22 @@ export default function HomeContent({
         /* sync is best-effort; the app stays fully functional without it */
       } finally {
         settleAuth();
+        // Same batch as the account copy's setPrefs above, so the effect that
+        // lifts html.hs-prefs-settling runs after the cards hold its values.
+        setPullSettled(true);
       }
     })();
     return () => window.clearTimeout(graceTimer);
   }, []);
+
+  // A signed-in tab keeps every news headline blurred until the account copy
+  // is in (html.hs-prefs-settling, set pre-paint in layout.tsx from the cached
+  // sign-in): this device's copy may say show where the account's says hide,
+  // and for the 1-3 s the pull takes that was a headline in the clear (Jacob
+  // 10/10). Lifted here, after the commit that carries the pulled prefs.
+  useEffect(() => {
+    if (pullSettled) document.documentElement.classList.remove("hs-prefs-settling");
+  }, [pullSettled]);
 
   // The pre-paint scripts in layout.tsx hide the store badges from a cached
   // guess. React owns them from the moment it has a real answer, so drop each
@@ -1436,19 +1458,22 @@ export default function HomeContent({
   const scrollOnRef = useRef(scrollOn);
   scrollOnRef.current = scrollOn;
 
-  // The shareable hidescore link for a modal payload — identical to the modal's
-  // own "Copy link" (see buildHighlightShareUrl). Returned root-relative ("/?…")
+  // The hidescore link for a modal payload, for the ADDRESS BAR: the modal's
+  // own "Copy link" (see buildHighlightShareUrl) minus the headline (?ht). The
+  // address bar and the browser history are on screen with Headlines off, so
+  // the post's headline must not sit there in plain text (Jacob 10/10). Copy
+  // link keeps ?ht for the recipient's preview card, and a pasted link that
+  // carries it still opens with it. Returned root-relative ("/?…")
   // so (a) pushState is same-origin in every shell (prod / iOS app / localhost)
   // and (b) it lands on "/", where the worker injects the per-share OG preview.
   // Exception: a YouTube clip on /watch stays on /watch (see highlightSharePath),
   // so its preview is the generic card, not the thumbnail.
   // Carries NO pref params, so copying the address bar shares the clip cleanly —
-  // the recipient keeps their own leagues — exactly like Copy link. Syncing this
-  // into the URL bar is why "copy the URL bar" == "Copy link".
+  // the recipient keeps their own leagues — like Copy link.
   const modalShareHref = useCallback((m: {
     videoId?: string | null; playbackUrl?: string | null; embedUrl?: string | null;
     imageUrl?: string | null; poster?: string | null; fallbackUrl?: string | null;
-    sourceLabel?: string | null; headline?: string | null; shareCard?: ShareCardMeta | null;
+    sourceLabel?: string | null; shareCard?: ShareCardMeta | null;
     section?: string | null;
   }) => {
     const abs = buildHighlightShareUrl({
@@ -1459,7 +1484,7 @@ export default function HomeContent({
       posterUrl: m.poster || null,
       sourceUrl: m.fallbackUrl || null,
       sourceLabel: m.sourceLabel || null,
-      headline: m.headline || null,
+      headline: null,
       cardKey: m.shareCard?.key ?? null,
       section: m.section || null,
       path: highlightSharePath(),
@@ -1570,7 +1595,9 @@ export default function HomeContent({
   // one that holds the open post gives the modal its list. A later, longer list
   // that holds it too replaces it while the modal is still the reloaded post: a
   // card's list grows as its sources load. Only the list changes, never the
-  // media (that would reload the player) or the address bar.
+  // media (that would reload the player) or the address bar. The list also
+  // gives the post its headline back: the address bar no longer carries it
+  // (see modalShareHref), and it shows under the card's own blur rule.
   const adoptSiblings = useCallback((list: PlayOpts[]) => {
     // No reloaded modal open (the usual case): skip the state update entirely.
     if (!videoModalRef.current?.restored) return;
@@ -1584,7 +1611,7 @@ export default function HomeContent({
       let i = list.findIndex((o) => pick(o) === want && (!m.fallbackUrl || o.fallbackUrl === m.fallbackUrl));
       if (i < 0) i = list.findIndex((o) => pick(o) === want);
       if (i < 0) return m;
-      return { ...m, siblings: list, sibIndex: i, seenKey: list[i].seenKey ?? m.seenKey, titlesShown: m.titlesShown ?? list[i].titlesShown ?? null };
+      return { ...m, siblings: list, sibIndex: i, seenKey: list[i].seenKey ?? m.seenKey, titlesShown: m.titlesShown ?? list[i].titlesShown ?? null, headline: m.headline ?? list[i].headline ?? null };
     });
   }, []);
 
@@ -1622,7 +1649,10 @@ export default function HomeContent({
       // COLD-LOADED share link never rewinds history (there's no videoModal
       // entry to pop), so re-pushing the identical URL would just stack a
       // duplicate entry that Back can't do anything useful with.
-      const here = window.location.pathname + window.location.search;
+      // A pasted link may still carry ?ht, which this tab's own links never do.
+      const q = new URLSearchParams(window.location.search);
+      q.delete("ht");
+      const here = `${window.location.pathname}?${q.toString()}`;
       if (href && href !== here) window.history.pushState({ videoModal: true }, "", href);
     }
   }, [reopenVideo, clearReopen, modalShareHref]);

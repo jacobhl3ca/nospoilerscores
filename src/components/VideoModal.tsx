@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/lib/youtube";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
-import { frontendHref } from "@/lib/frontendLinks";
+import { frontendHref, postHref } from "@/lib/frontendLinks";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { buildKeyLegend } from "@/lib/modalKeyLegend";
@@ -3181,7 +3181,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               shareUrl, so only the strictly-broken URL-less case is dropped. */}
           {sourceShareUrl && (
             <a
-              href={frontendHref(sourceShareUrl)}
+              href={postHref(sourceShareUrl)}
               target="_blank"
               rel="noopener noreferrer"
               // Route through handleExternalClick so a YouTube sourceShareUrl
