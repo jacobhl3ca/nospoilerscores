@@ -106,7 +106,7 @@
    padding (0.5rem at the least, same var(--bg)), so rounding can never open
    that row. News view sets it to 0: there a source header can pin flush
    under the toolbar and the overlap would clip its top border. That is safe
-   since 10/9: every News row carries its own 2px overlap (SEAM LIP below). */
+   since 10/9: every News row carries its own 3px overlap (SEAM LIP below). */
 .sticky-seam-cover {
   --seam-overlap: 2px;
   position: fixed;
@@ -132,7 +132,7 @@
    pinned Reddit bar and the R/BASEBALL / R/NFL headers). Two rows that pin at
    the same CSS number still snap to different device pixels at a fractional
    zoom, and the seam cover only sits under the header + toolbar. So each
-   sticky row paints 2px of page bg just ABOVE itself, at its own z-index.
+   sticky row paints 3px of page bg just ABOVE itself, at its own z-index.
    Every row pins under a row with a higher z (header 40 > toolbar 36 > title
    row / Reddit bar 30 > source headers / TeamView dividers 20), so the upper
    row covers the lip and it shows only inside a crack; the lower row's own
@@ -140,14 +140,16 @@
    overflow-clip clips it. Default-on, so a new sticky row is covered too.
    Opt out with .sticky-nolip for a sticky that is not a pinned row (sideways
    table cells, zero-height wrappers), and for a row that turns static at a
-   breakpoint. Guarded by tests/visual/sticky-seams.spec.ts. */
+   breakpoint. Guarded by tests/visual/sticky-seams.spec.ts.
+   3px since 10/10 (was 2px): the guard now opens a 3px crack too, and 2px left
+   the top pixel row of it open at every News seam. */
 .sticky:not(.sticky-nolip)::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   bottom: 100%;
-  height: 2px;
+  height: 3px;
   background: var(--bg);
   pointer-events: none;
 }

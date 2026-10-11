@@ -284,6 +284,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   return (
     // See NewsColumn.SourceHeader for the wrapper rationale.
     <div
+      data-testid="aligned-strip-source"
       className="news-source-sticky-top sticky z-20"
       style={{ background: "var(--bg)" }}
     >
