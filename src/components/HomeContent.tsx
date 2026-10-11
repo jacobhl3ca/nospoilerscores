@@ -586,6 +586,11 @@ function HeadlinesIcon({ on, size = 16 }: { on: boolean; size?: number }) {
 function MediaIcon({ on, size = 16 }: { on: boolean; size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-media-icon={on ? "on" : "off"}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" />{!on && <line x1="1" y1="1" x2="23" y2="23" data-slash="" />}</svg>;
 }
+// Show all / Hide all (Jacob 10/11): the Media frame with the Headlines eye
+// inside, since the chip sets both. Off = crossed out, like Media.
+function ShowAllIcon({ on, size = 16 }: { on: boolean; size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-showall-icon={on ? "on" : "off"}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M6.5 12s2-3.5 5.5-3.5 5.5 3.5 5.5 3.5-2 3.5-5.5 3.5S6.5 12 6.5 12z" /><circle cx="12" cy="12" r="1" />{!on && <line x1="1" y1="1" x2="23" y2="23" data-slash="" />}</svg>;
+}
 function VideosOnlyIcon({ size = 16 }: { size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>;
 }
@@ -718,10 +723,10 @@ const BIG_REDDIT_COLS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-col
 // A new key (10/9): the r4 note under the toolbar used v1 of the old one.
 const AUTOPLAY_BLOCKED_POPUP_KEY = "hs.autoplayBlockedPopup.v1";
 
-function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, children }: {
+function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, testId, children }: {
   active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean;
   // Icon only (the toolbar row is too narrow for labels): see useToolbarFit.
-  compact?: boolean; children: ReactNode;
+  compact?: boolean; testId?: string; children: ReactNode;
 }) {
   return (
     <button
@@ -737,6 +742,7 @@ function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, 
       // icon-button convention used elsewhere (e.g. SingleColToggle above).
       aria-label={ariaLabel}
       aria-pressed={active}
+      data-testid={testId}
       className={`news-chip inline-flex shrink-0 items-center gap-1.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${compact ? "news-chip-compact px-2.5" : "px-3.5"}`}
       style={{
         background: active ? "var(--accent)" : "var(--bg-card)",
@@ -3577,8 +3583,9 @@ export default function HomeContent({
     ? recapSportsSync.size > 0
     : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown || bestBarShown;
 
-  // Cards view: what the toolbar's Media / Headlines / Posts show. The news
-  // board sets it while it renders below; the toolbar reads it in RenderLate.
+  // What the toolbar's Show all / Media / Headlines / Posts show: the state of
+  // the cards on screen (Cards view and the ESPN layout). The news board sets
+  // it while it renders below; the toolbar reads it in RenderLate.
   // Null = no cards on screen (Feed, or the board has not loaded).
   let newsBar: NewsBarState | null = null;
 
@@ -4050,18 +4057,35 @@ export default function HomeContent({
                 </button>
               ))}
             </div>
-            {/* ESPN layout (r5): the toolbar keeps only the layout switch;
-                every option button sits in its card's header (newsCardOverrideFor).
-                Cards view: Media / Headlines / Posts show the state of the
-                cards on screen, which the board below works out (newsBar),
-                so they render late. Feed has no cards: the global prefs. */}
-            {newsLayout !== "espn" && (<RenderLate>{() => {
+            {/* The chips show the state of the cards on screen, which the
+                board below works out (newsBar), so they render late. Feed has
+                no cards: the global prefs.
+                ESPN layout (r5): the toolbar keeps the layout switch and Show
+                all; every other option button sits in its card's header
+                (newsCardOverrideFor). */}
+            <RenderLate>{() => {
               const bar: NewsBarState = newsBar ?? {
                 media: prefs.revealNewsMedia === true,
                 titles: !!prefs.revealNewsTitles,
                 posts: postFilterOf(prefs.newsVideosOnly, prefs.showTextPosts),
               };
+              const allShown = bar.media && bar.titles;
               return (<>
+            {/* Show all / Hide all (Jacob 10/11): Media + Headlines in every
+                card, one tap, every layout. On only when every card shows
+                both (one card off = Show all, so one tap fixes the lot). */}
+            <NewsToggleChip
+              compact={toolbarFit.compact}
+              active={allShown}
+              onClick={() => setGlobalNewsPref({ revealNewsMedia: !allShown, revealNewsTitles: !allShown }, ["revealMedia", "revealTitles"])}
+              title={allShown ? "Blur every card's media and headlines" : "Show every card's media and headlines"}
+              ariaLabel="Show or hide everything in every card"
+              testId="news-show-all"
+            >
+              <ShowAllIcon on={allShown} />
+              <span>{allShown ? "Hide all" : "Show all"}</span>
+            </NewsToggleChip>
+            {newsLayout !== "espn" && (<>
             {/* Autoplay first (Jacob 10/9 r6). It dims while Media is blurred:
                 blurred clips do not play, so an on-looking chip with nothing
                 playing would read as broken. It still toggles. */}
@@ -4108,8 +4132,9 @@ export default function HomeContent({
               value={bar.posts}
               onChange={(f) => setGlobalNewsPref(globalPostFilterPatch(f), ["videosOnly", "textPosts"])}
             />
+            </>)}
             </>);
-            }}</RenderLate>)}
+            }}</RenderLate>
           </div>
           </div>
         </div>
@@ -4915,8 +4940,10 @@ export default function HomeContent({
             // pref for EVERY card (ESPN Videos, Top Headlines, each sub). A chip
             // shows on only when every shown card is on (mixed = off, so one
             // tap turns all on); Posts shows no segment while the subs differ.
-            const { media: barMedia, titles: barTitles, posts: barPosts } = barStateFor(
+            // The toolbar's Show all chip reads the same state (newsBar).
+            newsBar = barStateFor(
               [ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)]);
+            const { media: barMedia, titles: barTitles, posts: barPosts } = newsBar;
             // --news-titlebar-h = the bar's height (h-11), so each sub's own
             // header (.news-source-sticky-top) pins under the bar. Equal pin
             // numbers can still crack apart at a fractional zoom; each row's
