@@ -17,6 +17,7 @@ import {
 } from "./lib/recaps.mjs";
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
 import { redlibGifMp4Path } from "./lib/redlib-gif.mjs";
+import { redlibImagePath } from "./lib/redlib-image.mjs";
 import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
@@ -1838,18 +1839,12 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
     }
 
     // 2) Reddit-hosted image post → lightboxable full-res (imageFullUrl).
-    const imgPath = (block.match(/class="post_media_image[^"]*"[^>]*href="([^"]+)"/) || [])[1] ||
-      (block.match(/<img[^>]*class="post_media_image[^"]*"[^>]*src="([^"]+)"/) || [])[1] ||
-      // redlib (perennialte.ch current build) emits the anchor as
-      // <a href="/preview/pre/<id>.jpeg?..." class="post_media_image short"> — href
-      // BEFORE class, and the inner <img> carries no class — so both regexes above
-      // miss it and EVERY i.redd.it/preview image post renders image-less (the
-      // RSS image fix never runs because redlib "succeeds" first). Grab the
-      // <img src> after the post_media_image anchor, attribute-order-agnostic.
-      // The mini's own redlib (9/29 build) also puts an HTML comment between the
-      // anchor and the <img> ("<!-- i.redd.it images speical case -->"), so skip
-      // any comments there too — without it r/soccer baked 0 image thumbnails.
-      (block.match(/post_media_image[^>]*>\s*(?:<!--[\s\S]*?-->\s*)*<img[^>]+\bsrc="([^"]+)"/) || [])[1];
+    //    The mini's Redlib v0.36 wraps the picture in
+    //    <svg><image/><desc><img/></desc></svg> and puts href BEFORE class on
+    //    the anchor; perennialte.ch put <img> directly after the anchor. The
+    //    helper covers both (and the older shapes), so a markup change in one
+    //    build no longer bakes every image post image-less.
+    const imgPath = redlibImagePath(block);
     if (imgPath) {
       imageUrl = redlibMediaToReddit(imgPath);
       imageFullUrl = imageUrl;
