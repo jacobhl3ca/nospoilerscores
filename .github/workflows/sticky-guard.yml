@@ -11,11 +11,13 @@ name: Sticky header guard
 #    --header-h), and it holds only while those two stay the same number.
 #
 # 2. tests/visual/sticky-seams.spec.ts: no pinned sticky row, in any view
-#    (Scores, News Cards, News ESPN, desktop + phone, toolbar shown + hidden),
-#    shows page content in a crack above it (sixth report, Jacob 10/9: Firefox
-#    at 80% opened a 1-device-px row under the Reddit bar). The fix is the
-#    default-on .sticky::before "seam lip" in globals.css; the spec probes every
-#    sticky row it finds, so a new row is held without editing the spec.
+#    (Scores, Team view, News Cards / Feed / ESPN, desktop + phone, toolbar
+#    shown + hidden), shows page content in a 2px or 3px crack above it (sixth
+#    report, Jacob 10/9: Firefox at 80% opened a 1-device-px row under the
+#    Reddit bar). The fix is the default-on .sticky::before "seam lip" in
+#    globals.css; the spec probes every sticky row it finds, so a new row is
+#    held without editing the spec. News ESPN also runs at 0.8x, 1.25x and
+#    1.75x device scale, where a pixel check catches the real 1-device-px crack.
 #
 # Deliberately NOT part of deploy.yml: a regression here is cosmetic, so this
 # must never be able to block a deploy. It runs alongside and alerts.

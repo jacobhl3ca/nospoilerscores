@@ -364,7 +364,7 @@ export default function TeamView({
           title row). The subtitle-height spacer lives OUTSIDE the sticky so
           when the user scrolls, the spacer scrolls away and the Recent/Upcoming
           divider rises into the italic slot under the pinned team row. */}
-      <div ref={headerRef} className="league-sticky-top flex flex-col items-center sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
+      <div ref={headerRef} data-testid="team-view-header" className="league-sticky-top flex flex-col items-center sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
         <div className="relative w-full flex items-center justify-center">
           <button
             ref={backRef}
@@ -435,7 +435,7 @@ export default function TeamView({
                   sticky top, so CSS stacking naturally pushes Recent out of
                   view once Upcoming reaches the pinned position. */}
               <div
-                className="sticky z-20 flex items-center gap-1.5 py-1"
+                className="team-divider sticky z-20 flex items-center gap-1.5 py-1"
                 style={{
                   top: `calc(var(--header-h, 60px) + ${headerH - 1}px)`,
                   background: "var(--bg)",
@@ -467,7 +467,7 @@ export default function TeamView({
               {/* Upcoming divider — same sticky top as Recent so it replaces it
                   once scrolled into the pinned slot. */}
               <div
-                className="sticky z-20 flex items-center gap-1.5 py-1"
+                className="team-divider sticky z-20 flex items-center gap-1.5 py-1"
                 style={{
                   top: `calc(var(--header-h, 60px) + ${headerH - 1}px)`,
                   background: "var(--bg)",
