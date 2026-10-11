@@ -551,6 +551,10 @@ test("span pill with no sibling pill: the other columns hold the row, first card
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page, { showRatings: true });
   await seedWeek(page);
+  // No recap anywhere, the month archive included: against production the
+  // real archive gave the NFL column a "Week 2 highlights" pill for 9/22.
+  await page.route(/\/news\/recaps(\.json|\/[^/]+\.json)/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: '{"fetchedAt":"2026-09-23T14:00:00Z","recaps":{}}' }));
   await page.goto("/");
   const col = page.locator('[data-league-column="best"]');
   await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
