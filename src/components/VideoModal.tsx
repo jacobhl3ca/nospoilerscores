@@ -815,6 +815,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
   const ytMode = !hlsMode && !embedMode && !imageMode && !textMode;
+  // Playable media. An article photo, a picture, a gallery and a text post are
+  // not clips.
+  const clipMode = ytMode || hlsMode || embedMode;
   // The landscape player is for clips we drive ourselves: YouTube and the
   // direct-stream <video>. A Brightcove embed keeps its own player chrome.
   const immersive = landscapePhone && (ytMode || hlsMode);
@@ -939,9 +942,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   }
   const headlinePeek = peeked && peekedFor === postKey;
   const toggleHeadlinePeek = useCallback(() => setPeeked((p) => !p), []);
-  // Only the clip / picture footer headline blurs; a text post's shows in the
-  // clear, so H has nothing to peek there and the legend drops its row.
-  const hasBlurredHeadline = !!headline && !textMode;
+  // Only a clip's headline blurs. An article, a picture and a text post show
+  // theirs in the clear (Jacob 10/10: opening the post is the reveal), so H has
+  // nothing to peek there and the legend drops its row.
+  const hasBlurredHeadline = !!headline && clipMode;
   // The dialog root's data-player-state, so a click-through test (and anything
   // else outside the cross-origin iframe) can read play/pause without asking
   // YouTube. Reveals nothing — not the position, not the duration.
@@ -2816,8 +2820,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               )}
               {/* Never blurred, whatever the Headlines toggle says (Jacob 9/27):
                   on a text post the headline IS the post, so a blurred one
-                  leaves an empty card. Opening it was the reveal. Clip and
-                  picture headlines (the footer below) still blur. */}
+                  leaves an empty card. Opening it was the reveal. Only a clip's
+                  headline (the footer below) blurs. */}
               {headline && (
                 <h2 data-modal-headline className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</h2>
               )}
@@ -3468,7 +3472,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           <div className="mt-3 text-center px-2">
             {/* Only the text itself swallows the click (so selecting the headline
                 doesn't close); the surrounding strip stays a dismiss target. */}
-            <PeekBlur key={`f-${postKey}`} peek={headlinePeek} onToggle={toggleHeadlinePeek} keyShortcut="h" tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
+            {clipMode ? (
+              <PeekBlur key={`f-${postKey}`} peek={headlinePeek} onToggle={toggleHeadlinePeek} keyShortcut="h" tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
+            ) : (
+              // An article photo, a Reddit picture or a gallery: plain, like a
+              // text post (Jacob 10/10). No news-title class, so neither the
+              // Headlines toggle nor a card's own Headlines button reaches it.
+              <p data-modal-headline className="text-sm sm:text-base text-white/90 leading-snug" onClick={(e) => e.stopPropagation()}>{headline}</p>
+            )}
             {byline && (
               <ArticleMeta byline={byline} published={null} className="text-xs text-white/40 mt-1" />
             )}
