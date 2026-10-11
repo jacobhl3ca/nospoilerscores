@@ -91,19 +91,32 @@ async function gotoNews(page: Page, extra: Record<string, unknown> = {}, seen: s
 const saved = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
 const pill = (page: Page, name: string) => page.locator(".news-toolbar-sticky").getByRole("button", { name, exact: true });
 const layout = (page: Page) => page.getByTestId("news-espn-layout");
+// Next to the ESPN mark a header drops the word "ESPN" at every width (Jacob
+// 10/10), so the ESPN cards read "Videos" and "Top Headlines".
 const headersIn = (page: Page, testId: string) =>
   page.getByTestId(testId).locator(".news-source-sticky-top").allInnerTexts()
     .then((all) => all.map((t) => t.trim().toUpperCase()));
+// One card's header bar, by its source label (the aria name keeps "ESPN").
+const cardHeader = (page: Page, label: string) =>
+  page.locator(".news-source-sticky-top").filter({ has: page.getByRole("button", { name: `Toggle media reveal: ${label}`, exact: true }) }).first();
+// A subreddit card's own Posts switch (3 icons, Jacob 10/10).
+const cardSwitch = (page: Page, label: string) => cardHeader(page, label).getByTestId("post-filter-switch");
+const cardSegs = (page: Page, label: string) => cardSwitch(page, label).getByRole("button")
+  .evaluateAll((els) => els.map((e) => e.getAttribute("aria-pressed")));
 
-test("pill offers Cards / Feed / ESPN; ESPN = Videos + Headlines on top, one Reddit column per league", async ({ page }) => {
+test("pill offers ESPN / Cards / Feed; ESPN = Videos + Headlines on top, one Reddit column per league", async ({ page }) => {
   await gotoNews(page);
   await expect(pill(page, "Cards")).toHaveAttribute("aria-pressed", "true", LOAD);
   await expect(pill(page, "Feed")).toBeVisible();
+  // ESPN is the first pill (Jacob 10/10).
+  await expect(toolbar(page).getByRole("button").nth(0)).toHaveText("ESPN");
+  await expect(toolbar(page).getByRole("button").nth(1)).toHaveText("Cards");
+  await expect(toolbar(page).getByRole("button").nth(2)).toHaveText("Feed");
   await pill(page, "ESPN").click();
   await expect(pill(page, "ESPN")).toHaveAttribute("aria-pressed", "true");
   await expect(layout(page)).toBeVisible();
 
-  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["ESPN VIDEOS", "ESPN TOP HEADLINES"]);
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
   // Two wide columns side by side.
   const cols = page.getByTestId("news-espn-row1").locator(":scope > div");
   await expect(cols).toHaveCount(2);
@@ -121,7 +134,7 @@ test("pill offers Cards / Feed / ESPN; ESPN = Videos + Headlines on top, one Red
 test("Hide seen, Headlines, Media and Posts all act on the ESPN layout", async ({ page }) => {
   const seenUrl = "https://example.com/espn-top/5";
   await gotoNews(page, { newsLayout: "espn" }, [seenUrl]);
-  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["ESPN VIDEOS", "ESPN TOP HEADLINES"]);
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
   const seenRow = page.locator(`[data-news-key="${seenUrl}"]`);
   await expect(seenRow).toHaveCount(1);
 
@@ -131,12 +144,13 @@ test("Hide seen, Headlines, Media and Posts all act on the ESPN layout", async (
   await page.getByTestId("news-hide-seen").click();
   await expect(seenRow).toHaveCount(1);
 
-  // Posts (a subreddit card's own chip, cycling All → No text → Videos,
-  // Jacob 10/9): on Videos that card's headline-only posts go, its clips
-  // stay, the other cards keep theirs.
-  await page.getByRole("button", { name: "Post filter: All" }).first().click();
-  await page.getByRole("button", { name: "Post filter: No text" }).click();
-  await expect(page.getByRole("button", { name: "Post filter: Videos" })).toHaveCount(1);
+  // Posts (a subreddit card's own 3-icon switch, Jacob 10/10): on Videos
+  // that card's headline-only posts go, its clips stay, the other cards keep
+  // theirs.
+  expect(await cardSegs(page, "r/baseball")).toEqual(["true", "false", "false"]);
+  await cardSwitch(page, "r/baseball").getByRole("button", { name: "Posts: Videos" }).click();
+  expect(await cardSegs(page, "r/baseball")).toEqual(["false", "false", "true"]);
+  expect(await cardSegs(page, "r/nfl")).toEqual(["true", "false", "false"]);
   await expect(page.getByText("reddit-mlb post 1", { exact: true })).toHaveCount(0);
   await expect(page.getByText("reddit-mlb post 2", { exact: true })).toHaveCount(1);
   await expect(page.getByText("reddit-nfl post 1", { exact: true })).toHaveCount(1);
@@ -253,7 +267,7 @@ test("Autoplay pill off in Big: big stills, nothing plays", async ({ page }) => 
 
 test("no column titles; headline rows hug their text; clips sit inside the card outline", async ({ page }) => {
   await gotoNews(page, { newsLayout: "espn" });
-  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["ESPN VIDEOS", "ESPN TOP HEADLINES"]);
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
   await expect(page.getByRole("heading", { name: "ESPN Videos", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Top Headlines", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "MLB", exact: true })).toHaveCount(0);
@@ -564,23 +578,40 @@ test("a layout or Big switch from a scrolled page goes to the top and plays the 
 });
 
 // ── Round 5 (Jacob 11:20 PM): ESPN option buttons in each card's header ────
+// The chips on screen (a narrowCol sub also holds the cycling Posts chip,
+// hidden from the xl breakpoint up, where the 3-icon switch shows).
 const headerButtons = (page: Page, label: string) =>
-  page.locator(".news-source-sticky-top", { hasText: label }).first().locator("[data-card-chip]")
-    .evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").replace(/:.*$/, "")));
+  cardHeader(page, label).locator("[data-card-chip]")
+    .evaluateAll((els) => els.filter((e) => e.getClientRects().length > 0).map((e) => (e.getAttribute("aria-label") ?? "").replace(/:.*$/, "")));
 
 test("ESPN: the toolbar keeps only the layout switch; each card header has exactly its buttons", async ({ page }) => {
   await gotoNews(page, { newsLayout: "espn" });
-  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["ESPN VIDEOS", "ESPN TOP HEADLINES"]);
-  await expect(toolbar(page).getByRole("button")).toHaveText(["Cards", "Feed", "ESPN"]);
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
+  await expect(toolbar(page).getByRole("button")).toHaveText(["ESPN", "Cards", "Feed"]);
   // r6 order: Autoplay first, Media before Headlines.
   expect(await headerButtons(page, "ESPN Videos")).toEqual(["Toggle news autoplay", "Toggle big ESPN videos", "Toggle media reveal", "Toggle headline reveal"]);
   expect(await headerButtons(page, "ESPN Top Headlines")).toEqual(["Toggle media reveal", "Toggle headline reveal"]);
+  // Each sub: Media, Headlines, then the Posts switch with all 3 choices in
+  // view (Jacob 10/10; it was one cycling chip).
   for (const sub of ["r/baseball", "r/nfl", "r/hockey"]) {
-    expect(await headerButtons(page, sub)).toEqual(["Toggle media reveal", "Toggle headline reveal", "Post filter"]);
+    expect(await headerButtons(page, sub)).toEqual(["Toggle media reveal", "Toggle headline reveal"]);
+    await expect(cardSwitch(page, sub)).toHaveAttribute("aria-label", `Post filter: ${sub}`);
+    expect(await cardSwitch(page, sub).getByRole("button").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label"))))
+      .toEqual(["Posts: All", "Posts: No text", "Posts: Videos"]);
+    // The switch is the last control, and no taller than the 28px chips.
+    const [chip, sw] = await Promise.all([
+      page.getByRole("button", { name: `Toggle headline reveal: ${sub}`, exact: true }).boundingBox(),
+      cardSwitch(page, sub).boundingBox(),
+    ]);
+    expect(sw!.x).toBeGreaterThan(chip!.x + chip!.width);
+    expect(sw!.height).toBeLessThanOrEqual(28);
   }
+  // 1280px: no cycling Posts chip on screen.
+  await expect(page.getByRole("button", { name: /^Post filter:/ })).toHaveCount(0);
   // Every header button keeps a title and an aria-label.
-  for (const b of await page.locator("[data-card-chip]").all()) {
+  for (const b of await page.locator("[data-card-chip], [data-testid=card-header-controls] [data-post-filter]").all()) {
     expect(await b.getAttribute("title")).toBeTruthy();
+    expect(await b.getAttribute("aria-label")).toBeTruthy();
   }
   // Big: the one video card carries the same 4.
   await page.getByRole("button", { name: "Toggle big ESPN videos" }).click();
@@ -613,7 +644,8 @@ test("Cards and Feed keep the full toolbar", async ({ page }) => {
   await gotoNews(page);
   await expect(chips(page)).toHaveCount(3, LOAD);
   await expect(postSwitch(page)).toHaveCount(1);
-  await expect(page.locator("[data-card-chip]")).toHaveCount(0);
+  // Cards view cards carry their own buttons too (10/10); Feed has no cards.
+  await expect(page.locator("[data-card-chip]").first()).toBeVisible(LOAD);
   await pill(page, "Feed").click();
   await expect(chips(page)).toHaveCount(3);
   await expect(postSwitch(page)).toHaveCount(1);
@@ -626,12 +658,18 @@ test("360px phone: header buttons fit, the label gives way", async ({ page }) =>
   await expect.poll(() => headersIn(page, "news-espn-layout"), LOAD).toContain("R/BASEBALL");
   const fit = await page.locator(".news-source-sticky-top").evaluateAll((hs) => hs.map((h) => {
     const bar = h.firstElementChild!.getBoundingClientRect();
-    return Array.from(h.querySelectorAll("[data-card-chip]")).every((c) => {
+    const sw = h.querySelector("[data-testid=post-filter-switch]")?.getBoundingClientRect();
+    return (!sw || sw.right <= bar.right + 0.5) && Array.from(h.querySelectorAll("[data-card-chip]")).every((c) => {
       const r = c.getBoundingClientRect();
       return r.right <= bar.right + 0.5 && r.width >= 27;
     });
   }));
   expect(fit.every(Boolean)).toBe(true);
+  // Each sub keeps its whole label beside Media, Headlines and the switch.
+  await expect(page.getByTestId("news-espn-reddit").getByTestId("post-filter-switch")).toHaveCount(4);
+  const cut = await page.getByTestId("news-espn-reddit").locator(".news-source-sticky-top span.truncate")
+    .evaluateAll((els) => els.filter((e) => (e as HTMLElement).offsetParent !== null).map((e) => e.scrollWidth - e.clientWidth));
+  expect(cut).toEqual([0, 0, 0]);
 });
 
 // ── Round 6 (Jacob 7:26 AM 10/9): icon order, Autoplay off icon, dim under blur ──
@@ -745,7 +783,7 @@ test("Reddit bar Media / Headlines set every card and clear the per-card values"
   await expect(titles).toHaveAttribute("aria-pressed", "false");
 });
 
-test("Reddit bar Posts switch filters every sub; a sub's own chip filters that sub only", async ({ page }) => {
+test("Reddit bar Posts switch filters every sub; a sub's own switch filters that sub only", async ({ page }) => {
   await gotoNews(page, { newsLayout: "espn" });
   await expect.poll(() => headersIn(page, "news-espn-reddit"), LOAD).toEqual(["R/BASEBALL", "R/NFL", "R/HOCKEY"]);
   await expect.poll(() => shownTextPosts(page), LOAD).toBeGreaterThan(0);
@@ -771,24 +809,26 @@ test("Reddit bar Posts switch filters every sub; a sub's own chip filters that s
   expect(await segPressed(page)).toEqual(["true", "false", "false"]);
   await expect(page.getByText("reddit-nfl post 1", { exact: true })).toBeVisible();
 
-  // r/nfl's own chip: All → No text on that sub only; the bar shows no segment.
-  const nflChip = page.locator(".news-source-sticky-top", { hasText: "r/nfl" }).getByRole("button", { name: /^Post filter:/ });
-  await expect(nflChip).toHaveAttribute("aria-label", "Post filter: All");
-  await expect(nflChip).toHaveAttribute("title", "Posts: All. Tap for No text.");
-  await nflChip.click();
-  await expect(nflChip).toHaveAttribute("aria-label", "Post filter: No text");
-  expect(await nflChip.locator("svg line[data-slash]").count()).toBe(1);
+  // r/nfl's own switch: No text on that sub only; the bar shows no segment.
+  const nfl = cardSwitch(page, "r/nfl");
+  expect(await cardSegs(page, "r/nfl")).toEqual(["true", "false", "false"]);
+  await expect(nfl.getByRole("button", { name: "Posts: No text" })).toHaveAttribute("title", "Posts in r/nfl: No text");
+  await nfl.getByRole("button", { name: "Posts: No text" }).click();
+  expect(await cardSegs(page, "r/nfl")).toEqual(["false", "true", "false"]);
+  expect(await nfl.getByRole("button", { name: "Posts: No text" }).locator("svg line[data-slash]").count()).toBe(1);
   await expect(page.getByText("reddit-nfl post 1", { exact: true })).toBeHidden();
   await expect(page.getByText("reddit-mlb post 1", { exact: true })).toBeVisible();
+  expect(await cardSegs(page, "r/baseball")).toEqual(["true", "false", "false"]);
   expect(await segPressed(page)).toEqual(["false", "false", "false"]);
   p = await saved(page);
   expect(p.newsCardPrefs?.["reddit-nfl"]).toEqual({ videosOnly: false, textPosts: false });
-  await nflChip.click();
-  await expect(nflChip).toHaveAttribute("aria-label", "Post filter: Videos");
+  await nfl.getByRole("button", { name: "Posts: Videos" }).click();
+  expect(await cardSegs(page, "r/nfl")).toEqual(["false", "false", "true"]);
   await expect(page.getByText("reddit-nfl post 1", { exact: true })).toHaveCount(0);
   await expect(page.getByText("reddit-nfl post 2", { exact: true })).toHaveCount(1);
-  await nflChip.click();
-  await expect(nflChip).toHaveAttribute("aria-label", "Post filter: All");
+  await nfl.getByRole("button", { name: "Posts: All" }).click();
+  expect(await cardSegs(page, "r/nfl")).toEqual(["true", "false", "false"]);
+  expect(await segPressed(page)).toEqual(["true", "false", "false"]);
 });
 
 for (const width of [575, 360]) {
@@ -830,7 +870,7 @@ test("Cards toolbar Media tap clears a card's own Media: ESPN then follows the g
   expect(p.revealNewsMedia).toBe(false);
   expect(p.newsCardPrefs).toEqual({ "espn-videos": { revealTitles: true } });
   await pill(page, "ESPN").click();
-  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["ESPN VIDEOS", "ESPN TOP HEADLINES"]);
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
   expect((await cardStates(page, "media")).every((v) => v === "off")).toBe(true);
   await expect(page.getByRole("button", { name: "Toggle media reveal: ESPN Videos" })).toHaveAttribute("aria-pressed", "false");
 });
@@ -977,4 +1017,236 @@ test("Hide seen on: the reloaded post stays in its card, so the arrows come back
   await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, revealNewsTitles: true, newsHideSeen: true });
   await openVideosClip(page);
   await reloadThenStep(page, "espn-videos post 1", "espn-videos post 2");
+});
+
+// ── News polish (Jacob 10/10): header text, Posts switch, Media slash,
+//    Cards chips, pill order ─────────────────────────────────────────────
+// The buttons on screen in one card's header, by aria-label (a hidden form of
+// the Posts control is not counted).
+const shownControls = (page: Page, label: string) => cardHeader(page, label).getByTestId("card-header-controls")
+  .getByRole("button").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+const cardOf = (page: Page, label: string) => cardHeader(page, label).locator("xpath=..");
+const SUBS = ["r/baseball", "r/nfl", "r/hockey"];
+
+test("Cards: each sub card has Media, Headlines and Posts in its header; a card's Media off beats the global on", async ({ page }) => {
+  await gotoNews(page, { ...PLAY });
+  await expect(pill(page, "Cards")).toHaveAttribute("aria-pressed", "true", LOAD);
+  for (const sub of SUBS) {
+    await expect(cardHeader(page, sub).getByTestId("card-header-controls")).toBeVisible(LOAD);
+    // 1280px: a 280px column, so Posts is the 3-icon switch.
+    expect(await shownControls(page, sub)).toEqual([
+      `Toggle media reveal: ${sub}`, `Toggle headline reveal: ${sub}`, "Posts: All", "Posts: No text", "Posts: Videos",
+    ]);
+    await expect(cardOf(page, sub)).toHaveClass(/news-card-media-on/);
+  }
+  const toolbarMedia = pill(page, "Toggle media reveal");
+  await expect(toolbarMedia).toHaveAttribute("aria-pressed", "true");
+
+  // r/nfl's own Media off: that card blurs, the global pref stays on.
+  await page.getByRole("button", { name: "Toggle media reveal: r/nfl" }).click();
+  await expect(cardOf(page, "r/nfl")).toHaveClass(/news-card-media-off/);
+  await expect(cardOf(page, "r/baseball")).toHaveClass(/news-card-media-on/);
+  await expect(page.locator("html")).not.toHaveClass(/blur-news-media/);
+  let p = await saved(page);
+  expect(p.revealNewsMedia).toBe(true);
+  expect(p.newsCardPrefs).toEqual({ "reddit-nfl": { revealMedia: false } });
+  // The toolbar reads like the Reddit bar: mixed = off, one tap turns all on
+  // and clears the card's own value.
+  await expect(toolbarMedia).toHaveAttribute("aria-pressed", "false");
+  await toolbarMedia.click();
+  await expect(toolbarMedia).toHaveAttribute("aria-pressed", "true");
+  await expect(cardOf(page, "r/nfl")).toHaveClass(/news-card-media-on/);
+  p = await saved(page);
+  expect(p.revealNewsMedia).toBe(true);
+  expect(p.newsCardPrefs ?? {}).toEqual({});
+
+  // Headlines: one card's own button shows that card only.
+  const blur = (key: string) => page.locator(`[data-news-key="${key}"] .news-title`).first().evaluate((el) => getComputedStyle(el).filter);
+  expect(await blur("https://example.com/reddit-mlb/0")).toContain("blur");
+  await page.getByRole("button", { name: "Toggle headline reveal: r/baseball" }).click();
+  await expect.poll(() => blur("https://example.com/reddit-mlb/0")).toBe("none");
+  expect(await blur("https://example.com/reddit-nfl/0")).toContain("blur");
+  await expect(pill(page, "Toggle headline reveal")).toHaveAttribute("aria-pressed", "false");
+});
+
+test("Cards: a sub's own Posts switch filters that sub only; the toolbar switch shows no segment while they differ", async ({ page }) => {
+  await gotoNews(page);
+  await expect(cardSwitch(page, "r/nfl")).toBeVisible(LOAD);
+  const toolbarSegs = () => postSwitch(page).getByRole("button").evaluateAll((els) => els.map((e) => e.getAttribute("aria-pressed")));
+  expect(await toolbarSegs()).toEqual(["true", "false", "false"]);
+  await expect(page.getByText("reddit-nfl post 1", { exact: true })).toBeVisible(LOAD);
+
+  await cardSwitch(page, "r/nfl").getByRole("button", { name: "Posts: Videos" }).click();
+  expect(await cardSegs(page, "r/nfl")).toEqual(["false", "false", "true"]);
+  await expect(page.getByText("reddit-nfl post 1", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("reddit-nfl post 2", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("reddit-mlb post 1", { exact: true })).toBeVisible();
+  expect(await toolbarSegs()).toEqual(["false", "false", "false"]);
+  expect((await saved(page)).newsCardPrefs).toEqual({ "reddit-nfl": { videosOnly: true } });
+
+  // The toolbar sets every card and clears the card's own value.
+  await postSwitch(page).getByRole("button", { name: "No text" }).click();
+  expect(await toolbarSegs()).toEqual(["false", "true", "false"]);
+  for (const sub of SUBS) expect(await cardSegs(page, sub)).toEqual(["false", "true", "false"]);
+  await expect(page.getByText("reddit-nfl post 1", { exact: true })).toBeHidden();
+  const p = await saved(page);
+  expect(p.newsCardPrefs ?? {}).toEqual({});
+  expect(p.showTextPosts).toBe(false);
+});
+
+test("Cards: a card emptied by its own Posts switch stays, so the switch can bring the posts back", async ({ page }) => {
+  // No clips in r/nfl: every post is headline-only. The route goes on after
+  // gotoNews' own mocks (the last route added answers first), so the page
+  // loads here, not in gotoNews.
+  await mockFeeds(page);
+  await page.route("**/news/reddit-nfl.json", (route) => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: JSON.stringify({ fetchedAt: new Date(NOW).toISOString(), items: itemsFor("reddit-nfl").map((i) => ({ ...i, playbackUrl: undefined })) }),
+  }));
+  await page.addInitScript((prefs) => localStorage.setItem("nss-preferences", JSON.stringify(prefs)), BASE_PREFS);
+  await page.goto("/");
+  await expect(page.getByText("reddit-nfl post 1", { exact: true })).toBeVisible(LOAD);
+  await cardSwitch(page, "r/nfl").getByRole("button", { name: "Posts: Videos" }).click();
+  await expect(page.getByText("reddit-nfl post 1", { exact: true })).toHaveCount(0);
+  await expect(cardOf(page, "r/nfl").getByText("Nothing here with this card's filters.")).toBeVisible();
+  await cardSwitch(page, "r/nfl").getByRole("button", { name: "Posts: All" }).click();
+  await expect(page.getByText("reddit-nfl post 1", { exact: true })).toBeVisible();
+});
+
+test("Cards 1024px: a 225px column keeps the one cycling Posts chip; 1280px shows the switch", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await gotoNews(page);
+  const header = cardHeader(page, "r/baseball");
+  await expect(header.getByTestId("card-header-controls")).toBeVisible(LOAD);
+  expect(await shownControls(page, "r/baseball")).toEqual(["Toggle media reveal: r/baseball", "Toggle headline reveal: r/baseball", "Post filter: All"]);
+  await expect(cardSwitch(page, "r/baseball")).toBeHidden();
+  // The chip cycles All → No text, and every control stays inside the header.
+  await header.getByRole("button", { name: "Post filter: All" }).click();
+  await expect(header.getByRole("button", { name: "Post filter: No text" })).toBeVisible();
+  const inside = await header.evaluate((h) => {
+    const bar = h.firstElementChild!.getBoundingClientRect();
+    return Array.from(h.querySelectorAll("[data-testid=card-header-controls] button"))
+      .map((b) => b.getBoundingClientRect()).filter((r) => r.width > 0).every((r) => r.right <= bar.right + 0.5);
+  });
+  expect(inside).toBe(true);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(cardSwitch(page, "r/baseball")).toBeVisible();
+  expect(await cardSegs(page, "r/baseball")).toEqual(["false", "true", "false"]);
+  await expect(header.getByRole("button", { name: /^Post filter:/ })).toHaveCount(0);
+});
+
+test("Cards: a video card has Media and Headlines only, and still follows the toolbar's Posts switch", async ({ page }) => {
+  // Videos + Reddit in the funnel: each league column = its video card, then its sub.
+  await gotoNews(page, { newsTypeFilters: ["reddit", "topvideos"], newsAutoplay: false });
+  const label = "MLB Most Popular";
+  await expect(cardHeader(page, label).getByTestId("card-header-controls")).toBeVisible(LOAD);
+  expect(await shownControls(page, label)).toEqual([`Toggle media reveal: ${label}`, `Toggle headline reveal: ${label}`]);
+  await expect(cardHeader(page, label).getByTestId("post-filter-switch")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Toggle news autoplay" })).toHaveCount(1); // the toolbar's
+  await expect(page.getByRole("button", { name: "Toggle big ESPN videos" })).toHaveCount(0);
+  // Its own Media button shows that card's previews only.
+  await page.getByRole("button", { name: `Toggle media reveal: ${label}` }).click();
+  await expect(cardOf(page, label)).toHaveClass(/news-card-media-on/);
+  await expect(cardOf(page, "r/baseball")).toHaveClass(/news-card-media-off/);
+  expect((await saved(page)).newsCardPrefs).toEqual({ "mlb-videos": { revealMedia: true } });
+  // No text-posts class of its own: the toolbar's Posts value applies.
+  await expect(cardOf(page, label)).not.toHaveClass(/news-card-textposts-/);
+});
+
+test("Media icon: a slash when off, none when on (toolbar, card headers, Reddit bar)", async ({ page }) => {
+  await gotoNews(page);
+  const icon = (name: string) => page.getByRole("button", { name, exact: true }).locator("svg[data-media-icon]");
+  // Cards, Media off by default: the toolbar chip and every card chip are crossed out.
+  await expect(icon("Toggle media reveal: r/baseball")).toHaveAttribute("data-media-icon", "off", LOAD);
+  await expect(icon("Toggle media reveal")).toHaveAttribute("data-media-icon", "off");
+  await expect(icon("Toggle media reveal").locator("line[data-slash]")).toHaveCount(1);
+  await expect(icon("Toggle media reveal: r/baseball").locator("line[data-slash]")).toHaveCount(1);
+  // One card on: that card's slash goes, the toolbar's stays (mixed = off).
+  await page.getByRole("button", { name: "Toggle media reveal: r/baseball" }).click();
+  await expect(icon("Toggle media reveal: r/baseball")).toHaveAttribute("data-media-icon", "on");
+  await expect(icon("Toggle media reveal: r/baseball").locator("line[data-slash]")).toHaveCount(0);
+  await expect(icon("Toggle media reveal")).toHaveAttribute("data-media-icon", "off");
+  await pill(page, "Toggle media reveal").click();
+  await expect(icon("Toggle media reveal")).toHaveAttribute("data-media-icon", "on");
+  await expect(icon("Toggle media reveal").locator("line[data-slash]")).toHaveCount(0);
+  await expect(icon("Toggle media reveal: r/nfl")).toHaveAttribute("data-media-icon", "on");
+
+  // ESPN layout: the Reddit bar chip and each card chip.
+  await pill(page, "ESPN").click();
+  await expect(icon("Toggle media reveal: every card")).toHaveAttribute("data-media-icon", "on", LOAD);
+  await page.getByRole("button", { name: "Toggle media reveal: ESPN Videos" }).click();
+  await expect(icon("Toggle media reveal: ESPN Videos")).toHaveAttribute("data-media-icon", "off");
+  await expect(icon("Toggle media reveal: ESPN Videos").locator("line[data-slash]")).toHaveCount(1);
+  await expect(icon("Toggle media reveal: every card")).toHaveAttribute("data-media-icon", "off");
+  await expect(icon("Toggle media reveal: ESPN Top Headlines")).toHaveAttribute("data-media-icon", "on");
+});
+
+test("a new visitor's News opens on ESPN; a stored blob with no layout stays on Cards", async ({ page, browser }) => {
+  // No stored prefs at all. The first-run "Pick your leagues" sheet comes up
+  // once the day's leagues load (often after the page is usable), and its
+  // scrim swallows clicks: take Use defaults whenever it turns up, as
+  // settings-shape.spec.ts does.
+  await page.addLocatorHandler(page.getByRole("button", { name: "Use defaults" }), async (defaults) => {
+    await defaults.evaluate((el) => (el as HTMLElement).click());
+  });
+  await mockFeeds(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: /^News/ }).first().click();
+  await expect(pill(page, "ESPN")).toHaveAttribute("aria-pressed", "true", LOAD);
+  await expect(layout(page)).toBeVisible(LOAD);
+  expect((await saved(page)).newsLayout).toBe("espn");
+  await page.reload();
+  await expect(pill(page, "ESPN")).toHaveAttribute("aria-pressed", "true", LOAD);
+
+  // An old Cards user: a blob from before newsLayout existed.
+  const ctx = await browser.newContext();
+  const old = await ctx.newPage();
+  await gotoNews(old, { newsFeedView: false });
+  await expect(pill(old, "Cards")).toHaveAttribute("aria-pressed", "true", LOAD);
+  await expect(layout(old)).toHaveCount(0);
+  await expect(cardHeader(old, "r/baseball")).toBeVisible(LOAD);
+  expect((await saved(old)).newsLayout).toBeUndefined();
+  await ctx.close();
+});
+
+test("a settings link without a layout leaves an old Cards user on Cards", async ({ page }) => {
+  await mockFeeds(page);
+  await page.addInitScript((prefs) => {
+    if (sessionStorage.getItem("hs-seed")) return;
+    sessionStorage.setItem("hs-seed", "1");
+    localStorage.setItem("nss-preferences", JSON.stringify(prefs));
+  }, BASE_PREFS);
+  // th = theme: one of the params that applies a shared setup.
+  await page.goto("/?th=d");
+  await expect(pill(page, "Cards")).toHaveAttribute("aria-pressed", "true", LOAD);
+  await expect(layout(page)).toHaveCount(0);
+  expect((await saved(page)).newsLayout).toBeUndefined();
+});
+
+test("next to the ESPN mark the header drops the word ESPN at every width; the label itself is whole", async ({ page }) => {
+  await gotoNews(page, { newsLayout: "espn" });
+  for (const [label, text] of [["ESPN Videos", "VIDEOS"], ["ESPN Top Headlines", "TOP HEADLINES"]]) {
+    const header = cardHeader(page, label);
+    await expect(header).toBeVisible(LOAD);
+    expect((await header.innerText()).trim().toUpperCase()).toBe(text);
+    await expect(header.locator('img[src*="misc_logos/500/espn.png"]')).toHaveCount(1);
+    // aria names keep the whole label.
+    await expect(page.getByRole("button", { name: `Toggle headline reveal: ${label}`, exact: true })).toHaveCount(1);
+  }
+  // A subreddit header (a league mark, not ESPN's) is untouched.
+  expect((await cardHeader(page, "r/baseball").innerText()).trim().toUpperCase()).toBe("R/BASEBALL");
+  // The modal's source label is the feed's, untouched.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(async () => (await cardHeader(page, "ESPN Videos").innerText()).trim().toUpperCase()).toBe("VIDEOS");
+});
+
+test("Cards Top news column: ESPN Videos reads Videos; a bare ESPN label keeps its word", async ({ page }) => {
+  // Top news in column 3 = r/sports, ESPN Videos, ESPN (GENERIC_CASCADE).
+  await gotoNews(page, { newsTopNews: true, newsTypeFilters: ["reddit", "topvideos", "espn"], firstLeague: "empty", secondLeague: "empty", thirdLeague: "empty", newsAutoplay: false });
+  await expect(pill(page, "Cards")).toHaveAttribute("aria-pressed", "true", LOAD);
+  await expect(cardHeader(page, "ESPN Videos")).toBeVisible(LOAD);
+  expect((await cardHeader(page, "ESPN Videos").innerText()).trim().toUpperCase()).toBe("VIDEOS");
+  expect((await cardHeader(page, "ESPN").innerText()).trim().toUpperCase()).toBe("ESPN");
+  expect(await shownControls(page, "ESPN Videos")).toEqual(["Toggle media reveal: ESPN Videos", "Toggle headline reveal: ESPN Videos"]);
 });
