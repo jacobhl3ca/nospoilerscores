@@ -5,7 +5,7 @@ import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
 import type { Sport } from "@/lib/types";
 import { getTimeZone } from "@/lib/etDay";
 import { handleExternalClick } from "@/lib/openExternal";
-import { frontendHref } from "@/lib/frontendLinks";
+import { postHref } from "@/lib/frontendLinks";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
@@ -578,13 +578,10 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
           // aspect-video; this full-width one was the lone reliant-on-content case.
           className="news-media-preview relative block w-full min-h-[3rem] cursor-pointer bg-black"
           // The tile's <img> is alt="", so this button's only accessible name is
-          // this label. For a video post (isVideo) it's the inline play trigger,
-          // yet a flat "Open post" gives no cue it PLAYS a clip and drops the
-          // headline — the twin control in NewsColumn (Cards view) already names
-          // it "Play highlight: {headline}". Mirror that here: name the action and
-          // keep the visible headline in the label so "Label in Name" (WCAG 2.5.3)
-          // holds and voice users can say the title to activate it.
-          aria-label={isVideo ? `Play video: ${item.headline}` : `Open post: ${item.headline}`}
+          // this label. It names the action (a video post plays inline) and
+          // nothing else: with the headline in it, a screen reader read the
+          // headline out from under the blur (Jacob 10/10).
+          aria-label={isVideo ? "Play video" : "Open post"}
         >
           {img || tile ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -699,7 +696,7 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
       {item.articleUrl && (
         <div className="flex items-center gap-2 px-4 pt-2 pb-3">
           <a
-            href={frontendHref(item.articleUrl)}
+            href={postHref(item.articleUrl)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={handleExternalClick(item.articleUrl)}

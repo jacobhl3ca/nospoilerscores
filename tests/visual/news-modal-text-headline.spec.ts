@@ -140,7 +140,9 @@ async function expectPlainUnderPhoto(page: Page, headline: string) {
   await expect(dialog).toBeVisible({ timeout: 30_000 });
   await expect(dialog.locator("img").first()).toBeVisible();
   const h = dialog.locator("[data-modal-headline]");
-  await expect(h).toHaveText(headline);
+  // 30s: after a reload the headline comes from the card's list (the address
+  // bar carries no ?ht), and the cards are still loading behind the modal.
+  await expect(h).toHaveText(headline, { timeout: 30_000 });
   // 10s: after a reload the page is still loading its cards behind the modal.
   await filterOf(h, 10_000).toBe("none");
   await expect(h).not.toHaveAttribute("role", "button");

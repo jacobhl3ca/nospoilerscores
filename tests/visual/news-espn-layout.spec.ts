@@ -321,7 +321,7 @@ test("Cards: Autoplay off = no video layer; on, exactly one clip plays and scrol
   // Videos + Reddit in the funnel, so the league columns carry their video cards.
   await gotoNews(page, { ...PLAY, newsTypeFilters: ["reddit", "topvideos"], newsAutoplay: false });
   await expect(autoplayChip(page)).toHaveAttribute("aria-pressed", "false", LOAD);
-  await expect(page.locator('button[aria-label^="Play highlight:"]').first()).toBeVisible(LOAD);
+  await expect(page.locator('button[aria-label="Play highlight"]').first()).toBeVisible(LOAD);
   await expect(page.locator("video[data-autoplay-video]")).toHaveCount(0);
 
   await autoplayChip(page).click();
@@ -553,7 +553,7 @@ test("switch Feed → ESPN with Autoplay on: the first in-view clip plays withou
 
 test("switch Cards → Feed with Autoplay on: the first in-view video plays without a scroll", async ({ page }) => {
   await gotoNews(page, { ...PLAY, newsAutoplay: true, newsTypeFilters: ["reddit", "topvideos"] });
-  await expect(page.locator('button[aria-label^="Play highlight:"]').first()).toBeVisible(LOAD);
+  await expect(page.locator('button[aria-label="Play highlight"]').first()).toBeVisible(LOAD);
   await pill(page, "Feed").click();
   await expect(page.locator("article[data-news-key]").first()).toBeVisible(LOAD);
   await expect.poll(async () => (await playingKeys(page)).length, { timeout: 2000 }).toBe(1);
@@ -927,7 +927,7 @@ test("Big: three subs sit in one row of three columns", async ({ page }) => {
 const footerTitle = (page: Page) => page.locator('[role="dialog"] p.news-title').first();
 const titleFilter = (page: Page) => footerTitle(page).evaluate((el) => getComputedStyle(el).filter);
 const openVideosClip = async (page: Page) => {
-  await page.getByRole("button", { name: "Play highlight: espn-videos post 1", exact: true }).click(LOAD);
+  await page.locator('button[aria-label="Play highlight"]', { hasText: "espn-videos post 1" }).first().click(LOAD);
   await expect(footerTitle(page)).toHaveText("espn-videos post 1", LOAD);
 };
 

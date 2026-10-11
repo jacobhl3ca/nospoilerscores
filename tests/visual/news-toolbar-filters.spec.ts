@@ -93,7 +93,7 @@ test("Cards: Videos only hides text posts even with Text posts on", async ({ pag
   // would have SHOWN them).
   await expect(page.locator(".news-textpost")).toHaveCount(0);
 
-  const playCards = page.locator('button[aria-label^="Play highlight:"]');
+  const playCards = page.locator('button[aria-label="Play highlight"]');
   if (n === 0 && (await playCards.count()) === 0) {
     // A day with no Reddit clips: the column says why, rather than going blank.
     await expect(page.getByText("No videos here right now.").first()).toBeVisible();
@@ -125,7 +125,7 @@ test("Feed: Videos only hides text posts, and says so when nothing is left", asy
     return;
   }
   for (let i = 0; i < n; i++) {
-    await expect(posts.nth(i).locator('button[aria-label^="Play video:"]')).toHaveCount(1);
+    await expect(posts.nth(i).locator('button[aria-label="Play video"]')).toHaveCount(1);
   }
 });
 
@@ -141,7 +141,7 @@ const STRIP_PREFS = {
   newsTypeFilters: ["topvideos"],
   newsTypeFilter: "topvideos",
 };
-const STRIP_CELL = 'button[aria-label^="Play highlight:"]';
+const STRIP_CELL = 'button[aria-label="Play highlight"]';
 
 // The three video feeds the strip leads with, mocked so the test does not
 // depend on which public/news/*.json files a checkout happens to have

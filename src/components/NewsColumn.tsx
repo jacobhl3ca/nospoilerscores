@@ -7,7 +7,7 @@ import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
 import { NewsItem, proxyImage, ESPN_BRAND_LOGO } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
-import { frontendHref } from "@/lib/frontendLinks";
+import { frontendHref, postHref } from "@/lib/frontendLinks";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { inSeasonSwitcherOptions } from "@/lib/switcherOptions";
 import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
@@ -871,7 +871,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
     <div className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
       {thumbIsTile ? (
         <a
-          href={frontendHref(item.articleUrl)}
+          href={postHref(item.articleUrl)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
@@ -885,7 +885,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
           source — same target as the thumbnail and chevron beside it, which
           keeps middle-click, keyboard, and "copy link" honest. */}
       <a
-        href={frontendHref(item.articleUrl)}
+        href={postHref(item.articleUrl)}
         target="_blank"
         rel="noopener noreferrer"
         onClick={handleExternalClick(item.articleUrl)}
@@ -896,7 +896,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
       </a>
       {!thumbIsTile && (
         <a
-          href={frontendHref(item.articleUrl)}
+          href={postHref(item.articleUrl)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
@@ -1025,15 +1025,12 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                       window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
                     }
                   }}
-                  // The button wraps the thumbnail (alt="") + headline, so its
-                  // accessible name is just the headline — a screen-reader/voice-
-                  // control user hears the title but gets no cue this control PLAYS
-                  // a highlight inline (vs. the sibling <a> row below that opens an
-                  // article). Name the action explicitly; the headline stays inside
-                  // the label so "Label in Name" (WCAG 2.5.3) still holds and voice
-                  // users can say the visible title to activate it. Matches the twin
-                  // Play button in AlignedVideoStrip's VideoRow/CompactTailRow.
-                  aria-label={`Play highlight: ${item.headline}`}
+                  // The label names the action and nothing else. It used to
+                  // carry the headline, which a screen reader then read out
+                  // from under the blur (Jacob 10/10); the "Open post" rows
+                  // above were already neutral. Matches the twin Play button
+                  // in AlignedVideoStrip's VideoRow/CompactTailRow.
+                  aria-label="Play highlight"
                   className={commonCls}
                   style={commonStyle}
                   data-news-key={item.articleUrl || item.id}
@@ -1045,7 +1042,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
             return (
               <a
                 key={item.id}
-                href={frontendHref(item.articleUrl)}
+                href={postHref(item.articleUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleExternalClick(item.articleUrl)}
@@ -1080,7 +1077,7 @@ function InlineVideoSourceCard({ label, logoUrl, items, loading, onPlay, sibling
               item={item}
               autoplay={autoplay}
               large={large}
-              ariaLabel={`Play highlight: ${item.headline}`}
+              ariaLabel="Play highlight"
               onOpen={() => {
                 if (onPlay) {
                   onPlay({

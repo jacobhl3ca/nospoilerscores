@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import { handleExternalClick } from "@/lib/openExternal";
-import { frontendHref } from "@/lib/frontendLinks";
+import { frontendHref, postHref } from "@/lib/frontendLinks";
 import { CardOverride, NewsSource, PlayHandler, PlayOpts, SourceHeader, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
@@ -373,13 +373,10 @@ function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: 
             window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
           }
         }}
-        // The button wraps the thumbnail (alt="") + headline, so its accessible
-        // name is just the headline — a screen-reader/voice-control user hears the
-        // title but gets no cue this control PLAYS a highlight inline (vs. the
-        // sibling <a> rows that open an article). Name the action explicitly; the
-        // headline is kept inside the label so "Label in Name" (WCAG 2.5.3) still
-        // holds and voice users can say the visible title to activate it.
-        aria-label={`Play highlight: ${item.headline}`}
+        // The label names the action and nothing else: with the headline in
+        // it, a screen reader read the headline out from under the blur
+        // (Jacob 10/10).
+        aria-label="Play highlight"
         className={commonCls}
         style={commonStyle}
         data-news-key={item.articleUrl || item.id}
@@ -389,7 +386,7 @@ function VideoRow({ item, isFirst, onPlay, siblings, index, autoplay }: { item: 
     );
   }
   return (
-    <a key={item.id} href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle} data-news-key={item.articleUrl || item.id}>
+    <a key={item.id} href={postHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle} data-news-key={item.articleUrl || item.id}>
       {body}
     </a>
   );
@@ -451,12 +448,8 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
             window.open(frontendHref(item.articleUrl), "_blank", "noopener,noreferrer");
           }
         }}
-        // Same inline-play control as VideoRow's button (its thumb is
-        // alt=""), so the accessible name would otherwise be just the headline
-        // with no cue this PLAYS a highlight vs. the sibling <a> tail rows that
-        // open an article. Name the action explicitly; the headline stays in
-        // the label so "Label in Name" (WCAG 2.5.3) still holds.
-        aria-label={`Play highlight: ${item.headline}`}
+        // Same inline-play control as VideoRow's button, same neutral label.
+        aria-label="Play highlight"
         className={`${rowCls} cursor-pointer`}
         style={rowStyle}
         data-news-key={item.articleUrl || item.id}
@@ -467,7 +460,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
     );
   }
   return (
-    <a href={frontendHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
+    <a href={postHref(item.articleUrl)} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle} data-news-key={item.articleUrl || item.id}>
       {thumb}
       <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
     </a>
