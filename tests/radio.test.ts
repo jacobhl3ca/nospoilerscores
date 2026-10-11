@@ -169,3 +169,18 @@ test("events: a tennis match picks up its slam's row from seriesNote", () => {
   assert.deepEqual(names(listenLinks(m("Wimbledon 2026"), t, null, {})), ["BBC Radio 5 Live"]);
   assert.deepEqual(names(listenLinks(m("US Open 2026"), t, null, {})), []);
 });
+
+// The year-round Tennis column: a 1000 has no audio on the Slam rows or on the
+// paid majors feed, so its card (the one with the tournament chip) links none.
+test("a tennis tour match gets no Listen link, a Slam match keeps the paid feed", () => {
+  const SXM_TENNIS = src("SiriusXM Tennis", { url: "https://www.siriusxm.com/sports/tennis", access: { cost: "paid", geo: "none", signIn: true } });
+  const t: RadioTable = { ...TABLE, leagues: { ...TABLE.leagues, tennis: { paid: [SXM_TENNIS] } } };
+  const slam = { ...game("1", "2", { sport: "tennis" }), seriesNote: "US Open 2026", venue: "" };
+  const tour = { ...slam, seriesNote: "Rolex Shanghai Masters 2026", formatTag: "Shanghai · R3" };
+  assert.equal(listenLinks(slam, t, null, {}).paid?.name, "SiriusXM Tennis");
+  assert.deepEqual(listenLinks(tour, t, null, {}), { free: [], paid: null });
+  assert.equal(mayHaveListen(slam), true);
+  assert.equal(mayHaveListen(tour), false);
+  // Cricket carries a format chip too; it keeps its links.
+  assert.equal(mayHaveListen({ ...game("1", "2", { sport: "cricketintl" }), formatTag: "ODI" }), true);
+});

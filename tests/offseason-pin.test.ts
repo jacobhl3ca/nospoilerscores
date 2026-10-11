@@ -61,8 +61,16 @@ test("an all-Auto board in November has no MLB column", async () => {
 
 // Several configs per sport: the pin takes the one that opens next, the same
 // event the column's "Returns ~…" line names.
-test("a tennis pin between Slams takes the next Slam", async () => {
-  const shown = await board("20251115", { first: "tennis" });
+// December is the one stretch with no tennis config in its window: the
+// year-round "Tennis" column (02-02 → 11-30, added 2026-10-11) covers the rest.
+test("a tennis pin in December takes the next Slam", async () => {
+  const shown = await board("20251215", { first: "tennis" });
   assert.equal(shown[0].sport, "tennis");
   assert.match(shown[0].label, /Aus Open/);
+});
+
+test("a tennis pin between Slams is the year-round Tennis column", async () => {
+  const shown = await board("20251115", { first: "tennis" });
+  assert.equal(shown[0].sport, "tennis");
+  assert.equal(shown[0].label, "Tennis");
 });

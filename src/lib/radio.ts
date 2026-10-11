@@ -91,7 +91,12 @@ export const FEED_SPORTS: ReadonlySet<Sport> = new Set<Sport>([
 // venue and seriesNote let an event row match a game too: a tennis match
 // carries "Wimbledon 2026" in seriesNote (espn.ts parseTennisMatch).
 type ListenGame = Pick<Game, "sport" | "state" | "homeTeam" | "awayTeam">
-  & { radio?: string[]; venue?: string; seriesNote?: string | null };
+  & { radio?: string[]; venue?: string; seriesNote?: string | null; formatTag?: string | null };
+
+// A tour match in the year-round Tennis column (it carries the tournament
+// chip, espn.ts parseTennisMatch). The tennis rows in the table are the Slams
+// and SiriusXM's majors feed; none of them has audio for a 1000.
+const isTennisTourMatch = (game: Pick<ListenGame, "sport" | "formatTag">) => game.sport === "tennis" && !!game.formatTag;
 
 const COUNTRY_LABEL: Record<string, string> = { GB: "UK", US: "US", CA: "Canada", AU: "Australia" };
 
@@ -139,7 +144,7 @@ export function listenLinks(
   prefs: ListenPrefs,
 ): ListenResult {
   const none: ListenResult = { free: [], paid: null };
-  if (!table || game.state === "post" || prefs.showListenLinks === false) return none;
+  if (!table || game.state === "post" || prefs.showListenLinks === false || isTennisTourMatch(game)) return none;
   const anywhere = prefs.listenAnywhere === true;
   // Game team ids are "<sport>-<espnId>" (espn.ts parseTeam); the table keys
   // on the bare ESPN id.
@@ -202,8 +207,8 @@ function pickLinks(
 }
 
 // Whether a card should bother loading the table at all.
-export function mayHaveListen(game: Pick<ListenGame, "sport" | "state" | "radio">): boolean {
-  return game.state !== "post" && (RADIO_SPORTS.has(game.sport) || FEED_SPORTS.has(game.sport) || !!game.radio?.length);
+export function mayHaveListen(game: Pick<ListenGame, "sport" | "state" | "radio" | "formatTag">): boolean {
+  return game.state !== "post" && !isTennisTourMatch(game) && (RADIO_SPORTS.has(game.sport) || FEED_SPORTS.has(game.sport) || !!game.radio?.length);
 }
 
 // ESPN geoBroadcasts → the radio media short names ("ERADM"). Only type 5
