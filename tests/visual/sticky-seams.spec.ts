@@ -232,7 +232,8 @@ function probeCracks(page: Page, push: number) {
     const name = (el: Element | null): string => {
       if (!el) return "nothing";
       if (el.tagName === "HEADER") return "header";
-      if (el.getAttribute("data-testid") === "aligned-strip-source") return "aligned-strip-source";
+      // AlignedVideoStrip shares NewsColumn's SourceHeader, so its column card names it.
+      if (el.classList.contains("news-source-sticky-top") && el.closest("[data-testid='aligned-strip-column']")) return "aligned-strip-source";
       for (const c of ["news-toolbar-sticky", "news-reddit-bar", "league-sticky-top", "news-source-sticky-top", "team-divider", "espn-headlines-pin", "sticky-seam-cover"]) {
         if (el.classList.contains(c)) return c;
       }

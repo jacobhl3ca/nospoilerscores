@@ -17,6 +17,10 @@
 // The order is the game's rating, never the score; nothing here reads one.
 // Called from prebake-news.mjs (token "top-games"); `node scripts/bake-top-games.mjs`
 // runs it alone.
+//
+// jiti is a declared devDependency; the mini runs `npm ci`. (Until 10/10 it
+// was only a transitive dependency and the mini's checkout had no
+// node_modules, so every run failed here and the span files never existed.)
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
@@ -36,6 +40,13 @@ const ymdToDate = (ymd) => new Date(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd
 // The modules the bake needs, loaded through jiti (espn.ts imports without
 // file extensions, which node's own resolver cannot follow).
 export async function loadTopGamesDeps({ highlights }) {
+  // Say what to do when the package is missing; node's own error names only
+  // the import.
+  try {
+    import.meta.resolve("jiti");
+  } catch {
+    throw new Error("the 'jiti' package is not installed: run `npm ci` in this checkout");
+  }
   const { createJiti } = await import("jiti");
   const jiti = createJiti(import.meta.url);
   const espn = await jiti.import("../../src/lib/espn.ts");

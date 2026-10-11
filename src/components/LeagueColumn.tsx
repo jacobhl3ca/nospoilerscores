@@ -66,6 +66,10 @@ interface LeagueColumnProps {
   // ESPN front page only: tapping a league block's label opens the "Add
   // {league}" popover (owned by HomeContent) to give it a column of its own.
   onAddLeague?: (sport: Sport, anchor: DOMRect) => void;
+  // ESPN front page only: one italic "News" link in the line under the
+  // column header; it opens News on the ESPN layout (Jacob 10/10: not the
+  // icon on the league rows, not a pill). Null in News view.
+  onOpenNews?: ((sport: Sport) => void) | null;
   // "Add more…" row above Remove col: opens HomeContent's league sheet for
   // this column, where the offseason leagues live now (Jacob 9/29).
   onAddMore?: () => void;
@@ -536,12 +540,17 @@ let cachedBigInningSchedule: BigInningSchedule | null = null;
 // "Starts 10/20 · Trades" on a wide column and shed the promo first on a narrow
 // one. Only consulted when the column has no subtitle of its own — a playoff
 // round or a Big Inning line is live information and outranks a start date.
-function PlayoffSubtitle({ sport, selectedDate, games, onClick, fallbackText, startsLabel }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string; startsLabel?: string }) {
+// `suffix` is a link that joins the end of the line ("NCAAF · News"), or
+// stands alone when the line has no text. The ESPN front page column's News
+// link is the one caller; that column has no subtitle of its own, so the text
+// ahead of the link is plain.
+type SubtitleSuffix = { text: string; label: string; onClick: () => void };
+function PlayoffSubtitle({ sport, selectedDate, games, onClick, fallbackText, startsLabel, suffix }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string; startsLabel?: string; suffix?: SubtitleSuffix }) {
   if (isDemoModeActive()) return null;
-  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} onClick={onClick} fallbackText={fallbackText} startsLabel={startsLabel} />;
+  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} onClick={onClick} fallbackText={fallbackText} startsLabel={startsLabel} suffix={suffix} />;
 }
 
-function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackText, startsLabel }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string; startsLabel?: string }) {
+function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackText, startsLabel, suffix }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string; startsLabel?: string; suffix?: SubtitleSuffix }) {
   const ref = useRef<HTMLElement>(null);
   const [bigInningSchedule, setBigInningSchedule] = useState<BigInningSchedule | null>(cachedBigInningSchedule);
 
@@ -733,6 +742,33 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
     }
     return t;
   };
+  if (suffix) {
+    // A flex row, centred as a whole. The text ahead of the link is the part
+    // that gives way on a narrow column (ellipsis), so the link never clips.
+    // No overflow clip on the row itself: the link's ::after widens its tap
+    // target past the 9px text, mostly into the gap under the line.
+    const lead = tiers.length || usingFallback ? text : "";
+    return (
+      <span
+        ref={ref as React.RefObject<HTMLSpanElement>}
+        className="text-[9px] sm:text-[10px] mt-0.5 flex max-w-full items-baseline justify-center whitespace-nowrap italic pr-0.5"
+        style={{ ...baseStyle, color: "var(--text-muted)" }}
+      >
+        {lead ? <span className="min-w-0 overflow-hidden text-ellipsis">{renderText(lead)}</span> : null}
+        {lead ? <span className="shrink-0 whitespace-pre">{" · "}</span> : null}
+        <button
+          type="button"
+          data-espn-news={sport}
+          onClick={(e) => { e.stopPropagation(); suffix.onClick(); }}
+          className="relative shrink-0 italic hover:underline cursor-pointer after:absolute after:-inset-x-2 after:-top-0.5 after:-bottom-1.5 after:content-['']"
+          style={{ color: "var(--text-muted)" }}
+          aria-label={suffix.label}
+        >
+          {suffix.text}
+        </button>
+      </span>
+    );
+  }
   // The trade-board promo needs its own href, so when it is showing alongside a
   // label that is itself a link the line has to hold two anchors. In that case
   // the measured/styled element becomes a wrapper span and the pieces sit
@@ -946,6 +982,7 @@ export default function LeagueColumn({
   autoSport,
   onSwapLeague,
   onAddLeague,
+  onOpenNews,
   onAddMore,
   onRemoveFromList,
   onCloseOffseason,
@@ -2323,7 +2360,7 @@ export default function LeagueColumn({
             // instead of riding ~16px higher.
             <span aria-hidden className="text-[9px] sm:text-[10px] mt-0.5 block whitespace-nowrap">{" "}</span>
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : canAddFromLabel && leadLabelSlot === "subtitle" && espnGroups?.length && !hasOwnColumn(espnGroups[0].sport) ? () => onAddLeague!(espnGroups[0].sport, columnRef.current!.getBoundingClientRect()) : undefined} fallbackText={lastPlayedLabel ?? (leadLabelSlot === "subtitle" ? leadLabel : undefined)} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : league.sport === "tennis" ? onShowSlamBracket : canAddFromLabel && leadLabelSlot === "subtitle" && espnGroups?.length && !hasOwnColumn(espnGroups[0].sport) ? () => onAddLeague!(espnGroups[0].sport, columnRef.current!.getBoundingClientRect()) : undefined} fallbackText={lastPlayedLabel ?? (leadLabelSlot === "subtitle" ? leadLabel : undefined)} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} suffix={league.sport === "top" && onOpenNews ? { text: "News", label: "Open News", onClick: () => onOpenNews("top") } : undefined} />
           )}
         </div>
       )}
