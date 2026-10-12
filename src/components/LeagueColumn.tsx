@@ -967,6 +967,19 @@ function formatDateCompact(yyyymmdd: string): string {
 // Stable default, so the filter memo below isn't rebuilt every render.
 const NO_STRICT: readonly Sport[] = [];
 
+// The thin "Final" rule between a list's unfinished games and its finals.
+// One copy so the board list, the condensed list and the ESPN front page
+// blocks can't drift.
+function FinalDivider() {
+  return (
+    <div data-final-divider className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+      <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+      <span className="text-[9px] uppercase tracking-wide">Final</span>
+      <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+    </div>
+  );
+}
+
 export default function LeagueColumn({
   league: rawLeague,
   favoriteTeams,
@@ -1717,30 +1730,39 @@ export default function LeagueColumn({
   const renderEspnGroups = (games: Game[]) => (
     <div className="flex flex-col gap-2.5 sm:gap-3">
       {groupEspnFrontPage(games, league.espnFeatured, topMatchups).map((group, i) => {
+        // The block is already ordered live, delayed, upcoming, final, so the
+        // split only finds where the rule goes.
+        const unfinished = group.games.filter((g) => g.state !== "post");
+        const finished = group.games.filter((g) => g.state === "post");
+        const card = (game: Game) => (
+          <GameCard
+            key={game.id}
+            game={game}
+            favoriteTeams={favoriteTeams}
+            onToggleFavoriteTeam={onToggleFavoriteTeam}
+            showRatings={showRatings}
+            leagueLabel={cardLeagueLabel(game)}
+            leagueTag={cardLeagueTag(game)}
+            onPlayHighlight={playHighlight}
+            onPlayEmbed={onPlayEmbed}
+            isPastDate={isPastDate}
+            isToday={isToday}
+            useAbbreviations={useAbbreviations}
+            onSelectTeam={setTeamViewTeam}
+            onShowDetails={onShowDetails}
+            showStars={cardStars}
+            upcomingRecordLeagues={upcomingRecordLeagues}
+          />
+        );
         return (
           <div key={group.sport} className="flex flex-col gap-1.5 sm:gap-2" data-espn-league={group.sport}>
             {!isDemoModeActive() && !(i === 0 && leadLabelSlot) && espnLabelRow(espnGroupLabel(group), group.sport)}
             <PairingRevealAll games={group.games} />
-            {group.games.map((game) => (
-              <GameCard
-                key={game.id}
-                game={game}
-                favoriteTeams={favoriteTeams}
-                onToggleFavoriteTeam={onToggleFavoriteTeam}
-                showRatings={showRatings}
-                leagueLabel={cardLeagueLabel(game)}
-                leagueTag={cardLeagueTag(game)}
-                onPlayHighlight={playHighlight}
-                onPlayEmbed={onPlayEmbed}
-                isPastDate={isPastDate}
-                isToday={isToday}
-                useAbbreviations={useAbbreviations}
-                onSelectTeam={setTeamViewTeam}
-                onShowDetails={onShowDetails}
-                showStars={cardStars}
-                upcomingRecordLeagues={upcomingRecordLeagues}
-              />
-            ))}
+            {unfinished.map(card)}
+            {/* Same rule as the league columns: only when the block has both,
+                so an all-final block (or a past day) shows no rule. */}
+            {showFinalSeparator && unfinished.length > 0 && finished.length > 0 && <FinalDivider />}
+            {finished.map(card)}
           </div>
         );
       })}
@@ -1829,13 +1851,7 @@ export default function LeagueColumn({
         {espnGroups ? renderEspnGroups(visible) : (
           <>
             {(splitFinal ? nonFinished : visible).map(card)}
-            {splitFinal && (
-              <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-                <span className="text-[9px] uppercase tracking-wide">Final</span>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-              </div>
-            )}
+            {splitFinal && <FinalDivider />}
             {splitFinal && finished.map(card)}
           </>
         )}
@@ -2696,11 +2712,7 @@ export default function LeagueColumn({
           {renderUpcoming && league.nextGameDay && league.nextGameDay.games.length > 0 &&
             renderUpcomingSlate(league.nextGameDay.games, false, sorted)}
           {showFinalSeparator && postGames.length > 0 && (liveGames.length > 0 || preGames.length > 0) && (
-            <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
-              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-              <span className="text-[9px] uppercase tracking-wide">Final</span>
-              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-            </div>
+            <FinalDivider />
           )}
           {renderFinished && postGames.map((game) => (
             <GameCard
