@@ -937,6 +937,21 @@ iframe#yt-player {
   .doc-float { display: none !important; }
 }
 
+/* Kind pills on /wall-of-fame and in the feedback form it opens (2026-10-11):
+   a tint fill with text of the same hue, opaque in both themes. League = blue,
+   Feature = green, Fix = amber, anything else = grey. Every pair is over 4.5:1
+   (tests/visual/wall-of-fame.spec.ts measures them). In the form a pill is a
+   toggle: the picked one wears a ring in its own text colour. */
+.kind-pill { background: #ebebeb; color: #374151; }
+.kind-pill[data-kind="League"] { background: #dbeafe; color: #1e40af; }
+.kind-pill[data-kind="Feature"] { background: #dcfce7; color: #166534; }
+.kind-pill[data-kind="Fix"] { background: #fef3c7; color: #92400e; }
+[data-theme="dark"] .kind-pill { background: #262626; color: #d1d5db; }
+[data-theme="dark"] .kind-pill[data-kind="League"] { background: #172554; color: #93c5fd; }
+[data-theme="dark"] .kind-pill[data-kind="Feature"] { background: #052e16; color: #86efac; }
+[data-theme="dark"] .kind-pill[data-kind="Fix"] { background: #451a03; color: #fcd34d; }
+.kind-pill[aria-pressed="true"] { box-shadow: 0 0 0 2px currentColor; }
+
 /* Doc-page top bar (DocTopBar), pinned on scroll 2026-09-25.
    - Pinned at top:0 it would sit under the iOS status bar, so it carries the
      inset as padding and takes the same amount back as a negative margin: the
