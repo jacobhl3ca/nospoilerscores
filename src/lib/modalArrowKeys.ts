@@ -45,6 +45,11 @@ export function routeArrowKey(ctx: ArrowContext): ArrowAction | null {
 // keyboard way to the next post was a chord nobody would guess. ↓/↑ is what a
 // feed reader reaches for, and it is the same walk the ‹ › buttons do.
 //
+// 10/11: on a VIDEO, plain ↑/↓ are the volume (YouTube's own keys, 5 a step)
+// and Shift+↑/↓ page, the same split ←/→ got on 9/4. Text, picture and gallery
+// posts have no volume, so plain ↑/↓ still page there. Shift+arrow pages on
+// every post type and from every focus target inside the modal.
+//
 // routeArrowKey above still owns the ←/→ decision; this wraps it so one call
 // site decides every key, and so the "should this key be handled at all"
 // gates (chords, text entry, key repeat) are written once and tested once.
@@ -58,7 +63,8 @@ export type ModalKeyContext = {
   chord: boolean;
   /** e.repeat — the key is auto-repeating because it is being held down. */
   repeat: boolean;
-  /** Focus is in an INPUT/TEXTAREA/SELECT/contentEditable, or a native <video>. */
+  /** Focus is in an INPUT/TEXTAREA/SELECT/contentEditable, or on a native
+   *  <video> or a role="slider" for a key that element acts on itself. */
   inTextEntry: boolean;
   /** Focus is on a button or link, which owns Space itself. */
   onControl: boolean;
@@ -82,6 +88,7 @@ export type ModalKeyAction =
   | "toggle-play"
   | "peek-headline"
   | "mute"
+  | "volume"
   | "seek-10"
   | "jump-pct"
   | "toggle-keys";
@@ -94,9 +101,27 @@ export type ModalKeyAction =
  * reaches the modal. Before 9/23 ANY key on a focused video was dropped, so
  * one click on a news clip's player silenced H until the modal closed
  * (Jacob 9/12: "if i click play on video in news i lose ability to use h").
+ *
+ * A focused native <video> never owns a Shift chord: Shift+arrow pages posts,
+ * and before 10/11 it seeked or set the volume instead once the player had
+ * focus (after fullscreen, a Tab, or a drag released off the element).
  */
-export function nativeVideoOwnsKey(key: string): boolean {
+export function nativeVideoOwnsKey(key: string, shift = false): boolean {
+  if (shift) return false;
   return key === " " || key === "ArrowLeft" || key === "ArrowRight" || key === "ArrowUp" || key === "ArrowDown";
+}
+
+/**
+ * The keys a focused role="slider" acts on by itself. The modal's own seek bar
+ * and volume bar nudge on the plain arrows, and their stopPropagation does not
+ * keep the press from the modal's handler: React listens on `document`, the
+ * same node that handler is on. Before 10/11 one ↓ on the volume bar lowered
+ * it and paged, and one → on the seek bar skipped twice. A Shift chord is
+ * never the slider's: Shift+arrow pages.
+ */
+export function sliderOwnsKey(key: string, shift = false): boolean {
+  if (shift) return false;
+  return key === "ArrowLeft" || key === "ArrowRight" || key === "ArrowUp" || key === "ArrowDown";
 }
 
 /** null = leave the key alone (no preventDefault). */
@@ -139,8 +164,11 @@ export function routeModalKey(ctx: ModalKeyContext): ModalKeyAction | null {
   }
 
   if (key === "ArrowDown" || key === "ArrowUp") {
-    // ONE rule for every post type — video, image, gallery, text. A long Reddit
-    // body therefore scrolls by wheel / PageUp / PageDown, never by ↑/↓; the
+    // On a video the plain pair is the volume, and repeat is allowed: holding
+    // ↑ ramps it the way holding ← scrubs. Shift+↑/↓ pages, on every post type.
+    if (!ctx.shift && ctx.canSeek) return "volume";
+    // Image, gallery and text posts: plain ↑/↓ page. A long Reddit body
+    // therefore scrolls by wheel / PageUp / PageDown, never by ↑/↓; the
     // rejected alternative ("scroll first, page once you're at the bottom") is
     // surprising to use and fiddly to detect. With no neighbour we return null
     // and DON'T preventDefault, so the key stays the browser's.
@@ -150,7 +178,7 @@ export function routeModalKey(ctx: ModalKeyContext): ModalKeyAction | null {
       : (ctx.hasPrev ? "page-prev" : null);
   }
 
-  // Shift+N / Shift+P — YouTube's own playlist keys, a silent alias of ↓/↑ for
+  // Shift+N / Shift+P — YouTube's own playlist keys, a silent alias of ⇧↓/⇧↑ for
   // anyone who already has them in their fingers. Plain n/p stay free.
   if (ctx.shift && (key === "N" || key === "n")) {
     if (ctx.repeat) return null;

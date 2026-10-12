@@ -78,9 +78,12 @@ test("? is on the list in every state — it opens and closes the panel", () => 
 test("a video prints the playback keys; a text post prints none of them", () => {
   assert.deepEqual(
     ids(ctx({ canSeek: true })),
-    ["play", "arrows", "jl", "pct", "mf", "page", "peek", "esc", "help"],
+    ["play", "arrows", "jl", "pct", "mf", "volume", "page", "peek", "esc", "help"],
   );
-  for (const id of ["play", "jl", "pct", "mf"]) {
+  assert.deepEqual(row(ctx({ canSeek: true }), "volume"), { id: "volume", keys: ["↑", "↓"], label: "Volume" });
+  // The volume row does not wait for a neighbouring post.
+  assert.ok(ids(ctx({ canSeek: true, hasPrev: false, hasNext: false })).includes("volume"));
+  for (const id of ["play", "jl", "pct", "mf", "volume"]) {
     assert.ok(!ids(ctx()).includes(id), `${id} shouldn't show without a video`);
   }
 });
@@ -98,9 +101,11 @@ test("←/→ is labelled with whatever it actually does here", () => {
 
 test("paging prints one row, with whichever keys reach it", () => {
   assert.deepEqual(row(ctx(), "page")?.keys, ["←", "→", "↑", "↓"]);
-  // A video or a gallery owns the plain pair, so Shift takes its place.
-  assert.deepEqual(row(ctx({ canSeek: true }), "page")?.keys, ["↑", "↓", "⇧←", "⇧→"]);
+  // A gallery owns the plain ←/→ pair, so Shift takes its place.
   assert.deepEqual(row(ctx({ galleryCanStep: true }), "page")?.keys, ["↑", "↓", "⇧←", "⇧→"]);
+  // A video owns all four plain arrows (seek and volume), so paging is Shift.
+  assert.deepEqual(row(ctx({ canSeek: true }), "page")?.keys, ["⇧↑", "⇧↓"]);
+  assert.deepEqual(row(ctx({ canSeek: true, hasPrev: false }), "page")?.keys, ["⇧↓"]);
   // First post of a column: only the forward half exists, and the label says so
   // instead of printing two rows that both read "Next post" (Jacob's screen 9/8).
   const first = ctx({ hasPrev: false });
