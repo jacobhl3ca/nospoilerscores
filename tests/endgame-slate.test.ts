@@ -49,6 +49,7 @@ const espn = await jiti.import<{
   buildTennisGames: (events: unknown[], when?: string | { from: string; to: string }) => GameLike[];
   ALL_LEAGUES: Array<{ sport: string; label: string; hidden?: boolean }>;
   isLeagueActive: (l: unknown, d: Date) => boolean;
+  isTennisTourDay: (ymd: string) => boolean;
   ENDGAME_MAX: number;
   ENDGAME_WINDOW_DAYS: number;
   PLAYOFF_ENDGAME_MAX: number;
@@ -93,6 +94,13 @@ function maybeActiveDay(sport: string, from: string, step: 1 | -1, extra?: (d: D
   }
   return null;
 }
+
+// The tennis fixture is a Slam, so its scenarios run on a Slam's own day. The
+// year-round "Tennis" column (2026-10-11) owns every other tennis day, reads
+// two feeds there and holds its ranged lookahead for a few minutes; its tests
+// are in tennis-tour.test.ts.
+const slamDay = (from: string, step: 1 | -1) =>
+  activeDay("tennis", from, step, (d) => !espn.isTennisTourDay(etDay.toYmd(d)));
 
 // ── fetch stub ──────────────────────────────────────────────────────────────
 // A tiny ESPN: team-sport scoreboards honour `?dates=A` and `?dates=A-B` by
@@ -183,7 +191,7 @@ test("the fixtures still carry the shapes this file relies on", () => {
 // ── THE BUG: Slam finals were invisible under the semis ─────────────────────
 
 test("tennis: the two singles finals ride under today's finished semis, on their own days", async () => {
-  const day = activeDay("tennis", TODAY, 1);
+  const day = slamDay(TODAY, 1);
   const [sat, sun] = [plusDays(day, 1), plusDays(day, 2)];
   serve({ tennis: tennisPayload({ semis: day, finals: [sat, sun], doubles: sat }) });
   const league = await column("tennis", day);
@@ -197,7 +205,7 @@ test("tennis: the two singles finals ride under today's finished semis, on their
 });
 
 test("tennis: an empty day before the finals shows BOTH finals, not just the first day", async () => {
-  const day = activeDay("tennis", TODAY, 1);
+  const day = slamDay(TODAY, 1);
   const [sat, sun] = [plusDays(day, 1), plusDays(day, 2)];
   serve({ tennis: tennisPayload({ semis: plusDays(day, -1), finals: [sat, sun] }) });
   const league = await column("tennis", day);
@@ -208,7 +216,7 @@ test("tennis: an empty day before the finals shows BOTH finals, not just the fir
 });
 
 test("tennis: eight quarterfinals ahead is above the cap — a day with games shows only that day", async () => {
-  const day = activeDay("tennis", TODAY, 1);
+  const day = slamDay(TODAY, 1);
   serve({ tennis: tennisPayload({ semis: day, qf: [plusDays(day, 1), plusDays(day, 2)] }) });
   const league = await column("tennis", day);
   assert.ok(league);
@@ -217,7 +225,7 @@ test("tennis: eight quarterfinals ahead is above the cap — a day with games sh
 });
 
 test("tennis: eight quarterfinals ahead of an empty day keeps the old next-day-only lookahead", async () => {
-  const day = activeDay("tennis", TODAY, 1);
+  const day = slamDay(TODAY, 1);
   serve({ tennis: tennisPayload({ qf: [plusDays(day, 1), plusDays(day, 2)] }) });
   const league = await column("tennis", day);
   assert.ok(league);
@@ -227,7 +235,7 @@ test("tennis: eight quarterfinals ahead of an empty day keeps the old next-day-o
 });
 
 test("tennis: the past tab never surfaces the finals", async () => {
-  const day = activeDay("tennis", plusDays(TODAY, -1), -1);
+  const day = slamDay(plusDays(TODAY, -1), -1);
   serve({ tennis: tennisPayload({ semis: day, finals: [plusDays(day, 1), plusDays(day, 2)] }) });
   const league = await column("tennis", day);
   assert.ok(league);

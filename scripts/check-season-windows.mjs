@@ -274,9 +274,126 @@ async function checkTourEvent(cfg, path, now) {
   return { cfg, issues, notes };
 }
 
+// ── The year-round "Tennis" column (added 2026-10-11) ──
+// Not one event but fifteen: the ATP Masters 1000s, the WTA 1000s and the two
+// tour Finals, listed in TENNIS_TOUR_EVENTS in espn.ts because ESPN has no
+// tier field. That table is the part that goes stale, and it goes stale
+// silently (the column just loses a tournament), so this reads the whole
+// year off both feeds and checks each row against it:
+//   - a row with no event this year: the tournament moved, or ESPN gave it a
+//     new id AND a new name. Unverified until ESPN lists it; fix the table.
+//   - a row found by name only, or by id only: one of its two keys drifted.
+//     The column still works; update the other key before it drifts too.
+//   - a match day outside the Tennis window, or inside a Slam's window (those
+//     days show the Slam alone): flagged, that day's matches are hidden.
+// 12 ranged requests of 3–8 MB. ESPN serves a tennis range whole, so two
+// months at a time keeps each response under the size that times out.
+const TENNIS_TOUR_LABEL = "Tennis";
+const TENNIS_TOUR_FEEDS = ["/tennis/atp/scoreboard", "/tennis/wta/scoreboard"];
+// ESPN listed 166 events for 2026 across the two feeds.
+const TENNIS_YEAR_MIN_EVENTS = 100;
+
+// `declared` counts the rows a second, looser way (every `id: "…"` in the
+// table), so a row the strict pattern can no longer read is a failure, not a
+// row this check silently stops covering.
+function parseTennisTourEvents() {
+  const start = SRC.indexOf("export const TENNIS_TOUR_EVENTS");
+  const body = start < 0 ? "" : SRC.slice(start, SRC.indexOf("\n];", start));
+  const rows = [...body.matchAll(/\{\s*id:\s*"(\d+)",\s*city:\s*"([^"]+)",\s*name:\s*\/(.+)\/i,\s*draws:\s*"(\w+)"\s*\}/g)]
+    .map((m) => ({ id: m[1], city: m[2], name: new RegExp(m[3], "i"), draws: m[4] }));
+  return { rows, declared: (body.match(/\bid:\s*"/g) ?? []).length };
+}
+
+async function checkTennisTour(cfg, now) {
+  const issues = [];
+  const notes = [];
+  const { rows, declared } = parseTennisTourEvents();
+  if (!rows.length || rows.length !== declared) {
+    issues.push(`${rows.length} of ${declared} TENNIS_TOUR_EVENTS rows could be read out of espn.ts — the table's shape changed and this check is blind to the rest`);
+    return { cfg, issues, notes };
+  }
+
+  const year = now.getUTCFullYear();
+  const events = new Map();
+  let feedErrors = 0;
+  for (const path of TENNIS_TOUR_FEEDS) {
+    for (let month = 0; month < 12; month += 2) {
+      const range = `${ymd(new Date(Date.UTC(year, month, 1, 12)))}-${ymd(new Date(Date.UTC(year, month + 2, 0, 12)))}`;
+      const r = await fetchRange(path, range);
+      if (r.error) {
+        feedErrors++;
+        notes.push(`${path} ${range}: ${r.error}`);
+        continue;
+      }
+      for (const e of r.events) if (e.id && !events.has(e.id)) events.set(e.id, e);
+    }
+  }
+  if (!events.size) {
+    notes.push(`ESPN returned no ${year} tennis events`);
+    return { cfg, issues, notes };
+  }
+
+  const wants = (row, slug) => slug.includes("singles") && !slug.includes("doubles") && (row.draws === "both" || row.draws === (slug.includes("women") ? "women" : "men"));
+  // ESPN stamps tennis in UTC and plays it everywhere from Beijing to Indian
+  // Wells; the board buckets by US Eastern. Four hours back is that day for
+  // every start time a tournament uses.
+  const etDay = (iso) => new Date(Date.parse(iso) - 4 * 3600_000).toISOString().slice(0, 10);
+  const mmdd = (day) => day.slice(5);
+  const inside = (day, c) => mmdd(day) >= c.startDate && mmdd(day) <= c.endDate;
+  const slams = parseLeagues().filter((l) => l.sport === "tennis" && l.label !== TENNIS_TOUR_LABEL && l.startDate && l.endDate);
+
+  // A whole year's calendar read with no error: a row with no event is then a
+  // row ESPN dropped or re-keyed, and its tournament shows nowhere. With a
+  // failed request, or a year ESPN has barely listed yet, it is only a note.
+  const wholeYear = !feedErrors && events.size >= TENNIS_YEAR_MIN_EVENTS;
+  let firstDay = null;
+  for (const row of rows) {
+    const byId = events.get(`${row.id}-${year}`);
+    const ev = byId ?? [...events.values()].find((e) => !e.major && row.name.test(e.name ?? ""));
+    if (!ev) {
+      const missing = `${row.city}: no ${year} event with id ${row.id} or a name matching ${row.name}`;
+      if (wholeYear) issues.push(`${missing} — moved, or renamed and re-numbered: the column no longer shows it`);
+      else notes.push(`${missing} — not listed yet, or the read was incomplete`);
+      continue;
+    }
+    if (!byId) notes.push(`${row.city}: found by name only ("${ev.name}" is now id ${ev.id}, the table says ${row.id}) — update the id`);
+    else if (!row.name.test(ev.name ?? "")) notes.push(`${row.city}: ESPN now calls id ${row.id} "${ev.name}", which ${row.name} does not match — update the name pattern (the id still carries the column)`);
+
+    // The days the column would show: main-draw singles of the row's draws.
+    // An event ESPN has not drawn yet has no matches, so fall back to its
+    // envelope (endDate is 03:59Z on the day after the final).
+    const played = new Set();
+    for (const g of ev.groupings ?? []) {
+      if (!wants(row, (g.grouping?.slug ?? "").toLowerCase())) continue;
+      for (const m of g.competitions ?? []) {
+        if (/^qualifying/i.test(m.round?.displayName ?? "") || !m.date) continue;
+        played.add(etDay(m.date));
+      }
+    }
+    if (!played.size && ev.date && ev.endDate) {
+      for (let t = Date.parse(ev.date); t < Date.parse(ev.endDate); t += 86400000) played.add(etDay(new Date(t).toISOString()));
+    }
+    const days = [...played].sort();
+    if (!days.length) continue;
+    if (!firstDay || days[0] < firstDay) firstDay = days[0];
+    const outside = days.filter((d) => !inside(d, cfg));
+    if (outside.length) issues.push(`${row.city} ("${ev.name}") plays ${outside[0]}${outside.length > 1 ? ` → ${outside.at(-1)}` : ""} OUTSIDE the Tennis window — those days would be hidden`);
+    for (const slam of slams) {
+      const clash = days.filter((d) => inside(d, slam));
+      if (clash.length) issues.push(`${row.city} ("${ev.name}") plays ${clash[0]}${clash.length > 1 ? ` → ${clash.at(-1)}` : ""} inside the ${slam.label} window, where the column shows the Slam alone`);
+    }
+  }
+  if (firstDay) {
+    const early = diffDays(dayOf(firstDay), mmddToDate(cfg.kickoffDate ?? cfg.startDate, year));
+    if (early > EARLY_OPEN_TOLERANCE_DAYS) issues.push(`opens ${early}d before the first 1000-level match (${firstDay})`);
+  }
+  return { cfg, issues, notes };
+}
+
 async function checkLeague(cfg, paths, now) {
   const path = paths[cfg.sport];
   if (!path || !cfg.startDate || !cfg.endDate) return null;
+  if (cfg.sport === "tennis" && cfg.label === TENNIS_TOUR_LABEL) return checkTennisTour(cfg, now);
   if (TOUR_SPORTS.has(cfg.sport)) return checkTourEvent(cfg, path, now);
 
   const year = now.getUTCFullYear();

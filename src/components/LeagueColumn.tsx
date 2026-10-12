@@ -405,7 +405,11 @@ function getPlayoffSubtitle(
   // off the day's matches (golf-style). Handled before the PLAYOFF_START_DATES
   // gate since tennis has no entry there.
   if (sport === "tennis") {
-    const labels = (games ?? []).map((g) => g.playoffLabel).filter(Boolean) as string[];
+    // A card from the year-round "Tennis" column names its own tournament and
+    // round on its chip (formatTag, "Shanghai · QF"): two tournaments can share
+    // a day at different rounds, so one column-wide round would be wrong for
+    // one of them. Only Slam matches, which have no chip, feed the subtitle.
+    const labels = (games ?? []).filter((g) => !g.formatTag).map((g) => g.playoffLabel).filter(Boolean) as string[];
     const round = deepestTennisRound(labels);
     return round ? { tiers: tennisRoundTiers(round) } : null;
   }

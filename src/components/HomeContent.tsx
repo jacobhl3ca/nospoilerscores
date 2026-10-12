@@ -30,7 +30,7 @@ import GameCard from "@/components/GameCard";
 import { closeHiddenPins, closeUnseenAutoSlots, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
-import { fetchAllLeagues, fetchSlateGames, fetchTopGamesSpan, fetchLastFinishedDay, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { fetchAllLeagues, fetchSlateGames, fetchTopGamesSpan, fetchLastFinishedDay, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, isTennisTourConfig, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
@@ -172,7 +172,7 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
 // useCallback) can take it off a ref instead of closing over prefs.
 function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): BestYesterdayOptions {
   const yesterday = fromYmd(prevYmd(date));
-  const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && isLeagueActive(l, yesterday));
+  const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && !isTennisTourConfig(l) && isLeagueActive(l, yesterday));
   const auto = pickAndAssignLeagues(fromYmd(date), slotCount, boardHiddenLeagues(p)).map((l) => l.sport);
   const board = closeHiddenPins([p.firstLeague, p.secondLeague, p.thirdLeague, p.fourthLeague, p.fifthLeague], boardHiddenLeagues(p) ?? [])
     .slice(0, slotCount)

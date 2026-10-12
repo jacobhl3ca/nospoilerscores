@@ -60,6 +60,8 @@ export async function loadTopGamesDeps({ highlights }) {
       const out = [];
       for (const league of espn.ALL_LEAGUES) {
         if (league.hidden || out.includes(league.sport) || !best.isBestYesterdaySourceSport(league.sport)) continue;
+        // The year-round Tennis row has no clips, so only a Slam makes tennis a source.
+        if (espn.isTennisTourConfig(league)) continue;
         if (espn.isLeagueActive(league, day)) out.push(league.sport);
       }
       return out;

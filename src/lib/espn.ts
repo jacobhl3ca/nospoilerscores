@@ -417,6 +417,17 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "tennis", label: "French Open",  startDate: "05-20", endDate: "06-09", kickoffDate: "05-23", championshipDate: "06-06", verifiedFor: 2027, excludeFromAuto: true },
   { sport: "tennis", label: "Wimbledon",    startDate: "06-26", endDate: "07-14", kickoffDate: "06-28", championshipDate: "07-11", verifiedFor: 2027, firstPref: true, displaySlot: "center", slotPrecedence: 4 },
   { sport: "tennis", label: "US Open",      startDate: "08-24", endDate: "09-15", kickoffDate: "08-29", championshipDate: "09-12", verifiedFor: 2027, firstPref: true, displaySlot: "center", slotPrecedence: 3 },
+  // ── Tennis, the rest of the year (added 2026-10-11 on a user request) ──
+  // One opt-in column for the ATP Masters 1000s, the WTA 1000s and the two
+  // tour Finals (TENNIS_TOUR_EVENTS below), men and women together. Never
+  // auto-picked (excludeFromAuto), so nobody's board changes; it is added from
+  // Add more… or by pinning tennis. ESPN read 10/11: the first 1000 of 2026
+  // is Doha (main draw Feb 8), the last event is the ATP Finals (Nov 15–22).
+  // The window opens the day after the Aus Open's closes, so a pinned tennis
+  // column in December still names the Aus Open as its return.
+  // Keep this line AFTER the four Slams: every "active config" lookup takes
+  // the first match, so inside a Slam window the column is the Slam.
+  { sport: "tennis", label: "Tennis",       startDate: "02-02", endDate: "11-30", kickoffDate: "02-08", verifiedFor: 2026, excludeFromAuto: true },
   // ── FIFA World Cup (every 4 years; 2026 was the most recent anchor) ──
   // startDate opened to 06-04 (tournament opens 06-11) so the column previews
   // live NOW with the opener via the next-game-day lookahead. Revert to 06-11
@@ -2458,6 +2469,100 @@ function tennisEtYmd(iso: string): string {
   }
 }
 
+// ── The year-round "Tennis" column (added 2026-10-11) ──
+// The Slam columns show ESPN's `major: true` events. The "Tennis" config in
+// ALL_LEAGUES covers the rest of the year, limited to the top tier: the nine
+// ATP Masters 1000s, the ten WTA 1000s and the two tour Finals. ESPN has no
+// tier field on the event (read 10/11: every event is season.type 2, and the
+// feed also carries the 250s, 500s and WTA 125s), so the tier is this table.
+//
+// Keyed on ESPN's tournament id, the part of the event id before the year
+// ("315-2026"). It did not change from 2025 to 2026 for any row checked, while
+// the name is mostly the sponsor ("BNP Paribas Open" is Indian Wells,
+// "Internazionali BNL d'Italia" is Rome) and changes with the contract. `name`
+// is the fallback for an id ESPN re-issues, and what the monthly
+// check-season-windows run compares against the feed. Each pattern was tested
+// against all 166 of ESPN's 2026 event names (tests/tennis-tour.test.ts).
+//
+// `draws`: the level is per draw, not per event. Dubai and Beijing are WTA
+// 1000s whose men's draw is an ATP 500, and Doha's ATP 500 is a separate event
+// with "Qatar" in its name too, so those rows keep the women's singles only.
+//
+// A 1000 that moves city or a new one (ESPN issues a new id): add a row here.
+// scripts/check-season-windows.mjs --only=tennis names a row with no event.
+type TennisDraw = "men" | "women";
+export type TennisTourEvent = { id: string; city: string; name: RegExp; draws: TennisDraw | "both" };
+export const TENNIS_TOUR_EVENTS: TennisTourEvent[] = [
+  { id: "256", city: "Doha", name: /\bQatar\b/i, draws: "women" },
+  { id: "25", city: "Dubai", name: /\bDubai\b/i, draws: "women" },
+  { id: "411", city: "Indian Wells", name: /^BNP Paribas Open$/i, draws: "both" },
+  { id: "713", city: "Miami", name: /\bMiami Open\b/i, draws: "both" },
+  { id: "42", city: "Monte-Carlo", name: /\bMonte[- ]Carlo\b/i, draws: "men" },
+  { id: "413", city: "Madrid", name: /\bMadrid Open\b/i, draws: "both" },
+  { id: "414", city: "Rome", name: /\bInternazionali\b.*\bd['’]Italia\b/i, draws: "both" },
+  { id: "421", city: "Canada", name: /\bNational Bank Open\b/i, draws: "both" },
+  { id: "718", city: "Cincinnati", name: /\bCincinnati\b/i, draws: "both" },
+  { id: "959", city: "Beijing", name: /^China Open$/i, draws: "women" },
+  { id: "315", city: "Shanghai", name: /\bShanghai\b.*\bMasters\b/i, draws: "men" },
+  { id: "381", city: "Wuhan", name: /\bWuhan\b/i, draws: "women" },
+  { id: "13", city: "Paris", name: /\bParis Masters\b/i, draws: "men" },
+  { id: "382", city: "WTA Finals", name: /^WTA Finals\b/i, draws: "women" },
+  { id: "339", city: "ATP Finals", name: /^(?!.*\bNext Gen\b).*\bATP Finals\b/i, draws: "men" },
+];
+
+// The table row for an ESPN tennis event, or null for everything below the
+// 1000 level. The id decides; the name only speaks for an id not in the table.
+export function tennisTourEvent(event: { id?: string; name?: string }): TennisTourEvent | null {
+  const id = (event.id ?? "").split("-")[0];
+  const byId = TENNIS_TOUR_EVENTS.find((t) => t.id === id);
+  if (byId) return byId;
+  const name = event.name ?? "";
+  return (name && TENNIS_TOUR_EVENTS.find((t) => t.name.test(name))) || null;
+}
+
+// Does this event (and, when given, this draw of it) belong in the "Tennis"
+// column? `drawSlug` is ESPN's grouping slug ("mens-singles").
+export function isBigTennisEvent(event: { id?: string; name?: string }, drawSlug?: string): boolean {
+  const tour = tennisTourEvent(event);
+  if (!tour) return false;
+  if (!drawSlug || tour.draws === "both") return true;
+  return tour.draws === (/women/i.test(drawSlug) ? "women" : "men");
+}
+
+const TENNIS_TOUR_LABEL = "Tennis";
+// The year-round "Tennis" row, as against the four Slam rows. Its matches have
+// no highlight clip (the bake is Slam-only), so nothing that needs one (Best
+// of yesterday, the top-games bake) counts it as tennis being in season.
+export function isTennisTourConfig(league: Pick<LeagueConfig, "sport" | "label">): boolean {
+  return league.sport === "tennis" && league.label === TENNIS_TOUR_LABEL;
+}
+// A day the "Tennis" column owns: inside its window and outside every Slam's.
+// The two never share a day, so a Slam column is the Slam alone, exactly as
+// before the tour column existed.
+export function isTennisTourDay(ymd: string): boolean {
+  if (!/^\d{8}$/.test(ymd)) return false;
+  const day = new Date(`${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}T12:00:00`);
+  let tour = false;
+  for (const l of ALL_LEAGUES) {
+    if (l.sport !== "tennis" || !isLeagueActive(l, day)) continue;
+    if (!isTennisTourConfig(l)) return false;
+    tour = true;
+  }
+  return tour;
+}
+
+// "Quarterfinal" → "QF", "Round 3" → "R3": the round as the card chip writes
+// it. (The Slam column subtitle keeps its own tennisRoundTiers.)
+export function tennisRoundShort(label: string): string {
+  return label
+    .replace(/Quarterfinals?/i, "QF")
+    .replace(/Semifinals?/i, "SF")
+    .replace(/Round Robin/i, "RR")
+    .replace(/Qualifying/i, "Qual")
+    .replace(/(\d+)(?:st|nd|rd|th)?\s+Round/i, "R$1")
+    .replace(/Round (\d+)/i, "R$1");
+}
+
 // Minimal shapes of ESPN's tennis scoreboard payload — only the fields the
 // parser below reads. Real matches are athlete-based competitors nested in
 // event.groupings[] (see buildTennisGames), not team-based like other sports.
@@ -2481,13 +2586,15 @@ type TennisMatch = {
   broadcasts?: { names?: string[] }[];
   round?: { displayName?: string };
 };
-type TennisEvent = { id?: string; date: string; name?: string };
+type TennisEvent = { id?: string; date: string; name?: string; major?: boolean };
 // The scoreboard event that wraps the draws: singles/doubles live under
 // groupings[], each grouping holding the actual matches (competitions[]).
 type TennisGrouping = { grouping?: { slug?: string }; competitions?: TennisMatch[] };
 type TennisScoreboardEvent = TennisEvent & { major?: boolean; groupings?: TennisGrouping[] };
 
-function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string): Game {
+// `tour`: the match's TENNIS_TOUR_EVENTS row, for a match in the year-round
+// "Tennis" column; null for a Slam match, which parses exactly as before.
+function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string, tour: TennisTourEvent | null = null): Game {
   const comps = match.competitors ?? [];
   const home = comps.find((c) => c.homeAway === "home") ?? comps[0];
   const away = comps.find((c) => c.homeAway === "away") ?? comps[1];
@@ -2530,7 +2637,8 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   // singles) needs 3. The grouping slug tells us which — ESPN's `format` field
   // is unreliable (reports 5 for both). Hoisted above the rating block so the
   // "went the distance" gate can require the winner to have actually reached it.
-  const setsToWin = /women/.test(slug) ? 2 : 3;
+  // Only the Slams play men's best-of-5; every tour event is best-of-3.
+  const setsToWin = /women/.test(slug) || tour ? 2 : 3;
   let rating: number | null = null;
   if (state === "post") {
     // GREAT is reserved for a match that went to a deciding final set (2-1 or
@@ -2600,6 +2708,10 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
     decidingSet,
     streamUrl: null,
     primeStreamUrl: null,
+    // The "Tennis" column can hold two tournaments on one day (Shanghai and
+    // Wuhan share a week), each at its own round, so every card names both:
+    // "Shanghai · QF". Same chip the cricket column uses for its formats.
+    ...(tour ? { formatTag: [tour.city, tennisRoundShort(match.round?.displayName ?? "")].filter(Boolean).join(" · ") } : {}),
   };
 }
 
@@ -2607,11 +2719,23 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
 // inclusive {from, to} range of ET days. The range form feeds the endgame
 // lookahead: ESPN's tennis scoreboard ignores `?dates=A-B` and always returns
 // the whole tournament, so the window has to be applied here, per match.
-export function buildTennisGames(events: TennisScoreboardEvent[], when?: string | { from: string; to: string }): Game[] {
+//
+// `tourColumn`: which of the two tennis columns is asking. The "Tennis" column
+// takes the tour events and no Slam; a Slam column takes the Slam and no tour
+// event. It is the VIEWED day's column (isTennisTourDay), not the match's day:
+// a lookahead from the Aus Open's last day reaches Doha a week later, and
+// those matches do not belong under an "Aus Open" header. Unset = the day
+// itself (a range: its first day).
+export function buildTennisGames(
+  events: TennisScoreboardEvent[],
+  when?: string | { from: string; to: string },
+  tourColumn?: boolean,
+): Game[] {
   const range = typeof when === "object" ? when : null;
   // No-date fallback uses the shared service day so tennis matches the rest of
   // the app's notion of "today" (normally `when` is always passed).
   const target = range ? null : (when ?? toYmd(getEtServiceDate()));
+  const tourMode = tourColumn ?? isTennisTourDay(range ? range.from : String(target));
   const games: Game[] = [];
   for (const event of events) {
     // Grand Slam only. The ATP scoreboard also returns the week's tune-up
@@ -2619,19 +2743,28 @@ export function buildTennisGames(events: TennisScoreboardEvent[], when?: string 
     // Libéma Open appear too, with their qualifying matches. Without this gate
     // those non-Slam matches leak into the "French Open" column (Jacob 6/7).
     // All four Slams carry major:true; the tune-ups are major:false.
-    if (!event.major) continue;
+    // The one other way in (2026-10-11): a 1000-level or Finals event, for the
+    // year-round "Tennis" column — see TENNIS_TOUR_EVENTS. A call builds one
+    // column or the other, never a mix (tourMode).
+    const tour = event.major ? null : tennisTourEvent(event);
+    if (tourMode ? !tour : !event.major) continue;
     for (const grouping of event.groupings ?? []) {
       const slug = (grouping.grouping?.slug ?? "").toLowerCase();
       // Singles draws only.
       if (!slug.includes("singles") || slug.includes("doubles")) continue;
+      // And, for a tour event, only the draw that is 1000-level.
+      if (tour && !isBigTennisEvent(event, slug)) continue;
       for (const match of grouping.competitions ?? []) {
         if ((match.competitors?.length ?? 0) < 2) continue;
         const day = tennisEtYmd(match.date ?? "");
         if (range ? (day < range.from || day > range.to) : day !== target) continue;
+        // The "Tennis" column is main draws only. A Slam column drops
+        // nothing, as before.
+        if (tour && /^qualifying/i.test(match.round?.displayName ?? "")) continue;
         const sn = match.status?.type?.name ?? "";
         if (sn.includes("POSTPONED") || sn.includes("CANCELED") || sn.includes("SUSPENDED")) continue;
         try {
-          games.push(parseTennisMatch(match, event, slug));
+          games.push(parseTennisMatch(match, event, slug, tour));
         } catch {
           // A single malformed match must not blank the whole draw.
         }
@@ -5247,6 +5380,73 @@ async function fetchGamesAcrossDays(
   return gathered;
 }
 
+// The WTA half of ESPN's tennis scoreboard. SPORT_PATHS.tennis is the ATP
+// feed, and a Slam is on both, so the Slam columns never needed this one. The
+// year-round "Tennis" column does: Doha, Wuhan and the WTA Finals are on the
+// WTA feed only.
+const TENNIS_WTA_PATH = "/tennis/wta/scoreboard";
+
+// Every tennis event for `dates` (one YYYYMMDD day, an A-B range, or unset for
+// ESPN's own today): the ATP feed, plus the WTA feed for the "Tennis" column
+// (`tourColumn`). A Slam column reads the ATP feed only, as it always has. A
+// combined event (Indian Wells, the China Open) is on both feeds with both
+// draws, so the first copy is kept.
+// null = every feed asked for failed. `partial` = one of two failed.
+async function fetchTennisEvents(dates: string | undefined, tourColumn: boolean): Promise<{ events: TennisScoreboardEvent[]; partial: boolean } | null> {
+  const urls = [scoreboardUrl("tennis")];
+  if (tourColumn) urls.push(new URL(BASE_URL + TENNIS_WTA_PATH));
+  const feeds = await Promise.all(urls.map(async (url) => {
+    if (dates) url.searchParams.set("dates", dates);
+    try {
+      // ESPN's tennis payload is large (the whole tournament, every draw), so
+      // no retries and a short timeout: see scoreboardFetchArgs.
+      const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs("tennis"));
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data?.events ?? []) as TennisScoreboardEvent[];
+    } catch {
+      return null;
+    }
+  }));
+  if (feeds.every((f) => f === null)) return null;
+  const seen = new Set<string>();
+  const events = feeds.flatMap((f) => f ?? []).filter((e) => {
+    if (!e.id) return true;
+    if (seen.has(e.id)) return false;
+    seen.add(e.id);
+    return true;
+  });
+  return { events, partial: feeds.some((f) => f === null) };
+}
+
+// Every singles match in [from, to] (YYYYMMDD, inclusive), one ranged request
+// per feed. ESPN's tennis scoreboard still takes `dates=A-B` (checked
+// 2026-10-11, HTTP 200) and answers with every tournament that touches the
+// range, whole; buildTennisGames applies the window per match.
+//
+// A range on the "Tennis" column's days is held for a few minutes. The board
+// re-pulls every column each 10 s while any game on it is live, and this
+// column asks twice (the endgame count, then the next match day) on two feeds
+// of 1–5 MB each. What the range feeds is the upcoming and the last-played
+// slate, not a live score, so a few minutes old is fine. Held as JSON: callers
+// stamp fields onto the games they get. A Slam column's ranges are never held,
+// and neither is a read that lost one of its two feeds.
+const TENNIS_RANGE_TTL_MS = 5 * 60_000;
+const tennisRangeCache = new Map<string, { at: number; json: string }>();
+async function fetchTennisRangeGames(from: string, to: string, tourColumn: boolean): Promise<Game[] | null> {
+  const key = tourColumn ? `${from}-${to}|${getTimeZone()}` : null;
+  const held = key ? tennisRangeCache.get(key) : undefined;
+  if (held && Date.now() - held.at < TENNIS_RANGE_TTL_MS) return JSON.parse(held.json) as Game[];
+  const read = await fetchTennisEvents(`${from}-${to}`, tourColumn);
+  if (!read) return null;
+  const games = buildTennisGames(read.events, { from, to }, tourColumn);
+  if (key && !read.partial) {
+    for (const [k, v] of tennisRangeCache) if (Date.now() - v.at >= TENNIS_RANGE_TTL_MS) tennisRangeCache.delete(k);
+    tennisRangeCache.set(key, { at: Date.now(), json: JSON.stringify(games) });
+  }
+  return games;
+}
+
 // How far ahead fetchNextGameDayRange reads in ONE request. Shared with the
 // offseason-opener gate in fetchAllLeagues so the gate can never green-light a
 // league whose opener sits outside the span the fetch would actually cover.
@@ -5306,19 +5506,8 @@ async function fetchNextGameDayRange(
   // RANGE_FANOUT_CHUNK_DAYS — because ESPN now answers their ranges with 400.
   let rangedTennis: Game[] | null = null;
   if (sport === "tennis") {
-    const url = scoreboardUrl(sport);
-    url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
-    try {
-      // ESPN's tennis scoreboard payload is large during Slams. Do not let a
-      // ranged tennis lookahead retry for ~30s before admitting there is no slate.
-      const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
-      if (!res.ok) return null;
-      const data = await res.json();
-      const events: ScoreboardEvent[] = data?.events ?? [];
-      rangedTennis = buildTennisGames(events as unknown as TennisScoreboardEvent[], { from: ymd(start), to: ymd(end) });
-    } catch {
-      return null;
-    }
+    rangedTennis = await fetchTennisRangeGames(ymd(start), ymd(end), isTennisTourDay(ymd(base)));
+    if (!rangedTennis) return null;
   }
   // Group by the fixture's ET calendar day, return the earliest day's slate.
   const dayOf = (iso: string) => {
@@ -5423,7 +5612,18 @@ async function fetchPreviousGameDayRange(
     const d = new Date(base); d.setDate(d.getDate() - (i + 1)); return ymd(d);
   });
   const finished = (gs: Game[]) => gs.filter((g) => g.state === "post");
-  const games = finished(await fetchGamesAcrossDays(sport, days, (gs) => finished(gs).length > 0));
+  let games: Game[];
+  if (sport === "tennis") {
+    // The day walk below can never find a tennis match: eventsToGames drops
+    // the 0-competitor tournament wrapper, so it read 14 scoreboards for
+    // nothing. The year-round "Tennis" column has gaps of a week or more
+    // between events, so it gets a real lookback, in one ranged request. A
+    // Slam column keeps the answer it always got (none), without the requests.
+    if (!isTennisTourDay(ymd(base))) return null;
+    games = finished(await fetchTennisRangeGames(days[days.length - 1], days[0], true) ?? []);
+  } else {
+    games = finished(await fetchGamesAcrossDays(sport, days, (gs) => finished(gs).length > 0));
+  }
   if (!games.length) return null;
   const dayOf = (iso: string) => {
     try {
@@ -5490,6 +5690,16 @@ export async function fetchGames(
   const finishedKey = date && date < toYmd(getEtServiceDate()) ? `${sport}|${date}|${getTimeZone()}` : null;
   const held = finishedKey ? finishedDayCache.get(finishedKey) : undefined;
   if (held && Date.now() - held.at < FINISHED_DAY_TTL_MS) return { games: JSON.parse(held.json) as Game[], failed: false };
+  // Tennis nests its real matches in event.groupings[].competitions[] with
+  // athlete-based competitors — flattened by a dedicated parser, not the
+  // team-based path below (which would drop the 0-competitor tournament
+  // wrapper). It also reads up to two feeds: see fetchTennisEvents.
+  if (sport === "tennis") {
+    const tourColumn = isTennisTourDay(date ?? toYmd(getEtServiceDate()));
+    const read = await fetchTennisEvents(date, tourColumn);
+    if (!read) return { games: [], failed: true };
+    return { games: buildTennisGames(read.events, date, tourColumn), failed: false };
+  }
   const url = scoreboardUrl(sport);
   // Soccer fixtures can kick off in the local midnight hour (a western-US World
   // Cup night game is 12 AM ET). ESPN buckets those under their raw calendar
@@ -5532,9 +5742,6 @@ export async function fetchGames(
   };
   let data: { events?: unknown[] } | null;
   try {
-    // ESPN's tennis scoreboard payload is large during Slams and has been the
-    // slowest selected column. Keep it from holding the whole board skeleton;
-    // a miss still falls back to the last good per-date cache below.
     const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
     if (!res.ok) return failWithCacheFallback();
     data = await res.json();
@@ -5551,13 +5758,6 @@ export async function fetchGames(
   }
 
   const events = data?.events ?? [];
-
-  // Tennis nests its real matches in event.groupings[].competitions[] with
-  // athlete-based competitors — flattened by a dedicated parser, not the
-  // team-based path below (which would drop the 0-competitor tournament wrapper).
-  if (sport === "tennis") {
-    return { games: buildTennisGames(events as TennisScoreboardEvent[], date), failed: false };
-  }
 
   let games: Game[] = eventsToGames(events as ScoreboardEvent[], sport);
   // Drop the adjacent-day fixtures the 2-day soccer window pulled in, keeping
@@ -7079,6 +7279,12 @@ export async function fetchNextGameDay(
   daysToCheck = 7,
   fromDate?: string // YYYYMMDD — search from this date instead of today
 ): Promise<{ date: string; games: Game[] } | null> {
+  // Tennis: the same answer from one ranged request. A single-day tennis
+  // request returns the whole tournament anyway, so seven of them in parallel
+  // were seven copies of one large payload (and fourteen for the "Tennis"
+  // column, which reads two feeds).
+  if (sport === "tennis") return fetchNextGameDayRange(sport, fromDate, daysToCheck);
+
   const base = fromDate
     ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
     : new Date();
