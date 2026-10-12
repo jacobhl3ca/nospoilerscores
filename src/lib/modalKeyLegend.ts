@@ -74,18 +74,25 @@ export function buildKeyLegend(ctx: KeyLegendContext): KeyLegendRow[] {
     rows.push({ id: "jl", keys: ["J", "L"], label: "Skip 10s" });
     rows.push({ id: "pct", keys: ["0–9"], label: "Jump ahead" });
     rows.push({ id: "mf", keys: ["M", "F"], label: "Mute / fullscreen" });
+    rows.push({ id: "volume", keys: ["↑", "↓"], label: "Volume" });
   }
 
   // One paging row, however many keys reach it. On a text post that's all four
-  // arrows (←/→ have nothing else to do there, so they page); on a video or a
-  // gallery the plain pair is spoken for and Shift+←/→ takes its place beside
-  // ↑/↓. Printing the plain pair as its own row would have given a text post
-  // two rows both labelled "Next post".
+  // arrows (←/→ have nothing else to do there, so they page); on a gallery the
+  // plain ←/→ pair is spoken for and Shift+←/→ takes its place beside ↑/↓.
+  // Printing the plain pair as its own row would have given a text post two
+  // rows both labelled "Next post". On a video all four plain arrows are
+  // spoken for (seek and volume), so the row prints ⇧↑ ⇧↓ alone: Shift+←/→
+  // page there too, but one pair is enough to say "hold Shift".
   if (hasNeighbour) {
-    const contentOwnsArrows = ctx.galleryCanStep || ctx.canSeek;
-    const keys = contentOwnsArrows ? [] : pagingKeys(ctx, "←", "→");
-    keys.push(...pagingKeys(ctx, "↑", "↓"));
-    if (contentOwnsArrows) keys.push(...pagingKeys(ctx, "⇧←", "⇧→"));
+    let keys: string[];
+    if (ctx.galleryCanStep) {
+      keys = [...pagingKeys(ctx, "↑", "↓"), ...pagingKeys(ctx, "⇧←", "⇧→")];
+    } else if (ctx.canSeek) {
+      keys = pagingKeys(ctx, "⇧↑", "⇧↓");
+    } else {
+      keys = [...pagingKeys(ctx, "←", "→"), ...pagingKeys(ctx, "↑", "↓")];
+    }
     rows.push({ id: "page", keys, label: pagingLabel(ctx) });
   }
 

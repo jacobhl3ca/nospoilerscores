@@ -941,8 +941,9 @@ test("ESPN modal: global Headlines on + ESPN Videos card off = the clip's headli
   await expect.poll(() => titleFilter(page)).toBe("blur(7px)");
   await page.keyboard.press("h");
   await expect.poll(() => titleFilter(page)).toBe("none");
-  // ↓ to the next clip in the same card: blurred again, card setting kept.
-  await page.keyboard.press("ArrowDown");
+  // ⇧↓ to the next clip in the same card: blurred again, card setting kept.
+  // (Plain ↓ on a clip is the volume.)
+  await page.keyboard.press("Shift+ArrowDown");
   await expect(footerTitle(page)).toHaveText("espn-videos post 2");
   await expect.poll(() => titleFilter(page)).toBe("blur(7px)");
 });
@@ -987,25 +988,26 @@ const reloadThenStep = async (page: Page, from: string, to: string) => {
   await page.reload();
   await expect(footerTitle(page)).toHaveText(from, LOAD);
   await expect(nextPost(page)).toBeEnabled(LOAD);
-  await page.keyboard.press("ArrowDown");
+  // ⇧↓ pages on every post type; plain ↓ on a clip is the volume.
+  await page.keyboard.press("Shift+ArrowDown");
   // Post 3 of a sub is a text post, whose title is not in the clip footer.
   await expect(page.getByRole("dialog").getByText(to, { exact: true }).first()).toBeVisible();
 };
 
-test("ESPN modal after a reload: the arrows come back and ↓ steps to post 2", async ({ page }) => {
+test("ESPN modal after a reload: the arrows come back and ⇧↓ steps to post 2", async ({ page }) => {
   await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, revealNewsTitles: true });
   await openVideosClip(page);
   await reloadThenStep(page, "espn-videos post 1", "espn-videos post 2");
 });
 
-test("r/nfl modal after a reload: the arrows come back and ↓ steps to the next post", async ({ page }) => {
+test("r/nfl modal after a reload: the arrows come back and ⇧↓ steps to the next post", async ({ page }) => {
   await gotoNews(page, { ...PLAY, newsLayout: "espn", newsAutoplay: false, revealNewsTitles: true });
   await page.getByText("reddit-nfl post 2", { exact: true }).click(LOAD);
   await expect(footerTitle(page)).toHaveText("reddit-nfl post 2", LOAD);
   await reloadThenStep(page, "reddit-nfl post 2", "reddit-nfl post 3");
 });
 
-test("Cards modal after a reload: the arrows come back and ↓ steps to the next post", async ({ page }) => {
+test("Cards modal after a reload: the arrows come back and ⇧↓ steps to the next post", async ({ page }) => {
   await gotoNews(page, { ...PLAY, newsAutoplay: false, revealNewsTitles: true });
   await expect(pill(page, "Cards")).toHaveAttribute("aria-pressed", "true", LOAD);
   await page.getByText("reddit-nfl post 2", { exact: true }).click(LOAD);

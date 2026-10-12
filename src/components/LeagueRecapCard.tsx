@@ -44,7 +44,7 @@ import { withoutSettledOdds } from "@/lib/playoffPicture";
 // leaves the pill and only Bracket and Picks remain (Jacob 9/29).
 //
 // `onPlayList`: each button opens its cut with the pill's other cuts as
-// siblings, so the modal pages through them — Shift+←/→ or ↑/↓, or the
+// siblings, so the modal pages through them — Shift+←/→ or Shift+↑/↓, or the
 // ‹ › buttons — without closing (Jacob 9/26: "shift click to cycle the best
 // of day highlights").
 

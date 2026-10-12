@@ -11,7 +11,7 @@ import ModalKeyHints from "@/components/ModalKeyHints";
 import { shareCardUrl, buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
 import { exitDocumentFullscreen, requestElementFullscreen } from "@/lib/mediaSafe";
-import { routeModalKey, nativeVideoOwnsKey } from "@/lib/modalArrowKeys";
+import { routeModalKey, nativeVideoOwnsKey, sliderOwnsKey } from "@/lib/modalArrowKeys";
 import { noteHighlightWatched } from "@/lib/rateApp";
 import { trackEvent } from "@/lib/track";
 
@@ -1346,6 +1346,23 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     setVolume(v);
   }, []);
 
+  // ↑/↓ on a video (Jacob 10/11): one 5-point step of volume. A step up from
+  // mute unmutes, and a step down to 0 mutes, so the icon and the level agree.
+  const stepVolume = useCallback((delta: number) => {
+    // Direct streams have no playerRef: set the <video>'s own volume (its
+    // native control strip picks the change up), same as toggleMute above.
+    const v = videoRef.current;
+    if (v && hlsMode) {
+      const next = Math.max(0, Math.min(100, Math.round(v.muted ? 0 : v.volume * 100) + delta));
+      v.volume = next / 100;
+      v.muted = next === 0;
+      setMuted(v.muted);
+      setVolume(next);
+      return;
+    }
+    setVolLevel((muted ? 0 : volume) + delta);
+  }, [hlsMode, muted, volume, setVolLevel]);
+
   // Drag/click the volume slider.
   const setVolFromClientX = useCallback((clientX: number) => {
     const el = volRef.current;
@@ -1493,6 +1510,30 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
   }, [frameRecoveryOn, recoverFocusFromFrame]);
 
+  // A focused native <video> keeps Space and the plain arrows for itself, so
+  // pointer focus on it is handed back to the dialog. Tab focus is left alone.
+  const refocusDialogFromVideo = useCallback(() => {
+    const v = videoRef.current;
+    if (v && document.activeElement === v) dialogRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  // A drag on the native controls that ends off the <video> (its volume
+  // slider, dragged past the edge) sends the pointerup somewhere else, so the
+  // element's own onPointerUp bounce never runs and the video keeps focus
+  // (Jacob 10/11). Same bounce, from the document.
+  useEffect(() => {
+    if (!hlsMode) return;
+    const onUp = () => {
+      window.setTimeout(() => {
+        const v = videoRef.current as (HTMLVideoElement & { webkitDisplayingFullscreen?: boolean }) | null;
+        if (document.fullscreenElement || v?.webkitDisplayingFullscreen) return;
+        refocusDialogFromVideo();
+      }, 0);
+    };
+    document.addEventListener("pointerup", onUp, true);
+    return () => document.removeEventListener("pointerup", onUp, true);
+  }, [hlsMode, refocusDialogFromVideo]);
+
   // Keep nativeFs in sync with the browser, and remember when we left so a
   // co-delivered Escape doesn't also close the modal.
   useEffect(() => {
@@ -1501,14 +1542,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       const active = !!fsEl && fsEl === fsHostRef.current;
       setNativeFs(active);
       if (!active) fsExitAtRef.current = Date.now();
+      // The <video>'s own fullscreen button leaves focus on the <video> on the
+      // way out, and a focused video keeps Space and the plain arrows for
+      // itself. Hand focus back to the dialog, like the onPointerUp bounce on
+      // the element does after a click (Jacob 10/11).
+      if (!fsEl) refocusDialogFromVideo();
     };
+    // Safari's native video layer (iPhone, and the player's own button on a
+    // Mac) ends with this event on the <video>. It does not bubble, so it is
+    // caught on the way down.
+    const onVideoFsEnd = () => refocusDialogFromVideo();
     document.addEventListener("fullscreenchange", onFsChange);
     document.addEventListener("webkitfullscreenchange", onFsChange);
+    document.addEventListener("webkitendfullscreen", onVideoFsEnd, true);
     return () => {
       document.removeEventListener("fullscreenchange", onFsChange);
       document.removeEventListener("webkitfullscreenchange", onFsChange);
+      document.removeEventListener("webkitendfullscreen", onVideoFsEnd, true);
     };
-  }, []);
+  }, [refocusDialogFromVideo]);
 
   // The modal's keyboard. Esc backs out of fullscreen first, then closes; "f"
   // fullscreens; everything else is routed by routeModalKey (the leaf module,
@@ -1550,8 +1602,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         toggleFullscreen();
       }
       // Everything else: build the context, ask routeModalKey, act. ↓/↑ page the
-      // post list, ←/→ keep the 9/4 routing (content first, Shift always pages),
-      // Space/k play-pause, H peeks this post's headline, and m / j / l / 0-9
+      // post list (on a video they are the volume, and Shift+↓/↑ page), ←/→ keep
+      // the 9/4 routing (content first, Shift always pages), Space/k play-pause, H peeks this post's headline, and m / j / l / 0-9
       // are the YouTube keys we take back by keeping focus out of the iframe.
       const t = e.target as HTMLElement | null;
       const tag = t?.tagName;
@@ -1566,8 +1618,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         repeat: e.repeat,
         // A focused native <video controls> (the HLS path) toggles itself on
         // Space and seeks itself on the arrows, so those presses are its own;
-        // every other key still routes (nativeVideoOwnsKey).
-        inTextEntry: !!t && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable || (tag === "VIDEO" && nativeVideoOwnsKey(key))),
+        // every other key still routes, and so does any Shift chord
+        // (nativeVideoOwnsKey). The same goes for the modal's own seek bar and
+        // volume bar, which nudge on the plain arrows (sliderOwnsKey).
+        inTextEntry: !!t && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable || (tag === "VIDEO" && nativeVideoOwnsKey(key, e.shiftKey)) || (t.getAttribute("role") === "slider" && sliderOwnsKey(key, e.shiftKey))),
         onControl: !!t && (tag === "BUTTON" || tag === "A"),
         // hlsMode included: MLB/Reddit direct streams seek through the <video>
         // element (see seekBy), so ← → skip on them like they do on YouTube.
@@ -1589,6 +1643,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         case "toggle-play": togglePlay(); break;
         case "peek-headline": toggleHeadlinePeek(); break;
         case "mute": toggleMute(); break;
+        case "volume": stepVolume(e.key === "ArrowUp" ? 5 : -5); break;
         // j back, l forward — YouTube's own ∓10s, twice the arrows' step.
         case "seek-10": seekBy((e.key === "j" || e.key === "J" ? -1 : 1) * 10); break;
         // 1-9 jump to that tenth; 0 restarts. seekToPct already honours the 90%
@@ -1601,7 +1656,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, seekToPct, togglePlay, toggleMute, toggleHeadlinePeek, hasBlurredHeadline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen, toggleKeyHints]);
+  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, seekToPct, togglePlay, toggleMute, stepVolume, toggleHeadlinePeek, hasBlurredHeadline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen, toggleKeyHints]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
@@ -2224,6 +2279,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
   const hasPager = !!(onPrev || onNext);
+  // On a video plain ↑/↓ are the volume, so the pager's keys are Shift+↑/↓.
+  const pagerOnVideo = ytMode || hlsMode;
+  const prevPostTitle = pagerOnVideo ? "Previous post (⇧↑)" : "Previous post (↑)";
+  const nextPostTitle = pagerOnVideo ? "Next post (⇧↓)" : "Next post (↓)";
 
   // The legend's rows come out of the same context flags routeModalKey decides
   // on, so a row can't outlive the key it names (buildKeyLegend, and the test
@@ -2336,6 +2395,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // seekBy). stopPropagation so the modal's global arrow
         // handler doesn't ALSO fire (it would step to the prev/next
         // post, or double-seek, instead of just nudging the bar).
+        // Shift+arrow is the pager's on every focus target, so the
+        // bar leaves it alone (sliderOwnsKey has the other half).
+        if (e.shiftKey) return;
         if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
           e.preventDefault(); e.stopPropagation(); seekBy(-SEEK_STEP);
         } else if (e.key === "ArrowRight" || e.key === "ArrowUp") {
@@ -2432,11 +2494,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           {hasPager && (
             <>
               <button type="button" onClick={(e) => { e.stopPropagation(); goPrev(); }} disabled={!onPrev}
-                aria-label="Previous post" title="Previous post (↑)" className={lsBtn} style={lsBtnStyle}>
+                aria-label="Previous post" title={prevPostTitle} className={lsBtn} style={lsBtnStyle}>
                 <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
               </button>
               <button type="button" onClick={(e) => { e.stopPropagation(); goNext(); }} disabled={!onNext}
-                aria-label="Next post" title="Next post (↓)" className={lsBtn} style={lsBtnStyle}>
+                aria-label="Next post" title={nextPostTitle} className={lsBtn} style={lsBtnStyle}>
                 <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
               </button>
             </>
@@ -2591,12 +2653,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       {hasPager && (
         <>
           <button type="button" onClick={(e) => { e.stopPropagation(); goPrev(); }} disabled={!onPrev}
-            aria-label="Previous post" title="Previous post (↑)" aria-keyshortcuts="ArrowUp"
+            aria-label="Previous post" title={prevPostTitle} aria-keyshortcuts={pagerOnVideo ? "Shift+ArrowUp" : "ArrowUp"}
             className={clusterBtn} style={clusterBtnStyle}>
             <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
           <button type="button" onClick={(e) => { e.stopPropagation(); goNext(); }} disabled={!onNext}
-            aria-label="Next post" title="Next post (↓)" aria-keyshortcuts="ArrowDown"
+            aria-label="Next post" title={nextPostTitle} aria-keyshortcuts={pagerOnVideo ? "Shift+ArrowDown" : "ArrowDown"}
             className={clusterBtn} style={clusterBtnStyle}>
             <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
           </button>
@@ -3241,6 +3303,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     // Make the focusable role="slider" actually keyboard-operable
                     // (WCAG 2.1.1): ←/↓ lower and →/↑ raise by 5, Home/End jump to
                     // mute/full. Without this the slider takes focus but ignores keys.
+                    // Shift+arrow is the pager's, so the bar leaves it alone.
+                    if (e.shiftKey) return;
                     const cur = muted ? 0 : volume;
                     let next: number | null = null;
                     if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = cur - 5;

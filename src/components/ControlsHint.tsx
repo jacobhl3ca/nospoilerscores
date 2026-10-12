@@ -42,8 +42,10 @@ const BOARD_ROWS: Row[] = [
   { keys: ["Esc"], what: "Close what's open" },
 ];
 
+// Shift+↓/↑ page on every post type. The plain pair pages too on a text or
+// picture post, but on a video it is the volume, so only the chord is printed.
 const BOARD_PREVIEW_ROWS: Row[] = [
-  { keys: ["↓", "↑"], what: "Next / previous post" },
+  { keys: ["⇧↓", "⇧↑"], what: "Next / previous post" },
   { keys: ["←", "→"], what: "Skip 5s in a video" },
   { keys: ["Space"], what: "Play / pause" },
   { keys: ["F"], what: "Fullscreen" },
