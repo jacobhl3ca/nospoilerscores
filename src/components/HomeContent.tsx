@@ -5,7 +5,7 @@ import { abortOwn } from "@/lib/abort";
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
+import { NewsMarkSeenContext, markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, NewsLayout, type NewsCardPrefs, type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
@@ -3622,6 +3622,7 @@ export default function HomeContent({
   return (
     <WatchQueueContext.Provider value={watchQueueApi}>
     <HideRanksContext.Provider value={!!prefs.hideRanks}>
+    <NewsMarkSeenContext.Provider value={prefs.newsMarkSeen ?? true}>
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Keyboard skip link (WCAG 2.4.1) — visually hidden until focused, then
           jumps a Tab user past the sticky header / date nav straight to the
@@ -6518,6 +6519,7 @@ export default function HomeContent({
         <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} />
       </div>
     </div>
+    </NewsMarkSeenContext.Provider>
     </HideRanksContext.Provider>
     </WatchQueueContext.Provider>
   );

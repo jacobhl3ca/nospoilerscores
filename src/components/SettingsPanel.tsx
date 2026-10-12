@@ -978,7 +978,8 @@ export default function SettingsPanel({
     // default (no video filter, default order, nothing hidden).
     // newsOldestFirst (the ⇅ control) was the last toolbar pref still
     // surviving a reset; it has no non-undefined default either. Same for
-    // newsHideSeen (the 👁 control).
+    // newsHideSeen (the 👁 control). newsMarkSeen (Settings → News) reads
+    // undefined as on, its default.
     // The layout is the one a new visitor gets (ESPN since 10/10), set by
     // name: undefined would read as Cards (newsLayoutOf).
     newsFeedView: undefined,
@@ -991,6 +992,7 @@ export default function SettingsPanel({
     newsVideosOnly: undefined,
     newsOldestFirst: undefined,
     newsHideSeen: undefined,
+    newsMarkSeen: undefined,
     newsTypeFilterOrder: undefined,
     newsHiddenSources: undefined,
     singleColumn: undefined,
@@ -1786,6 +1788,11 @@ export default function SettingsPanel({
               label="Hide upsetting news"
               checked={!!(prefs.hideSensitiveNews || prefs.hideCrashNews)}
               onChange={(v) => updatePrefs({ hideSensitiveNews: v, hideCrashNews: v })}
+            />
+            <ToggleRow
+              label="Mark posts you opened"
+              checked={prefs.newsMarkSeen ?? true}
+              onChange={(v) => updatePrefs({ newsMarkSeen: v })}
             />
           </Section>
 

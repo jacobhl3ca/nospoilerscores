@@ -839,6 +839,33 @@ iframe#yt-player {
   .news-restore-flash { animation: none; box-shadow: 0 0 0 2px var(--accent); background-color: color-mix(in srgb, var(--accent) 18%, transparent); }
 }
 
+/* News: "✓ Opened" marker (Jacob 10/11). A post he opened stays on screen,
+   dimmed to 55%, with a small chip top-right; Settings → News "Mark posts you
+   opened" turns it off. Every card that carries data-news-key gets
+   data-news-seen from lib/newsSeen (ESPN, Cards, Feed, the strip). The dim
+   sits on the card's children, not the card, so the chip keeps full strength:
+   --text-secondary on --bg is 5.7:1 light, 7.8:1 dark. The chip is absolute
+   and takes no clicks, so the row keeps its size and its tap targets. */
+[data-news-seen] { position: relative; }
+[data-news-seen] > * { opacity: 0.55; }
+[data-news-seen]::after {
+  content: "✓ Opened";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Tailwind's built-in looping utilities (loading skeletons use animate-pulse)
      don't honor reduced-motion on their own — silence them so the rest of the

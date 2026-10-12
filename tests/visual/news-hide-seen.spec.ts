@@ -9,6 +9,11 @@ import { expect, test, type Page } from "@playwright/test";
 //   4. Cmd-click in Cards view (new tab) counts; survives reload.
 //   5. The comments toggle does not count.
 //   6. Reset to defaults clears newsHideSeen; the toggle fits a phone header.
+// "✓ Opened" marker (Jacob 10/11): an opened post that stays on screen gets
+// data-news-seen (dim + chip, globals.css). Settings → News turns it off.
+//   7. Open a post → that card only is marked, nothing moves, survives reload.
+//   8. Cards and ESPN layouts mark the opened card too.
+//   9. The Settings switch removes the marker; Reset to defaults brings it back.
 // Every news feed is mocked so the run does not depend on the gitignored
 // public/news/*.json files or the live ESPN API. Run against `localhost`.
 
@@ -66,6 +71,7 @@ async function mockFeeds(page: Page) {
 }
 
 const posts = (page: Page) => page.locator("article[data-news-key]");
+const MARKED = "main [data-news-seen]";
 
 async function settle(page: Page) {
   let last = -1;
@@ -202,6 +208,134 @@ test("Reset to defaults clears Hide seen", async ({ page }) => {
     const raw = localStorage.getItem("nss-preferences");
     return raw ? Object.prototype.hasOwnProperty.call(JSON.parse(raw), "newsHideSeen") : "missing";
   }), { timeout: 5_000 }).toBe(false);
+});
+
+test("Opened marker: an opened post dims and gets the chip; no other card, no layout shift", async ({ page }) => {
+  await mockFeeds(page);
+  await gotoNews(page);
+  const total = await settle(page);
+  const key = (await renderedKeys(page))[2];
+  const card = posts(page).nth(2);
+  await expect(page.locator(MARKED)).toHaveCount(0);
+
+  // Page coordinates, so a scroll between the two reads does not count.
+  const boxes = () => posts(page).evaluateAll((els) => els.map((e) => {
+    const r = e.getBoundingClientRect();
+    return [r.x + window.scrollX, r.y + window.scrollY, r.width, r.height].map(Math.round);
+  }));
+  const before = await boxes();
+
+  await card.getByRole("button", { name: "Open post" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  // No reload and no toggle: the card marks itself as soon as it is opened.
+  await expect(card).toHaveAttribute("data-news-seen", "");
+  expect(await page.locator(MARKED).evaluateAll((els) => els.map((e) => e.getAttribute("data-news-key")))).toEqual([key]);
+  expect((await renderedKeys(page)).length).toBe(total);
+  expect(await boxes()).toEqual(before);
+
+  const look = (i: number) => posts(page).nth(i).evaluate((el) => {
+    const chip = getComputedStyle(el, "::after");
+    return {
+      chip: chip.content,
+      chipPosition: chip.position,
+      chipClicks: chip.pointerEvents,
+      dim: [...el.children].map((c) => getComputedStyle(c).opacity),
+    };
+  });
+  const marked = await look(2);
+  expect(marked.chip).toContain("Opened");
+  expect(marked.chipPosition).toBe("absolute");
+  expect(marked.chipClicks).toBe("none");
+  expect(marked.dim.length).toBeGreaterThan(0);
+  expect(marked.dim.every((o) => o === "0.55")).toBe(true);
+  const plain = await look(1);
+  expect(plain.chip).toBe("none");
+  expect(plain.dim.every((o) => o === "1")).toBe(true);
+
+  // The chip takes no clicks: the marked card still opens.
+  await card.getByRole("button", { name: "Open post" }).first().click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  await page.reload();
+  await settle(page);
+  expect(await page.locator(MARKED).evaluateAll((els) => els.map((e) => e.getAttribute("data-news-key")))).toEqual([key]);
+});
+
+for (const [name, layout] of [["Cards", { newsFeedView: false }], ["ESPN", { newsFeedView: false, newsLayout: "espn" }]] as const) {
+  test(`Opened marker: ${name} layout marks the opened card only`, async ({ page }) => {
+    await mockFeeds(page);
+    await gotoNews(page, layout);
+    const opener = page.locator("main [data-news-key] [data-news-open], main [data-news-open][data-news-key]").first();
+    await expect(opener).toBeVisible({ timeout: 30_000 });
+    const key = await opener.evaluate((el) => el.closest("[data-news-key]")!.getAttribute("data-news-key")!);
+    await expect(page.locator(MARKED)).toHaveCount(0);
+
+    await opener.click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+
+    await expect(page.locator(MARKED).first()).toBeVisible();
+    const markedKeys = await page.locator(MARKED).evaluateAll((els) => els.map((e) => e.getAttribute("data-news-key")));
+    expect(new Set(markedKeys)).toEqual(new Set([key]));
+    // Every card that shows this post is marked, and no other card is.
+    expect(markedKeys.length).toBe(await page.locator(`main [data-news-key="${key}"]`).count());
+  });
+}
+
+test("Opened marker: the Settings switch turns it off; Reset to defaults turns it back on", async ({ page }) => {
+  await mockFeeds(page);
+  await gotoNews(page);
+  await settle(page);
+  await posts(page).nth(2).getByRole("button", { name: "Open post" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.locator(MARKED)).toHaveCount(1);
+
+  const storedPref = () => page.evaluate(() => {
+    const raw = localStorage.getItem("nss-preferences");
+    return raw ? JSON.parse(raw).newsMarkSeen ?? "unset" : "missing";
+  });
+  expect(await storedPref()).toBe("unset");
+
+  page.on("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Open settings", exact: true }).click();
+  const toggle = page.getByRole("checkbox", { name: /Mark posts you opened/ });
+  await toggle.scrollIntoViewIfNeeded();
+  await expect(toggle).toBeChecked();
+  await toggle.click();
+  await expect(toggle).not.toBeChecked();
+  await expect(page.locator(MARKED)).toHaveCount(0);
+  await expect.poll(storedPref, { timeout: 5_000 }).toBe(false);
+  // Off hides the marker only: the post is still in the opened store.
+  expect((await seenStore(page)).length).toBe(1);
+
+  const reset = page.getByRole("button", { name: "Reset to defaults" });
+  await reset.scrollIntoViewIfNeeded();
+  await reset.click();
+  await expect.poll(storedPref, { timeout: 5_000 }).toBe("unset");
+  await expect(toggle).toBeChecked();
+
+  // Reset also puts News back on the ESPN layout, so the post opened above may
+  // be off screen. Open one in the layout that is up now.
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeHidden();
+  const opener = page.locator("main [data-news-key] [data-news-open], main [data-news-open][data-news-key]").first();
+  await expect(opener).toBeVisible({ timeout: 30_000 });
+  await opener.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.locator(MARKED).first()).toBeVisible();
 });
 
 for (const width of [390, 360]) {

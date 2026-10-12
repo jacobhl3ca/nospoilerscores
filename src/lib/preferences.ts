@@ -710,6 +710,11 @@ export interface Preferences {
   // lives here; WHICH posts were seen is a device-local store outside
   // Preferences. Toggled by the 👁 button left of ⇅ in the news header.
   newsHideSeen?: boolean;
+  // "✓ Opened" marker (Jacob 10/11): a post opened on this device stays on
+  // screen dimmed, with a small chip (lib/newsSeen.ts, data-news-seen). On for
+  // everyone: undefined = on, false = off. Settings → News "Mark posts you
+  // opened". Separate from newsHideSeen, which removes the post.
+  newsMarkSeen?: boolean;
   // Hide upsetting news items — deaths, fatal crashes, assault/abuse cases,
   // on-field injuries (hit in the head, collisions, carted off), serious
   // illness, harm to animals, self-harm (Jacob 8/21). Matching lives in
