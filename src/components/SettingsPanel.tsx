@@ -26,6 +26,8 @@ import {
 } from "@/lib/preferences";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { clearRememberedPairings, restoreRememberedPairings } from "@/lib/pairingMask";
+import { pushSeen, stopSeenSync } from "@/lib/seenSync";
+import { setSeenSync } from "@/lib/newsSeen";
 import { getAuthState, cachedAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
 interface LeagueOption {
@@ -2149,7 +2151,7 @@ export default function SettingsPanel({
             {auth.signedIn && (
               <>
                 <button type="button"
-                  onClick={() => signOut()}
+                  onClick={() => { stopSeenSync(true); signOut(); }}
                   className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
                   style={{ color: "var(--text-muted)" }}
                 >
@@ -2182,9 +2184,14 @@ export default function SettingsPanel({
                       alert("Account not deleted — you didn't type DELETE.");
                       return;
                     }
+                    // No opened-post upload may land after the delete.
+                    stopSeenSync(false);
                     const ok = await deleteAccount();
                     if (ok) window.location.href = "/";
-                    else alert("Couldn't delete your account. Please try again in a moment.");
+                    else {
+                      setSeenSync(pushSeen);
+                      alert("Couldn't delete your account. Please try again in a moment.");
+                    }
                   }}
                   className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
                   style={{ color: "var(--text-muted)" }}

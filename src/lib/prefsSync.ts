@@ -50,7 +50,7 @@ export function hsPlatform(): "ios" | "android" | "web" {
   return cap.getPlatform?.() === "android" ? "android" : "ios";
 }
 
-function hsClientHeaders(extra?: Record<string, string>): Record<string, string> {
+export function hsClientHeaders(extra?: Record<string, string>): Record<string, string> {
   return { "X-HS-Client": hsPlatform(), ...(extra || {}) };
 }
 
