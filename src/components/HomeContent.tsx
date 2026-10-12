@@ -5,7 +5,8 @@ import { abortOwn } from "@/lib/abort";
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { NewsMarkSeenContext, markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
+import { NewsMarkSeenContext, markSeen, seenKeys, setSeenSync, useNewsSeenTracker } from "@/lib/newsSeen";
+import { pullSeen, pushSeen } from "@/lib/seenSync";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, NewsLayout, type NewsCardPrefs, type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
@@ -1279,6 +1280,11 @@ export default function HomeContent({
         setAppAccountUse(Boolean(auth.signedIn && (auth.platforms?.ios || auth.platforms?.android)));
         if (!auth.signedIn) return;
         setRemoteSync(pushRemotePrefs);
+        // Opened posts follow the account too (lib/seenSync): new marks go up,
+        // other devices' marks come down. Its own request, so it never holds
+        // up the prefs pull below.
+        setSeenSync(pushSeen);
+        void pullSeen();
         // A device that submitted a bracket before the account knew about it
         // hands its picks token up now, so the account's other devices can
         // adopt it without anyone opening the Picks tab here (lib/picksAccount).
@@ -1358,6 +1364,8 @@ export default function HomeContent({
         setIsSignedIn(Boolean(auth.signedIn));
         setAppAccountUse(Boolean(auth.signedIn && (auth.platforms?.ios || auth.platforms?.android)));
         if (!auth.signedIn || !alive) return;
+        // What another device opened since this tab last looked.
+        void pullSeen();
         const mark = pullMark();
         const remote = await fetchRemotePrefs();
         if (!remote || !alive || Object.keys(remote).length === 0) return;
