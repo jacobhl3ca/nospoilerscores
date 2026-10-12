@@ -4,7 +4,8 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 // ESPN Videos items carry a baked videoUrl (a direct mp4 on ESPN's akamaized
 // CDN, scripts/lib/espn-clip.mjs) and play in our modal's native <video>.
 // An item without one, or with a URL off that CDN, keeps the still image and
-// the "Open on ESPN" link (Jacob 10/1).
+// the "Open on ESPN" link (Jacob 10/1). Its headline blurs under the still like
+// a clip's: it is a video post whose clip we could not get (Jacob 10/11).
 //
 // The clip is a real WebM recorded at test time (see
 // modal-keys-news-native-video.spec.ts), served at the mp4 URL.
@@ -59,9 +60,12 @@ async function openNews(page: Page) {
 
 const row = (page: Page, text: RegExp) =>
   page.locator('button[aria-label="Play highlight"], button[aria-label="Open post"]', { hasText: text }).first();
-// The post modal, by its headline: blurred under a clip, plain under a still
-// (only a clip's headline blurs, Jacob 10/10).
+// The post modal, by its headline: blurred under a clip and under an ESPN
+// Videos still, plain under any other picture (Jacob 10/10, 10/11).
 const dialog = (page: Page) => page.getByRole("dialog").filter({ has: page.locator(".news-title, [data-modal-headline]") }).first();
+// Poll: .news-title animates its filter over 150ms.
+const filterOf = (el: import("@playwright/test").Locator, timeout = 3_000) =>
+  expect.poll(() => el.evaluate((n) => getComputedStyle(n).filter), { timeout });
 
 test("an ESPN Videos item with a baked mp4 plays in the modal's <video>", async ({ page }) => {
   await openNews(page);
@@ -74,13 +78,22 @@ test("an ESPN Videos item with a baked mp4 plays in the modal's <video>", async 
   await expect(dialog(page).getByText(/Open on ESPN/).first()).toBeVisible();
 });
 
-test("an ESPN Videos item without one, or off the CDN, keeps the still + Open on ESPN", async ({ page }) => {
+test("an ESPN Videos item without one, or off the CDN, keeps the still + Open on ESPN, headline blurred", async ({ page }) => {
   await openNews(page);
+  await expect(page.locator("html")).not.toHaveClass(/reveal-news-titles/);
   for (const name of [/Still clip two/, /Off-CDN clip three/]) {
     await row(page, name).click();
     await expect(dialog(page)).toBeVisible();
     await expect(page.locator('[role="dialog"] video')).toHaveCount(0);
     await expect(dialog(page).getByText(/Open on ESPN/).first()).toBeVisible();
+    // The headline under the still blurs, and H peeks it.
+    await expect(dialog(page).locator("[data-modal-headline]")).toHaveCount(0);
+    const title = dialog(page).locator(".news-title", { hasText: name });
+    await filterOf(title).toMatch(/blur\(/);
+    await page.keyboard.press("h");
+    await filterOf(title).toBe("none");
+    await page.keyboard.press("h");
+    await filterOf(title).toMatch(/blur\(/);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
   }

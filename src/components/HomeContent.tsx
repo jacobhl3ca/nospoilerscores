@@ -6332,6 +6332,7 @@ export default function HomeContent({
           embedUrl={videoModal.embedUrl}
           poster={videoModal.poster}
           sourceLabel={videoModal.sourceLabel}
+          section={videoModal.section}
           league={videoModal.league}
           headline={videoModal.headline}
           byline={videoModal.byline}
