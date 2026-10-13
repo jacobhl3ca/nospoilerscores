@@ -67,3 +67,58 @@ export function lacrossePlayoffRound(sport: LacrosseSport, iso: string): string 
   if (!day) return null;
   return LACROSSE_PLAYOFF_ROUNDS[sport].find((r) => day >= r.from && day <= r.to)?.label ?? null;
 }
+
+// PLL highlight gate (PR 2, 2026-10-13). The PLL channel titles every 2026
+// regular-season cut "Away vs. Home Week N Game Highlights | 2026 Season": a
+// week, never a date. Six pairs met two or three times in 2026, so the date
+// and year gates cannot pick the meeting, and the live worker served the Week
+// 12 Atlas–Outlaws cut for their Week 3 game (probed 2026-10-13). The week is
+// the only tell, and ESPN does not send one, so it comes off this table.
+//
+// Each entry is the Friday a week's weekend starts; the week runs Friday to
+// Monday. null marks a weekend with no week number: 2026 Week 7 was All-Star
+// weekend (Jul 3–5) and its games are titled by event, not by week. A year
+// with no row gets no week, and a PLL game with no week and no round asks for
+// no video at all (see pllHighlightGateMissing). Add next season's row when
+// its schedule is out; BACKLOG carries the yearly reminder.
+const PLL_WEEK_FRIDAYS: Record<number, readonly (string | null)[]> = {
+  2026: ["05-08", "05-15", "05-29", "06-05", "06-19", "06-26", null, "07-10", "07-17", "07-24", "07-31", "08-07", "08-14"],
+};
+
+function addDays(ymd: string, n: number): string {
+  const d = new Date(`${ymd}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// The PLL regular-season week a game belongs to, or null (a playoff, the
+// Championship Series, All-Star weekend, or a year with no table row).
+export function pllWeekNumber(iso: string): number | null {
+  const day = etDay(iso);
+  if (!day || lacrossePlayoffRound("pll", iso)) return null;
+  const year = Number(day.slice(0, 4));
+  const fridays = PLL_WEEK_FRIDAYS[year];
+  if (!fridays) return null;
+  for (let i = 0; i < fridays.length; i++) {
+    const friday = fridays[i];
+    if (!friday) continue;
+    const from = `${year}-${friday}`;
+    if (day >= from && day <= addDays(from, 3)) return i + 1;
+  }
+  return null;
+}
+
+// Title tokens for a PLL playoff cut. The channel titles them "Away vs. Home
+// Quarterfinals Game Highlights | 2026 Season", "… Semifinals Game …" and
+// "… Championship Game Highlights …". "championship game" never matches a
+// Championship Series cut ("… | 2026 Championship Series Final Full Game
+// Highlights"). The Championship Series rounds get no tokens: they have no week
+// either, so they stay dark. Mirrored by the bake, which loads this file.
+export function pllPlayoffTitleTokens(playoffLabel: string | null | undefined): string[] {
+  switch (playoffLabel) {
+    case "Quarterfinals": return ["quarterfinals"];
+    case "Semifinals": return ["semifinals"];
+    case "Championship": return ["championship game"];
+    default: return [];
+  }
+}

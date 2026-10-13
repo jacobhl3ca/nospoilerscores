@@ -510,7 +510,17 @@ function parseWeekFromTitle(title) {
 // HAM@SSK, live; wk15 SSK@WPG, baked — 2026-09-22 QA). NFL/NCAAF are NOT
 // listed: their postseason and some per-team-channel cuts genuinely carry no
 // week, and that has to keep passing through untouched.
-const WEEK_TOKEN_REQUIRED_CHANNELS = new Set(["tsn"]);
+//
+// The PLL channel joined 2026-10-13: every 2026 regular-season cut reads
+// "Away vs. Home Week N Game Highlights | 2026 Season", and its playoff cuts
+// ("… Semifinals Game Highlights | 2026 Season") carry no week. Without the
+// reject, a Week 2 Waterdogs at Cannons query was served the pair's Semifinals
+// cut (live probe, 2026-10-13).
+const WEEK_TOKEN_REQUIRED_CHANNELS = new Set(["tsn", "premier lacrosse league"]);
+// The reverse gate: channels whose WEEK-LESS queries (the PLL playoffs, which
+// send a round in `comp` and no week) must refuse a title that names a week,
+// since that title is a regular-season meeting of the same pair.
+const WEEK_TOKEN_FORBIDDEN_WITHOUT_WEEK_CHANNELS = new Set(["premier lacrosse league"]);
 
 // Channels whose game slots take a title with the word "highlight" only. The
 // NFL channel posts an "NFL Daily" talk show per game ("Lions vs. Panthers
@@ -2109,6 +2119,8 @@ export default {
             // titleWeek was already computed above for isStrictBareCflWeek.
             if (titleWeek !== null && titleWeek !== queryWeek) continue;
             if (titleWeek === null && WEEK_TOKEN_REQUIRED_CHANNELS.has(preferChannelLower)) continue;
+          } else if (titleWeek !== null && WEEK_TOKEN_FORBIDDEN_WITHOUT_WEEK_CHANNELS.has(preferChannelLower)) {
+            continue;
           }
           const hasYear = titleHasExplicitDate
             ? titleDateMatches

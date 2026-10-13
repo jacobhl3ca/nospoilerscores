@@ -10,7 +10,7 @@ import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { PLAYOFF_START_DATES } from "./playoffDates";
-import { isLacrosseSport, lacrossePlayoffRound } from "./lacrossePlayoffs";
+import { isLacrosseSport, lacrossePlayoffRound, pllWeekNumber } from "./lacrossePlayoffs";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { parseRadioBroadcasts, type GeoBroadcast } from "./radio";
@@ -3302,7 +3302,8 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
       ? gameProgress(event, sport, (SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba).regulationPeriods, "in")
       : undefined,
     seriesNote,
-    weekNumber: gridironWeekNumber(sport, event),
+    // PLL: off the 2026 week table (ESPN sends no week). See pllWeekNumber.
+    weekNumber: sport === "pll" ? pllWeekNumber(event.date ?? "") : gridironWeekNumber(sport, event),
     isPlayoff,
     isPreseason,
     playoffLabel,

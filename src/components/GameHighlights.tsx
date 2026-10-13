@@ -7,7 +7,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import type { FallbackChannel } from "@/lib/collegeHighlights";
-import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, getHighlightMatchGates, hasNoTrustedHighlightSource, highlightDateStrs, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolvedLengthSec, resolveTelemundoWorldCupVideo, sportChannelBlocksEmbeds } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, getHighlightMatchGates, hasNoTrustedHighlightSource, highlightDateStrs, highlightGateMissing, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolvedLengthSec, resolveTelemundoWorldCupVideo, sportChannelBlocksEmbeds } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId, getVerifiedEspnClip } from "@/lib/highlights";
 import { isDuplicateHighlightId } from "@/lib/highlightDedupe";
 import { clubNickname, formatRecapDuration } from "@/lib/recaps";
@@ -385,7 +385,8 @@ export default function GameHighlights({
   // what gates the prefetch effect AND is the modal's fallback link, so nulling
   // it here is the single point that keeps both highlight buttons off the card:
   // without it a league lacking an approved uploader could reach resolution.
-  const noTrustedSource = chainIsPrimary ? !officialChannel : hasNoTrustedHighlightSource(game.sport, highlightLabel);
+  // highlightGateMissing: a PLL game with no week and no round (see there).
+  const noTrustedSource = (chainIsPrimary ? !officialChannel : hasNoTrustedHighlightSource(game.sport, highlightLabel)) || highlightGateMissing(game);
   const highlightUrl = highlightsReady && !noTrustedSource
     ? getYouTubeSearchUrl(hlAway, hlHome, dateStr, game.seriesNote, competition)
     : null;

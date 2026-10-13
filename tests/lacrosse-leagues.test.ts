@@ -18,7 +18,7 @@ type Team = { id: string; logo: string; score?: string };
 type ParsedGame = {
   sport: string; state: string; period: number; clock: string; statusDetail: string;
   isPlayoff: boolean; playoffLabel: string | null; seriesStatus: string | null; seriesNote: string | null;
-  rating: number | null; homeTeam: Team; awayTeam: Team;
+  rating: number | null; homeTeam: Team; awayTeam: Team; weekNumber?: number | null;
 };
 const espn = await jiti.import<{
   parseGame: (event: unknown, sport: string) => ParsedGame;
@@ -31,11 +31,14 @@ const espn = await jiti.import<{
 const { pairingSpoilsEarlierRound } = await jiti.import<{
   pairingSpoilsEarlierRound: (g: Pick<ParsedGame, "isPlayoff" | "playoffLabel"> & { sport: string; stage?: string | null }) => boolean;
 }>("../src/lib/pairingMask.ts");
-const { lacrossePlayoffRound } = await jiti.import<{
+const { lacrossePlayoffRound, pllWeekNumber } = await jiti.import<{
   lacrossePlayoffRound: (sport: "pll" | "nll", iso: string) => string | null;
+  pllWeekNumber: (iso: string) => number | null;
 }>("../src/lib/lacrossePlayoffs.ts");
-const { hasNoTrustedHighlightSource } = await jiti.import<{
+const { hasNoTrustedHighlightSource, getCompetitionTitleTokens, highlightGateMissing } = await jiti.import<{
   hasNoTrustedHighlightSource: (sport: string) => boolean;
+  getCompetitionTitleTokens: (sport: string, opts?: { playoff?: boolean; playoffLabel?: string | null }) => string[];
+  highlightGateMissing: (g: { sport: string; weekNumber?: number | null; isPlayoff?: boolean; playoffLabel?: string | null }) => boolean;
 }>("../src/lib/youtube.ts");
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
@@ -141,4 +144,41 @@ test("windows, groups, links, short codes, and both leagues dark", () => {
   assert.equal(new Set(codes).size, codes.length, "every short code is unique");
   assert.equal(hasNoTrustedHighlightSource("pll"), true);
   assert.equal(hasNoTrustedHighlightSource("nll"), true);
+});
+
+// PR 2: the PLL highlight gate. The channel titles regular-season cuts by week
+// and playoff cuts by round; ESPN sends neither, so both come off
+// lib/lacrossePlayoffs.ts.
+test("PLL weeks come off the 2026 table: Friday to Monday, All-Star weekend and playoffs have none", () => {
+  const cases: [iso: string, week: number | null][] = [
+    ["2026-05-08T23:00Z", 1],  // Fri May 8, the opener
+    ["2026-05-11T00:30Z", 1],  // Sun May 10, 8:30 pm ET
+    ["2026-05-30T17:00Z", 3],  // the Atlas-Outlaws game the live worker got wrong
+    ["2026-07-04T19:00Z", null], // All-Star weekend (titled by event, not week)
+    ["2026-07-11T19:00Z", 8],
+    ["2026-08-08T19:00Z", 12],
+    ["2026-08-15T19:00Z", 13],
+    ["2026-08-30T00:30Z", null], // Quarterfinals
+    ["2026-09-20T16:30Z", null], // Championship
+    ["2026-03-01T19:00Z", null], // Championship Series
+    ["2027-05-08T23:00Z", null], // a year with no row
+  ];
+  for (const [iso, week] of cases) assert.equal(pllWeekNumber(iso), week, iso);
+  const games = espn.eventsToGames(fixture("pll-20260530-scoreboard.json").events, "pll");
+  assert.deepEqual(games.map((g) => g.weekNumber), [3, 3, 3]);
+  assert.equal(espn.parseGame(fixture("pll-championship-event.json"), "pll").weekNumber, null);
+  assert.equal(espn.parseGame(fixture("nll-finals-g2-event.json"), "nll").weekNumber, null);
+});
+
+test("PLL playoff cards send their round, and a PLL game with no week and no round asks for nothing", () => {
+  const final = espn.parseGame(fixture("pll-championship-event.json"), "pll");
+  assert.deepEqual(getCompetitionTitleTokens("pll", { playoff: true, playoffLabel: final.playoffLabel }), ["championship game"]);
+  assert.deepEqual(getCompetitionTitleTokens("pll", { playoff: true, playoffLabel: "Quarterfinals" }), ["quarterfinals"]);
+  assert.deepEqual(getCompetitionTitleTokens("pll", { playoff: true, playoffLabel: "Semifinals" }), ["semifinals"]);
+  assert.deepEqual(getCompetitionTitleTokens("pll", { playoff: false }), []);
+  assert.equal(highlightGateMissing({ sport: "pll", weekNumber: 3, isPlayoff: false, playoffLabel: null }), false);
+  assert.equal(highlightGateMissing({ ...final, sport: "pll" }), false);
+  assert.equal(highlightGateMissing({ sport: "pll", weekNumber: null, isPlayoff: true, playoffLabel: "Championship Series Final" }), true);
+  assert.equal(highlightGateMissing({ sport: "pll", weekNumber: null, isPlayoff: false, playoffLabel: null }), true);
+  assert.equal(highlightGateMissing({ sport: "nfl", weekNumber: null, isPlayoff: false, playoffLabel: null }), false);
 });

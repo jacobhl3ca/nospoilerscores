@@ -2,6 +2,7 @@ import llwsRegions from "./llwsRegions.json";
 import collegeHighlightChannels from "./collegeHighlightChannels.json";
 import { buildCollegeFallbackChain, titleMaskedChainChannels, type ChainTeam, type CollegeHighlightConfig, type FallbackChannel } from "./collegeHighlights";
 import { isNflTeamChannel } from "./nflTeamChannels";
+import { pllPlayoffTitleTokens } from "./lacrossePlayoffs";
 
 // The JSON import types as a literal object, which cannot be indexed by an
 // arbitrary string; the codes come from ESPN at runtime, so widen it once here.
@@ -890,7 +891,20 @@ export function getCompetitionTitleTokens(
 ): string[] {
   if (sport === "nfl" && opts?.preseason) return NFL_PRESEASON_TITLE_TOKENS;
   if (sport === "cfl" && opts?.playoff) return cflPlayoffTitleTokens(opts.playoffLabel);
+  if (sport === "pll") return opts?.playoff ? pllPlayoffTitleTokens(opts.playoffLabel) : [];
   return COMPETITION_TITLE_TOKENS[sport] ?? [];
+}
+
+// True when a game's league needs a title gate this game cannot supply, so it
+// must ask for no video at all. PLL only (2026-10-13): a regular-season cut is
+// found by its week, a playoff cut by its round. A PLL game with neither (the
+// Championship Series, All-Star weekend, a year with no week table) would
+// fall back to the bare team + year match that served the wrong meeting, so it
+// gets no button. Mirrored in scripts/prebake-news.mjs.
+export function highlightGateMissing(game: { sport: string; weekNumber?: number | null; isPlayoff?: boolean; playoffLabel?: string | null }): boolean {
+  if (game.sport !== "pll") return false;
+  if (game.weekNumber) return false;
+  return !(game.isPlayoff && pllPlayoffTitleTokens(game.playoffLabel).length > 0);
 }
 
 // Per-game fallback uploaders for the official slot, tried in order only after
