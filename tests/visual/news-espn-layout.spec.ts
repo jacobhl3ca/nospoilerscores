@@ -92,7 +92,8 @@ const saved = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getIte
 const pill = (page: Page, name: string) => page.locator(".news-toolbar-sticky").getByRole("button", { name, exact: true });
 const layout = (page: Page) => page.getByTestId("news-espn-layout");
 // Next to the ESPN mark a header drops the word "ESPN" at every width (Jacob
-// 10/10), so the ESPN cards read "Videos" and "Top Headlines".
+// 10/10) and "Top" too (Jacob 10/13), so the ESPN cards read "Videos" and
+// "Headlines".
 const headersIn = (page: Page, testId: string) =>
   page.getByTestId(testId).locator(".news-source-sticky-top").allInnerTexts()
     .then((all) => all.map((t) => t.trim().toUpperCase()));
@@ -116,7 +117,7 @@ test("pill offers ESPN / Cards / Feed; ESPN = Videos + Headlines on top, one Red
   await expect(pill(page, "ESPN")).toHaveAttribute("aria-pressed", "true");
   await expect(layout(page)).toBeVisible();
 
-  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "HEADLINES"]);
   // Two wide columns side by side.
   const cols = page.getByTestId("news-espn-row1").locator(":scope > div");
   await expect(cols).toHaveCount(2);
@@ -134,7 +135,7 @@ test("pill offers ESPN / Cards / Feed; ESPN = Videos + Headlines on top, one Red
 test("Hide seen, Headlines, Media and Posts all act on the ESPN layout", async ({ page }) => {
   const seenUrl = "https://example.com/espn-top/5";
   await gotoNews(page, { newsLayout: "espn" }, [seenUrl]);
-  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "HEADLINES"]);
   const seenRow = page.locator(`[data-news-key="${seenUrl}"]`);
   await expect(seenRow).toHaveCount(1);
 
@@ -172,7 +173,7 @@ test("390px phone: one column, Videos → Headlines → each sub", async ({ page
   await gotoNews(page, { newsLayout: "espn" });
   await expect.poll(() => headersIn(page, "news-espn-layout"), LOAD)
     // Phones drop the "ESPN " prefix from source headers (stripLeaguePrefixForMobile).
-    .toEqual(["VIDEOS", "TOP HEADLINES", "R/BASEBALL", "R/NFL", "R/HOCKEY"]);
+    .toEqual(["VIDEOS", "HEADLINES", "R/BASEBALL", "R/NFL", "R/HOCKEY"]);
 });
 
 test("an old blob with only newsFeedView: true still opens Feed", async ({ page }) => {
@@ -267,7 +268,7 @@ test("Autoplay pill off in Big: big stills, nothing plays", async ({ page }) => 
 
 test("no column titles; headline rows hug their text; clips sit inside the card outline", async ({ page }) => {
   await gotoNews(page, { newsLayout: "espn" });
-  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "HEADLINES"]);
   await expect(page.getByRole("heading", { name: "ESPN Videos", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Top Headlines", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "MLB", exact: true })).toHaveCount(0);
@@ -586,7 +587,7 @@ const headerButtons = (page: Page, label: string) =>
 
 test("ESPN: the toolbar keeps only the layout switch and Show all; each card header has exactly its buttons", async ({ page }) => {
   await gotoNews(page, { newsLayout: "espn" });
-  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "HEADLINES"]);
   await expect(toolbar(page).getByRole("button")).toHaveText(["ESPN", "Cards", "Feed", "Show all"]);
   // r6 order: Autoplay first, Media before Headlines.
   expect(await headerButtons(page, "ESPN Videos")).toEqual(["Toggle news autoplay", "Toggle big ESPN videos", "Toggle media reveal", "Toggle headline reveal"]);
@@ -857,7 +858,7 @@ for (const width of [575, 360]) {
     expect(m.label.w).toBeGreaterThan(20);
     if (width === 360) expect(m.label.sw).toBeGreaterThan(m.label.cw);
     // The ESPN cards sit above the bar.
-    expect(await headersIn(page, "news-espn-layout")).toEqual(["VIDEOS", "TOP HEADLINES", "R/BASEBALL", "R/NFL", "R/HOCKEY"]);
+    expect(await headersIn(page, "news-espn-layout")).toEqual(["VIDEOS", "HEADLINES", "R/BASEBALL", "R/NFL", "R/HOCKEY"]);
   });
 }
 
@@ -870,7 +871,7 @@ test("Cards toolbar Media tap clears a card's own Media: ESPN then follows the g
   expect(p.revealNewsMedia).toBe(false);
   expect(p.newsCardPrefs).toEqual({ "espn-videos": { revealTitles: true } });
   await pill(page, "ESPN").click();
-  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "TOP HEADLINES"]);
+  await expect.poll(() => headersIn(page, "news-espn-row1"), LOAD).toEqual(["VIDEOS", "HEADLINES"]);
   expect((await cardStates(page, "media")).every((v) => v === "off")).toBe(true);
   await expect(page.getByRole("button", { name: "Toggle media reveal: ESPN Videos" })).toHaveAttribute("aria-pressed", "false");
 });
@@ -1228,7 +1229,7 @@ test("a settings link without a layout leaves an old Cards user on Cards", async
 
 test("next to the ESPN mark the header drops the word ESPN at every width; the label itself is whole", async ({ page }) => {
   await gotoNews(page, { newsLayout: "espn" });
-  for (const [label, text] of [["ESPN Videos", "VIDEOS"], ["ESPN Top Headlines", "TOP HEADLINES"]]) {
+  for (const [label, text] of [["ESPN Videos", "VIDEOS"], ["ESPN Top Headlines", "HEADLINES"]]) {
     const header = cardHeader(page, label);
     await expect(header).toBeVisible(LOAD);
     expect((await header.innerText()).trim().toUpperCase()).toBe(text);
