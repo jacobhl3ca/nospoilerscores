@@ -30,8 +30,18 @@ import { pickEspnGameClip, attachEspnVideoClips, isEspnTalkKind } from "./lib/es
 import { isRealEspnClip, mergeVideos, orderVideos } from "./lib/video-order.mjs";
 import { mergeSeries, pickInternationalSeries } from "./lib/cricket-series.mjs";
 import { etServiceYmd, mergeEspnFrontSnapshot, parseFrontPageFeedIds, trimEspnHeader } from "./lib/espn-front.mjs";
+import { MEDIA_CLASSES, applyMediaPolicyCounted, mediaOffLogLine, readMediaOffDetailed } from "./lib/media-policy.mjs";
 
 const OUT_DIR = "public/news";
+
+// Per-source playback off switch (takedown response): see scripts/lib/media-policy.mjs
+// for the runbook. Read once at start; every feed goes through writeFeed.
+const mediaOffRead = readMediaOffDetailed();
+const MEDIA_OFF = mediaOffRead.off;
+for (const name of mediaOffRead.unknown) console.warn(`MEDIA-OFF ignored unknown class "${name}" (valid: ${MEDIA_CLASSES.join(", ")}, all)`);
+if (mediaOffRead.fileError) console.warn(`MEDIA-OFF could not read the flag file: ${mediaOffRead.fileError}`);
+// Items and clip entries stripped by the switch this run, for the one log line at the end.
+let mediaOffStripped = 0;
 
 // NBA.com 403s obvious-bot UAs; mirror a real Safari request.
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
@@ -1334,9 +1344,9 @@ async function fetchESPNTopVideos() {
 // ── ESPN Videos: a direct mp4 per item, so the modal plays it ────────────
 // See attachEspnVideoClips in scripts/lib/espn-clip.mjs. Mini bake only (off
 // under GitHub Actions, which still carries clips the prior file has);
-// ESPN_VIDEO_PLAY=0 turns it off and drops every carried videoUrl. ≤8 clip
+// ESPN_VIDEO_PLAY=0 (or MEDIA_OFF=espn) turns it off and drops every carried videoUrl. ≤8 clip
 // requests per bake, 1 per second; an answered id is never asked again.
-const ESPN_VIDEO_PLAY_OFF = process.env.ESPN_VIDEO_PLAY === "0";
+const ESPN_VIDEO_PLAY_OFF = process.env.ESPN_VIDEO_PLAY === "0" || MEDIA_OFF.has("espn");
 const ESPN_VIDEO_PLAY_ON = !ESPN_VIDEO_PLAY_OFF && process.env.GITHUB_ACTIONS !== "true";
 // Outside public/news for the same reason as HL_FOTMOB_STATE_PATH.
 const ESPN_VIDEO_STATE_PATH = ".bake-state/espn-video-clip.json";
@@ -1349,6 +1359,7 @@ async function readEspnVideoState() {
 }
 
 async function espnVideoClips(items, priorItems, state) {
+  if (MEDIA_OFF.has("espn")) mediaOffStripped += items.filter((i) => i.videoUrl).length;
   const prior = new Map((Array.isArray(priorItems) ? priorItems : []).map((i) => [i.id, i]));
   const { items: out, requests, dropped } = await attachEspnVideoClips(items, {
     on: ESPN_VIDEO_PLAY_ON,
@@ -3471,10 +3482,10 @@ async function hlFotmobFinish() {
 // as a second, labelled option.
 //
 // Limits: La Liga only; mini bake only (off under GitHub Actions, which still
-// carries a clip the prior manifest has); HL_ESPN_CLIP=0 turns it off and drops
+// carries a clip the prior manifest has); HL_ESPN_CLIP=0 (or MEDIA_OFF=espn) turns it off and drops
 // every carried clip; ≤12 summaries per bake, 1 per second; a game ESPN
 // answered without a clip is not re-asked for 6 hours, and a hit is kept.
-const HL_ESPN_CLIP_OFF = process.env.HL_ESPN_CLIP === "0";
+const HL_ESPN_CLIP_OFF = process.env.HL_ESPN_CLIP === "0" || MEDIA_OFF.has("espn");
 const HL_ESPN_CLIP_ON = !HL_ESPN_CLIP_OFF && process.env.GITHUB_ACTIONS !== "true";
 const HL_ESPN_CLIP_LEAGUES = { laliga: "esp.1" };
 const HL_ESPN_CLIP_MAX_FETCHES = 12;
@@ -3850,7 +3861,10 @@ async function bakeGameHighlights() {
   // HL_ESPN_CLIP=0 drops every carried ESPN clip, not only the ones the
   // per-game loop below revisits.
   if (HL_ESPN_CLIP_OFF) {
-    for (const v of Object.values(games)) for (const field of ["espnClipUrl", "espnClipHeadline", "espnClipSec"]) delete v[field];
+    for (const v of Object.values(games)) {
+      if (v.espnClipUrl && MEDIA_OFF.has("espn")) mediaOffStripped++;
+      for (const field of ["espnClipUrl", "espnClipHeadline", "espnClipSec"]) delete v[field];
+    }
   }
   for (const [k, seed] of Object.entries(HL_WORLD_CUP_SEEDS)) {
     const teams = seed.teams ?? String(seed.matchup ?? "").split("|").filter(Boolean);
@@ -5332,6 +5346,12 @@ async function writeFeed(name, items) {
       }
       if (blankFrac >= 0.5 && prevBlankFrac < 0.25 && ageH < 6) {
         console.warn(`MEDIA-REGRESSION ${path}: ${(blankFrac * 100).toFixed(0)}% blank this bake vs ${(prevBlankFrac * 100).toFixed(0)}% prior (age ${ageH.toFixed(1)}h) — extractor likely broke, KEEPING PRIOR`);
+        // The kept prior must not keep playing a source that is switched off.
+        const keptPrior = applyMediaPolicyCounted(prevItems, MEDIA_OFF);
+        if (keptPrior.stripped > 0) {
+          mediaOffStripped += keptPrior.stripped;
+          await writeFile(path, JSON.stringify({ ...prev, items: keptPrior.items }));
+        }
         return;
       }
     } catch { /* no prior file / unreadable — fall through and write the new one */ }
@@ -5339,6 +5359,12 @@ async function writeFeed(name, items) {
   if (name.startsWith("reddit-") && blankFrac >= 0.35) {
     console.warn(`MEDIA-LOW ${path}: ${(blankFrac * 100).toFixed(0)}% of cards are blank (no image/video/text) — extractor may be missing a media type`);
   }
+  // MEDIA_OFF: strip the play URLs of every switched-off source. After the
+  // guards above on purpose: the blank-card checks judge the extractor, and the
+  // video carry would otherwise put a stripped URL back from the prior file.
+  const policy = applyMediaPolicyCounted(items, MEDIA_OFF);
+  items = policy.items;
+  mediaOffStripped += policy.stripped;
   const payload = { fetchedAt: new Date().toISOString(), items };
   await writeFile(path, JSON.stringify(payload));
   console.log(`wrote ${path} (${items.length} items)`);
@@ -5683,6 +5709,9 @@ try {
 } catch (e) {
   console.warn("YT-WATCH-META save failed:", e?.message || e);
 }
+
+// One line per bake: which sources are switched off and how much it stripped.
+console.log(mediaOffLogLine(MEDIA_OFF, mediaOffStripped));
 
 let failed = 0;
 results.forEach((r, i) => {
