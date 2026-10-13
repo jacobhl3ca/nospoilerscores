@@ -3007,6 +3007,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       ? { color: "rgba(255,255,255,0.7)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }
                       : { color: "white", background: "var(--accent)" }}
                   >
+                    <YouTubeIcon height={14} />
                     Watch on YouTube
                     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
                   </button>
@@ -3568,9 +3569,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               // still stopPropagation()s — so the click doesn't dismiss the
               // modal — and leaves modifier/middle-clicks to the browser.
               onClick={(e) => { if (ytMode) trackVideoOut("footer"); handleExternalClick(sourceShareUrl)(e); }}
-              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
+              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 inline-flex items-center gap-1.5"
             >
-              {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
+              {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : <><YouTubeIcon height={10} />Watch on YouTube</>}
             </a>
           )}
           {shareUrl && (
@@ -3617,5 +3618,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       </div>
       </div>
     </div>
+  );
+}
+
+// YouTube's own red play mark (the rounded rectangle), for the hand-offs that
+// open youtube.com or the YouTube app. Brand colours, not the text colour.
+function YouTubeIcon({ height }: { height: number }) {
+  return (
+    <svg aria-hidden="true" data-yt-icon width={(height * 28) / 20} height={height} viewBox="0 0 28 20" className="shrink-0">
+      <path fill="#FF0000" d="M27.4 3.1A3.5 3.5 0 0 0 24.9.6C22.7 0 14 0 14 0S5.3 0 3.1.6A3.5 3.5 0 0 0 .6 3.1C0 5.3 0 10 0 10s0 4.7.6 6.9a3.5 3.5 0 0 0 2.5 2.5C5.3 20 14 20 14 20s8.7 0 10.9-.6a3.5 3.5 0 0 0 2.5-2.5C28 14.7 28 10 28 10s0-4.7-.6-6.9z" />
+      <path fill="#fff" d="M11.2 14.3 18.4 10l-7.2-4.3z" />
+    </svg>
   );
 }

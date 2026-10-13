@@ -330,6 +330,9 @@ test("signed out with a sent bracket: the account prompt shows and opens the sig
   await prompt.click();
   await expect(dialog.getByRole("button", { name: "Sign in with Apple" })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Sign in with Google" })).toBeVisible();
+  // Each button carries its provider's logo (10/13).
+  await expect(dialog.getByRole("button", { name: "Sign in with Apple" }).locator("svg")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Sign in with Google" }).locator("svg")).toBeVisible();
 });
 
 test("signed out with no bracket yet: the shorter prompt sits under the name field", async ({ page }) => {

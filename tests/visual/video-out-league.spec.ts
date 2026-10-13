@@ -129,6 +129,7 @@ for (const width of [390, 1280]) {
     await page.getByRole("button", { name: "NFL highlights" }).first().click();
     const handOff = page.getByRole("button", { name: "Watch on YouTube" });
     await expect(handOff).toBeVisible({ timeout: 15_000 });
+    await expect(handOff.locator("svg[data-yt-icon]")).toBeVisible(); // YouTube's red mark (10/13)
     await handOff.click();
     await expect.poll(async () => (await events(page)).filter(([n]) => n === "video-out"))
       .toEqual([["video-out", { source: "NFL", league: "nfl", via: "card" }]]);
