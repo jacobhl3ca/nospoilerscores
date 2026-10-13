@@ -12,8 +12,9 @@ import { openExternal, openAppScheme, isNativeApp } from "@/lib/openExternal";
 // card on a board equal — see GameCard) and a new row would break it.
 //
 // Add to calendar opens a small inline row of two targets rather than a menu:
-// Google Calendar (a prefilled event URL — the Google Calendar app picks it up
-// on iOS when installed) and Apple / Outlook (an .ics). On the web the .ics is
+// Google Calendar (a prefilled event URL; in the native wrapper openExternal
+// hands it to the OS as a Universal Link, so the Google Calendar app opens it
+// when installed, else the system browser) and Apple / Outlook (an .ics). On the web the .ics is
 // a data: download; inside the Capacitor wrapper SFSafariViewController takes
 // only http(s), so the same text is served back by the worker's /api/ics.
 //
@@ -25,6 +26,14 @@ const secondary = {
   border: "1px solid var(--border)",
   color: "var(--text)",
 } as const;
+
+// The two calendar apps' own icons, web only: Apple limits use of its app icons
+// inside apps, so the native wrapper keeps the text-only labels. Square App Store
+// art, rounded here the way iOS masks it; the label carries the name (alt="").
+function CalendarIcon({ src }: { src: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" width={18} height={18} className="rounded-[4px] shrink-0" data-cal-icon />;
+}
 
 export default function CalendarButtons({
   event,
@@ -64,10 +73,11 @@ export default function CalendarButtons({
           <button
             type="button"
             onClick={() => { openExternal(googleCalendarUrl(event)); onClose(); }}
-            className="flex-1 py-2 rounded-lg text-sm font-medium cursor-pointer"
+            className={`flex-1 py-2 rounded-lg text-sm font-medium cursor-pointer${native ? "" : " inline-flex items-center justify-center gap-1.5 whitespace-nowrap"}`}
             style={secondary}
             aria-label={`Add to Google Calendar: ${event.title}`}
           >
+            {native ? null : <CalendarIcon src="/brand-google-calendar.webp" />}
             Google Calendar
           </button>
           {native ? (
@@ -87,10 +97,11 @@ export default function CalendarButtons({
               // Let the default action start the download, then close on the
               // next tick so unmounting the anchor cannot cancel it.
               onClick={() => { setTimeout(onClose, 0); }}
-              className="flex-1 py-2 rounded-lg text-sm font-medium cursor-pointer text-center"
+              className="flex-1 py-2 rounded-lg text-sm font-medium cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
               style={secondary}
               aria-label={`Download .ics for Apple or Outlook: ${event.title}`}
             >
+              <CalendarIcon src="/brand-apple-calendar.webp" />
               Apple / Outlook (.ics)
             </a>
           )}
