@@ -73,6 +73,13 @@ const LADDER_SEEDED_ROUND: Partial<Record<Sport, RegExp>> = {
   // "NCAA Women's Volleyball Championship - First Round"; conference
   // tournaments ("SEC Women's Volleyball Tournament - First Round") mask.
   ncaavb: /^NCAA\b.*\bfirst round\b/i,
+  // Pro lacrosse (2026-10-13): labels come off the date table in
+  // lacrossePlayoffs.ts. Both quarterfinal rounds are seeded off the table and
+  // show; the semifinals, the final and the PLL Championship Series knockout
+  // games mask. The NLL semifinals and Finals are best of 3, and ESPN sends
+  // no series object, so no card can show a series score.
+  pll: /^quarterfinals$/i,
+  nll: /^quarterfinals$/i,
 };
 
 // Leagues ESPN files without a playoff flag, keyed on parseGame's stage. A

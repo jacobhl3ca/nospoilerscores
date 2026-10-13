@@ -310,6 +310,19 @@ check(
   youtube.hasNoTrustedHighlightSource("ufl") === true &&
     !monitor.includes('ufl: "/football/ufl/scoreboard"'),
 );
+// PLL is dark until its week gate passes a whole-season probe (2026-10-13:
+// 4/5 strict with 1 WRONG, a same-teams rematch). Unmonitored.
+check(
+  "PLL stays dark and unmonitored",
+  youtube.hasNoTrustedHighlightSource("pll") === true &&
+    !monitor.includes('pll: "/lacrosse/pll/scoreboard"'),
+);
+// NLL is dark too (2026-10-13: 0/1, no "highlights" word in its titles).
+check(
+  "NLL stays dark and unmonitored",
+  youtube.hasNoTrustedHighlightSource("nll") === true &&
+    !monitor.includes('nll: "/lacrosse/nll/scoreboard"'),
+);
 // NCAA baseball + softball are dark the same way (2026-09-14).
 check(
   "NCAA baseball and softball stay dark and unmonitored",

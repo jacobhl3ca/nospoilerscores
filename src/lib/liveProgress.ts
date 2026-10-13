@@ -123,7 +123,9 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     if (/^end\b|between/i.test(statusDetail)) return { full: `End of Set ${n}`, short: `End S${n}` };
     return { full: `Set ${n}`, short: `S${n}` };
   }
-  if (sport === "nfl" || sport === "ncaaf" || sport === "ufl" || sport === "cfl") {
+  // Pro lacrosse (2026-10-13) takes this branch too: four quarters, halftime
+  // after Q2, and sudden-death OT as period 5 (a 2nd OT as period 6).
+  if (sport === "nfl" || sport === "ncaaf" || sport === "ufl" || sport === "cfl" || sport === "pll" || sport === "nll") {
     // UFL shares the shape: four 15-min quarters, then OT. Its OT is an
     // alternating series of 2-point tries, but ESPN still reports it as
     // period 5, so "OT" is the right label. The CFL is the same shape; the

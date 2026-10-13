@@ -242,6 +242,8 @@ const HIGHLIGHT_BUFFER_HOURS = {
   // Rugby union: 80 minutes plus stoppages, so the same 3h window soccer uses.
   sixnations: 3, superrugby: 3, rugbywc: 3, nationschamp: 3,
   nrl: 3, afl: 4, urc: 3, top14: 3,
+  // Pro lacrosse (2026-10-13): dark, so unmonitored; listed to match GameHighlights.
+  pll: 3, nll: 3,
 };
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5,
@@ -250,6 +252,7 @@ const REGULATION_PERIODS = {
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2, facup: 2, nations: 2, ncaawsoc: 2, ncaamsoc: 2,
   sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,
   nrl: 2, afl: 4, urc: 2, top14: 2,
+  pll: 4, nll: 4,
 };
 
 // Matches TEAM_NAME_ALIASES in src/lib/youtube.ts. Keep in sync.

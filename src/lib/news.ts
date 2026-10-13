@@ -22,6 +22,9 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   ncaaf: "/football/college-football",
   nfl: "/football/nfl",
   ufl: "/football/ufl",
+  // Both lacrosse /news feeds answered 200 on 2026-10-13 (6 articles each).
+  pll: "/lacrosse/pll",
+  nll: "/lacrosse/nll",
   nhl: "/hockey/nhl",
   ncaah: "/hockey/mens-college-hockey",
   // Both /news feeds answered 200 on 2026-09-14.
@@ -327,6 +330,8 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   nhl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
   nfl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
   ufl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufl.png&w=40&h=40&transparent=true",
+  pll: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pll.png&w=40&h=40&transparent=true",
+  nll: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nll.png&w=40&h=40&transparent=true",
   mls: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
   fifa: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=40&h=40&transparent=true",
   // ESPN's CDN doesn't host real league logos for NCAAM or tennis — even
@@ -589,6 +594,10 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   // 2026-09-27: r/nrl and r/AFL, the two leagues' main subs.
   nrl: { key: "reddit-nrl", label: "r/nrl" },
   afl: { key: "reddit-afl", label: "r/AFL" },
+  // 2026-10-13: each lacrosse league's own sub (31 → 33 Reddit jobs, under
+  // the ~40 the 45 s gate allows).
+  pll: { key: "reddit-pll", label: "r/PLL" },
+  nll: { key: "reddit-nll", label: "r/NLL" },
   ufc: { key: "reddit-ufc", label: "r/ufc" },
   boxing: { key: "reddit-boxing", label: "r/Boxing" },
   f1: { key: "reddit-f1", label: "r/formula1" },
@@ -719,6 +728,7 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "uecl", "facup", "copadelrey", "dfbpokal", "nations",
   "ncaawsoc", "ncaamsoc",
   "cricketintl", "cricket", "nrl", "afl",
+  "pll", "nll",
   "sixnations", "rugbywc", "nationschamp", "rugbytest", "superrugby", "rugbychamp",
   "urc", "premrugby", "top14", "challengecup", "mlr",
   "ufc", "boxing", "f1", "nascar", "indycar", "poker", "climbing",

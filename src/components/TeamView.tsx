@@ -59,6 +59,8 @@ const TWO_CALENDAR_YEAR_SPORTS = new Set<Sport>([
   // Nations League: a league phase in the autumn of an even year, knockouts in
   // the following spring/summer — ESPN files it as one season across both.
   "nations",
+  // NLL: late November → May. ESPN files the 2025-26 season as 2026.
+  "nll",
 ]);
 
 // Fallback multi-year window so a season that spans (or hasn't filled) the
