@@ -5471,6 +5471,9 @@ const jobs = [
   // 2026-09-27: one shared r/rugbyunion bake for every union column.
   ["reddit-rugbyunion", () => fetchReddit("rugbyunion", "r/rugbyunion")],
   ["reddit-afl", () => fetchReddit("AFL", "r/AFL")],
+  // 2026-10-13: PLL + NLL. Two more 45s gate slots (33 Reddit jobs).
+  ["reddit-pll", () => fetchReddit("PLL", "r/PLL")],
+  ["reddit-nll", () => fetchReddit("NLL", "r/NLL")],
   ["reddit-ufc", () => fetchReddit("ufc", "r/ufc")],
   ["reddit-boxing", () => fetchReddit("Boxing", "r/Boxing")],
   ["reddit-f1", () => fetchReddit("formula1", "r/formula1")],

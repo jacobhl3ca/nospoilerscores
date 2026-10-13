@@ -219,6 +219,54 @@
       }
     },
     {
+      "key": "pll",
+      "label": "PLL",
+      "path": "/lacrosse/pll/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pll.png&w=200&h=200&transparent=true",
+      "defaultOn": false,
+      "preseasonIsRegular": false,
+      "season": {
+        "start": "02-26",
+        "end": "09-21",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 8,
+        "overtimeBonus": 20,
+        "scoringDivisor": 6,
+        "regulationPeriods": 4,
+        "periodSeconds": 720,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
+      "key": "nll",
+      "label": "NLL",
+      "path": "/lacrosse/nll/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nll.png&w=200&h=200&transparent=true",
+      "defaultOn": false,
+      "preseasonIsRegular": false,
+      "season": {
+        "start": "11-26",
+        "end": "05-18",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 8,
+        "overtimeBonus": 20,
+        "scoringDivisor": 6,
+        "regulationPeriods": 4,
+        "periodSeconds": 900,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
       "key": "fifa",
       "label": "World Cup",
       "path": "/soccer/fifa.world/scoreboard",

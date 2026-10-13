@@ -502,6 +502,17 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "mlr",
   "ufl",
   "uecl",
+  // Pro lacrosse, probed 2026-10-13 on the live worker (strict, own channel):
+  // pll: "Premier Lacrosse League" 4/5 right with 1 WRONG (May 30 Atlas at
+  //   Outlaws got the Aug 8 rematch: 2026 titles say "Week N", no date, and
+  //   the same two teams meet 2-3 times a season). Stays dark until a week
+  //   gate passes a whole-season probe with 0 wrong.
+  // nll: "NLL | National Lacrosse League" 0/1; titles read "WEEK 20 |
+  //   ROCHESTER VS BUFFALO" (no "highlights" word, city names only).
+  //   Re-probe after the Nov 28, 2026 opener.
+  // Team channels (Swarm, Rock …) put the score in the title. Never use them.
+  "pll",
+  "nll",
 ]);
 
 // True when a league has no exact approved channel. Callers must render no

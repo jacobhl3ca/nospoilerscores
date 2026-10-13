@@ -221,6 +221,10 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/cfl-without-spoilers" className="underline underline-offset-2">
             CFL
           </Link>
+          {/* 2026-10-13: pro lacrosse (PLL + NLL), linked on its first day. */}
+          <Link href="/lacrosse-highlights-without-spoilers" className="underline underline-offset-2">
+            Lacrosse
+          </Link>
           {/* 2026-10-03: climbing, linked on its first day like the batch above. */}
           <Link href="/climbing-replays-without-spoilers" className="underline underline-offset-2">
             Climbing

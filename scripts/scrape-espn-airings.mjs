@@ -48,6 +48,9 @@ const SPORT_PATHS = {
   mlb: "/baseball/mlb/scoreboard",
   nfl: "/football/nfl/scoreboard",
   ufl: "/football/ufl/scoreboard",
+  // Pro lacrosse (2026-10-13): PLL games air on ESPN+, ESPN2 and ABC.
+  pll: "/lacrosse/pll/scoreboard",
+  nll: "/lacrosse/nll/scoreboard",
   ncaam: "/basketball/mens-college-basketball/scoreboard",
 };
 

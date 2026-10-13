@@ -30,6 +30,7 @@ const NEWS_HOURLY = [
   "reddit-f1", "reddit-indycar", "reddit-nascar", "reddit-nfl", "reddit-nhl", "reddit-nwsl", "reddit-soccer", "reddit-tennis",
   "reddit-ucl", "reddit-uel", "reddit-ufc", "reddit-ufl", "reddit-wnba",
   "reddit-nrl", "reddit-afl", "reddit-rugbyunion",
+  "reddit-pll", "reddit-nll",
   // thescore-cfl is NOT here on purpose: api.thescore.com/cfl/articles returns
   // [] (theScore publishes no CFL news), and writeFeed never writes an empty
   // feed, so the file has 404'd since the CFL shipped 2026-09-13. Listing it
@@ -67,6 +68,8 @@ const RATE_LIMIT_PRONE_REDDIT = new Set([
   "reddit-ufl",
   // r/collegebaseball (added 2026-09-14), same low-volume college shape.
   "reddit-ncaabase",
+  // r/PLL and r/NLL (added 2026-10-13) are small league subs.
+  "reddit-pll", "reddit-nll",
   // reddit-wnba is a lower-volume sub whose prebake occasionally slips a couple
   // of hourly runs on a Reddit 429/403 blip and self-heals; a 12h crit paged on
   // a 13.4h transient (issue #18, 2026-07-06). Treat like the other flaky subs.
@@ -95,6 +98,9 @@ const SEASONAL_REDDIT = new Set([
   // r/nrl and r/AFL go quiet between their October / September grand finals
   // and the February preseason.
   "reddit-nrl", "reddit-afl",
+  // r/PLL is quiet from the September final to the May opener; r/NLL from
+  // the May Finals to the late-November opener.
+  "reddit-pll", "reddit-nll",
 ]);
 
 const FEEDS = [

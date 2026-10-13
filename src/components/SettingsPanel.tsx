@@ -236,6 +236,8 @@ const SPORT_LABEL: Record<Sport, string> = {
   mlr: "Major League Rugby",
   nrl: "NRL (rugby league)",
   afl: "AFL (Aussie rules)",
+  pll: "PLL (pro lacrosse)",
+  nll: "NLL (box lacrosse)",
   f1: "F1",
   nascar: "NASCAR",
   indycar: "IndyCar",

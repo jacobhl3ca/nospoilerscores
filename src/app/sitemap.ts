@@ -75,6 +75,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // Added 2026-10-03 with the Climbing column, two weeks before the Salt
     // Lake City and Santiago World Cups.
     "/climbing-replays-without-spoilers",
+    // Added 2026-10-13 with the PLL and NLL columns (a "Major League
+    // Lacrosse" league request).
+    "/lacrosse-highlights-without-spoilers",
     "/best-spoiler-free-sports-sites",
     // Added 2026-10-05: HideScore already ranks 2.7 for "dont tell me the
     // score" with zero clicks; this is the page those searches should land on.
@@ -179,6 +182,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // Added 2026-10-03 with the Climbing column, two weeks before the Salt
     // Lake City and Santiago World Cups.
     "/climbing-replays-without-spoilers",
+    // Added 2026-10-13 with the PLL and NLL columns (a "Major League
+    // Lacrosse" league request).
+    "/lacrosse-highlights-without-spoilers",
   ]);
 
   // Build timestamp, for the boards whose rendered content really does change
