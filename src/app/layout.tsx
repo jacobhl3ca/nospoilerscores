@@ -540,10 +540,19 @@ export default function RootLayout({
             on purpose: the tracker reads data-tag once when it loads, which races the
             native bridge injecting window.Capacitor, while before-send fires per event
             and is always late enough to see it. It must return the payload on every
-            path — a throw or an undefined return silently drops the event. */}
+            path — a throw or an undefined return silently drops the event.
+
+            The same hook sets the device number (2026-10-13): a random UUID kept in
+            localStorage["hs_did"] goes out as `id` on every send, so Umami counts one
+            device once across Wi-Fi/cell and across the 1st of the month. It is set
+            here, not with umami.identify(), because before-send runs before the FIRST
+            pageview; identify() fires after it and splits the visit into two sessions.
+            No ID is created while the /notrack opt-out (umami.disabled) is set, and
+            any storage error sends nothing extra. Signed-in accounts go as data only
+            (prefsSync identifyToUmami), so `id` is always this device number. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.__umamiTagApp=function(t,p){try{var c=window.Capacitor;if(c&&(typeof c.isNativePlatform==="function"?c.isNativePlatform():c.isNative)){p.tag="app"}}catch(e){}return p};`,
+            __html: `window.__umamiTagApp=function(t,p){try{var c=window.Capacitor;if(c&&(typeof c.isNativePlatform==="function"?c.isNativePlatform():c.isNative)){p.tag="app"}}catch(e){}try{var s=window.localStorage,k="hs_did";if(s&&!s.getItem("umami.disabled")){var d=s.getItem(k);if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(d||"")){d=window.crypto&&crypto.randomUUID?crypto.randomUUID():"";if(d){s.setItem(k,d)}}if(d&&p){p.id=d}}}catch(e){}return p};`,
           }}
         />
         {/* Umami analytics — self-hosted on the Mac mini, privacy-first */}

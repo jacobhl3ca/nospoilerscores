@@ -52,13 +52,13 @@ export default function PrivacyPage() {
         <h2 className="text-lg font-semibold mt-6">What we collect</h2>
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
-            <strong>Usage stats.</strong> Which pages and features get used, and whether on the website or the app. They are counted without cookies and never build a profile of you. You can <Link href="/notrack" className="underline underline-offset-2">turn them off in this browser</Link>.
+            <strong>Usage stats.</strong> Which pages and features get used, and whether on the website or the app. They are counted without cookies and never build a profile of you. It keeps a random number on your device so each device counts once. You can <Link href="/notrack" className="underline underline-offset-2">turn them off in this browser</Link>.
           </li>
           <li>
             <strong>Crash reports.</strong> When something breaks, the app sends the error and basic device details to an error-monitoring service. We use them only to fix bugs.
           </li>
           <li>
-            <strong>Your account, if you make one.</strong> Sign-in is optional (Apple, Google or an email code). We then store your email, sign-in record, saved settings and basic account activity, so your teams sync between devices. Your usage stats also carry a scrambled account code that cannot be turned back into your email.
+            <strong>Your account, if you make one.</strong> Sign-in is optional (Apple, Google or an email code). We then store your email, sign-in record, saved settings and basic account activity, so your teams sync between devices. Your usage stats also note a scrambled account code that cannot be turned back into your email. It is not used to count visitors.
           </li>
         </ul>
         <p>

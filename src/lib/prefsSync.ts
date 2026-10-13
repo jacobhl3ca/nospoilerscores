@@ -56,7 +56,10 @@ export function hsClientHeaders(extra?: Record<string, string>): Record<string, 
 
 // Attach the signed-in account to the Umami session so analytics can answer
 // "how many real accounts use the iPhone app" instead of just counting devices.
-// Sends the pseudonymous uid + platform only — no email, no provider sub. Umami
+// Sends the pseudonymous uid + platform only — no email, no provider sub.
+// The uid goes as DATA (`account`), never as `id`: `id` is the device number the
+// layout's before-send hook sets on every send. Sending the uid as `id` switched
+// the visitor id mid-visit and split one visit into two sessions (2026-10-13). Umami
 // respects localStorage["umami.disabled"], so the site's no-track toggle still
 // wins. Fails silently when the script is blocked or hasn't loaded yet.
 // /api/me has been observed returning a raw Apple `sub` in `provider`, which put a real
@@ -76,7 +79,7 @@ function identifyToUmami(a: AuthState): void {
   identified = key;
   try {
     umami.identify({
-      id: a.uid,
+      account: a.uid,
       signedIn: true,
       provider: PROVIDER_LABELS.has(a.provider ?? "") ? a.provider : "unknown",
       platform: a.platform || "web",
