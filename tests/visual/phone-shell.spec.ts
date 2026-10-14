@@ -210,18 +210,24 @@ test("native bar: an old build's Leagues tap opens Settings", async ({ page }) =
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page, "light");
   await page.addInitScript(() => {
-    document.documentElement.setAttribute("data-native-tabbar", "");
     const sent: unknown[] = [];
     (window as unknown as { __hsTabMsgs: unknown[] }).__hsTabMsgs = sent;
     (window as unknown as { webkit: unknown }).webkit = { messageHandlers: { hsTabBar: { postMessage: (m: unknown) => sent.push(m) } } };
+    // Init scripts can run before <html> exists; mark it as soon as it does.
+    const mark = () => document.documentElement?.setAttribute("data-native-tabbar", "");
+    if (document.documentElement) mark();
+    else new MutationObserver((_, obs) => { if (document.documentElement) { mark(); obs.disconnect(); } }).observe(document, { childList: true });
   });
   await page.goto("/");
   await expect(card(page, "Oklahoma at Georgia")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".web-tab-bar")).toBeHidden();
+  // The page connected to the bridge: it posted the selected tab.
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __hsTabMsgs: unknown[] }).__hsTabMsgs.length)).toBeGreaterThan(0);
   const tap = (v: string) => page.evaluate((v) => window.dispatchEvent(new CustomEvent("hs-native-tab", { detail: v })), v);
 
   await tap("leagues");
-  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+  // The Settings panel is a lazy chunk: the first open can be slow on a dev server.
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible({ timeout: 20_000 });
   await expect(page.locator("html")).toHaveAttribute("data-view", "scores-plain");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Settings" })).toHaveCount(0);
