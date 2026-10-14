@@ -2,7 +2,8 @@ import { devices, expect, test, type Page } from "@playwright/test";
 import { openFakeStreamClip, openFakeYouTubeClip } from "./fake-video";
 
 // The landscape player (owner 10/9): a phone on its side gets the clip full
-// screen, controls in a thin layer that fades after 3s and returns on a tap,
+// screen, controls in a thin layer that fades after 3s of play and returns on
+// a tap (✕ only dims, Dad 10/14),
 // every control at least 44px, the YouTube title cover still on, and a turn
 // back to portrait keeps the same player at the same point.
 //
@@ -67,9 +68,13 @@ test.describe("phone landscape", () => {
     expect(mask.width).toBeGreaterThanOrEqual(frame.width - 1);
     await page.screenshot({ path: test.info().outputPath("landscape-844x390-youtube.png") });
 
-    // Fades after 3s, and takes no taps while faded.
+    // Fades after 3s, and takes no taps while faded. ✕ is the exception: it
+    // dims and stays tappable.
     await expect(controls).toHaveAttribute("data-shown", "false", { timeout: 4500 });
-    await expect.poll(() => controls.evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
+    await expect.poll(() => controls.locator("[data-fade]").evaluateAll((els) =>
+      els.map((el) => getComputedStyle(el).opacity).join(","))).toBe("0,0,0");
+    await expect.poll(() => controls.getByRole("button", { name: "Close" }).evaluate((el) =>
+      Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.3);
     await page.screenshot({ path: test.info().outputPath("landscape-844x390-youtube-faded.png") });
 
     // A tap on the picture brings it back, and does not pause the clip.
@@ -144,6 +149,10 @@ test.describe("phone landscape", () => {
     await expectNoPageScroll(page);
     await page.screenshot({ path: test.info().outputPath("landscape-844x390-stream.png") });
 
+    // The fake media never plays by itself, and the layer fades only during play.
+    await page.waitForTimeout(3500);
+    await expect(controls).toHaveAttribute("data-shown", "true");
+    await page.locator("[role=dialog] video").evaluate((v) => v.dispatchEvent(new Event("play")));
     await expect(controls).toHaveAttribute("data-shown", "false", { timeout: 4500 });
     const v = (await page.locator("[role=dialog] video").boundingBox())!;
     await page.mouse.click(v.x + v.width / 2, v.y + v.height / 2);

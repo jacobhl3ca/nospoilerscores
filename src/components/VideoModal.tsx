@@ -763,6 +763,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [chromeShown, setChromeShown] = useState(true);
   const chromeShownRef = useRef(true);
   const chromeTimerRef = useRef<number | null>(null);
+  // playerState (below), read by the fade timer.
+  const playerStateRef = useRef<"playing" | "paused" | "none">("none");
   const revealChrome = useCallback(() => {
     chromeShownRef.current = true;
     setChromeShown(true);
@@ -771,6 +773,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // Never fade out from under a finger that is still scrubbing; the
       // release re-arms the timer (endBarDrag).
       if (draggingBarRef.current) return;
+      // Fade only while the clip plays. A clip that never started (iPhone
+      // autoplay refused) or sits paused keeps its controls up (Dad 10/14:
+      // a never-started NFL clip faded to black with no way out). The
+      // play/pause effect below re-arms the timer once it plays.
+      if (playerStateRef.current !== "playing") return;
       chromeShownRef.current = false;
       setChromeShown(false);
     }, CHROME_FADE_MS);
@@ -950,6 +957,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // else outside the cross-origin iframe) can read play/pause without asking
   // YouTube. Reveals nothing — not the position, not the duration.
   const [playerState, setPlayerState] = useState<"playing" | "paused" | "none">("none");
+  useEffect(() => { playerStateRef.current = playerState; }, [playerState]);
   useEffect(() => { setPlayerState("none"); }, [postKey]);
   // Landscape player: a play/pause shows the controls again. So does a tap
   // that lands in the YouTube iframe (its own controls, where no tap reaches
@@ -2471,18 +2479,23 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const playing = playerState === "playing";
   const showLandscapeBar = seekControl !== "jumps" && !(ytMode && youtubeNativeControls);
   const showLandscapeJumps = seekControl !== "bar";
-  // The landscape player's control layer. Every control is 44px. The layer
-  // fades to nothing after CHROME_FADE_MS; while faded it takes no taps, so
-  // the tap that brings it back lands on the video (handleSurfaceTap).
-  const lsBtn = `w-11 h-11 flex items-center justify-center rounded-full text-white/90 cursor-pointer disabled:opacity-30 disabled:cursor-default ${chromeShown ? "pointer-events-auto" : "pointer-events-none"}`;
+  // The landscape player's control layer. Every control is 44px. While the
+  // clip plays, the layer fades to nothing after CHROME_FADE_MS; while faded
+  // it takes no taps, so the tap that brings it back lands on the video
+  // (handleSurfaceTap) or the black beside it. ✕ is the exception: it only
+  // dims and always takes a tap, so a phone on its side always has a way out
+  // (Dad 10/14).
+  const lsBtnBase = "w-11 h-11 flex items-center justify-center rounded-full text-white/90 cursor-pointer disabled:opacity-30 disabled:cursor-default";
+  const lsBtn = `${lsBtnBase} ${chromeShown ? "pointer-events-auto" : "pointer-events-none"}`;
   const lsBtnStyle = { background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.22)" } as const;
+  const lsFade = "transition-opacity duration-300";
+  const lsFadeStyle = { opacity: chromeShown ? 1 : 0 };
   const landscapeChrome = immersive ? (
     <div
       data-testid="landscape-controls"
       data-shown={chromeShown ? "true" : "false"}
-      className="pointer-events-none absolute inset-0 z-50 flex flex-col justify-between transition-opacity duration-300"
+      className="pointer-events-none absolute inset-0 z-50 flex flex-col justify-between"
       style={{
-        opacity: chromeShown ? 1 : 0,
         paddingTop: "max(0.5rem, env(safe-area-inset-top))",
         paddingRight: "max(0.75rem, env(safe-area-inset-right))",
         paddingBottom: "max(0.25rem, env(safe-area-inset-bottom))",
@@ -2490,7 +2503,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       }}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div data-fade className={`flex items-center gap-2 ${lsFade}`} style={lsFadeStyle}>
           {hasPager && (
             <>
               <button type="button" onClick={(e) => { e.stopPropagation(); goPrev(); }} disabled={!onPrev}
@@ -2504,7 +2517,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             </>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div data-fade className={`flex items-center gap-3 ${lsFade}`} style={lsFadeStyle}>
           {showLandscapeJumps && (
             <button type="button" onClick={(e) => { e.stopPropagation(); seekBy(-SEEK_STEP); revealChrome(); }}
               aria-label="Back 5 seconds" title="Back 5 seconds (←)" className={lsBtn} style={lsBtnStyle}>
@@ -2527,7 +2540,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           )}
         </div>
         <button type="button" onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
-          aria-label="Close" title="Close (Esc)" className={lsBtn} style={lsBtnStyle}>
+          aria-label="Close" title="Close (Esc)" className={`${lsBtnBase} pointer-events-auto ${lsFade}`}
+          style={{ ...lsBtnStyle, opacity: chromeShown ? 1 : 0.6 }}>
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
       </div>
@@ -2535,8 +2549,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // YouTube's own controls (the default) bring their own bar along the
         // bottom of the frame, so ours steps aside for it.
         <div
-          className={`rounded-full px-3 ${chromeShown ? "pointer-events-auto" : "pointer-events-none"}`}
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))" }}
+          data-fade
+          className={`rounded-full px-3 ${lsFade} ${chromeShown ? "pointer-events-auto" : "pointer-events-none"}`}
+          style={{ ...lsFadeStyle, background: "linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))" }}
           onClick={(e) => e.stopPropagation()}
         >
           {seekBar}
@@ -2908,7 +2923,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // wrapper itself, not a child) dismisses when not fullscreen; clicks
             // bubbling up from the player/controls still stop here so they keep
             // working. The video surface stops propagation in handleSurfaceTap.
-            onClick={(e) => { if (!fsLike && e.target === e.currentTarget) onClose("accidental"); else e.stopPropagation(); }}
+            // Landscape player: a tap on the black beside the frame brings the
+            // controls back. With YouTube's own controls nothing of ours sits
+            // over the frame, so this is the tap that reaches us.
+            onClick={(e) => {
+              if (!fsLike && e.target === e.currentTarget) onClose("accidental");
+              else { e.stopPropagation(); if (immersive) revealChrome(); }
+            }}
             // Non-fullscreen: pin the wrapper to the exact video width and centre
             // it. Without an explicit width this is a shrink-to-fit flex item, and
             // Safari resolves its width to the full viewport (not the video's) —
@@ -3420,7 +3441,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // reserved layout so the frame really fills the screen rather than
           // sitting in the middle of it.
           <div
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); if (immersive) revealChrome(); }}
             style={fsLike ? fsWrapperStyle : undefined}
           >
           <div ref={containerRef} className={`group relative mx-auto w-full overflow-hidden bg-black ${immersive ? "" : "rounded-lg"}`} style={{ width: mediaFrameWidth, aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
