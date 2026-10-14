@@ -54,6 +54,14 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   //      rather than spelled out ("2 years ago"); latestPossiblePublish now
   //      reads both.
   cfl: "TSN",
+  // PLL (lit 2026-10-13): the league's own channel posts a 10–25 minute cut of
+  // every game, titled "Away vs. Home Week N Game Highlights | 2026 Season" or
+  // "… Semifinals Game Highlights | 2026 Season". No date in the title, and the
+  // same pair meets 2-3 times a season, so every lookup carries the week or
+  // the round (Game.weekNumber, pllPlayoffTitleTokens) and a game with neither
+  // asks for nothing (highlightGateMissing). Whole-2026-season probe through
+  // the gated worker: see the PR 2 note in BACKLOG.md.
+  pll: "Premier Lacrosse League",
   // World Cup: FOX is the US English-language rightsholder and "FOX Sports"
   // posts a clean per-match "TeamA vs TeamB Highlights | 2026 FIFA World Cup™"
   // for every game. FIFA's own channel only posts alt-cast / limited clips, so
@@ -503,16 +511,12 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "mlr",
   "ufl",
   "uecl",
-  // Pro lacrosse, probed 2026-10-13 on the live worker (strict, own channel):
-  // pll: "Premier Lacrosse League" 4/5 right with 1 WRONG (May 30 Atlas at
-  //   Outlaws got the Aug 8 rematch: 2026 titles say "Week N", no date, and
-  //   the same two teams meet 2-3 times a season). Stays dark until a week
-  //   gate passes a whole-season probe with 0 wrong.
-  // nll: "NLL | National Lacrosse League" 0/1; titles read "WEEK 20 |
+  // NLL, probed 2026-10-13 on the live worker (strict, own channel):
+  //   "NLL | National Lacrosse League" 0/1; titles read "WEEK 20 |
   //   ROCHESTER VS BUFFALO" (no "highlights" word, city names only).
-  //   Re-probe after the Nov 28, 2026 opener.
-  // Team channels (Swarm, Rock …) put the score in the title. Never use them.
-  "pll",
+  //   Re-probe after the Nov 28, 2026 opener. Team channels (Swarm, Rock …)
+  //   put the score in the title. Never use them.
+  // (The PLL was dark here until its week gate shipped, 2026-10-13.)
   "nll",
 ]);
 
@@ -867,6 +871,10 @@ export function cflPlayoffTitleTokens(playoffLabel?: string | null): string[] {
 export type HighlightMatchGates = { homeFirst?: boolean; minSec?: number };
 const HIGHLIGHT_MATCH_GATES: Record<string, HighlightMatchGates> = {
   nations: { homeFirst: true, minSec: 300 },
+  // PLL: game cuts run 590–1,550 s; the channel's player reels and Mic'd Up
+  // clips that name a week run 230–600 s and never name both teams, but the
+  // floor keeps a short clip out of a game slot either way.
+  pll: { minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
 };

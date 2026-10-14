@@ -132,3 +132,32 @@ test("News: a PLL headline that names a winner is blurred like every other leagu
   await expect.poll(() => title.evaluate((el) => getComputedStyle(el).filter), { timeout: 3_000 }).toMatch(/blur\(([6-9]|\d\d)/);
   await page.screenshot({ path: `${QA}/news-pll-headline-blurred.png`, fullPage: false });
 });
+
+// PR 2: the PLL is lit behind its week gate. The Championship card asks the
+// PLL channel with the round ("championship game") and no week; a regular
+// season card asks with its week. Whatever the worker says, the request must
+// carry the gate, and the button that comes back plays the official cut.
+test("Sep 20 2026: the PLL Championship asks with its round and shows the official highlight button", async ({ page }) => {
+  await mockLacrosse(page);
+  const asked: URL[] = [];
+  await page.route("**/api/youtube?**", (route) => {
+    const u = new URL(route.request().url());
+    asked.push(u);
+    const ok = u.searchParams.get("channel") === "Premier Lacrosse League" && u.searchParams.get("comp") === "championship game" && !u.searchParams.get("week");
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(ok ? { videoId: "hxOo9yBO-6o", lengthSec: 1195 } : { videoId: null }) });
+  });
+  await page.route("**/news/highlights.json", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ games: {} }) }));
+  await page.clock.setFixedTime(new Date("2026-09-20T20:00:00-04:00"));
+  await page.goto("/?l=pl&s=pl.0.0&dd=t&dv=s");
+  const col = page.locator('[data-league-column="pll"]');
+  await col.locator(`[data-pairing-mask="${pllFinal.id}"]`).getByRole("button", { name: /Show teams/ }).click();
+  await expect(col.getByRole("button", { name: "Premier Lacrosse League highlights" })).toBeVisible({ timeout: 30_000 });
+  expect(asked.length).toBeGreaterThan(0);
+  for (const u of asked) {
+    expect(u.searchParams.get("strict")).toBe("1");
+    expect(u.searchParams.get("comp")).toBe("championship game");
+    expect(u.searchParams.get("week")).toBeNull();
+    expect(u.searchParams.get("minsec")).toBe("300");
+  }
+  await page.screenshot({ path: `${QA}/pll-sep20-highlight-button.png`, fullPage: false });
+});

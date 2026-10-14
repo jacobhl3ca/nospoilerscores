@@ -123,7 +123,7 @@ test("playoff rounds by date: quarterfinals show, later rounds mask", () => {
   }
 });
 
-test("windows, groups, links, short codes, and both leagues dark", () => {
+test("windows, groups, links, short codes; PLL lit, NLL dark", () => {
   const pll = espn.ALL_LEAGUES.filter((l) => l.sport === "pll");
   const nll = espn.ALL_LEAGUES.filter((l) => l.sport === "nll");
   assert.deepEqual(pll.map((l) => [l.label, l.startDate, l.endDate, l.championshipDate, l.excludeFromAuto]), [
@@ -142,7 +142,7 @@ test("windows, groups, links, short codes, and both leagues dark", () => {
   assert.ok(PREFS_SRC.includes('pll: "pl", nll: "lx"'));
   const codes = PREFS_SRC.match(/const SPORT_TO_SHORT[^\n]*/)![0].match(/: "([a-z]+)"/g)!;
   assert.equal(new Set(codes).size, codes.length, "every short code is unique");
-  assert.equal(hasNoTrustedHighlightSource("pll"), true);
+  assert.equal(hasNoTrustedHighlightSource("pll"), false, "lit behind the week gate (PR 2)");
   assert.equal(hasNoTrustedHighlightSource("nll"), true);
 });
 

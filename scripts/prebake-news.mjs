@@ -2677,6 +2677,10 @@ const HL_LEAGUES = [
   // TSN is the uploader (16/16 strict + week hits on Weeks 12–15); the week
   // gate is load-bearing because TSN's 2024/2025 uploads carry no year.
   { sport: "cfl",    path: "/api/cfl",                                          channel: "TSN", worker: true },
+  // PLL (lit 2026-10-13). Every lookup carries the week or the playoff round
+  // off src/lib/lacrossePlayoffs.ts (hlLacrosse); a game with neither is
+  // skipped. See the pll note in src/lib/youtube.ts.
+  { sport: "pll",    path: "/lacrosse/pll/scoreboard",                          channel: "Premier Lacrosse League" },
   // NCAA women's hockey (added 2026-09-23). No fixed uploader, like ncaavb:
   // `channel: null` plus `primaryFromChain` makes the ECAC Hockey channel the
   // official one for any game with an ECAC school, behind the `women` token
@@ -2738,6 +2742,7 @@ const HL_NFL_PRESEASON_TOKENS = ["preseason", "hall of fame"];
 // gate existed must not survive as the other leg.
 const HL_MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
+  pll: { minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
 };

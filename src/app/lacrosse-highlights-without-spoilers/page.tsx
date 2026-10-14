@@ -12,8 +12,10 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // 2026-27 season opens Sat Nov 28 2026. ⛔ The page never names a finalist or
 // a champion.
 //
-// Highlights: both leagues are DARK (lib/youtube.ts NO_HIGHLIGHT_FALLBACK).
-// The copy says so; change it in the same PR that lights a league.
+// Highlights: the PLL is LIT behind its week gate (PR 2, 2026-10-13: the
+// whole 2026 season through the gated worker read 51/51 right, 0 wrong); the
+// NLL is DARK (lib/youtube.ts NO_HIGHLIGHT_FALLBACK). The copy says so; change
+// it in the same PR that lights or darkens a league.
 //
 // ⚠️ WHAT THE APP ACTUALLY DOES: the score is parsed only to compute the
 // rating and is never rendered. There is no standings view. Ratings are OPT-IN.
@@ -41,7 +43,7 @@ const FAQ = [
   },
   {
     q: "Is there a highlight button for lacrosse?",
-    a: "Not yet. The PLL posts a cut of every game on its own channel, but the titles name the week, not the date, and the same two teams meet two or three times a season. Until HideScore can tell those rematches apart with no mistakes, there is no button. NLL titles do not say highlights at all. A wrong clip is a spoiler, so no button is the safe answer.",
+    a: "For the PLL, yes. The PLL posts a cut of every game on its own channel, titled by week and not by date, and the same two teams meet two or three times a season. HideScore asks for that game's week, or its playoff round, so a rematch never fills the slot. Championship Series and All-Star games have no button. The NLL has no button yet, because its titles do not say highlights at all. A wrong clip is a spoiler, so no button is the safe answer there.",
   },
   {
     q: "Where can I watch the PLL and NLL live in the US?",
@@ -116,8 +118,8 @@ export default function LacrosseHighlightsWithoutSpoilersPage() {
           p: "Lacrosse goals come one at a time, and a typical pro game has about twenty to twenty-five of them. The rating reads each game the same way it reads every other sport: how close it was entering the fourth quarter, how close at the end, whether one team came back, and whether it went to sudden-death overtime. It is shown as a word such as Great or Good, never as a margin.",
         },
         {
-          h: "No highlight button yet, on purpose",
-          p: "HideScore only shows a highlight button when it can find the right clip for that exact game every time. The PLL's own channel posts a cut of every game, but its titles name the week and not the date, and the same two teams meet two or three times a season, so a lookup can land on the rematch. The NLL's titles do not say highlights at all. A wrong clip can show you a result you have not seen, so both leagues stay without a button until a full season of checks finds no mistakes.",
+          h: "PLL highlights by week, NLL not yet",
+          p: "HideScore only shows a highlight button when it can find the right clip for that exact game every time. The PLL's own channel posts a cut of every game, titled by week and not by date, and the same two teams meet two or three times a season. So each PLL game asks for its own week, or its playoff round, and a cut from any other week is refused. Checked against every 2026 PLL game, that found the right cut each time and never a wrong one. The NLL's titles do not say highlights at all, so the NLL stays without a button until a full season of checks finds no mistakes.",
         },
       ]}
       bullets={[
@@ -126,6 +128,7 @@ export default function LacrosseHighlightsWithoutSpoilersPage() {
         "Semifinals and finals shown by round, never by who advanced.",
         "No series score on any NLL playoff card.",
         "Optional ratings for finished games that never name a winner.",
+        "A PLL highlight button for each game, matched by week or playoff round.",
         "Watch links to ESPN's watch page, not to a scoreboard.",
       ]}
       ctaLabel="Open lacrosse without spoilers"
