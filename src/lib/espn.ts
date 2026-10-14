@@ -9,7 +9,7 @@ import { TOP_GAMES_COLUMN_LABEL, TOP_GAMES_EMPTY_LABEL, isTopGamesFile, pickTopG
 import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
-import { PLAYOFF_START_DATES } from "./playoffDates";
+import { PLAYOFF_START_DATES, epcrKnockoutRound, isEpcrSport } from "./playoffDates";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { parseRadioBroadcasts, type GeoBroadcast } from "./radio";
@@ -658,7 +658,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Rugby World Cup is quadrennial; 2027 (Australia) is the next edition, so
   // the anchor is 2027 rather than the 2028 used by the Euro.
   { sport: "rugbywc", label: "Rugby World Cup", startDate: "10-01", endDate: "11-13", championshipDate: "11-13", verifiedFor: 2027, excludeFromAuto: true, yearCycle: { mod: 4, anchor: 2027 } },
-  { sport: "rugbychamp", label: "Champions Cup", startDate: "12-05", endDate: "05-23", championshipDate: "05-23", verifiedFor: 2025, excludeFromAuto: true },
+  // Champions Cup (re-read 2026-10-14, after a user could not find it): the
+  // 2026-27 season opens Fri 2026-10-16 (Gloucester v Bordeaux). Pool rounds
+  // Oct 16–18, Dec 11–13, Jan 8–10, Jan 15–17; R16 ~Apr 2, QF ~Apr 9, SF ~Apr
+  // 30, final Sat 2027-05-22. The old "12-05" start hid round 1 and kept the
+  // column "offseason" (so out of Settings) until December.
+  { sport: "rugbychamp", label: "Champions Cup", startDate: "10-16", endDate: "05-23", championshipDate: "05-22", verifiedFor: 2026, excludeFromAuto: true },
   { sport: "superrugby", label: "Super Rugby", startDate: "02-13", endDate: "06-20", championshipDate: "06-20", verifiedFor: 2026, excludeFromAuto: true },
   // Internationals (summer/autumn tours + one-off tests). No championship —
   // it is a run of standalone fixtures, not a competition with a final, so
@@ -730,7 +735,8 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "premrugby", label: "Prem Rugby", startDate: "09-25", endDate: "06-20", championshipDate: "06-19", verifiedFor: 2026, excludeFromAuto: true },
   { sport: "urc", label: "URC", startDate: "09-25", endDate: "06-19", championshipDate: "06-18", verifiedFor: 2026, excludeFromAuto: true },
   // Top 14: the feed still lists 2025-26 (opened 2025-09-06, final 2026-06-27)
-  // plus the 2026-27 opener (2026-09-13). The window spans both edges.
+  // plus the 2026-27 opener (Sat 2026-09-05, re-read 2026-10-14; the old note
+  // said 09-13, which is a ghost copy of a round 2 game). The window spans both edges.
   { sport: "top14", label: "Top 14", startDate: "09-05", endDate: "06-28", championshipDate: "06-27", verifiedFor: 2026, excludeFromAuto: true },
   // Challenge Cup: pool round 1 on 2026-10-16, final 2027-05-21.
   { sport: "challengecup", label: "Challenge Cup", startDate: "10-16", endDate: "05-22", championshipDate: "05-21", verifiedFor: 2026, excludeFromAuto: true },
@@ -1387,6 +1393,7 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   urc: 39,
   premrugby: 40,
   top14: 41,
+  rugbychamp: 41.5,
   challengecup: 42,
   mlr: 43,
 };
@@ -3133,6 +3140,15 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   if (sport === "nrl" && /\bfinal\b/i.test(event.season?.slug?.replace(/-/g, " ") ?? "")) {
     isPlayoff = true;
     if (!playoffLabel) playoffLabel = NRL_FINALS_WEEKS[event.week?.number ?? 0] ?? "Finals";
+  }
+  // Champions Cup / Challenge Cup: every game is type 1 with no notes, so the
+  // knockout round comes off the date table in playoffDates.ts.
+  if (isEpcrSport(sport)) {
+    const round = epcrKnockoutRound(sport, event.date ?? "");
+    if (round) {
+      isPlayoff = true;
+      playoffLabel = round;
+    }
   }
   if (sport === "afl" && event.season?.type === 3) {
     playoffLabel = aflFinalsLabel(competition?.notes?.[0]?.headline ?? "");

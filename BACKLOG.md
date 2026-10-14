@@ -1,5 +1,22 @@
 # HideScore — Master Backlog
 
+## 2026-10-14 — Champions Cup from round 1 (a "League request: Investec Champions Cup")
+
+**Plan:** `~/.claude-c3/plans/pasted-content-id-f0b7-skip-to-luminous-muffin.md`. Branch `feat/champions-cup-2026` (worktree `~/hs-champions-cup`). Request: Formspree, Android build `abb1ee72`, Oct 14 1:36 PM ET, initials M.T. (on the wall).
+- `rugbychamp` was in the app since 8/11 but its window opened 12-05: round 1 (Oct 16–18) hidden, and on Oct 14 the row read offseason, so Settings (Hide offseason on by default) never listed it. Now `10-16 → 05-23`, final `05-22`, `verifiedFor: 2026`. Label stays "Champions Cup" (no sponsor).
+- Gaps closed: PICKER_RANK, LEAGUE_PRIORITY (41.5), calendar 120 min, club rugby tests.
+- Knockouts: ESPN files every EPCR game type 1 with no notes or week, so rounds come off a date table in `playoffDates.ts` (`epcrKnockoutRound`, 2026 + 2027 rows, both cups). Pairing cover: R16 shows (seeded off the pools), QF / SF / Final covered.
+- `check-season-windows.mjs`: rugby paths keep type 1 games (all twelve rugby/NRL windows read "?" before); a 400 tries `dates=YYYYMM` months before the day walk; a game up to 60 days before a window opens (after the previous close) flags "OPENS Nd AFTER THE FIRST GAME". FA Cup and Copa del Rey are on `LATE_OPEN_ON_PURPOSE`. On main's espn.ts it flags Champions Cup (OPENS 50d).
+- Highlights stay DARK for both cups. Both post to one channel, "Investec Champions Cup & EPCR Challenge Cup". Whole 2025-26 probe (114 games, local gated worker): 70 right, 1 WRONG (Toulouse v Sharks got the Sale Sharks cut), 1 doubtful, 25 missed (club names ESPN does not use). Titles lead with a verdict ("Champions!", "Historic Victory"). Script: `~/scripts/hs-epcr-probe/probe.mjs`.
+- Top 14 2026-27 opened Sat Sep 5 (not Sep 12 / Sep 13): fixed on `/rugby-without-spoilers` and in the espn.ts note; that page also had the Top 14 under "dark" after it lit on 10/3.
+- Tests: `tests/champions-cup.test.ts`, `tests/visual/champions-cup.spec.ts` (Chromium + WebKit on the mini).
+
+**Open:**
+- [ ] Re-probe EPCR after round 1, Mon Oct 19: `node ~/scripts/hs-epcr-probe/probe.mjs <worker> "Investec Champions Cup & EPCR Challenge Cup" out.json`. To light: a "Sharks" alias that cannot match "Sale Sharks" (Hollywoodbets Sharks), aliases for Bristol Bears / Section Paloise / USAP / Newcastle Red Bulls / Aviron Bayonnais, the channel in `TITLE_ALWAYS_MASKED_CHANNELS`, then 0 wrong.
+- [ ] Each season: add the next knockout rows to `EPCR_ROUNDS` in `playoffDates.ts` (a season with no rows shows every knockout pairing).
+- [ ] Window audit flags outside rugby (not fixed here): WNBA 2026 games May 8–15 sat before its 05-16 window; NASCAR's Clash (Feb 4) sat a day before 02-05; NCAAW Soccer closes 22 d before its last game.
+- [ ] Reply to M.T.: draft in Gmail (To blank), send only on Jacob's "send it".
+
 ## 2026-10-11 — Wall of fame page (/wall-of-fame): round 2 of "Built from your requests"
 
 **Plan:** `~/.claude-c3/plans/that-page-we-were-imperative-dolphin.md` (Job 1). Branch `feat/wall-of-fame-r2`.

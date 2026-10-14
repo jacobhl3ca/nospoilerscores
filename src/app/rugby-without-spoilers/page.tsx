@@ -9,12 +9,14 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // 2026-09-27: URC round 1 on Fri Sep 25 (three games at 2:45 pm ET) and Sat
 // Sep 26 (Lions v Leinster in Johannesburg at 7:30 am ET); PREM round 1 on Fri
 // Sep 25 at 2:45 pm, Sat Sep 26 at 10:05 am and 12:30 pm, Sun Sep 27 at 10:00
-// am; Top 14 opened Sat Sep 12 with five games at 10:35 am ET and a 3:00 pm
-// night game; Challenge Cup pool round 1 on Fri Oct 16; the Bledisloe tests
-// on Oct 10 and Oct 17; the Nations Championship final on Nov 29.
+// am; Top 14 opened Sat Sep 5 (re-read 2026-10-14: Sep 12, with five games at
+// 10:35 am ET and a 3:00 pm night game, was round 2); Champions Cup and
+// Challenge Cup pool round 1 on Fri Oct 16 (Champions Cup re-read 2026-10-14);
+// the Bledisloe tests on Oct 10 and Oct 17; the Nations Championship final on
+// Nov 29.
 //
 // Highlights: lit = Six Nations, Super Rugby, Rugby World Cup, Nations
-// Championship, URC. Dark = Premiership, Top 14, Champions Cup, Challenge Cup,
+// Championship, URC, Top 14 (2026-10-03). Dark = Premiership, Champions Cup, Challenge Cup,
 // MLR and the standalone tests (lib/youtube.ts NO_HIGHLIGHT_FALLBACK). The page
 // says so plainly. No broadcaster is named: US rights are split by competition
 // and were not verified for this page.
@@ -38,7 +40,7 @@ const FAQ = [
   },
   {
     q: "Does every rugby game get a highlights button?",
-    a: "No. A button appears only when the competition has an official uploader that titles each match by both teams. The URC, the Six Nations, Super Rugby, the Nations Championship and the World Cup do. The Premiership, the Top 14, the European cups, Major League Rugby and one-off tests do not yet, so those cards show no video rather than a clip that could spoil the result.",
+    a: "No. A button appears only when the competition has an official uploader that titles each match by both teams. The URC, the Top 14, the Six Nations, Super Rugby, the Nations Championship and the World Cup do. The Premiership, the European cups, Major League Rugby and one-off tests do not yet, so those cards show no video rather than a clip that could spoil the result.",
   },
   {
     q: "Does HideScore show league tables?",
@@ -106,7 +108,7 @@ export default function RugbyWithoutSpoilersPage() {
         },
         {
           h: "Highlights, where there is an official source",
-          p: "A highlights button appears only when the competition's own channel titles each match by both teams. The URC, the Six Nations, Super Rugby, the Nations Championship and the Rugby World Cup do, and the clip plays with its title and progress covered. The Premiership, the Top 14, the European cups, Major League Rugby and one-off tests do not have an uploader HideScore can trust yet: some titles miss the pairing, and some print the score. Those cards show no video rather than a guess.",
+          p: "A highlights button appears only when the competition's own channel titles each match by both teams. The URC, the Top 14, the Six Nations, Super Rugby, the Nations Championship and the Rugby World Cup do, and the clip plays with its title and progress covered. The Premiership, the European cups, Major League Rugby and one-off tests do not have an uploader HideScore can trust yet: some titles miss the pairing, and some print the score. Those cards show no video rather than a guess.",
         },
         {
           h: "Ratings that never name a winner",
@@ -114,7 +116,7 @@ export default function RugbyWithoutSpoilersPage() {
         },
         {
           h: "Dates to know in 2026",
-          p: "The URC and the Premiership opened on Friday, September 25, and the Top 14 on Saturday, September 12. The Challenge Cup starts on Friday, October 16. New Zealand and Australia play the Bledisloe Cup on October 10 and October 17. The Nations Championship runs through November, with its final on November 29. Each column is offered in the league picker while its season is on.",
+          p: "The URC and the Premiership opened on Friday, September 25, and the Top 14 on Saturday, September 5. The Investec Champions Cup and the Challenge Cup both start on Friday, October 16. New Zealand and Australia play the Bledisloe Cup on October 10 and October 17. The Nations Championship runs through November, with its final on November 29. Each column is offered in the league picker while its season is on.",
         },
       ]}
       bullets={[

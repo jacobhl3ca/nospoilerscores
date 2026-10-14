@@ -346,6 +346,18 @@ check(
   youtube.hasNoTrustedHighlightSource("ncaavb") === true &&
     !monitor.includes('ncaavb: "/volleyball/womens-college-volleyball/scoreboard"'),
 );
+// Champions Cup + Challenge Cup are dark (re-probed 2026-10-14 on their shared
+// channel, "Investec Champions Cup & EPCR Challenge Cup"; see youtube.ts). The
+// monitor must not scan them.
+for (const [sport, path] of [
+  ["rugbychamp", "/rugby/271937/scoreboard"],
+  ["challengecup", "/rugby/272073/scoreboard"],
+]) {
+  check(
+    `${sport} stays dark and unmonitored`,
+    youtube.hasNoTrustedHighlightSource(sport) === true && !monitor.includes(`"${path}"`),
+  );
+}
 // Conference League, Copa del Rey and DFB-Pokal are dark (2026-09-14): no
 // uploader cleared the 4/5 gate and every candidate served a wrong match. The
 // monitor must not scan them. The FA Cup IS lit, on ESPN FC with a required

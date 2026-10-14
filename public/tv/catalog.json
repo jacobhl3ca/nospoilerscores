@@ -1091,7 +1091,7 @@
       "defaultOn": false,
       "preseasonIsRegular": true,
       "season": {
-        "start": "12-05",
+        "start": "10-16",
         "end": "05-23",
         "cycleMod": null,
         "cycleAnchor": null

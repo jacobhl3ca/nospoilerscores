@@ -76,6 +76,18 @@ const EARLY_OPEN_TOLERANCE_DAYS = 7;
 // alert here is real — this is not a source of recurring noise.
 const IMMINENT_CLOSE_DAYS = 60;
 
+// How far before a window's opening day to look for games it would hide.
+// Bounded by the previous season's close, so a league's own last season never
+// reads as hidden.
+const LATE_OPEN_LOOKBACK_DAYS = 60;
+
+// Windows that open after the first listed game on purpose (see the comment on
+// each row in espn.ts). Their earlier games are not flagged.
+const LATE_OPEN_ON_PURPOSE = {
+  facup: "the window opens with the third round proper, when the top-division clubs enter",
+  copadelrey: "the qualifying rounds stay outside the window",
+};
+
 function parseLeaguePaths() {
   const paths = {};
   for (const m of SRC.matchAll(/^\s{2}(\w+):\s*"(\/[^"]+\/scoreboard)"/gm)) paths[m[1]] = m[2];
@@ -162,9 +174,41 @@ async function fetchByDay(path, range) {
   return { events };
 }
 
+// Rugby (union and league) 400s every day range but serves a whole month
+// (`dates=YYYYMM`, read 2026-10-14), so a 400 tries the months first: two or
+// three calls instead of a ~45-call day walk. Any month that comes back at the
+// event cap, or any failed month, drops to the per-day walk, which is never
+// capped.
+async function fetchByMonth(path, range) {
+  const [from, to] = range.split("-");
+  const months = [];
+  for (let y = +from.slice(0, 4), m = +from.slice(4, 6); y * 100 + m <= +to.slice(0, 6); m === 12 ? (y++, m = 1) : m++) {
+    months.push(`${y}${String(m).padStart(2, "0")}`);
+  }
+  const parts = await Promise.all(months.map((mo) => fetchRange(path, mo)));
+  if (parts.some((p) => p.error || p.events.length >= EVENT_CAP)) return { error: "month walk incomplete" };
+  const lo = `${from.slice(0, 4)}-${from.slice(4, 6)}-${from.slice(6, 8)}`;
+  const hi = `${to.slice(0, 4)}-${to.slice(4, 6)}-${to.slice(6, 8)}`;
+  const seen = new Set();
+  const events = parts
+    .flatMap((p) => p.events)
+    .filter((e) => e.date && !seen.has(e.id) && seen.add(e.id))
+    .filter((e) => e.date.slice(0, 10) >= lo && e.date.slice(0, 10) <= hi);
+  return { events };
+}
+
+const RUGBY_PATH = /^\/rugby(?:-league)?\//;
+
 async function fetchDays(path, range, preseason = false) {
   let first = await fetchRange(path, range);
   let byDay = false;
+  if (first.error === "HTTP 400" && range.includes("-")) {
+    const byMonth = await fetchByMonth(path, range);
+    if (!byMonth.error) {
+      first = byMonth;
+      byDay = true; // never capped, so no slicing below
+    }
+  }
   if ((first.error === "HTTP 404" || first.error === "HTTP 400") && range.includes("-")) {
     first = await fetchByDay(path, range);
     byDay = true;
@@ -195,7 +239,11 @@ async function fetchDays(path, range, preseason = false) {
   // preseason games looks like it starts weeks early; a PRESEASON window
   // (the NFL Preseason backfill entry) measured against regular-season games
   // looks like it ends a month early. So each asks for its own game type.
-  const wanted = events.filter((e) => ((e.season?.type ?? 2) === 1) === preseason);
+  // ⚠️ Rugby is the exception: ESPN tags EVERY union and rugby league game
+  // type 1 (see SEASON_TYPE_1_IS_REGULAR in espn.ts), so the filter dropped
+  // every fixture and all twelve rugby/NRL windows read "unverifiable". That
+  // is how the Champions Cup window sat seven weeks late (2026-10-14).
+  const wanted = RUGBY_PATH.test(path) ? events : events.filter((e) => ((e.season?.type ?? 2) === 1) === preseason);
   return { days: [...new Set(wanted.map((e) => e.askedDay ?? e.date.slice(0, 10)))].sort() };
 }
 
@@ -433,25 +481,53 @@ async function checkLeague(cfg, paths, now) {
 
   // Probe a window around each edge rather than the whole season — ESPN caps
   // how much a single ranged request will return.
+  //
+  // The open probe also looks BACK, up to LATE_OPEN_LOOKBACK_DAYS before the
+  // window opens (never past the previous season's close): a game there is a
+  // game the board hides. The old probe only asked "does the window open too
+  // EARLY", so a window that opened seven weeks late (Champions Cup, startDate
+  // 12-05 against a 2026-10-16 round 1) passed in silence.
   const preseason = /preseason/i.test(cfg.label);
+  const windowOpen = mmddToDate(cfg.startDate, openYear);
+  const prevClose = mmddToDate(cfg.endDate, wraps ? openYear : openYear - 1);
+  const lookFrom = new Date(Math.max(shift(windowOpen, -LATE_OPEN_LOOKBACK_DAYS).getTime(), shift(prevClose, 1).getTime()));
+  const openFrom = lookFrom < shift(open, -21) ? lookFrom : shift(open, -21);
   const [openProbe, closeProbe] = await Promise.all([
-    fetchDays(path, `${ymd(shift(open, -21))}-${ymd(shift(open, 21))}`, preseason),
+    fetchDays(path, `${ymd(openFrom)}-${ymd(shift(open, 21))}`, preseason),
     fetchDays(path, `${ymd(shift(close, -30))}-${ymd(shift(close, 45))}`, preseason),
   ]);
 
   const issues = [];
   const notes = [];
 
+  // A day before the window opens is only hidden if no other row for the same
+  // sport covers it (the PLL's two rows, the rugbytest / nationschamp split).
+  const siblings = ALL_ROWS.filter((l) => l.sport === cfg.sport && l !== cfg && l.startDate && l.endDate);
+  const coveredElsewhere = (day) => siblings.some((l) => {
+    const md = day.slice(5);
+    return l.startDate <= l.endDate ? md >= l.startDate && md <= l.endDate : md >= l.startDate || md <= l.endDate;
+  });
+  const lo = lookFrom.toISOString().slice(0, 10);
+  const hi = windowOpen.toISOString().slice(0, 10);
+  const hidden = openProbe.error ? [] : openProbe.days.filter((d) => d >= lo && d < hi && !coveredElsewhere(d));
+  if (hidden.length && !cfg.backfillOnly && !LATE_OPEN_ON_PURPOSE[cfg.sport]) {
+    issues.push(`OPENS ${diffDays(windowOpen, dayOf(hidden[0]))}d AFTER THE FIRST GAME (first game ${hidden[0]}${hidden.length > 1 ? `, ${hidden.length} game days before ${hi}` : ""}) — those games are hidden`);
+  }
+  // The too-early check keeps its old ±21-day probe, so a game just before the
+  // window (hidden or not) still counts as "the season has started".
+  const near = openProbe.error ? [] : openProbe.days.filter((d) => d >= shift(open, -21).toISOString().slice(0, 10));
+
   if (openProbe.error) notes.push(`open probe: ${openProbe.error}`);
-  else if (!openProbe.days.length) notes.push("no fixtures published near the opener yet");
-  else {
-    const first = new Date(`${openProbe.days[0]}T12:00:00Z`);
+  else if (!near.length) {
+    if (!hidden.length) notes.push("no fixtures published near the opener yet");
+  } else {
+    const first = new Date(`${near[0]}T12:00:00Z`);
     const gap = diffDays(first, open);
     // backfillOnly entries (NFL Preseason) open early ON PURPOSE — their job is
     // to fill an otherwise-empty third slot through a thin stretch of the
     // calendar, not to have a game every day. Only their closing edge matters.
     if (gap > EARLY_OPEN_TOLERANCE_DAYS && !cfg.backfillOnly) {
-      issues.push(`opens ${gap}d before the first game (first game ${openProbe.days[0]})`);
+      issues.push(`opens ${gap}d before the first game (first game ${near[0]})`);
     }
   }
 
@@ -482,6 +558,7 @@ const only = (args.find((a) => a.startsWith("--only=")) || "").slice(7).split(",
 const all = args.includes("--all");
 
 const paths = parseLeaguePaths();
+const ALL_ROWS = parseLeagues();
 // --now lets you run the check as if it were another date. The bug this script
 // had for its first day was date-dependent (wrapping leagues anchored to the
 // wrong season all winter) and invisible in August, so being able to say
@@ -493,7 +570,7 @@ if (nowArg && Number.isNaN(now.getTime())) {
   process.exit(2);
 }
 if (nowArg) console.log(`(running as of ${nowArg})\n`);
-const leagues = parseLeagues().filter((l) => {
+const leagues = ALL_ROWS.filter((l) => {
   if (l.yearCycle) return false; // World Cup / Euro cycles: no fixtures most years
   if (only.length) return only.includes(l.sport);
   return all || POPULAR.has(l.sport);
