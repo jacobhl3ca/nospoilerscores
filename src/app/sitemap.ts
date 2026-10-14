@@ -91,6 +91,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/about",
     "/contact",
     "/privacy",
+    // Added 2026-10-11: the terms of use.
+    "/terms",
   ];
   const highIntent = new Set([
     "/guides",

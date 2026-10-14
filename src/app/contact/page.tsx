@@ -69,7 +69,7 @@ export default function ContactPage() {
         {/* The homepage footer's "Feedback" links here (2026-09-28). A div,
             not a p: FeedbackBox renders its modal (a div + form) in place. */}
         <div>
-          <FeedbackBox label="Send feedback" />
+          <FeedbackBox label="Send feedback" primary />
         </div>
 
         {/* Added 2026-10-09, so a note sent from here visibly goes somewhere.

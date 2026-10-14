@@ -18,6 +18,7 @@ export type RequestedBuild = { date: string; kind: RequestedBuildKind; title: st
 // order of the credited groups is this file's order (most credits first).
 export const REQUESTED_BUILDS: RequestedBuild[] = [
   { date: "2026-10-07", kind: "Feature", title: "Android home-screen widget with your teams' next games", by: ["K.K."] },
+  { date: "2026-10-07", kind: "Feature", title: "1-row widget that flips through your teams' games", by: ["K.K."] },
   { date: "2026-10-05", kind: "Feature", title: "Scroll columns: up to 5 columns on phones and tablets", by: ["K.K."] },
   { date: "2026-09-14", kind: "League", title: "NCAA women's hockey", by: ["K.K."] },
   { date: "2026-09-12", kind: "League", title: "NCAA men's hockey", by: ["K.K."] },

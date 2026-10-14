@@ -55,7 +55,7 @@ for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) 
     expect(res?.status()).toBe(200);
     await expect(page.getByRole("heading", { level: 1, name: "Wall of fame" })).toBeVisible();
     await expect(page.getByText("Every item started as a note someone sent us.")).toBeVisible();
-    await expect(page.getByText("Everyone on this wall gets any future paid features free.")).toBeVisible();
+    await expect(page.getByText("Everyone on this wall gets their next request moved to the top of the list, and 6 months of any supporter perks free.")).toBeVisible();
 
     const people = requestedBuildPeople();
     const ranked = page.getByTestId("wall-ranked").locator("li");
@@ -214,5 +214,54 @@ test("the doc footer links to the wall, except on the wall itself", async ({ pag
   await page.goto("/wall-of-fame");
   const nav = page.getByRole("navigation", { name: "Site" });
   await expect(nav.getByRole("link", { name: "Wall of fame" })).toHaveCount(0);
-  await expect(nav.getByRole("link").filter({ hasNotText: "Back to HideScore" })).toHaveText(["About", "FAQ", "Guides", "Contact", "Feedback", "Privacy"]);
+  await expect(nav.getByRole("link").filter({ hasNotText: "Back to HideScore" })).toHaveText(["About", "FAQ", "Guides", "Contact", "Feedback", "Privacy", "Terms"]);
+});
+
+test("the initials note is an underlined link that opens the form seeded for the change", async ({ page }) => {
+  await page.goto("/wall-of-fame");
+  const note = page.getByRole("button", { name: "Say so in a note." });
+  await expect(note).toHaveAttribute("data-umami-event", "wall-initials");
+  expect(await note.evaluate((n) => getComputedStyle(n).textDecorationLine)).toContain("underline");
+  await note.click();
+  await expect(page.locator("#hs-feedback-input")).toHaveValue("Wall of fame: please add / remove my initials: ");
+  await expect(page.locator("#hs-feedback-form .kind-pill")).toHaveCount(0);
+});
+
+test("/contact#feedback: Send feedback is the blue accent button, not a link", async ({ page }) => {
+  for (const theme of ["light", "dark"]) {
+    await page.emulateMedia({ colorScheme: theme as "light" | "dark" });
+    await page.goto("/contact#feedback");
+    const button = page.locator("#feedback ~ * button, main button").filter({ hasText: /^Send feedback$/ }).first();
+    await expect(button).toBeVisible();
+    const { bg, accent, color } = await button.evaluate((n) => {
+      const probe = document.createElement("div");
+      probe.style.background = "var(--accent)";
+      n.parentElement!.appendChild(probe);
+      const accent = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      const cs = getComputedStyle(n);
+      return { bg: cs.backgroundColor, accent, color: cs.color };
+    });
+    expect(bg).toBe(accent);
+    expect(color).toBe("rgb(255, 255, 255)");
+  }
+});
+
+test("every kind pill in the wall table is one width, label centred", async ({ page }) => {
+  for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size);
+    await page.goto("/wall-of-fame");
+    const boxes = await rows(page).locator(".kind-pill").evaluateAll((els) =>
+      els.map((el) => {
+        const pill = el.getBoundingClientRect();
+        const label = el.firstElementChild!.getBoundingClientRect();
+        return { kind: el.textContent, width: pill.width, offset: (label.left - pill.left) - (pill.right - label.right) };
+      }),
+    );
+    expect(new Set(boxes.map((b) => b.kind))).toEqual(new Set(["League", "Feature", "Fix"]));
+    for (const b of boxes) {
+      expect(b.width, b.kind!).toBeCloseTo(boxes[0].width, 1);
+      expect(Math.abs(b.offset), b.kind!).toBeLessThanOrEqual(1);
+    }
+  }
 });

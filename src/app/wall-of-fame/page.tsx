@@ -66,7 +66,7 @@ export default function WallOfFamePage() {
           ))}
         </ol>
 
-        <p>Everyone on this wall gets any future paid features free.</p>
+        <p>Everyone on this wall gets their next request moved to the top of the list, and 6 months of any supporter perks free.</p>
       </section>
 
       <WallOfFameRequests />

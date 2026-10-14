@@ -78,6 +78,7 @@ button rather than serving a re-upload whose title gives the result away.
 - https://hidescore.com/contact — how to reach us (hi@hidescore.com)
 - https://hidescore.com/faq — what it does, what it costs, which leagues
 - https://hidescore.com/privacy — what is collected, which is very little
+- https://hidescore.com/terms — terms of use: provided as is, third-party data and trademarks, takedown contact
 
 ## Per-league pages
 

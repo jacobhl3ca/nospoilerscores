@@ -2,8 +2,8 @@ import Link from "next/link";
 import SupportLine from "@/components/SupportLine";
 
 // Bottom links for every page that renders DocTopBar (2026-09-28). The same
-// row as the homepage footer (About · FAQ · Guides · Contact · Feedback ·
-// Privacy) behind a first "← Back to HideScore", so an article ends the way
+// row as the homepage footer (About · FAQ · Guides · Wall of fame · Contact ·
+// Feedback · Privacy · Terms) behind a first "← Back to HideScore", so an article ends the way
 // the board does instead of with its own ad-hoc link list. All next/link with
 // prefetch off, like the homepage row (10/5): a tap is a soft navigation, so a
 // lost request can't land the iOS shell on its "No connection" page.
@@ -14,12 +14,12 @@ export const SITE_LINKS: { href: string; label: string }[] = [
   { href: "/about", label: "About" },
   { href: "/faq", label: "FAQ" },
   { href: "/guides", label: "Guides" },
-  // Doc pages only (10/11): the board's footer row does not carry this one.
   { href: "/wall-of-fame", label: "Wall of fame" },
   { href: "/contact", label: "Contact" },
   // /contact hosts the feedback form (FeedbackBox) under the email line.
   { href: "/contact#feedback", label: "Feedback" },
   { href: "/privacy", label: "Privacy" },
+  { href: "/terms", label: "Terms" },
 ];
 
 export default function DocFooter({ route }: { route: string }) {
@@ -46,13 +46,6 @@ export default function DocFooter({ route }: { route: string }) {
           </Link>
         ))}
       </nav>
-      {/* Legal line (10/3): the same sentence the About page carries, left out
-          on /about and /contact, where it already sits just above. */}
-      {route !== "about" && route !== "contact" && (
-        <p className="mt-3 text-xs" style={muted}>
-          HideScore is not affiliated with, endorsed by, or sponsored by any league, team or broadcaster.
-        </p>
-      )}
       <SupportLine />
     </>
   );
