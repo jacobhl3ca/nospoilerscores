@@ -1352,7 +1352,7 @@ export default function SettingsPanel({
               in the panel to reach). Was "League columns", fifth. My leagues
               first, as chips (a tick = in the header switcher), then the
               columns as one row of pills like the board header. */}
-          <Section title="Leagues">
+          <Section title="Leagues" id="settings-leagues">
             <div>
               <div className="flex items-center justify-between gap-3 mb-1.5">
                 <span className="text-sm font-medium" style={{ color: "var(--text)" }}>My leagues</span>
@@ -2295,9 +2295,9 @@ function ProviderMark({ provider }: { provider: string | null }) {
 // server without the X-HS-Client header — see hsPlatform in lib/prefsSync.ts), and
 // how long it has existed. All of it comes from the canonical users/<uid>.json
 // record in R2 via /api/me.
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   return (
-    <section>
+    <section id={id}>
       <h3 className="text-[11px] uppercase tracking-wide font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
         {title}
       </h3>

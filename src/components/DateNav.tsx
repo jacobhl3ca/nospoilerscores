@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { getEtServiceDate, getTimeZone } from "@/lib/etDay";
 
 interface DateNavProps {
@@ -16,6 +16,9 @@ interface DateNavProps {
   // Route's absolute YYYYMMDD, when it has one (the World Cup hub after the
   // final). Same pre-hydration role as initialOffset, and wins over it.
   initialDate?: string;
+  // "strip" = the phone's scrollable day-chip row (9/29, FotMob style), -7…+7
+  // days around today. Default = the ‹ Yesterday/Today/Tomorrow › pills.
+  variant?: "pills" | "strip";
 }
 
 function toYYYYMMDD(d: Date): string {
@@ -228,7 +231,135 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
 // Exported for use in toolbar
 export { CalendarDropdown };
 
-export default function DateNav({ selectedDate, onDateChange, trailing, initialOffset, initialDate }: DateNavProps) {
+// How far the phone strip reaches either side of today.
+const STRIP_DAYS = 7;
+
+function DateStrip({ selectedDate, onDateChange, trailing, initialOffset, initialDate }: DateNavProps) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  // Dates only after mount. The board HTML is cached for hours, so a server-
+  // rendered "Tue 9/22" goes stale and breaks hydration; the three word chips
+  // below read the same on any day, so they are the first paint instead.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const today = getDateString(0);
+  const effectiveDate = selectedDate || initialDate || getDateString(initialOffset ?? 0);
+  // Same rule as the pills: on bare "/" nothing is known to be selected until
+  // the smart default resolves, so nothing is underlined before then.
+  const knowsSelection = initialOffset !== undefined || initialDate !== undefined || selectedDate !== "";
+
+  const days: string[] = [];
+  for (let i = -STRIP_DAYS; i <= STRIP_DAYS; i++) days.push(getDateString(i));
+  // A calendar pick outside the window still gets a chip, at the near end.
+  if (effectiveDate < days[0]) days.unshift(effectiveDate);
+  else if (effectiveDate > days[days.length - 1]) days.push(effectiveDate);
+
+  const labelFor = (d: string) =>
+    d === today ? "Today"
+      : d === getDateString(-1) ? "Yesterday"
+        : d === getDateString(1) ? "Tomorrow"
+          : formatDayShort(d);
+
+  // Centre a chip by moving only the strip's own scroll position, so the page
+  // itself never scrolls. Today on first paint (once, no animation); after
+  // that, a date change brings its chip into view.
+  const centre = (date: string, smooth: boolean) => {
+    const scroller = scrollerRef.current;
+    const chip = scroller?.querySelector<HTMLElement>(`[data-date="${date}"]`);
+    if (!scroller || !chip) return;
+    // Rects, not offsetLeft: the strip is not positioned, so offsetLeft would
+    // measure from the fixed header and land 16 px off.
+    const chipLeft = chip.getBoundingClientRect().left - scroller.getBoundingClientRect().left + scroller.scrollLeft;
+    const left = chipLeft - (scroller.clientWidth - chip.offsetWidth) / 2;
+    scroller.scrollTo({ left: Math.max(0, left), behavior: smooth ? "smooth" : "auto" });
+  };
+  // Until the user touches the strip, keep Today centred while the row is
+  // still settling (web fonts, the header's late CSS, a rotation).
+  const userMoved = useRef(false);
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!mounted || !scroller) return;
+    centre(today, false);
+    const again = () => { if (!userMoved.current) centre(today, false); };
+    const ro = new ResizeObserver(again);
+    ro.observe(scroller);
+    document.fonts?.ready.then(again).catch(() => {});
+    const moved = () => { userMoved.current = true; };
+    scroller.addEventListener("pointerdown", moved, { passive: true });
+    scroller.addEventListener("touchstart", moved, { passive: true });
+    scroller.addEventListener("wheel", moved, { passive: true });
+    return () => {
+      ro.disconnect();
+      scroller.removeEventListener("pointerdown", moved);
+      scroller.removeEventListener("touchstart", moved);
+      scroller.removeEventListener("wheel", moved);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the dates appear
+  }, [mounted]);
+  const settled = useRef(false);
+  useEffect(() => {
+    if (!mounted || !selectedDate) return;
+    if (!settled.current) {
+      settled.current = true;
+      // The first resolved date (the smart default landing on yesterday, a
+      // /tomorrow route) is not a user move: Today stays centred when that
+      // chip is already beside it.
+      if (Math.abs(days.indexOf(selectedDate) - days.indexOf(today)) <= 1) return;
+      userMoved.current = true;
+      centre(selectedDate, false);
+      return;
+    }
+    userMoved.current = true;
+    centre(selectedDate, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- days/today derive from the date
+  }, [mounted, selectedDate]);
+
+  const chip = (key: string, label: string, ariaLabel: string, isSelected: boolean, date?: string) => (
+    <button
+      type="button"
+      key={key}
+      data-date={date}
+      onClick={date ? () => onDateChange(date) : undefined}
+      aria-current={isSelected ? "date" : undefined}
+      aria-label={ariaLabel}
+      className="date-strip-chip shrink-0 px-3 pt-1.5 pb-2 text-[13px] whitespace-nowrap cursor-pointer transition-colors"
+      style={{
+        color: isSelected ? "var(--accent)" : "var(--text-muted)",
+        fontWeight: isSelected ? 600 : 400,
+        boxShadow: isSelected ? "inset 0 -2px 0 var(--accent)" : "none",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="flex items-center gap-1">
+      <div
+        ref={scrollerRef}
+        data-testid="date-strip"
+        className={`date-strip flex-1 min-w-0 flex overflow-x-auto${mounted ? "" : " justify-center"}`}
+        role="group"
+        aria-label="Choose a day"
+      >
+        {mounted
+          ? days.map((d) => {
+              const label = labelFor(d);
+              return chip(d, label, label === formatDayShort(d) ? formatDayName(d) : label, knowsSelection && d === effectiveDate, d);
+            })
+          : ([[-1, "Yesterday"], [0, "Today"], [1, "Tomorrow"]] as const).map(([offset, label]) =>
+              chip(String(offset), label, label, initialDate === undefined && initialOffset === offset))}
+      </div>
+      {trailing && <div className="flex items-center shrink-0 pb-0.5">{trailing}</div>}
+    </div>
+  );
+}
+
+export default function DateNav(props: DateNavProps) {
+  if (props.variant === "strip") return <DateStrip {...props} />;
+  return <DatePills {...props} />;
+}
+
+function DatePills({ selectedDate, onDateChange, trailing, initialOffset, initialDate }: DateNavProps) {
   const yesterday = getDateString(-1);
   const today = getDateString(0);
   const tomorrow = getDateString(1);

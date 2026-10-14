@@ -47,6 +47,7 @@ import AutoplayBlockedPopover from "@/components/AutoplayBlockedPopover";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, newsCardKeyForSection, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
+import { LeagueMark } from "@/components/LeagueMark";
 import VideoModal from "@/components/VideoModal";
 import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
 import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
@@ -215,11 +216,11 @@ function resolveDefaultOffset(mode: "smart" | "today" | "yesterday" | undefined,
   return getSmartDefaultOffset(cutoffHour);
 }
 
-type ViewMode = "scores-plain" | "scores-rated" | "news";
+type ViewMode = "scores-plain" | "scores-rated" | "news" | "leagues";
 
 // iOS-style fixed bottom tab bar. Always pinned to the viewport bottom, sits
-// over scrolled content with a translucent blurred background, three tabs:
-// 🙈 No ratings  |  🙉 With ratings  |  📰 News. Selected state uses accent
+// over scrolled content with a translucent blurred background, four tabs:
+// 🙈 Games  |  🙉 Ratings  |  📰 News  |  🏆 Leagues. Selected state uses accent
 // color on icon + label (no solid background fill) so it reads "elegant"
 // rather than "chunky pill". Home-indicator clearance via safe-area inset.
 function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: ViewMode; onChange: (m: ViewMode) => void; placement?: "bottom" | "inline" }) {
@@ -267,15 +268,15 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         style={inline ? { background: "var(--bg-card)", border: "1px solid var(--border)" } : undefined}
       >
         {/* The icons carry real alt text (2026-09-25): AI-visibility scanners
-            count alt="" as missing, and these 3 icons render twice per board
+            count alt="" as missing, and these 4 icons render twice per board
             page. Screen readers are unaffected — the button's aria-label wins
             over its contents. */}
         {tab(
           "scores-plain",
           // eslint-disable-next-line @next/next/no-img-element
           <img src="/monkey-see-no-evil.svg" alt="See-no-evil monkey" width={24} height={24} className="w-6 h-6" draggable={false} />,
-          "Scores",
-          "Scores (no ratings, no spoilers)",
+          "Games",
+          "Games (no scores, no spoilers)",
         )}
         {tab(
           "scores-rated",
@@ -290,6 +291,15 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
           <img src="/news-emoji.svg" alt="Newspaper" width={24} height={24} className="w-6 h-6 news-tab-emoji" draggable={false} />,
           "News",
           "News (full spoilers)",
+        )}
+        {/* Leagues (9/29, from the FotMob review): pick the board's first
+            column on the fly. Same Twemoji set as the other three icons. */}
+        {tab(
+          "leagues",
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/trophy-emoji.svg" alt="Trophy" width={24} height={24} className="w-6 h-6" draggable={false} />,
+          "Leagues",
+          "Leagues (pick what is on the board)",
         )}
       </div>
     </nav>
@@ -539,6 +549,20 @@ const SLOT_INDICES = [0, 1, 2, 3, 4];
 // like the phone's 28px calendar icon, and only at 390px and up: below that the
 // header row is already full (the calendar reaches the moon at 375), so a
 // narrower phone keeps Settings → Board layout as its switch.
+// The Live filter's cut of one column: in-progress games only (the same
+// state === "in" test as the LIVE badge and the 10 s poll), with no next- or
+// last-slate fallback. Golf and event columns stay only while they are live.
+function liveOnlyLeague(league: LeagueData): LeagueData {
+  return {
+    ...league,
+    games: league.games.filter((g) => g.state === "in"),
+    nextGameDay: undefined,
+    previousGameDay: undefined,
+    golfTournament: league.golfTournament?.roundStatus === "in" ? league.golfTournament : undefined,
+    eventCard: league.eventCard?.state === "in" ? league.eventCard : undefined,
+  };
+}
+
 function SingleColToggle({ active, onClick, compact }: { active: boolean; onClick: () => void; compact?: boolean }) {
   return (
     <button
@@ -945,6 +969,11 @@ export default function HomeContent({
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
+  // The Leagues tab (9/29): a view in <main>, not a modal, so the tab bars
+  // stay up. Session-only — a reload lands back on the board.
+  const [showLeagues, setShowLeagues] = useState(false);
+  // The header's Live pill: a session-only filter down to in-progress games.
+  const [liveOnly, setLiveOnly] = useState(false);
   // Same, for the News tab's spoiler warning.
   const [newsNotice, setNewsNotice] = useState(false);
   // An ESPN front page label's News button waiting on "are you sure" (the
@@ -2034,6 +2063,11 @@ export default function HomeContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasLiveGames, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague]);
 
+  // Live is about now: moving the board off Today turns the filter off.
+  useEffect(() => {
+    if (liveOnly && selectedDate && selectedDate !== getDateString(0)) setLiveOnly(false);
+  }, [liveOnly, selectedDate]);
+
   // Back online after showing the saved board: one silent pull, which clears
   // the "Offline" line when it lands. Same request as a normal load.
   const isOffline = offline !== null;
@@ -2070,10 +2104,22 @@ export default function HomeContent({
   // Single segmented control in the header replaces the old separate
   // monkey + news buttons. Switching INTO news/ratings runs the same
   // explainer modals as before; switching out is silent.
-  const viewMode: ViewMode = showNews ? "news" : prefs.showRatings ? "scores-rated" : "scores-plain";
+  const viewMode: ViewMode = showLeagues ? "leagues" : showNews ? "news" : prefs.showRatings ? "scores-rated" : "scores-plain";
 
   const handleViewModeClick = (mode: ViewMode) => {
     if (mode === viewMode) return;
+    if (mode === "leagues") {
+      // Exclusive with News; the ratings pref is left alone, so leaving
+      // Leagues goes back to whichever board tab was on.
+      if (showNews) {
+        setShowNews(false);
+        updatePrefs({ showNews: false });
+      }
+      setShowLeagues(true);
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+    if (showLeagues) setShowLeagues(false);
     if (mode === "scores-plain") {
       if (showNews) setShowNews(false);
       updatePrefs({ showNews: false, showRatings: false });
@@ -2107,7 +2153,7 @@ export default function HomeContent({
   const nativeTabBarRef = useRef<NativeTabBar | null>(null);
   useEffect(() => {
     const bar = connectNativeTabBar((v) => {
-      if (v === "scores-plain" || v === "scores-rated" || v === "news") handleViewModeClickRef.current(v);
+      if (v === "scores-plain" || v === "scores-rated" || v === "news" || v === "leagues") handleViewModeClickRef.current(v);
     });
     nativeTabBarRef.current = bar;
     return () => { bar?.disconnect(); nativeTabBarRef.current = null; };
@@ -2171,6 +2217,9 @@ export default function HomeContent({
   // and self-corrects on the rare morning-reset boundary.
   useEffect(() => {
     document.documentElement.setAttribute("data-view", viewMode);
+    // Leagues is session-only (a reload opens the board), so the pre-paint
+    // script keeps the board tab it will actually land on.
+    if (viewMode === "leagues") return;
     try {
       localStorage.setItem("nss-last-view", viewMode);
     } catch {}
@@ -3627,6 +3676,83 @@ export default function HomeContent({
   // Null = no cards on screen (Feed, or the board has not loaded).
   let newsBar: NewsBarState | null = null;
 
+  // The Leagues tab (9/29, FotMob review): the column switcher's own list as a
+  // full page. A tap puts that league in column 1 (the same setter the column
+  // switcher uses) and goes back to the board. In-season first, then leagues
+  // about to start, then offseason; each group keeps the switcher's order.
+  const renderLeaguesView = () => {
+    const visibleSlots = SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length;
+    const onBoard = sortedLeagues.slice(0, visibleSlots).map((l) => l.sport);
+    const tier = (o: { offseason?: boolean; upcomingLabel?: string }) => (o.offseason ? 2 : o.upcomingLabel ? 1 : 0);
+    const rows = switcherOptions
+      .map((o, i) => ({ o, i }))
+      .sort((a, b) => tier(a.o) - tier(b.o) || a.i - b.i)
+      .map(({ o }) => o);
+    const pick = (sport: Sport) => {
+      setSlotLeague(0, sport);
+      setShowLeagues(false);
+      window.scrollTo({ top: 0, behavior: "auto" });
+    };
+    const openLeagueSettings = () => {
+      setSettingsOpen(true);
+      // The panel mounts on open; try for a few frames until the section is there.
+      let tries = 0;
+      const go = () => {
+        const el = document.getElementById("settings-leagues");
+        if (el) el.scrollIntoView({ block: "start" });
+        else if (++tries < 20) requestAnimationFrame(go);
+      };
+      requestAnimationFrame(go);
+    };
+    return (
+      <section data-testid="leagues-view" aria-labelledby="leagues-title" className="max-w-xl mx-auto pt-4">
+        <h2 id="leagues-title" className="text-2xl font-bold tracking-tight mb-3" style={{ color: "var(--text)" }}>Leagues</h2>
+        <ul className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--bg-card)" }}>
+          {rows.map((o, i) => {
+            const col = onBoard.indexOf(o.sport);
+            return (
+              <li key={o.sport} style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}>
+                <button
+                  type="button"
+                  data-league={o.sport}
+                  onClick={() => pick(o.sport)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left cursor-pointer transition-colors"
+                  style={{ color: o.offseason ? "var(--text-muted)" : "var(--text)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  aria-current={col === 0 ? "true" : undefined}
+                >
+                  <span className="inline-flex items-center justify-center w-7 h-7 shrink-0">
+                    <LeagueMark sport={o.sport} size={22} />
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[15px] font-medium truncate">{o.label}</span>
+                    {(o.upcomingLabel || o.offseason) && (
+                      <span className="block text-xs" style={{ color: "var(--text-muted)" }}>
+                        {o.upcomingLabel ? `Season starts ${o.upcomingLabel}` : "Offseason"}
+                      </span>
+                    )}
+                  </span>
+                  {col >= 0 && (
+                    <span className="flex items-center gap-1 text-xs shrink-0" style={{ color: "var(--accent)" }}>
+                      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      Column {col + 1}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="text-center text-xs mt-4 mb-2">
+          <button type="button" onClick={openLeagueSettings} className="underline underline-offset-2 cursor-pointer" style={{ color: "var(--text-muted)" }}>
+            League settings
+          </button>
+        </p>
+      </section>
+    );
+  };
+
   return (
     <WatchQueueContext.Provider value={watchQueueApi}>
     <HideRanksContext.Provider value={!!prefs.hideRanks}>
@@ -3743,7 +3869,13 @@ export default function HomeContent({
               // In the news view, the logo acts as "back to scores" — toggle
               // news off in place instead of navigating, since "/" would
               // just rehydrate news from prefs.showNews and bounce the user
-              // right back into the news view.
+              // right back into the news view. Leagues is left the same way.
+              if (showLeagues) {
+                e.preventDefault();
+                setShowLeagues(false);
+                window.scrollTo({ top: 0, behavior: "auto" });
+                return;
+              }
               if (showNews) {
                 e.preventDefault();
                 setShowNews(false);
@@ -3758,62 +3890,20 @@ export default function HomeContent({
             className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0 justify-self-start col-start-1"
             style={{ color: "var(--text)" }}
           >
-            <span className="hidden xl:inline text-lg font-bold tracking-tight">HideScore</span>
-            <svg className="xl:hidden w-7 h-7 header-logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-              <rect width="32" height="32" rx="6" className="header-logo-bg" />
-              <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
-            </svg>
+            {/* The wordmark at every width (9/29). The "H" square held the
+                phone slot only while the date nav shared this row; the dates
+                now have their own row below. */}
+            <span className="text-lg font-bold tracking-tight">HideScore</span>
           </Link>
 
           {/* Top-row middle (col 2): the view tabs on sm+ (page-centered between
-              two 1fr cols → lines up with the middle MLB column). On small screens
-              the tabs drop to the fixed bottom bar, so the date nav takes this slot
-              instead (scores/rated only) — sitting cleanly in the top row. */}
-          {/* Mobile: center the date nav within col 2 so it sits evenly
-              between the H logo and the theme toggle (Jacob 6/1). Desktop is
-              already centered (the view tabs line up under the middle MLB
-              column). The leading spacer is dropped on phones so the centering
-              is true (not biased by the trailing calendar icon). */}
+              two 1fr cols → lines up with the middle MLB column). Empty on
+              phones: the tabs live in the bottom bar and the dates in the
+              strip row under this one. */}
           <div className="justify-self-center col-start-2 min-w-0">
             <div className="hidden sm:block w-80">
               <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
             </div>
-            {/* Mobile: date nav sits inline in the header middle (the view tabs
-                live in the fixed bottom bar on phones, so this slot is free).
-                Scores/Rated only. Calendar = bare icon after the › arrow. */}
-            {!showNews && (
-              <div className="sm:hidden flex justify-center">
-                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} initialDate={initialDate} trailing={
-                  <span className="relative inline-flex items-center mr-2 shrink-0">
-                    <button
-                      type="button"
-                      data-cal-toggle
-                      onClick={() => setCalendarOpen(!calendarOpen)}
-                      className="ml-0.5 w-7 h-7 shrink-0 flex items-center justify-center rounded-full transition-colors cursor-pointer"
-                      style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
-                      title="Pick a date"
-                      aria-label="Pick a date"
-                      aria-haspopup="dialog"
-                      aria-expanded={calendarOpen}
-                    >
-                      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                      </svg>
-                    </button>
-                    {calendarOpen && (
-                      <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
-                    )}
-                    {/* The single-column toggle left this row on 6/18 (the 32px
-                        copy crowded col 2 into the moon in col 3) and Settings
-                        was the only way to flip it on a phone. Jacob 9/22 turned
-                        it on at the PC, it followed him to the phone, and he had
-                        to go landscape to find a button. It is back at the
-                        calendar's 28px size, from 390px up (see SingleColToggle). */}
-                    <SingleColToggle compact active={prefs.singleColumn ?? false} onClick={() => updatePrefs({ singleColumn: !prefs.singleColumn })} />
-                  </span>
-                } />
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0 justify-self-end col-start-3">
@@ -3977,6 +4067,42 @@ export default function HomeContent({
               </div>
             )}
 
+            {/* Live filter (9/29, FotMob review). A filter, not a count: it
+                shows only while something on the board is in progress (or
+                while it is on, so it can be turned off), board views only. */}
+            {!showNews && !showLeagues && (hasLiveGames || liveOnly) && (
+              <button
+                type="button"
+                data-testid="live-toggle"
+                onClick={() => {
+                  if (liveOnly) {
+                    setLiveOnly(false);
+                    return;
+                  }
+                  setLiveOnly(true);
+                  // Live means now: pull the board back to Today.
+                  const today = getDateString(0);
+                  if (selectedDate !== today) setSelectedDate(today);
+                }}
+                className="monkey-toggle h-10 sm:h-11 px-3 flex items-center gap-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+                style={{
+                  background: liveOnly ? "var(--accent)" : "var(--bg-card)",
+                  border: `1px solid ${liveOnly ? "var(--accent)" : "var(--border)"}`,
+                  color: liveOnly ? "white" : "var(--text-muted)",
+                }}
+                title={liveOnly ? "Showing live games only — tap for the full board" : "Show live games only"}
+                aria-label="Live games only"
+                aria-pressed={liveOnly}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`w-2 h-2 rounded-full${liveOnly ? " animate-pulse" : ""}`}
+                  style={{ background: liveOnly ? "white" : "#dc2626" }}
+                />
+                Live
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
@@ -4005,6 +4131,38 @@ export default function HomeContent({
           </div>
         </div>
 
+        {/* Phone date strip (9/29, FotMob style): its own row under the top
+            row, inside the fixed header, so --header-h measures it and it never
+            covers a card. Board views only. The calendar and the one-column
+            toggle stay pinned at the right end, outside the scroll area. */}
+        {!showNews && !showLeagues && (
+          <div className="sm:hidden max-w-6xl mx-auto mt-1.5 -mb-2" data-testid="date-strip-row">
+            <DateNav variant="strip" selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} initialDate={initialDate} trailing={
+              <span className="relative inline-flex items-center shrink-0">
+                <button
+                  type="button"
+                  data-cal-toggle
+                  onClick={() => setCalendarOpen(!calendarOpen)}
+                  className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+                  style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
+                  title="Pick a date"
+                  aria-label="Pick a date"
+                  aria-haspopup="dialog"
+                  aria-expanded={calendarOpen}
+                >
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </button>
+                {calendarOpen && (
+                  <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
+                )}
+                {/* One-column toggle: on the phone since 9/22 (see SingleColToggle). */}
+                <SingleColToggle compact active={prefs.singleColumn ?? false} onClick={() => updatePrefs({ singleColumn: !prefs.singleColumn })} />
+              </span>
+            } />
+          </div>
+        )}
       </header>
       {/* Gives back the flow space the now-fixed header vacated — sized by
           var(--header-h), the same variable .league-sticky-top pins at, which
@@ -4016,7 +4174,7 @@ export default function HomeContent({
           view tabs in the top-row middle, so the date nav drops here). On mobile
           it's inline in the header middle instead (above). Scores/rated only;
           centered in max-w-6xl to line up with the middle (MLB) column. */}
-      {!showNews && (
+      {!showNews && !showLeagues && (
         <div className="hidden sm:flex max-w-6xl mx-auto px-4 justify-center pt-2 pb-1">
           <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} initialDate={initialDate} trailing={
             <span className="relative inline-flex items-center">
@@ -4426,7 +4584,7 @@ export default function HomeContent({
             the layout jumps to league columns ~1.5 s later (Jacob 10/2). Both
             conditions: a refresh poll keeps the news up, and an offline or
             failed load (loading false, no leagues) still falls through to it. */}
-        {showNews && !(loading && leagues.length === 0) ? (() => {
+        {showLeagues ? renderLeaguesView() : showNews && !(loading && leagues.length === 0) ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
               label: c.label,
@@ -5422,6 +5580,9 @@ export default function HomeContent({
               if (bestSpanData?.key === bestSpanKey) return bestSpanData.data;
               return { sport: "best", label: TOP_GAMES_COLUMN_LABEL[bestSpan], games: [], emptyLabel: "Loading…" };
             };
+            // The header's Live pill cuts each column to its in-progress games.
+            const boardShown = (league: LeagueData): LeagueData =>
+              liveOnly ? liveOnlyLeague(bestShown(league)) : bestShown(league);
             // With ratings on, the Best column's span pill IS its top card: it
             // takes the recap / Playoff pill row (BestSpanBar matches a pill's
             // height), so there is no spacer above it. Ratings off: no pill,
@@ -5976,7 +6137,8 @@ export default function HomeContent({
                   {slotEntries.map((entry) => (
                     <LeagueColumn
                       key={`${entry.league.sport}-${entry.slotIdx}`}
-                      league={bestShown(entry.league)}
+                      league={boardShown(entry.league)}
+                      liveOnly={liveOnly}
                       slotIdx={entry.slotIdx}
                       onReorderSlots={reorderSlots}
                       {...commonProps}
@@ -6010,7 +6172,8 @@ export default function HomeContent({
                 {slotEntries.map((entry) => (
                   <LeagueColumn
                     key={`${entry.league.sport}-${entry.slotIdx}`}
-                    league={bestShown(entry.league)}
+                    league={boardShown(entry.league)}
+                    liveOnly={liveOnly}
                     slotIdx={entry.slotIdx}
                     onReorderSlots={reorderSlots}
                     {...commonProps}
