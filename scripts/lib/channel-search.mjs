@@ -359,8 +359,25 @@ export function normalizeTitle(title) {
 export function titleHasCompToken(title, tokens) {
   if (!tokens?.length) return true;
   const t = normalizeTitle(title);
+  const cut = [...String(title ?? "")].length >= YT_TITLE_MAX_CHARS;
   return tokens.some((tok) => {
     const n = normalizeTitle(tok);
-    return n && t.includes(n);
+    return n && (t.includes(n) || (cut && cutTitleEndsInToken(t, n)));
   });
+}
+
+// YouTube cuts every title at 100 characters. Conference USA's FIU at
+// Jacksonville State cut (2026-10-13) ends "… Highlights | 2026 Regular Season
+// W", so "regular season week" was not in it. A title at the cap also counts a
+// token when it ENDS in that token's start, cut past the token's first word
+// ("regular season w" counts, "regular" does not). Both inputs are normalized.
+// Mirrors compTitleMatches and cutTitleEndsInToken in public/_worker.js.
+export const YT_TITLE_MAX_CHARS = 100;
+export function cutTitleEndsInToken(t, n) {
+  const firstWord = n.split(" ")[0].length;
+  for (let k = n.length - 1; k > firstWord; k--) {
+    const at = t.length - k;
+    if (at >= 0 && t.endsWith(n.slice(0, k)) && (at === 0 || t[at - 1] === " ")) return true;
+  }
+  return false;
 }

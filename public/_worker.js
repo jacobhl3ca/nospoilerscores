@@ -258,7 +258,26 @@ const NON_RACE_SESSION_RX =
 function compTitleMatches(tokens, titleLower) {
   if (tokens.length === 0) return true; // no gate requested → unchanged behaviour
   const nt = normalizeRaceToken(titleLower);
-  return tokens.some((tok) => tok && nt.includes(tok));
+  const cut = [...titleLower].length >= YT_TITLE_MAX_CHARS;
+  return tokens.some((tok) => tok && (nt.includes(tok) || (cut && cutTitleEndsInToken(nt, tok))));
+}
+
+// YouTube cuts every title at 100 characters, and two long school names push
+// a channel's suffix past it: Conference USA titled FIU at Jacksonville State
+// (2026-10-13) "Florida International Panthers vs. Jacksonville State Gamecocks
+// - Highlights | 2026 Regular Season W", so its "regular season week" token was
+// gone and the cut was refused. A title at the cap also counts a token when it
+// ENDS in that token's start, cut past the token's first word ("regular s" …
+// "regular season wee"; "regular" alone does not count). Both inputs are
+// normalized. Mirrors titleHasCompToken in scripts/lib/channel-search.mjs.
+const YT_TITLE_MAX_CHARS = 100;
+function cutTitleEndsInToken(nt, tok) {
+  const firstWord = tok.split(" ")[0].length;
+  for (let k = tok.length - 1; k > firstWord; k--) {
+    const at = nt.length - k;
+    if (at >= 0 && nt.endsWith(tok.slice(0, k)) && (at === 0 || nt[at - 1] === " ")) return true;
+  }
+  return false;
 }
 
 // YouTube bylines a CO-UPLOAD with both accounts joined by " and ": the search
