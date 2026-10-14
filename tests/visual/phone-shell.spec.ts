@@ -100,13 +100,13 @@ for (const theme of ["light", "dark"] as const) {
       await expect(card(page, "Oklahoma at Georgia")).toBeVisible({ timeout: 30_000 });
     });
 
-    test("bar = Games · Ratings · News · Leagues with the four emoji SVGs", async ({ page, browserName }) => {
+    test("bar = Games · Ratings · News · Leagues · Schedule with the five emoji SVGs", async ({ page, browserName }) => {
       const bar = page.locator(".web-tab-bar nav");
       const tabs = bar.locator("button[data-tab]");
-      await expect(tabs).toHaveCount(4);
-      expect(await tabs.evaluateAll((els) => els.map((e) => e.textContent?.trim()))).toEqual(["Games", "Ratings", "News", "Leagues"]);
+      await expect(tabs).toHaveCount(5);
+      expect(await tabs.evaluateAll((els) => els.map((e) => e.textContent?.trim()))).toEqual(["Games", "Ratings", "News", "Leagues", "Schedule"]);
       expect(await tabs.locator("img").evaluateAll((els) => els.map((e) => new URL((e as HTMLImageElement).src).pathname)))
-        .toEqual(["/monkey-see-no-evil.svg", "/monkey-hear-no-evil.svg", "/news-emoji.svg", "/trophy-emoji.svg"]);
+        .toEqual(["/monkey-see-no-evil.svg", "/monkey-hear-no-evil.svg", "/news-emoji.svg", "/trophy-emoji.svg", "/calendar-emoji.svg"]);
       // Every icon actually loaded.
       expect(await tabs.locator("img").evaluateAll((els) => els.every((e) => (e as HTMLImageElement).naturalWidth > 0))).toBe(true);
       await expect(bar.locator('button[data-tab="scores-plain"]')).toHaveAttribute("title", "Games (no scores, no spoilers)");
