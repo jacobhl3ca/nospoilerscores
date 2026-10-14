@@ -94,6 +94,10 @@ export default function ContactPage() {
           </li>
         </ul>
 
+        <p>
+          To report a clip or image you own, email <EmailLink />. We remove it within 1 business day.
+        </p>
+
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
           HideScore is an online app with no office or phone line. It is not affiliated with, endorsed by, or sponsored
           by any league, team or broadcaster.

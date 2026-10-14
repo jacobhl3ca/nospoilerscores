@@ -146,6 +146,15 @@ public class WidgetParserTest {
     }
 
     @Test
+    public void foxIsAllCapsLikeTheWeb() {
+        assertEquals("FOX", WidgetRows.channel("Fox"));
+        assertEquals("FOX", WidgetRows.channel("Fox · Peacock"));
+        assertEquals("FOX Deportes", WidgetRows.channel("Fox Deportes"));
+        assertEquals("FOX", WidgetRows.channel("FOX"));
+        assertEquals("Foxtel", WidgetRows.channel("Foxtel"));
+    }
+
+    @Test
     public void rowsGetDayHeadersOneChannelAndFitTheHeight() throws Exception {
         TimeZone ny = TimeZone.getTimeZone("America/New_York");
         long now = WidgetParser.parseIso("2026-10-05T16:00Z");   // Mon 12:00 PM ET

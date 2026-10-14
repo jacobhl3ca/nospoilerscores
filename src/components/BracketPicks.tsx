@@ -43,6 +43,7 @@ import { cachedAuthState, getAuthState, hasNativeGoogleBridge, signInWithApple, 
 import { trackSoon } from "@/lib/umamiTrack";
 import { getApiBase } from "@/lib/youtube";
 import { getTimeZone } from "@/lib/etDay";
+import { AppleLogo, GoogleG } from "./ProviderLogo";
 
 // The Picks tab: tap a winner per series, submit, and see how it went.
 //
@@ -819,7 +820,7 @@ function SignInPrompt({ auth, text }: { auth: AuthState; text: string }) {
     try { window.sessionStorage.setItem(LINK_FLAG, "1"); } catch {}
     fn(window.location.pathname + window.location.search);
   };
-  const btn = "text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer";
+  const btn = "text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer inline-flex items-center justify-center gap-1.5";
   return (
     <div data-picks-signin className="flex flex-col gap-1.5">
       <button
@@ -836,12 +837,14 @@ function SignInPrompt({ auth, text }: { auth: AuthState; text: string }) {
           {auth.providers?.apple !== false ? (
             <button type="button" className={btn} onClick={() => go(signInWithApple)}
               style={{ background: "var(--text)", color: "var(--bg)" }}>
+              <AppleLogo size={12} />
               Sign in with Apple
             </button>
           ) : null}
           {auth.providers?.google && canUseGoogle ? (
             <button type="button" className={btn} onClick={() => go(signInWithGoogle)}
               style={{ background: "#fff", color: "#1f1f1f", border: "1px solid #dadce0" }}>
+              <GoogleG size={12} />
               Sign in with Google
             </button>
           ) : null}

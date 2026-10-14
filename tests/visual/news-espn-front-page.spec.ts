@@ -110,7 +110,7 @@ test("turned on: ESPN front page is a league row in news column 3, headlines the
   await menu.getByRole("button", { name: "ESPN front page" }).click();
 
   await expect(titles(page).nth(2)).toHaveText("ESPN front page");
-  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["TOP HEADLINES", "VIDEOS"]);
+  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["HEADLINES", "VIDEOS"]);
   for (const h of HEADLINES) await expect(page.getByText(h)).toHaveCount(1);
   await expect(page.getByText(CLIP)).toHaveCount(1);
   const prefs = await saved(page);
@@ -143,7 +143,7 @@ test("under an ESPN front page scores column 3, news column 3 is ESPN front page
   await page.goto("/");
   await expect(titles(page)).toHaveCount(3, LOAD);
   await expect(titles(page).nth(2)).toHaveText("ESPN front page");
-  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["TOP HEADLINES", "VIDEOS"]);
+  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["HEADLINES", "VIDEOS"]);
   const { rows } = await rowsOf(page, 2);
   expect(rows.find((r) => r.startsWith("ESPN front page"))).toBe("ESPN front page");
   expect((await saved(page)).newsThirdLeague).toBeUndefined();
@@ -156,8 +156,8 @@ test("phone: an ESPN front page scores column 3 shows the headlines after the le
   await seedPrefs(page, { thirdLeague: "top" });
   await page.goto("/");
   const headers = page.locator(".news-source-sticky-top");
-  await expect(headers.filter({ hasText: /Top Headlines/i })).toHaveCount(1, LOAD);
-  await expect(headers.first()).not.toHaveText(/Top Headlines/i);
+  await expect(headers.filter({ hasText: /Headlines/i })).toHaveCount(1, LOAD);
+  await expect(headers.first()).not.toHaveText(/Headlines/i);
   await expect(page.getByText(HEADLINES[0])).toHaveCount(1);
 });
 
@@ -167,5 +167,5 @@ test("phone: without it, the feed does not lead with the front page", async ({ p
   await page.goto("/");
   const first = page.locator(".news-source-sticky-top").first();
   await expect(first).toBeVisible(LOAD);
-  await expect(first).not.toHaveText(/Top Headlines/i);
+  await expect(first).not.toHaveText(/Headlines/i);
 });

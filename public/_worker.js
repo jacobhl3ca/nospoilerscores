@@ -1036,6 +1036,10 @@ export default {
       if (request.method === "PUT") return prefsPut(request, env, ctx);
       return prefsGet(request, env, ctx);
     }
+    if (url.pathname === "/api/seen") {
+      if (request.method === "POST") return seenPut(request, env, ctx);
+      return seenGet(request, env, ctx);
+    }
     if (url.pathname === "/api/account" && request.method === "DELETE") return accountDelete(request, env);
 
     // --- "Add to calendar" (.ics) for the native wrapper. The web builds a
@@ -4588,11 +4592,74 @@ async function prefsPut(request, env, ctx) {
   return _siwaJson({ ok: true });
 }
 
+// News posts the account has opened ("✓ Opened" / Hide seen across devices,
+// src/lib/seenSync.ts). Its own object, `seen/<uid>.json` = { key: openedAtMs },
+// because 3,000 article URLs is far past the 64 KB prefs cap. Same limits as the
+// device store (src/lib/newsSeen.ts): 14 days, newest 3,000.
+const SEEN_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const SEEN_MAX_ENTRIES = 3000;
+const SEEN_MAX_KEY_CHARS = 2048;
+
+// Pure merge, exported for tests/seen-worker.test.mjs: union of the stored map
+// and the new marks, the later time winning per key, then the age and count
+// caps. Anything that is not a string key with a finite time is skipped.
+export function _hsMergeSeen(existing, add, now) {
+  const out = {};
+  const take = (map) => {
+    if (!map || typeof map !== "object" || Array.isArray(map)) return;
+    for (const [k, v] of Object.entries(map)) {
+      if (!k || k.length > SEEN_MAX_KEY_CHARS || typeof v !== "number" || !Number.isFinite(v)) continue;
+      if (!(Object.hasOwn(out, k) && out[k] >= v)) out[k] = v;
+    }
+  };
+  take(existing);
+  take(add);
+  const fresh = Object.entries(out).filter(([, t]) => now - t <= SEEN_MAX_AGE_MS);
+  fresh.sort((a, b) => b[1] - a[1]);
+  return Object.fromEntries(fresh.slice(0, SEEN_MAX_ENTRIES));
+}
+
+// GET /api/seen -> { seen } (the account's opened posts, or {})
+async function seenGet(request, env, ctx) {
+  const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!sessionUser) return _siwaJson({ error: "unauthorized" }, 401);
+  if (!env.DATA) return _siwaJson({ seen: {} });
+  const u = await _hsResolveAccount(env, sessionUser);
+  if (ctx) ctx.waitUntil(_hsTouchUser(env, request, u).catch(() => {}));
+  const stored = await _hsReadJson(env, `seen/${u.uid}.json`);
+  return _siwaJson({ seen: _hsMergeSeen(stored, null, Date.now()) });
+}
+
+// POST /api/seen  body = { add: { key: openedAtMs } } -> { ok: true, count }
+// R2 has no atomic merge: two devices posting in the same instant can each
+// read the old object, and the second write drops the first one's marks. The
+// client sends whatever the account lacks on its next pull, so it heals.
+async function seenPut(request, env, ctx) {
+  const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!sessionUser) return _siwaJson({ error: "unauthorized" }, 401);
+  if (!env.DATA) return _siwaJson({ error: "no_store" }, 503);
+  const text = await request.text();
+  if (text.length > 64 * 1024) return _siwaJson({ error: "too_large" }, 413);
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { return _siwaJson({ error: "bad_json" }, 400); }
+  const add = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed.add : null;
+  if (!add || typeof add !== "object" || Array.isArray(add)
+      || !Object.values(add).every((v) => typeof v === "number" && Number.isFinite(v))) {
+    return _siwaJson({ error: "bad_shape" }, 400);
+  }
+  const u = await _hsResolveAccount(env, sessionUser);
+  const key = `seen/${u.uid}.json`;
+  const merged = _hsMergeSeen(await _hsReadJson(env, key), add, Date.now());
+  await env.DATA.put(key, JSON.stringify(merged), { httpMetadata: { contentType: "application/json" } });
+  if (ctx) ctx.waitUntil(_hsTouchUser(env, request, u).catch(() => {}));
+  return _siwaJson({ ok: true, count: Object.keys(merged).length });
+}
+
 // DELETE /api/account -> delete the signed-in user's stored data + clear the session.
 // Satisfies Apple's in-app account-deletion requirement (App Store guideline 5.1.1(v)).
-// All data we hold for a user is their prefs object at `prefs/<sub>.json` plus the usage
-// record at `users/<sub>.json` (email / first+last seen / which platforms) — BOTH are
-// erased here; sessions are stateless HMAC cookies (no server-side store), so clearing
+// All data we hold for a user is their prefs object at `prefs/<uid>.json`, the news posts
+// they opened at `seen/<uid>.json`, and the usage record at `users/<uid>.json` (email /
+// first+last seen / which platforms) — ALL are erased here; sessions are stateless HMAC cookies (no server-side store), so clearing
 // the cookie fully signs out.
 // The iOS app loads this site in a WebView sharing the same cookie, so this deletes
 // on-device too. We can't unlink their Apple/Google ID (external), only erase our data.
@@ -4602,6 +4669,7 @@ async function accountDelete(request, env) {
   const u = await _hsResolveAccount(env, sessionUser);
   if (env.DATA) {
     try { await env.DATA.delete(`prefs/${u.uid}.json`); } catch { /* already gone */ }
+    try { await env.DATA.delete(`seen/${u.uid}.json`); } catch { /* already gone */ }
     try { await env.DATA.delete(`users/${u.uid}.json`); } catch { /* already gone */ }
     const account = await _hsReadJson(env, `accounts/${u.uid}.json`);
     for (const sub of account?.identities || []) {

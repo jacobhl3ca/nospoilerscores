@@ -34,9 +34,11 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
     private static final int CHROME_DP = 44;
     private static final String KEY_PAGE = "page_";
     // Narrower than this (dp), the channel cell goes so the team names fit. A
-    // 4-wide Pixel widget is 360 dp, 3-wide 266 dp; the pager's arrows take 48 dp.
+    // 4-wide Pixel widget is 360 dp, 3-wide 266 dp; the pager's arrows take 48 dp,
+    // so the pager drops its league chip first, then the channel.
     private static final int LIST_CHANNEL_DP = 300;
     private static final int PAGER_CHANNEL_DP = 340;
+    private static final int PAGER_CHIP_DP = 390;
 
     @Override
     public void onUpdate(Context context, AppWidgetManager mgr, int[] ids) {
@@ -179,8 +181,9 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         } else if (plan.paged) {
             headerDay = plan.headerDay;
             count = (plan.page + 1) + "/" + plan.pages;
-            boolean channel = roomFor(mgr.getAppWidgetOptions(id), PAGER_CHANNEL_DP);
-            views.addView(R.id.widget_rows, pager(context, id, plan.body.get(0), theme, logos, channel));
+            Bundle o = mgr.getAppWidgetOptions(id);
+            views.addView(R.id.widget_rows, pager(context, id, plan.body.get(0), theme, logos,
+                roomFor(o, PAGER_CHANNEL_DP), roomFor(o, PAGER_CHIP_DP)));
         } else {
             headerDay = plan.headerDay;
             boolean channel = roomFor(mgr.getAppWidgetOptions(id), LIST_CHANNEL_DP);
@@ -212,10 +215,10 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
 
     /** ‹ row › for a 1-row widget; the arrows fill the body's height. */
     private static RemoteViews pager(Context context, int id, WidgetRows.Row row, WidgetTheme theme, boolean logos,
-                                     boolean channel) {
+                                     boolean channel, boolean chip) {
         RemoteViews pager = new RemoteViews(context.getPackageName(), R.layout.widget_pager);
-        // Narrow pager: the chip goes too (the arrows take its room); the team logos stay.
-        pager.addView(R.id.pager_row, rowView(context, row, theme, logos, channel, channel || row.kind != WidgetRows.Kind.GAME));
+        // The arrows take the chip's room; a mask row keeps its chip (it has no teams).
+        pager.addView(R.id.pager_row, rowView(context, row, theme, logos, channel, chip || row.kind != WidgetRows.Kind.GAME));
         pager.setOnClickPendingIntent(R.id.pager_prev, pageIntent(context, id, -1));
         pager.setOnClickPendingIntent(R.id.pager_next, pageIntent(context, id, 1));
         theme.muted(pager, R.id.pager_prev, R.id.pager_next);
@@ -242,12 +245,14 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         boolean game = r.kind == WidgetRows.Kind.GAME;
         int shown = game ? View.VISIBLE : View.GONE;
         row.setViewVisibility(R.id.row_time, shown);
-        row.setViewVisibility(R.id.row_at, shown);
-        row.setViewVisibility(R.id.row_home, shown);
+        row.setViewVisibility(R.id.row_teams, shown);
+        // A mask row's text is too long for the fixed away cell: its own cell.
+        row.setViewVisibility(R.id.row_mask, game ? View.GONE : View.VISIBLE);
         row.setTextViewText(R.id.row_time, r.time);
         row.setTextViewText(R.id.row_league, r.chip);
-        row.setTextViewText(R.id.row_away, game ? r.away : r.teams);
+        row.setTextViewText(R.id.row_away, r.away);
         row.setTextViewText(R.id.row_home, r.home);
+        row.setTextViewText(R.id.row_mask, game ? "" : r.teams);
         row.setTextViewText(R.id.row_channel, r.channel);
         row.setViewVisibility(R.id.row_channel, channel ? View.VISIBLE : View.GONE);
         row.setViewVisibility(R.id.row_league, chip ? View.VISIBLE : View.GONE);
@@ -258,7 +263,7 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
             row.setViewVisibility(R.id.row_away_logo, View.GONE);
             row.setViewVisibility(R.id.row_home_logo, View.GONE);
         }
-        theme.text(row, R.id.row_time, R.id.row_league, R.id.row_away, R.id.row_at, R.id.row_home);
+        theme.text(row, R.id.row_time, R.id.row_league, R.id.row_away, R.id.row_at, R.id.row_home, R.id.row_mask);
         theme.muted(row, R.id.row_channel);
         theme.chip(row, R.id.row_league);
         return row;

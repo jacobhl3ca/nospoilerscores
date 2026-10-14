@@ -3,9 +3,12 @@ import { createContext, useContext, useEffect, useId, useSyncExternalStore, type
 // News "Hide seen" (Jacob 10/6, 10/8): a post counts as seen when he opens it
 // (the in-app modal, its ‹ prev / next › paging, or the source link), and the
 // header 👁 toggle drops seen posts from every news surface (Cards, Feed, the
-// aligned strip). Scrolling past a post does not count. Device-local on
-// purpose — what one screen has opened says nothing about another — so it
-// lives in its own localStorage key, outside Preferences and its account sync.
+// aligned strip). Scrolling past a post does not count. It lives in its own
+// localStorage key, outside Preferences: 3,000 URLs is far past the 64 KB prefs
+// blob. Signed out it stays on this device. Signed in (Jacob 10/12), every new
+// mark also goes to the account through setSeenSync, and what other devices
+// opened comes back through mergeSeen (lib/seenSync.ts, /api/seen), so
+// "✓ Opened" and Hide seen follow the account across browsers and the app.
 //
 // Key = item.articleUrl || item.id, the same value every card carries as
 // data-news-key, so the tracker below can read it straight off the DOM.
@@ -96,13 +99,43 @@ function save(merge: boolean): void {
   }
 }
 
+// The account mirror: HomeContent registers it once signed in, null otherwise.
+// Same shape as setRemoteSync in lib/preferences.ts.
+type SeenSync = (key: string, at: number) => void;
+let seenSync: SeenSync | null = null;
+
+export function setSeenSync(fn: SeenSync | null): void {
+  seenSync = fn;
+}
+
 export function markSeen(key: string, now: number = Date.now()): void {
   if (!key) return;
   const map = load();
   map[key] = now;
   save(true);
+  seenSync?.(key, now);
   // A long session keeps marking; prune here too once the cap is passed.
   if (Object.keys(cache ?? map).length > SEEN_MAX_ENTRIES) prune(now);
+  notify();
+}
+
+// What the account holds (other devices' opens): union into this device's
+// map, the later time winning per key. Never calls seenSync, so a pull is not
+// echoed back up.
+export function mergeSeen(remote: Record<string, number>): void {
+  if (!remote || typeof remote !== "object" || Array.isArray(remote)) return;
+  const map = load();
+  let changed = false;
+  for (const [k, v] of Object.entries(remote)) {
+    if (!k || typeof v !== "number" || !Number.isFinite(v)) continue;
+    if (Object.hasOwn(map, k) && map[k] >= v) continue;
+    map[k] = v;
+    changed = true;
+  }
+  if (!changed) return;
+  // Merge, like markSeen: another tab may have written since this one loaded.
+  save(true);
+  prune(Date.now());
   notify();
 }
 
@@ -113,6 +146,11 @@ export function isSeen(key: string): boolean {
 // A COPY, so a snapshot taken now does not grow as more posts get seen.
 export function seenKeys(): Set<string> {
   return new Set(Object.keys(load()));
+}
+
+// A COPY of key -> opened-at, for the account sync to diff against.
+export function seenSnapshot(): Record<string, number> {
+  return { ...load() };
 }
 
 // Drop entries older than SEEN_MAX_AGE_MS, then keep the newest

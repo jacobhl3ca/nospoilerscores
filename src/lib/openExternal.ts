@@ -177,9 +177,13 @@ const APP_LINK_HOSTS = [
   "pgatour.com",       // PGA Tour
   "usanetwork.com",    // USA Network
   "golfchannel.com",   // Golf Channel
+  // Google Calendar app — its apple-app-site-association lists
+  // /calendar/render for EQHXZ8M8AV.com.google.calendar (checked 2026-10-13),
+  // so the prefilled "Add to calendar" event opens in the app when installed.
+  "calendar.google.com",
 ];
 
-function isAppLinkHost(url: string): boolean {
+export function isAppLinkHost(url: string): boolean {
   try {
     const host = new URL(url).hostname.toLowerCase();
     return APP_LINK_HOSTS.some((h) => host === h || host.endsWith("." + h));

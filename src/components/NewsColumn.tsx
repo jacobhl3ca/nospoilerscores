@@ -497,13 +497,16 @@ export function NewsColumnTitle({
 // repeats the logo (Jacob 10/10), so "ESPN Videos" reads "Videos" at every
 // width. Only the text on screen changes: the source's own label (aria names,
 // card keys, sibling lists) stays whole. `narrow` is the text below `sm`,
-// where league tokens go too (stripLeaguePrefixForMobile).
+// where league tokens go too (stripLeaguePrefixForMobile). The ESPN mark also
+// drops "Top", so "ESPN Top Headlines" reads "Headlines" (Jacob 10/13).
 export function sourceHeaderText(label: string, logoUrl?: string): { wide: string; narrow: string } {
-  const wide = logoUrl === ESPN_BRAND_LOGO ? label.replace(/^ESPN\s+/i, "").trim() || label : label;
+  const espnMark = logoUrl === ESPN_BRAND_LOGO;
+  const noTop = (s: string) => (espnMark ? s.replace(/^Top\s+/i, "").trim() || s : s);
+  const wide = espnMark ? noTop(label.replace(/^ESPN\s+/i, "").trim() || label) : label;
   const stripped = stripLeaguePrefixForMobile(label);
   // "ESPN NBA" strips to nothing and falls back to the whole label; next to
   // the ESPN mark it keeps the wide text ("NBA").
-  return { wide, narrow: stripped !== label ? stripped : wide };
+  return { wide, narrow: stripped !== label ? noTop(stripped) : wide };
 }
 
 // Also the header of each AlignedVideoStrip column.

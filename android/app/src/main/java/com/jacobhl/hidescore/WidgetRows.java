@@ -253,7 +253,11 @@ final class WidgetRows {
         return c.get(Calendar.YEAR) + "-" + c.get(Calendar.DAY_OF_YEAR);
     }
 
-    /** The first network only (WidgetParser joins two with " · "), long names cut short. */
+    /**
+     * The first network only (WidgetParser joins two with " · "), long names cut short.
+     * ESPN sends "Fox" since Oct 2026; the brand is all caps, as on the web
+     * (normalizeNetworkName in src/lib/espn.ts): "Fox Deportes" → "FOX Deportes".
+     */
     static String channel(String raw) {
         if (raw == null) return "";
         String first = raw;
@@ -261,7 +265,7 @@ final class WidgetRows {
         if (cut >= 0) first = first.substring(0, cut);
         cut = first.indexOf(',');
         if (cut >= 0) first = first.substring(0, cut);
-        first = first.trim();
+        first = first.trim().replaceAll("\\bFox\\b", "FOX");
         switch (first) {
             case "NHL Network": return "NHL Net";
             case "Prime Video": return "Prime";

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home-screen widget (HideScoreWidgetProvider). Header: 🙈, the first
-     day label, a stale note, the pager count, ↻. Rows are added at runtime
-     from widget_row.xml and widget_day.xml, as many as the widget's height
-     fits (max 6 games), or one game in widget_pager.xml when under 2 fit. -->
+<!-- Home-screen widget (HideScoreWidgetProvider). Header: the first day
+     label, the app-icon monkey, a stale note, the pager count, ↻. Rows are
+     added at runtime from widget_row.xml and widget_day.xml, as many as the
+     widget's height fits (max 6 games), or one game in widget_pager.xml
+     when under 2 fit. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -10,29 +11,26 @@
     android:background="@drawable/widget_bg"
     android:orientation="vertical"
     android:paddingStart="12dp"
-    android:paddingEnd="6dp"
+    android:paddingEnd="5dp"
     android:paddingTop="4dp"
     android:paddingBottom="8dp">
 
+    <!-- 3 cells: the day label left, the monkey centered, refresh right. The
+         row ends 7 dp in (12 dp from the edge, same as the start), so the
+         monkey is centered on the widget; the refresh glyph's right edge
+         (its vector has a 3 dp margin, hence -3 dp) lines up with the
+         channel column's right edge. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="32dp"
+        android:layout_marginEnd="7dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:contentDescription="@string/widget_title"
-            android:includeFontPadding="false"
-            android:text="@string/widget_monkey"
-            android:textSize="15sp" />
 
         <TextView
             android:id="@+id/widget_day"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
@@ -40,34 +38,56 @@
             android:textSize="12sp"
             android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/widget_stale"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:maxLines="1"
-            android:textColor="@color/widget_muted"
-            android:textSize="11sp"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/widget_count"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:maxLines="1"
-            android:textColor="@color/widget_muted"
-            android:textSize="11sp"
-            android:visibility="gone" />
-
         <ImageView
-            android:id="@+id/widget_refresh"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:contentDescription="@string/widget_refresh"
-            android:padding="7dp"
-            android:src="@drawable/ic_widget_refresh"
-            android:tint="@color/widget_muted" />
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:contentDescription="@string/widget_title"
+            android:scaleType="fitCenter"
+            android:src="@drawable/widget_monkey" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="end|center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_stale"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/widget_muted"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/widget_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:maxLines="1"
+                android:textColor="@color/widget_muted"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <ImageView
+                android:id="@+id/widget_refresh"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="-3dp"
+                android:contentDescription="@string/widget_refresh"
+                android:paddingStart="14dp"
+                android:paddingTop="7dp"
+                android:paddingEnd="0dp"
+                android:paddingBottom="7dp"
+                android:src="@drawable/ic_widget_refresh"
+                android:tint="@color/widget_muted" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
@@ -75,6 +95,6 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:paddingEnd="6dp"
+        android:paddingEnd="7dp"
         android:orientation="vertical" />
 </LinearLayout>

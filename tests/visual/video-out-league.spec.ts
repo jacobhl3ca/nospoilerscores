@@ -129,6 +129,7 @@ for (const width of [390, 1280]) {
     await page.getByRole("button", { name: "NFL highlights" }).first().click();
     const handOff = page.getByRole("button", { name: "Watch on YouTube" });
     await expect(handOff).toBeVisible({ timeout: 15_000 });
+    await expect(handOff.locator("svg[data-yt-icon]")).toBeVisible(); // YouTube's red mark (10/13)
     await handOff.click();
     await expect.poll(async () => (await events(page)).filter(([n]) => n === "video-out"))
       .toEqual([["video-out", { source: "NFL", league: "nfl", via: "card" }]]);
@@ -168,6 +169,10 @@ for (const width of [390, 1280]) {
     await page.getByRole("button", { name: "WNBA highlights" }).first().click();
     await expect.poll(async () => (await events(page)).filter(([n]) => n === "video-play"), { timeout: 15_000 })
       .toEqual([["video-play", { player: "youtube", source: "WNBA", league: "wnba", page: "yesterday" }]]);
+    // The red mark stays on the embed-blocked button only, not this footer link (Jacob 10/13).
+    const footer = page.getByRole("link", { name: "Watch on YouTube" });
+    await expect(footer).toBeVisible();
+    await expect(footer.locator("svg[data-yt-icon]")).toHaveCount(0);
   });
 }
 
