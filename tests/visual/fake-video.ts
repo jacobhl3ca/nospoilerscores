@@ -6,6 +6,10 @@ import { expect, type Page } from "@playwright/test";
 // The fake YouTube player keeps the real IFrame API's lag: getCurrentTime()
 // trails a seekTo() by 1.5s, the way YouTube's cached position does until a
 // seek has finished buffering.
+//
+// window.__ytNoAutoplay = true makes playVideo() a no-op: the iPhone case where
+// the browser refuses autoplay (Low Power Mode) and the clip sits unstarted
+// until a tap on YouTube's own play button.
 
 export const FAKE_YT_API = `
 (function () {
@@ -33,7 +37,7 @@ export const FAKE_YT_API = `
     this._state = state;
     setTimeout(function () { self._events.onStateChange && self._events.onStateChange({ data: state, target: self }); }, 0);
   };
-  FakePlayer.prototype.playVideo = function () { if (this._state !== 1) this._set(1); };
+  FakePlayer.prototype.playVideo = function () { if (window.__ytNoAutoplay) return; if (this._state !== 1) this._set(1); };
   FakePlayer.prototype.pauseVideo = function () { if (this._state !== 2) this._set(2); };
   FakePlayer.prototype.seekTo = function (t, ahead) {
     window.__seeks.push({ t: t, ahead: ahead });
@@ -75,7 +79,8 @@ export const BASE_PREFS = {
   newsTypeFilter: "all",
 };
 
-export async function openFakeYouTubeClip(page: Page, prefs: Record<string, unknown> = {}) {
+export async function openFakeYouTubeClip(page: Page, prefs: Record<string, unknown> = {}, { autoplay = true } = {}) {
+  if (!autoplay) await page.addInitScript(() => { (window as unknown as { __ytNoAutoplay: boolean }).__ytNoAutoplay = true; });
   await page.route("https://www.youtube.com/iframe_api", (r) =>
     r.fulfill({ status: 200, contentType: "application/javascript", body: FAKE_YT_API }));
   await page.route("https://www.youtube.com/embed/**", (r) =>
@@ -84,7 +89,8 @@ export async function openFakeYouTubeClip(page: Page, prefs: Record<string, unkn
   await page.goto(`/?v=fake123&hu=${encodeURIComponent("https://example.com/watch")}&hl=NFL&ht=${encodeURIComponent("Giants edge Cowboys in the fourth")}`);
   const dialog = page.getByRole("dialog");
   await expect(dialog).toHaveCount(1);
-  await expect(dialog).toHaveAttribute("data-player-state", "playing");
+  await expect(page.locator("iframe#yt-player")).toHaveCount(1);
+  await expect(dialog).toHaveAttribute("data-player-state", autoplay ? "playing" : "none");
   return dialog;
 }
 
