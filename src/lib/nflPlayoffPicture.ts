@@ -1,8 +1,8 @@
 // The NFL playoff picture and standings, from one ESPN standings payload
 // (added 2026-10-07 for /nfl-playoff-picture and /nfl-standings).
 //
-// Own leaf module with no imports, like standingsRank.ts, so a node --test run
-// can load it. Source: site.web.api.espn.com …/football/nfl/standings?level=3,
+// Own leaf module (its one import, teamLogos.ts, is a leaf too), like
+// standingsRank.ts, so a node --test run can load it. Source: site.web.api.espn.com …/football/nfl/standings?level=3,
 // the same CORS-open host lib/espn.ts reads standings from. level=3 nests
 // conference → division → teams, which gives each club its division without a
 // second request. Every entry carries ESPN's own `playoffSeed` (1–16 per
@@ -18,6 +18,8 @@
 // What is shown: W-L(-T), win %, games back. NOT points for or against — those
 // are a step closer to a score. The pages carry no cover (same call as the MLB
 // pages, Jacob 9/23): a visitor who searched for standings asked to see them.
+
+import { fixTeamLogo } from "./teamLogos.ts";
 
 export type NflConfKey = "AFC" | "NFC";
 
@@ -128,7 +130,7 @@ function toTeam(e: EspnEntry, conference: NflConfKey, division: string): NflTeam
     id,
     name: e.team?.displayName ?? "",
     abbrev: e.team?.abbreviation ?? "",
-    logo: e.team?.logos?.[0]?.href ?? null,
+    logo: fixTeamLogo(e.team?.logos?.[0]?.href ?? null),
     conference,
     division,
     wins,
