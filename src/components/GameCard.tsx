@@ -22,6 +22,7 @@ import { shouldShowRating } from "@/lib/ratingGate";
 import { useWatchQueue } from "@/components/WatchQueueContext";
 import { useHideRanks } from "@/components/HideRanksContext";
 import { shortNetwork } from "@/lib/networkShort";
+import { TeamLogo } from "@/components/TeamLogo";
 
 interface GameCardProps {
   game: Game;
@@ -272,8 +273,7 @@ export function CompactUpcomingCard({
             audit) — visibility, not display, on error, so a 404'd logo keeps
             its box width instead of collapsing the row. */}
         {home.logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={home.logo} alt="" title={home.displayName} loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 object-contain shrink-0" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+          <TeamLogo src={home.logo} alt="" title={home.displayName} loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 object-contain shrink-0" />
         ) : (
           <span aria-hidden="true" className="flex items-center justify-center w-4 h-4 rounded shrink-0 text-[7px] font-semibold leading-none" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
             {teamInitials(home)}
@@ -590,8 +590,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
       // remote-image guards in NewsColumn/AlignedVideoStrip/VideoModal).
       // visibility, not display: the box must keep its width so the name
       // stays aligned with the other row.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={team.logo} alt="" title={team.displayName} loading="lazy" decoding="async" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+      <TeamLogo src={team.logo} alt="" title={team.displayName} loading="lazy" decoding="async" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
     );
 
   // Clicking the card body opens a spoiler-safe details popup. Inner

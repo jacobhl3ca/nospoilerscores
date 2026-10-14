@@ -47,6 +47,7 @@ import { fetchMlbPostseason, mlbPickBracket, mlbRoundHeading, type MlbPostseason
 import BracketPicks from "@/components/BracketPicks";
 import { useHideRanks } from "@/components/HideRanksContext";
 import { getTimeZone } from "@/lib/etDay";
+import { TeamLogo } from "@/components/TeamLogo";
 
 // The MLB playoff picture, behind one reveal.
 //
@@ -214,8 +215,7 @@ function TeamRow({ team, seed, odds, showGamesBack }: {
           it gives the cell a zero min-content so the flex child can shrink. */}
       <td className="px-1 py-1 max-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <TeamLogo
             src={teamLogo(team.id)}
             alt=""
             loading="lazy"
@@ -224,7 +224,7 @@ function TeamRow({ team, seed, odds, showGamesBack }: {
             height={18}
             className="w-[18px] h-[18px] object-contain shrink-0"
             draggable={false}
-            onError={(e) => { e.currentTarget.style.display = "none"; }}
+            hide="display"
           />
           <span className="text-xs truncate min-w-0" style={{ color: "var(--text)" }} title={team.name}>{team.name}</span>
         </div>
@@ -421,8 +421,7 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
             {hideRanks ? null : slot.seed ?? t.seed}
           </span>
         ) : null}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <TeamLogo
           src={teamLogo(t.id)}
           alt=""
           loading="lazy"
@@ -431,7 +430,7 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
           height={18}
           className="w-[18px] h-[18px] object-contain shrink-0"
           draggable={false}
-          onError={(e) => { e.currentTarget.style.display = "none"; }}
+          hide="display"
         />
         <span className="text-[11px] font-bold leading-none shrink-0" style={{ color: "var(--text)" }}>{t.abbrev}</span>
         {clinched ? (
@@ -447,8 +446,7 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
           {shown.map((c) => (
             <div key={c.id} data-bracket-chaser className="flex items-center gap-1 h-[16px]" title={`${c.name} is still in it for this spot`}>
               <span className="w-2 shrink-0 text-[9px] leading-none" style={{ color: "var(--text-muted)", opacity: 0.5 }}>↳</span>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <TeamLogo
                 src={teamLogo(c.id)}
                 alt=""
                 loading="lazy"
@@ -457,7 +455,7 @@ function Seat({ slot, odds, chasers, emptyLabel, outcome = null, compact = false
                 height={12}
                 className="w-[12px] h-[12px] object-contain shrink-0"
                 draggable={false}
-                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                hide="display"
               />
               <span className="text-[9px] leading-none shrink-0" style={{ color: "var(--text-muted)" }}>{c.abbrev}</span>
               <OddsPill odd={playoffOdd(c, odds)} small />
