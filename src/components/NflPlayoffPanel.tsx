@@ -12,6 +12,7 @@ import {
   type NflPicture,
   type NflTeam,
 } from "@/lib/nflPlayoffPicture";
+import { TeamLogo } from "@/components/TeamLogo";
 
 // The NFL playoff panel for /nfl-playoff-picture and /nfl-standings (added
 // 2026-10-07). Same shape as PlayoffPictureModal's `variant="page"`: a live
@@ -36,8 +37,7 @@ const card = { background: "var(--bg-card)", border: "1px solid var(--border)" }
 function Logo({ t, size = 18 }: { t: NflTeam; size?: number }) {
   if (!t.logo) return <span style={{ width: size }} className="shrink-0" />;
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <TeamLogo
       src={t.logo}
       alt=""
       width={size}
@@ -47,7 +47,7 @@ function Logo({ t, size = 18 }: { t: NflTeam; size?: number }) {
       className="object-contain shrink-0"
       style={{ width: size, height: size }}
       draggable={false}
-      onError={(e) => { e.currentTarget.style.display = "none"; }}
+      hide="display"
     />
   );
 }

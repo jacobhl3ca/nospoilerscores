@@ -10,6 +10,7 @@ import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { SHORT_LEAGUE_LABELS } from "@/lib/leagueLabels";
 import GameCard, { PairingRevealAll } from "./GameCard";
 import { getDateString } from "@/components/DateNav";
+import { TeamLogo } from "@/components/TeamLogo";
 
 interface TeamViewProps {
   sport: Sport;
@@ -385,8 +386,7 @@ export default function TeamView({
           <div className="flex items-center justify-center min-w-0">
             <span className="text-sm invisible mr-1" aria-hidden="true">★</span>
             {team.logo && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={team.logo} alt="" width={20} height={20} loading="lazy" decoding="async" className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+              <TeamLogo src={team.logo} alt="" width={20} height={20} loading="lazy" decoding="async" className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" hide="display" />
             )}
             <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }} title={team.displayName}>
               {headerAbbrev ? team.abbreviation : (team.shortDisplayName || team.displayName)}

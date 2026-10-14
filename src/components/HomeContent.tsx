@@ -72,6 +72,7 @@ import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
 import SupportLine from "@/components/SupportLine";
+import { TeamLogo } from "@/components/TeamLogo";
 
 // The league key at the front of a share-card key (`mlb-bos-nyy-20260930`),
 // for the video-play Umami field. No card (TBD teams, the MLB review cuts) =
@@ -3813,13 +3814,11 @@ export default function HomeContent({
       const team = (t: ScheduleRow["home"], side: "away" | "home") => (
         <span className={`flex items-center gap-1.5 min-w-0 font-semibold text-[15px] ${side === "away" ? "justify-end" : ""}`}>
           {side === "home" && t.logo && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+            <TeamLogo src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" />
           )}
           <span className="truncate" title={t.name}>{t.abbr}</span>
           {side === "away" && t.logo && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+            <TeamLogo src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" />
           )}
         </span>
       );

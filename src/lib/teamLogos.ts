@@ -72,6 +72,17 @@ export function fixTeamLogo<T extends string | null | undefined>(url: T): T | st
   return (key && LOGO_REPLACE[key]) || url;
 }
 
+// ESPN's dark-theme copy of a team logo (/500/ → /500-dark/), for dark mode:
+// one-colour black or navy marks (Iowa, Juventus, Yankees, Spurs) all but
+// vanish on the dark card. Every league path checked 2026-10-14 has the copy,
+// the scoreboard size too, except cricket and AFL (404). Self-hosted art,
+// NCAA.com, FotMob and ESPN's guid logos have none → undefined.
+export function darkTeamLogo(url: string): string | undefined {
+  const m = /^https:\/\/a\.espncdn\.com\/i\/teamlogos\/(\w+)\/(?:teams\/)?500\//.exec(url);
+  if (!m || m[1] === "cricket" || m[1] === "afl") return undefined;
+  return url.replace("/500/", "/500-dark/");
+}
+
 // Little League World Series: ESPN's own scoreboard draws a country flag, not a
 // team logo — countries/500/<ISO3>.png for an international champion, usa.png
 // for every US regional (whose abbreviation is a state, "N CA", "NCAL", "TXW").

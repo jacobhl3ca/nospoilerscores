@@ -30,6 +30,7 @@ import { pushSeen, stopSeenSync } from "@/lib/seenSync";
 import { setSeenSync } from "@/lib/newsSeen";
 import { AppleLogo, GoogleG } from "./ProviderLogo";
 import { getAuthState, cachedAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
+import { TeamLogo } from "@/components/TeamLogo";
 
 interface LeagueOption {
   sport: Sport;
@@ -2567,8 +2568,7 @@ function PickerTeamLogo({ logo, name }: { logo?: string; name: string }) {
   const [failed, setFailed] = useState(false);
   if (logo && !failed) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={logo} alt="" loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" onError={() => setFailed(true)} />
+      <TeamLogo src={logo} alt="" loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" onFail={() => setFailed(true)} />
     );
   }
   return (
