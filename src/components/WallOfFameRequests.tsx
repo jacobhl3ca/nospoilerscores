@@ -56,8 +56,18 @@ export default function WallOfFameRequests() {
 
       <h2 id="built" className="text-lg font-semibold mt-6 mb-4">Built from your requests</h2>
       <RequestedBuildsList onClaim={(r) => open(requestedBuildClaim(r), false)} />
+      {/* The note link opens the same form, seeded for an initials change (10/14). */}
       <p className="text-sm mt-4" style={muted}>
-        Want your initials added or removed? Say so in a note.
+        Want your initials added or removed?{" "}
+        <button
+          type="button"
+          onClick={() => open("Wall of fame: please add / remove my initials: ", false)}
+          className="underline underline-offset-2 cursor-pointer hover:opacity-80"
+          style={muted}
+          data-umami-event="wall-initials"
+        >
+          Say so in a note.
+        </button>
       </p>
 
       {/* h-0: the box's own wrapper is an inline-flex with only a fixed modal

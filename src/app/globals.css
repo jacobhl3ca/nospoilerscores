@@ -951,6 +951,14 @@ iframe#yt-player {
 [data-theme="dark"] .kind-pill[data-kind="Feature"] { background: #052e16; color: #86efac; }
 [data-theme="dark"] .kind-pill[data-kind="Fix"] { background: #451a03; color: #fcd34d; }
 .kind-pill[aria-pressed="true"] { box-shadow: 0 0 0 2px currentColor; }
+/* The wall table's pills share one width (Jacob 10/14): the widest label,
+   "Feature", sits hidden in the same grid cell as the real one, so every pill
+   is as wide as that word whatever the font, and the label is centred. A
+   pseudo-element keeps the extra word out of the text and the a11y tree.
+   Unlayered, so its display beats the pill's inline-flex utility. */
+.kind-pill-even { display: inline-grid; justify-items: center; }
+.kind-pill-even > span, .kind-pill-even::after { grid-area: 1 / 1; }
+.kind-pill-even::after { content: "Feature"; visibility: hidden; }
 
 /* Doc-page top bar (DocTopBar), pinned on scroll 2026-09-25.
    - Pinned at top:0 it would sit under the iOS status bar, so it carries the

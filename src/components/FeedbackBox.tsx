@@ -38,6 +38,8 @@ const BUILD = (process.env.NEXT_PUBLIC_BUILD_SHA || "dev").slice(0, 8);
 // `kinds` (2026-10-11, the wall of fame's "Suggest something") adds the League /
 // Feature / Fix / Other pills above the message and sends the picked one as
 // `kind`. No pill is picked at open; a second tap unpicks.
+// `primary` (2026-10-14, /contact#feedback) draws the trigger as the blue
+// accent button the wall's "Suggest something" uses, instead of a muted link.
 export default function FeedbackBox({
   openSignal,
   prefill,
@@ -45,7 +47,8 @@ export default function FeedbackBox({
   seed,
   hideTrigger = false,
   kinds = false,
-}: { openSignal?: number; prefill?: string; label?: string; seed?: string; hideTrigger?: boolean; kinds?: boolean } = {}) {
+  primary = false,
+}: { openSignal?: number; prefill?: string; label?: string; seed?: string; hideTrigger?: boolean; kinds?: boolean; primary?: boolean } = {}) {
   const [text, setText] = useState("");
   const [email, setEmail] = useState("");
   // Opt-in credit for the "Built from your requests" list on /contact
@@ -206,6 +209,11 @@ export default function FeedbackBox({
     return () => window.clearTimeout(t);
   }, [hideTrigger, sent]);
 
+  const triggerClass = primary
+    ? "rounded-lg px-3.5 py-1.5 text-sm font-semibold cursor-pointer hover:opacity-90"
+    : "underline underline-offset-2 cursor-pointer hover:opacity-80";
+  const triggerStyle = primary ? { background: "var(--accent)", color: "#fff" } : { color: "var(--text-muted)" };
+
   if (!open && !sent) {
     if (hideTrigger) return null;
     return (
@@ -217,8 +225,8 @@ export default function FeedbackBox({
           setOpen(true);
         }}
         aria-expanded="false"
-        className="underline underline-offset-2 cursor-pointer hover:opacity-80"
-        style={{ color: "var(--text-muted)" }}
+        className={triggerClass}
+        style={triggerStyle}
       >
         {label}
       </button>
@@ -272,8 +280,8 @@ export default function FeedbackBox({
               onClick={close}
               aria-expanded="true"
               aria-controls="hs-feedback-form"
-              className="underline underline-offset-2 cursor-pointer hover:opacity-80"
-              style={{ color: "var(--text-muted)" }}
+              className={triggerClass}
+              style={triggerStyle}
             >
               {label}
             </button>
