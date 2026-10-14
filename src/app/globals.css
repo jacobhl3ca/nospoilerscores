@@ -657,7 +657,7 @@ html[data-kbd-nav] .ns-card-focus:focus-visible {
   display: none;
 }
 
-/* View-mode tabs (Games / Ratings / News / Leagues / Schedule). Active styling is driven here off
+/* View-mode tabs (Games / Ratings / News / Schedule). Active styling is driven here off
    html[data-view] so the pre-paint inline script in layout.tsx can highlight
    the right tab before hydration — no Scores→Ratings flash on refresh for
    users whose remembered view is Ratings (Jacob 6/12). Base (inactive) look
@@ -682,7 +682,6 @@ html[data-native-tabbar] .web-tab-bar {
 html[data-view="scores-plain"] .view-tab[data-tab="scores-plain"],
 html[data-view="scores-rated"] .view-tab[data-tab="scores-rated"],
 html[data-view="news"] .view-tab[data-tab="news"],
-html[data-view="leagues"] .view-tab[data-tab="leagues"],
 html[data-view="schedule"] .view-tab[data-tab="schedule"] {
   color: var(--text);
   background: var(--bg-card-hover);
@@ -691,7 +690,6 @@ html[data-view="schedule"] .view-tab[data-tab="schedule"] {
 html[data-view="scores-plain"] .view-tab[data-tab="scores-plain"] .tab-icon,
 html[data-view="scores-rated"] .view-tab[data-tab="scores-rated"] .tab-icon,
 html[data-view="news"] .view-tab[data-tab="news"] .tab-icon,
-html[data-view="leagues"] .view-tab[data-tab="leagues"] .tab-icon,
 html[data-view="schedule"] .view-tab[data-tab="schedule"] .tab-icon {
   opacity: 1;
 }
