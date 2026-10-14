@@ -149,6 +149,10 @@ interface LeagueColumnProps {
   // threshold over here can reproduce it.
   onAbbrevReport?: (key: string, abbrev: boolean | null) => void;
   namesCompact?: boolean;
+  // The header's Live filter is on: HomeContent has already cut `league` down
+  // to its in-progress games, and an empty column says so plainly instead of
+  // falling back to the next slate or the season opener.
+  liveOnly?: boolean;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -1030,6 +1034,7 @@ export default function LeagueColumn({
   topCardIsSpacer,
   onAbbrevReport,
   namesCompact,
+  liveOnly,
 }: LeagueColumnProps) {
   // "Only my teams": everything below draws `league`, already cut down to the
   // starred teams' games. Memoised so an unchanged filter keeps the object
@@ -2542,6 +2547,10 @@ export default function LeagueColumn({
         />
       ) : league.eventCard && section !== "finished" ? (
         <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={playHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label, league.sport) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} showRatings={showRatings} />
+      ) : !hasGames && liveOnly ? (
+        renderUpcoming ? (
+          <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No live games</p>
+        ) : null
       ) : !hasGames ? (
         renderUpcoming ? (
           league.fetchFailed ? (

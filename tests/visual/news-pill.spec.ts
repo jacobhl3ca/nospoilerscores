@@ -355,7 +355,9 @@ for (const device of DEVICES) {
       await expect.poll(() => view(page)).toBe("news");
       await page.waitForTimeout(5_600);
       expect(await okDay(page)).toBe(TODAY);
-      await page.locator('[data-tab="scores-plain"]:visible').click();
+      // dispatchEvent, not click: with four tabs the Games tab sits under
+      // `next dev`'s Dev Tools button in the bottom-left corner.
+      await page.locator('[data-tab="scores-plain"]:visible').dispatchEvent("click");
       await expect.poll(() => view(page)).toBe("scores");
       await newsLink(page).click();
       await expect.poll(() => view(page)).toBe("news");
@@ -367,7 +369,9 @@ for (const device of DEVICES) {
       await page.locator('[data-tab="news"]:visible').click();
       await expect.poll(() => view(page)).toBe("news");
       await page.waitForTimeout(1_000);
-      await page.locator('[data-tab="scores-plain"]:visible').click();
+      // dispatchEvent, not click: with four tabs the Games tab sits under
+      // `next dev`'s Dev Tools button in the bottom-left corner.
+      await page.locator('[data-tab="scores-plain"]:visible').dispatchEvent("click");
       await expect.poll(() => view(page)).toBe("scores");
       await page.waitForTimeout(4_600);
       expect(await okDay(page)).toBeNull();

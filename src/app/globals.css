@@ -648,7 +648,16 @@ html[data-kbd-nav] .ns-card-focus:focus-visible {
   .live-clock::after { animation: none; opacity: 0.6; }
 }
 
-/* View-mode tabs (Scores / Ratings / News). Active styling is driven here off
+/* Phone date strip (DateNav variant="strip"): swipe to scroll, no bar. */
+.date-strip {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.date-strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* View-mode tabs (Games / Ratings / News / Leagues). Active styling is driven here off
    html[data-view] so the pre-paint inline script in layout.tsx can highlight
    the right tab before hydration — no Scores→Ratings flash on refresh for
    users whose remembered view is Ratings (Jacob 6/12). Base (inactive) look
@@ -672,14 +681,16 @@ html[data-native-tabbar] .web-tab-bar {
 }
 html[data-view="scores-plain"] .view-tab[data-tab="scores-plain"],
 html[data-view="scores-rated"] .view-tab[data-tab="scores-rated"],
-html[data-view="news"] .view-tab[data-tab="news"] {
+html[data-view="news"] .view-tab[data-tab="news"],
+html[data-view="leagues"] .view-tab[data-tab="leagues"] {
   color: var(--text);
   background: var(--bg-card-hover);
   font-weight: 600;
 }
 html[data-view="scores-plain"] .view-tab[data-tab="scores-plain"] .tab-icon,
 html[data-view="scores-rated"] .view-tab[data-tab="scores-rated"] .tab-icon,
-html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
+html[data-view="news"] .view-tab[data-tab="news"] .tab-icon,
+html[data-view="leagues"] .view-tab[data-tab="leagues"] .tab-icon {
   opacity: 1;
 }
 /* Visible keyboard focus ring on the primary view tabs (WCAG 2.4.7). Without
@@ -1025,4 +1036,10 @@ iframe#yt-player {
 .hs-controls-hint { display: none; }
 @media (hover: hover) and (pointer: fine) {
   .hs-controls-hint { display: flex; }
+}
+/* A narrow window with a mouse still has the phone's bottom tab bar, and the
+   corner pill sat on its right-hand tab (Leagues, 9/29). Lift it above the bar.
+   !important: the component sets `bottom` inline. */
+@media (hover: hover) and (pointer: fine) and (max-width: 39.99rem) {
+  .hs-controls-hint { bottom: calc(env(safe-area-inset-bottom) + 4.5rem) !important; }
 }

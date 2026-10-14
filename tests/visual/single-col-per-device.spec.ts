@@ -2,7 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 // A10 (Jacob 9/22): single-column view set on the PC followed him to the phone,
 // and a portrait phone had no toggle to turn it off. Now the phone header has
-// the toggle, and the setting never rides the account sync.
+// the toggle (in the date strip row since 9/29), and the setting never rides
+// the account sync.
 
 function prefs(extra: Record<string, unknown> = {}) {
   return {
@@ -41,12 +42,11 @@ for (const width of [390, 430]) {
     const toggle = page.getByRole("button", { name: "Toggle single-column view" }).locator("visible=true");
     await expect(toggle).toHaveCount(1);
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
-    // Inside the viewport and not under the settings gear (the theme button
-    // that used to sit between them left the header 9/28).
+    // Inside the viewport, pinned at the right end of the date strip row
+    // (9/29: the dates left the top row for their own row under it).
     const box = (await toggle.boundingBox())!;
     expect(box.x + box.width).toBeLessThanOrEqual(width);
-    const gear = (await page.getByRole("button", { name: "Open settings" }).locator("visible=true").boundingBox())!;
-    expect(box.x + box.width).toBeLessThanOrEqual(gear.x);
+    expect(await toggle.evaluate((el) => !!el.closest('[data-testid="date-strip-row"]'))).toBe(true);
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
