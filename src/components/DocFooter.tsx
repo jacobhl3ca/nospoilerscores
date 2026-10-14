@@ -14,6 +14,8 @@ export const SITE_LINKS: { href: string; label: string }[] = [
   { href: "/about", label: "About" },
   { href: "/faq", label: "FAQ" },
   { href: "/guides", label: "Guides" },
+  // Doc pages only (10/11): the board's footer row does not carry this one.
+  { href: "/wall-of-fame", label: "Wall of fame" },
   { href: "/contact", label: "Contact" },
   // /contact hosts the feedback form (FeedbackBox) under the email line.
   { href: "/contact#feedback", label: "Feedback" },

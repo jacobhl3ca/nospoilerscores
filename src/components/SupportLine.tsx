@@ -1,18 +1,23 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { activeSupportLinks, supportLinksVisible } from "@/lib/supportLinks";
+import { activeSupportLinks, supportLinksVisible, type SupportLink } from "@/lib/supportLinks";
 
 const noSubscribe = () => () => {};
+
+// The links to show right now: none before the live date, in the native
+// shells, or on the server. Shared with the wall of fame (10/11).
+export function useSupportLinks(): SupportLink[] {
+  const visible = useSyncExternalStore(noSubscribe, () => supportLinksVisible(), () => false);
+  return visible ? activeSupportLinks() : [];
+}
 
 // "Support HideScore" line for the web footers. The server snapshot is false,
 // so the static export never bakes it in; the browser decides at view time and
 // the native shells never show it. See lib/supportLinks.ts for the date gate.
 export default function SupportLine() {
-  const visible = useSyncExternalStore(noSubscribe, () => supportLinksVisible(), () => false);
-
-  const links = activeSupportLinks();
-  if (!visible || links.length === 0) return null;
+  const links = useSupportLinks();
+  if (links.length === 0) return null;
 
   const muted = { color: "var(--text-muted)" };
   return (

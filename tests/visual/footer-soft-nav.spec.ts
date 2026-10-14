@@ -16,6 +16,7 @@ const PAGES: { href: string; h1: string }[] = [
 ];
 
 const LABEL: Record<string, string> = {
+  "/wall-of-fame": "Wall of fame",
   "/about": "About", "/faq": "FAQ", "/guides": "Guides",
   "/contact": "Contact", "/contact#feedback": "Feedback", "/privacy": "Privacy",
 };
@@ -69,7 +70,10 @@ for (const target of PAGES) {
   });
 }
 
-for (const target of PAGES.filter((p) => p.href !== "/about")) {
+// On the doc pages' footer only, not the board's (10/11).
+const WALL = { href: "/wall-of-fame", h1: "Wall of fame" };
+
+for (const target of [WALL, ...PAGES.filter((p) => p.href !== "/about")]) {
   test(`/about footer → ${target.href} is a soft navigation`, async ({ page }) => {
     const docs = await setup(page);
     await page.goto("/about");

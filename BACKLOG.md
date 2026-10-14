@@ -1,5 +1,22 @@
 # HideScore — Master Backlog
 
+## 2026-10-11 — Wall of fame page (/wall-of-fame): round 2 of "Built from your requests"
+
+**Plan:** `~/.claude-c3/plans/that-page-we-were-imperative-dolphin.md` (Job 1). Branch `feat/wall-of-fame-r2`.
+- `/wall-of-fame`: people ranked by builds (`K.K. · 4 built`), the promise line "Everyone on this wall gets any future paid features free.", a "Suggest something" button, then every row as a table. No `<details>` cap.
+- Table (`src/components/RequestedBuildsList.tsx`): grid `[4rem][5.5rem][1fr]`, no borders; one header per person, then "Asked without a name". Initials are in the header only; the "thanks K.K." tail is gone.
+- Kind pills (`.kind-pill[data-kind]` in `globals.css`): League blue, Feature green, Fix amber, Other grey, opaque in both themes, each over 4.5:1.
+- "Suggest something" opens FeedbackBox with the kind pills (new `kinds` prop); the picked one goes to Formspree as `kind`. No pill is picked at open.
+- "This was me" on each row with no initials opens the form seeded `Claim: CFL (asked Sep 13). My initials: `. Nothing is added by code: Jacob reads the inbox and a chat edits `requestedBuilds.ts`.
+- `/contact` keeps the H2 (`#built`) and a link "See the wall of fame →". Doc footer gets "Wall of fame" after Guides (the board footer row does not). Sitemap + llms.txt.
+- Tests: `tests/requested-builds.test.ts` (+ ranked people, sections, claim text), `tests/visual/wall-of-fame.spec.ts` (Chromium + WebKit on the mini).
+
+**Open:**
+- [ ] Repo is public: never commit a map of initials to a person or an email.
+- [ ] Dec 15: the Ko-fi + Patreon links show beside "Suggest something" through the `supportLinks.ts` gate. `PATREON_URL` is still empty.
+- [ ] Not built (Jacob 10/11): signed-in reorder of open requests.
+- [ ] `tests/visual/public-pages.spec.ts` baselines (faq, privacy) are from 10/4 and no longer match main's page heights.
+
 ## 2026-10-09 — "Built from your requests" on /contact#feedback + optional initials on the feedback form
 
 **Plan:** `~/.claude-secondary/plans/patreon-hidescore-stuff-next-stesp-vivid-wirth.md` (item B). Branch `feat/built-from-requests`.
