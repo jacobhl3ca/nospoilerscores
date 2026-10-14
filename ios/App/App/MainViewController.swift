@@ -9,7 +9,7 @@ import WebKit
  history is exactly the right thing to walk. Matches the Android hardware-back
  handler in MainActivity.java.
 
- It also draws the Games / Ratings / News / Leagues / Schedule tab bar natively (Jacob 9/27: the web
+ It also draws the Games / Ratings / News / Schedule tab bar natively (Jacob 9/27: the web
  bar's icons popped iOS's image menu on long-press, and he wanted the stock
  translucent bar). The page stays the source of truth: it tells the bar which
  tab is selected, when to show (board page, phone width, no modal open) and the
@@ -23,7 +23,7 @@ import WebKit
  */
 class MainViewController: CAPBridgeViewController, UITabBarDelegate {
     private static let messageName = "hsTabBar"
-    private static let views = ["scores-plain", "scores-rated", "news", "leagues", "schedule"]
+    private static let views = ["scores-plain", "scores-rated", "news", "schedule"]
 
     private let tabBar = UITabBar()
     /// A universal link that arrived before the web view existed (cold start).
@@ -142,8 +142,7 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
             item("Games", "TabGames", 0),
             item("Ratings", "TabRatings", 1),
             item("News", "TabNews", 2),
-            item("Leagues", "TabLeagues", 3),
-            item("Schedule", "TabSchedule", 4),
+            item("Schedule", "TabSchedule", 3),
         ]
         tabBar.delegate = self
         tabBar.isHidden = true
