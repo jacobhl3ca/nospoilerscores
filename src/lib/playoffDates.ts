@@ -15,4 +15,8 @@ export const PLAYOFF_START_DATES: Record<string, { date: string; label: string; 
   mlb: { date: "2026-09-29", label: "Postseason", singularLabel: true }, // Wild Card game 1 (StatsAPI postseason/series)
   nfl: { date: "2027-01-09", label: "Playoffs" },
   ncaam: { date: "2026-03-17", label: "March Madness", singularLabel: true },
+  // Pro lacrosse (2026-10-13): the first quarterfinal day, read off ESPN's
+  // fixtures. The rounds themselves live in lacrossePlayoffs.ts.
+  pll: { date: "2026-08-29", label: "Playoffs" },
+  nll: { date: "2026-04-24", label: "Playoffs" },
 };

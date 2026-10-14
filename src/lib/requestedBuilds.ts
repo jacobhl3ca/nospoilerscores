@@ -21,6 +21,7 @@ export const REQUESTED_BUILDS: RequestedBuild[] = [
   { date: "2026-09-14", kind: "League", title: "NCAA women's hockey", by: ["K.K."] },
   { date: "2026-09-12", kind: "League", title: "NCAA men's hockey", by: ["K.K."] },
   { date: "2026-10-04", kind: "Fix", title: "Game times follow your own time zone", by: ["I.R."] },
+  { date: "2026-10-13", kind: "League", title: "Pro lacrosse: PLL and NLL", by: [] },
   { date: "2026-09-13", kind: "League", title: "CFL", by: [] },
   { date: "2026-08-12", kind: "League", title: "Rugby Nations Championship", by: [] },
   { date: "2026-08-03", kind: "League", title: "La Liga, Serie A, Bundesliga and Ligue 1", by: [] },

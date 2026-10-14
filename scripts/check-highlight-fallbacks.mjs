@@ -110,6 +110,10 @@ const ESPN_PATHS = {
   // after 2023, so fetchScoreboard reads this one from our own worker route
   // (theScore reshaped to the ESPN scoreboard — public/_worker.js).
   cfl:          "/api/cfl",
+  // PLL (lit 2026-10-13 behind the week gate). Each game is asked with its
+  // week or its playoff round, as the client asks; a game with neither has no
+  // button and is not checked. See pllGate below.
+  pll:          "/lacrosse/pll/scoreboard",
   // Deliberately absent: MLB (MLB.com-native); EURO, NCAA
   // men's and women's hockey, women's volleyball, UFL, NCAA baseball, NCAA
   // softball, the Conference League, Copa del Rey, DFB-Pokal, and cricket
@@ -128,6 +132,7 @@ const OFFICIAL_CHANNELS = {
   ncaaw: "March Madness", ncaaf: "ESPN College Football",
   // TSN, not the CFL's own channel — see the cfl note in src/lib/youtube.ts.
   cfl: "TSN",
+  pll: "Premier Lacrosse League",
   // ⚠️ Two entries below had DRIFTED from src/lib/youtube.ts (found 2026-08-12).
   // `mlb: "MLB"` was missing outright, and fifa read "FIFA" while the app has
   // used "FOX Sports" since the World Cup work — FIFA's own channel posts only
@@ -202,6 +207,26 @@ function cflPlayoffTokens(ev) {
   return ["grey cup", "semi final", "east final", "eastern final", "west final", "western final", "playoff"];
 }
 
+// PLL: the week (regular season) or the round's title tokens (playoffs), off
+// src/lib/lacrossePlayoffs.ts, the same table the client and the bake read.
+// Null for a game the client asks nothing for (no week and no round), and for
+// every game if the table does not load.
+let lacrosseMod;
+try {
+  lacrosseMod = await import("../src/lib/lacrossePlayoffs.ts");
+} catch (e) {
+  console.warn(`PLL week table not loaded, PLL not checked: ${e?.message || e}`);
+  lacrosseMod = null;
+}
+function pllGate(ev) {
+  if (!lacrosseMod) return null;
+  const round = lacrosseMod.lacrossePlayoffRound("pll", ev?.date ?? "");
+  const week = lacrosseMod.pllWeekNumber(ev?.date ?? "");
+  const tokens = round ? lacrosseMod.pllPlayoffTitleTokens(round) : [];
+  if (!week && !tokens.length) return null;
+  return { week, tokens: tokens.length ? tokens : null };
+}
+
 // Matches SECONDARY_CHANNELS in src/lib/youtube.ts for team-game leagues.
 // Every entry remains strict to that exact uploader.
 const SECONDARY_CHANNELS = {
@@ -221,6 +246,7 @@ const SECONDARY_CHANNELS = {
 // app sends and can count the OTHER leg of a pair as a hit.
 const MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
+  pll: { minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
 };
@@ -242,6 +268,8 @@ const HIGHLIGHT_BUFFER_HOURS = {
   // Rugby union: 80 minutes plus stoppages, so the same 3h window soccer uses.
   sixnations: 3, superrugby: 3, rugbywc: 3, nationschamp: 3,
   nrl: 3, afl: 4, urc: 3, top14: 3,
+  // Pro lacrosse (2026-10-13): dark, so unmonitored; listed to match GameHighlights.
+  pll: 3, nll: 3,
 };
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5,
@@ -250,6 +278,7 @@ const REGULATION_PERIODS = {
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2, facup: 2, nations: 2, ncaawsoc: 2, ncaamsoc: 2,
   sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,
   nrl: 2, afl: 4, urc: 2, top14: 2,
+  pll: 4, nll: 4,
 };
 
 // Matches TEAM_NAME_ALIASES in src/lib/youtube.ts. Keep in sync.
@@ -419,12 +448,13 @@ function extractTeams(ev, sport) {
   };
 }
 
-async function youtubeLookup(query, channel, strict = !!channel, { raceTokens = [], compTokens = [], gates = null } = {}) {
+async function youtubeLookup(query, channel, strict = !!channel, { raceTokens = [], compTokens = [], gates = null, week = null } = {}) {
   let url = `${BASE}/api/youtube?q=${encodeURIComponent(query)}`;
   if (channel) url += `&channel=${encodeURIComponent(channel)}`;
   if (strict && channel) url += "&strict=1";
   if (raceTokens.length) url += `&race=${encodeURIComponent(raceTokens.join("|"))}`;
   if (compTokens.length) url += `&comp=${encodeURIComponent(compTokens.join("|"))}`;
+  if (week) url += `&week=${week}`;
   if (gates?.homeFirst) url += "&order=home";
   if (gates?.minSec) url += `&minsec=${gates.minSec}`;
   try {
@@ -649,13 +679,13 @@ async function validateBakedHighlight(sport, bakedHighlight) {
 
 // Mirrors resolveHighlightVideo() in src/lib/youtube.ts: exactly one channel,
 // strict, with no unscoped tier.
-async function resolve(away, home, dateStr, channel, sport, compOverride = null) {
+async function resolve(away, home, dateStr, channel, sport, compOverride = null, week = null) {
   const a = aliasTeam(away);
   const h = aliasTeam(home);
   const dated = `${a} vs ${h} highlights ${dateStr}`;
   if (!channel) return { videoId: null, via: "no-approved-channel" };
   const compTokens = compOverride ?? COMPETITION_TITLE_TOKENS[sport] ?? [];
-  const hit = await youtubeLookup(dated, channel, true, { compTokens, gates: MATCH_GATES[sport] ?? null });
+  const hit = await youtubeLookup(dated, channel, true, { compTokens, gates: MATCH_GATES[sport] ?? null, week });
   return hit
     ? { videoId: hit, via: "strict-channel+date" }
     : { videoId: null, via: "channel-exhausted" };
@@ -1055,6 +1085,9 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
       if (!endedWithinLookback(ev)) continue;
       const teams = extractTeams(ev, sport);
       if (!teams) continue;
+      // A PLL game with no week and no round has no button (highlightGateMissing).
+      const pll = sport === "pll" ? pllGate(ev) : null;
+      if (sport === "pll" && !pll) continue;
       if (!highlightsReady(ev, sport)) {
         deferred++;
         continue;
@@ -1073,9 +1106,10 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
       const secondaryChannel = sport === "fifa"
           ? "FOX Sports"
           : (SECONDARY_CHANNELS[sport] ?? channel);
-      const compOverride = sport === "cfl" ? cflPlayoffTokens(ev) : null;
+      const compOverride = sport === "cfl" ? cflPlayoffTokens(ev) : (pll?.tokens ?? null);
+      const week = pll?.week ?? null;
       const official = primaryChannel
-        ? await resolve(teams.away, teams.home, dateStr, primaryChannel, sport, compOverride)
+        ? await resolve(teams.away, teams.home, dateStr, primaryChannel, sport, compOverride, week)
         : { videoId: "n/a", via: "no-official-channel" };
       await sleep(FIRST_PASS_GAP_MS);
       const search = await resolve(
@@ -1085,6 +1119,7 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
         secondaryChannel,
         sport,
         compOverride,
+        week,
       );
       await sleep(FIRST_PASS_GAP_MS);
 
@@ -1109,6 +1144,7 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
         secondaryChannel,
         eventId: String(ev.id),
         compOverride,
+        week,
       };
       const anyVisibleButton = (primaryChannel ? !!official.videoId : false) || !!search.videoId;
       if (!anyVisibleButton) {
@@ -1162,7 +1198,7 @@ if (exhausted.length) {
     for (let attempt = 0; attempt < CONFIRM_ATTEMPTS; attempt++) {
       if (attempt > 0) await sleep(CONFIRM_RETRY_BACKOFF_MS); // let a lingering block lift
       official = row.primaryChannel
-        ? await resolve(row.away, row.home, row.dateStr, row.primaryChannel, row.sportKey, row.compOverride ?? null)
+        ? await resolve(row.away, row.home, row.dateStr, row.primaryChannel, row.sportKey, row.compOverride ?? null, row.week ?? null)
         : { videoId: "n/a", via: "no-official-channel" };
       await sleep(CONFIRM_GAP_MS);
       search = await resolve(
@@ -1172,6 +1208,7 @@ if (exhausted.length) {
         row.secondaryChannel,
         row.sportKey,
         row.compOverride ?? null,
+        row.week ?? null,
       );
       const anyVisibleButton = (row.primaryChannel ? !!official.videoId : false) || !!search.videoId;
       if (anyVisibleButton) break; // recovered — stop retrying this game

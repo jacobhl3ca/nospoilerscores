@@ -2677,6 +2677,10 @@ const HL_LEAGUES = [
   // TSN is the uploader (16/16 strict + week hits on Weeks 12–15); the week
   // gate is load-bearing because TSN's 2024/2025 uploads carry no year.
   { sport: "cfl",    path: "/api/cfl",                                          channel: "TSN", worker: true },
+  // PLL (lit 2026-10-13). Every lookup carries the week or the playoff round
+  // off src/lib/lacrossePlayoffs.ts (hlLacrosse); a game with neither is
+  // skipped. See the pll note in src/lib/youtube.ts.
+  { sport: "pll",    path: "/lacrosse/pll/scoreboard",                          channel: "Premier Lacrosse League" },
   // NCAA women's hockey (added 2026-09-23). No fixed uploader, like ncaavb:
   // `channel: null` plus `primaryFromChain` makes the ECAC Hockey channel the
   // official one for any game with an ECAC school, behind the `women` token
@@ -2738,6 +2742,7 @@ const HL_NFL_PRESEASON_TOKENS = ["preseason", "hall of fame"];
 // gate existed must not survive as the other leg.
 const HL_MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
+  pll: { minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
 };
@@ -3514,6 +3519,27 @@ async function hlEspnClipScoreCheck() {
   return hlEspnClip.isScoreSpoiler;
 }
 
+// PLL week table and playoff rounds (src/lib/lacrossePlayoffs.ts), loaded the
+// same way as the score check above so bake and client read one table. Null if
+// it does not load, and then no PLL game is looked up: a PLL lookup with no
+// week or round gate is the one that served the wrong meeting.
+let hlLacrosseMod;
+async function hlLacrosse() {
+  if (hlLacrosseMod !== undefined) return hlLacrosseMod;
+  hlLacrosseMod = null;
+  try {
+    hlLacrosseMod = await import("../src/lib/lacrossePlayoffs.ts");
+  } catch {
+    try {
+      const { createJiti } = await import("jiti");
+      hlLacrosseMod = await createJiti(import.meta.url).import("../src/lib/lacrossePlayoffs.ts");
+    } catch (e) {
+      console.warn(`HIGHLIGHT-PLL week table not loaded: ${e?.message || e}`);
+    }
+  }
+  return hlLacrosseMod;
+}
+
 async function hlEspnClipState() {
   if (hlEspnClip.state) return hlEspnClip.state;
   let state = null;
@@ -3915,6 +3941,7 @@ async function bakeGameHighlights() {
   const HL_CFL_DAYS = 30;
   const cflDates = Array.from({ length: HL_CFL_DAYS }, (_, i) => hlEtYmd(-i));
   let resolved = 0;
+  const lax = HL_LEAGUES.some((l) => l.sport === "pll") ? await hlLacrosse() : null;
   for (const lg of hlSports ? HL_LEAGUES.filter((l) => hlSports.has(l.sport)) : HL_LEAGUES) {
     const lgDates = lg.sport === "fifa" ? fifaDates : (lg.sport === "cfl" ? cflDates : dates);
     for (const ymd of lgDates) {
@@ -3974,16 +4001,29 @@ async function bakeGameHighlights() {
             const cflPlayoff = lg.sport === "cfl" && event.season?.type === 3
               ? hlCflPlayoffTokens(comp?.notes?.[0]?.headline)
               : null;
-            return [{ id: event.id, away, home, date: event.date, series, channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks, primaryTokens }];
+            // PLL: the week (regular season) or the round's title tokens
+            // (playoffs) off lib/lacrossePlayoffs.ts. A game with neither is
+            // skipped, as on the client (highlightGateMissing).
+            let pllWeek;
+            let pllPlayoff = null;
+            if (lg.sport === "pll") {
+              if (!lax) return [];
+              const round = lax.lacrossePlayoffRound("pll", event.date ?? "");
+              pllWeek = lax.pllWeekNumber(event.date ?? "") ?? undefined;
+              const tokens = round ? lax.pllPlayoffTitleTokens(round) : [];
+              pllPlayoff = tokens.length ? tokens : null;
+              if (!pllWeek && !pllPlayoff) return [];
+            }
+            return [{ id: event.id, away, home, date: event.date, series, channel, week: week ?? pllWeek, preseason, awayAbbr, homeAbbr, roundTokens: cflPlayoff ?? pllPlayoff, fallbacks, primaryTokens }];
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
-        const { away, home, series, week, preseason, cflPlayoff } = item;
+        const { away, home, series, week, preseason, roundTokens } = item;
         const isFifa = lg.sport === "fifa";
-        // CFL-only: see hlVideoMatchesWeek's requireWeek param. NFL/NCAAF keep
-        // the old "no token = untouched" behavior — their postseason and some
-        // per-team-channel cuts genuinely carry no week.
-        const cflWeekRequired = lg.sport === "cfl";
+        // CFL and PLL: see hlVideoMatchesWeek's requireWeek param. NFL/NCAAF
+        // keep the old "no token = untouched" behavior — their postseason and
+        // some per-team-channel cuts genuinely carry no week.
+        const cflWeekRequired = lg.sport === "cfl" || lg.sport === "pll";
         // Nations League: home-first order + duration floor on every slot.
         const gates = HL_MATCH_GATES[lg.sport];
         const teamsOk = async (id) => (await hlVideoMatchesTeams(id, away, home, !!gates?.homeFirst)) && (await hlVideoLongEnough(id, gates?.minSec));
@@ -4001,7 +4041,7 @@ async function bakeGameHighlights() {
         const dateStr = hlDateStr(item.date);
         const dateStrs = hlDateStrs(item.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
-        const compTokens = preseason ? HL_NFL_PRESEASON_TOKENS : (cflPlayoff ?? HL_COMPETITION_TOKENS[lg.sport] ?? null);
+        const compTokens = preseason ? HL_NFL_PRESEASON_TOKENS : (roundTokens ?? HL_COMPETITION_TOKENS[lg.sport] ?? null);
         // The official slot's tokens: the chain-primary channel's own list when
         // it has one (AHA), else the sport-wide tokens.
         const primaryTokens = item.primaryTokens ?? compTokens;
@@ -5471,6 +5511,9 @@ const jobs = [
   // 2026-09-27: one shared r/rugbyunion bake for every union column.
   ["reddit-rugbyunion", () => fetchReddit("rugbyunion", "r/rugbyunion")],
   ["reddit-afl", () => fetchReddit("AFL", "r/AFL")],
+  // 2026-10-13: PLL + NLL. Two more 45s gate slots (33 Reddit jobs).
+  ["reddit-pll", () => fetchReddit("PLL", "r/PLL")],
+  ["reddit-nll", () => fetchReddit("NLL", "r/NLL")],
   ["reddit-ufc", () => fetchReddit("ufc", "r/ufc")],
   ["reddit-boxing", () => fetchReddit("Boxing", "r/Boxing")],
   ["reddit-f1", () => fetchReddit("formula1", "r/formula1")],

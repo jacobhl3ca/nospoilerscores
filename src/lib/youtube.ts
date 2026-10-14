@@ -2,6 +2,7 @@ import llwsRegions from "./llwsRegions.json";
 import collegeHighlightChannels from "./collegeHighlightChannels.json";
 import { buildCollegeFallbackChain, titleMaskedChainChannels, type ChainTeam, type CollegeHighlightConfig, type FallbackChannel } from "./collegeHighlights";
 import { isNflTeamChannel } from "./nflTeamChannels";
+import { pllPlayoffTitleTokens } from "./lacrossePlayoffs";
 
 // The JSON import types as a literal object, which cannot be indexed by an
 // arbitrary string; the codes come from ESPN at runtime, so widen it once here.
@@ -53,6 +54,14 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   //      rather than spelled out ("2 years ago"); latestPossiblePublish now
   //      reads both.
   cfl: "TSN",
+  // PLL (lit 2026-10-13): the league's own channel posts a 10–25 minute cut of
+  // every game, titled "Away vs. Home Week N Game Highlights | 2026 Season" or
+  // "… Semifinals Game Highlights | 2026 Season". No date in the title, and the
+  // same pair meets 2-3 times a season, so every lookup carries the week or
+  // the round (Game.weekNumber, pllPlayoffTitleTokens) and a game with neither
+  // asks for nothing (highlightGateMissing). Whole-2026-season probe through
+  // the gated worker: see the PR 2 note in BACKLOG.md.
+  pll: "Premier Lacrosse League",
   // World Cup: FOX is the US English-language rightsholder and "FOX Sports"
   // posts a clean per-match "TeamA vs TeamB Highlights | 2026 FIFA World Cup™"
   // for every game. FIFA's own channel only posts alt-cast / limited clips, so
@@ -502,6 +511,13 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "mlr",
   "ufl",
   "uecl",
+  // NLL, probed 2026-10-13 on the live worker (strict, own channel):
+  //   "NLL | National Lacrosse League" 0/1; titles read "WEEK 20 |
+  //   ROCHESTER VS BUFFALO" (no "highlights" word, city names only).
+  //   Re-probe after the Nov 28, 2026 opener. Team channels (Swarm, Rock …)
+  //   put the score in the title. Never use them.
+  // (The PLL was dark here until its week gate shipped, 2026-10-13.)
+  "nll",
 ]);
 
 // True when a league has no exact approved channel. Callers must render no
@@ -855,6 +871,10 @@ export function cflPlayoffTitleTokens(playoffLabel?: string | null): string[] {
 export type HighlightMatchGates = { homeFirst?: boolean; minSec?: number };
 const HIGHLIGHT_MATCH_GATES: Record<string, HighlightMatchGates> = {
   nations: { homeFirst: true, minSec: 300 },
+  // PLL: game cuts run 590–1,550 s; the channel's player reels and Mic'd Up
+  // clips that name a week run 230–600 s and never name both teams, but the
+  // floor keeps a short clip out of a game slot either way.
+  pll: { minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
 };
@@ -879,7 +899,20 @@ export function getCompetitionTitleTokens(
 ): string[] {
   if (sport === "nfl" && opts?.preseason) return NFL_PRESEASON_TITLE_TOKENS;
   if (sport === "cfl" && opts?.playoff) return cflPlayoffTitleTokens(opts.playoffLabel);
+  if (sport === "pll") return opts?.playoff ? pllPlayoffTitleTokens(opts.playoffLabel) : [];
   return COMPETITION_TITLE_TOKENS[sport] ?? [];
+}
+
+// True when a game's league needs a title gate this game cannot supply, so it
+// must ask for no video at all. PLL only (2026-10-13): a regular-season cut is
+// found by its week, a playoff cut by its round. A PLL game with neither (the
+// Championship Series, All-Star weekend, a year with no week table) would
+// fall back to the bare team + year match that served the wrong meeting, so it
+// gets no button. Mirrored in scripts/prebake-news.mjs.
+export function highlightGateMissing(game: { sport: string; weekNumber?: number | null; isPlayoff?: boolean; playoffLabel?: string | null }): boolean {
+  if (game.sport !== "pll") return false;
+  if (game.weekNumber) return false;
+  return !(game.isPlayoff && pllPlayoffTitleTokens(game.playoffLabel).length > 0);
 }
 
 // Per-game fallback uploaders for the official slot, tried in order only after

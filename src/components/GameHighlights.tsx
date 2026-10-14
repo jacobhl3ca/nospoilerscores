@@ -7,7 +7,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import type { FallbackChannel } from "@/lib/collegeHighlights";
-import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, getHighlightMatchGates, hasNoTrustedHighlightSource, highlightDateStrs, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolvedLengthSec, resolveTelemundoWorldCupVideo, sportChannelBlocksEmbeds } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, getHighlightMatchGates, hasNoTrustedHighlightSource, highlightDateStrs, highlightGateMissing, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolvedLengthSec, resolveTelemundoWorldCupVideo, sportChannelBlocksEmbeds } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId, getVerifiedEspnClip } from "@/lib/highlights";
 import { isDuplicateHighlightId } from "@/lib/highlightDedupe";
 import { clubNickname, formatRecapDuration } from "@/lib/recaps";
@@ -88,6 +88,11 @@ const highlightBufferHours: Record<string, number> = {
   // breaks run ~2h45m of wall clock, so an hour more.
   premrugby: 3, urc: 3, top14: 3, challengecup: 3, mlr: 3,
   nrl: 3, afl: 4,
+  // PLL: the league's own cut went up a median 2.7 h after kickoff over 12
+  // 2026 games (watch-page upload times, read 2026-10-13), so 3. NLL: 3, the
+  // same four-quarter, ~2.5 h game. Both are dark today; this only matters
+  // once a channel is lit.
+  pll: 3, nll: 3,
 };
 // ncaaw is 4, not 2: women's college hoops plays four 10-min quarters (moved to
 // quarters in 2015-16), so a finished regulation game reports period 4. A value
@@ -100,7 +105,9 @@ const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, n
   // buffer was right by accident; stating it keeps that an intent, not luck.
   sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2,
   premrugby: 2, urc: 2, top14: 2, challengecup: 2, mlr: 2,
-  nrl: 2, afl: 4 };
+  nrl: 2, afl: 4,
+  // Four quarters; a 5th period is sudden-death OT.
+  pll: 4, nll: 4 };
 
 // Fallback label for the official-highlight button. That button normally
 // reads the clip's LENGTH ("9m") - the league name is redundant beside a card
@@ -378,7 +385,8 @@ export default function GameHighlights({
   // what gates the prefetch effect AND is the modal's fallback link, so nulling
   // it here is the single point that keeps both highlight buttons off the card:
   // without it a league lacking an approved uploader could reach resolution.
-  const noTrustedSource = chainIsPrimary ? !officialChannel : hasNoTrustedHighlightSource(game.sport, highlightLabel);
+  // highlightGateMissing: a PLL game with no week and no round (see there).
+  const noTrustedSource = (chainIsPrimary ? !officialChannel : hasNoTrustedHighlightSource(game.sport, highlightLabel)) || highlightGateMissing(game);
   const highlightUrl = highlightsReady && !noTrustedSource
     ? getYouTubeSearchUrl(hlAway, hlHome, dateStr, game.seriesNote, competition)
     : null;

@@ -10,6 +10,7 @@ import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { PLAYOFF_START_DATES } from "./playoffDates";
+import { isLacrosseSport, lacrossePlayoffRound, pllWeekNumber } from "./lacrossePlayoffs";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { parseRadioBroadcasts, type GeoBroadcast } from "./radio";
@@ -117,6 +118,17 @@ export const SPORT_PATHS: Record<Sport, string> = {
   // actual fixtures 2026-03-27 → 06-13 (43 games, 8 teams), four quarters,
   // records "6-4", curatedRank 99 placeholders (no poll).
   ufl: "/football/ufl/scoreboard",
+  // Pro lacrosse (added 2026-10-13, a "Major League Lacrosse" league request;
+  // the MLL merged into the PLL in Dec 2020). Probed live 2026-10-13: 200 on
+  // both. ESPN tags EVERY game type 2 "regular-season", finals included, with
+  // no notes, no series and no week, so playoffs are known by date only (see
+  // PLAYOFF_START_DATES and LADDER_SEEDED_ROUND). Four quarters; a 5th
+  // linescore is sudden-death OT. ⚠️ A `dates=A-B` range is a 400 on both;
+  // only YYYY, YYYYMM and YYYYMMDD work, and `dates=2026` on NLL caps at 100
+  // events. The PLL feed also carries the All-Star games (East/West and the
+  // WLL Team Izzy/Team Humphrey game) as ordinary events.
+  pll: "/lacrosse/pll/scoreboard",
+  nll: "/lacrosse/nll/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
   // NCAA men's ice hockey (added 2026-09-12). Standard scoreboard shape, so
   // parseGame reads it as is. Probed live 2026-09-12: 200, league abbr NCAAH,
@@ -405,6 +417,15 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // already has the NBA/NHL playoffs + MLB in the auto rotation. 2027 dates are
   // unpublished; the season-window checker reports it unverified until then.
   { sport: "ufl",   label: "UFL", startDate: "03-25", endDate: "06-14", kickoffDate: "03-27", championshipDate: "06-13", verifiedFor: 2026, excludeFromAuto: true },
+  // ── Pro lacrosse (added 2026-10-13) ──
+  // PLL, two windows off ESPN's 2026 fixtures (read 10/13): the Championship
+  // Series (sixes, Feb 27 → Mar 8) and the main season (May 8 → the Sep 20
+  // final). Nothing is played in between, so the gap is offseason. NLL crosses
+  // Jan 1 like the NHL: 2026-27 opens Sat Nov 28, the 2026 Finals ended May 17
+  // (Game 2). Both opt-in: nobody's board changes.
+  { sport: "pll",   label: "PLL", startDate: "02-26", endDate: "03-09", kickoffDate: "02-27", championshipDate: "03-08", verifiedFor: 2026, excludeFromAuto: true },
+  { sport: "pll",   label: "PLL", startDate: "05-07", endDate: "09-21", kickoffDate: "05-08", championshipDate: "09-20", verifiedFor: 2026, excludeFromAuto: true },
+  { sport: "nll",   label: "NLL", startDate: "11-26", endDate: "05-18", kickoffDate: "11-28", championshipDate: "05-17", verifiedFor: 2026, excludeFromAuto: true },
   // ── Golf majors ──
   // Masters takes the right slot when active (Jacob's pref) — bumps NHL during Apr 9-13.
   { sport: "golf",  label: "Masters",  startDate: "04-06", endDate: "04-13", kickoffDate: "04-08", championshipDate: "04-11", verifiedFor: 2027, firstPref: true, displaySlot: "right",  slotPrecedence: 1 },
@@ -990,6 +1011,7 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 // listed falls back to a neutral marker rather than getting a wrong icon.
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", ncaabase: "⚾", ncaasoft: "🥎", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
+  pll: "🥍", nll: "🥍",
   nfl: "🏈", ncaaf: "🏈", ufl: "🏈", cfl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", ncaavb: "🏐", ncaawsoc: "⚽", ncaamsoc: "⚽", golf: "⛳", tennis: "🎾",
   sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
   premrugby: "🏉", urc: "🏉", top14: "🏉", challengecup: "🏉", mlr: "🏉",
@@ -1047,6 +1069,7 @@ export const SPORT_GROUP_ORDER: { key: SportGroup; label: string; emoji: string 
 // disappearing from Settings. Adding a sport to `Sport` without touching this
 // map degrades to a slightly-wrong section, never to an unpickable league.
 const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
+  pll: "us", nll: "us",
   nfl: "us", ufl: "us", nba: "us", mlb: "us", nhl: "us", ncaah: "us", cfl: "us", ncaawh: "us", wnba: "us",
   ncaaf: "us", ncaam: "us", ncaaw: "us", ncaavb: "us", llws: "us", ncaabase: "us", ncaasoft: "us",
   epl: "soccer", ucl: "soccer", uel: "soccer", laliga: "soccer",
@@ -1100,7 +1123,7 @@ const CATALOG_TAIL: ReadonlySet<Sport> = new Set<Sport>([
 const CATALOG_STATURE: Partial<Record<Sport, number>> = Object.fromEntries(
   ([
     // US leagues
-    "nfl", "nba", "mlb", "nhl", "wnba", "cfl", "ufl",
+    "nfl", "nba", "mlb", "nhl", "wnba", "cfl", "ufl", "pll", "nll",
     "ncaaf", "ncaam", "ncaaw", "ncaah", "ncaawh", "ncaavb", "ncaabase", "ncaasoft", "llws",
     // Soccer
     "epl", "laliga", "seriea", "bundesliga", "ligue1", "mls", "ligamx", "nwsl", "efl", "saudi",
@@ -1212,9 +1235,11 @@ export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): Se
   if (candidates.length === 0) return null;
   // A sport can hold several configs (golf majors, tennis Slams, NFL + its
   // preseason). Prefer the one this column is actually labelled with; otherwise
-  // take whichever comes back soonest.
-  const exact = candidates.find((l) => l.label === label);
-  const pool = exact ? [exact] : candidates;
+  // take whichever comes back soonest. Every config with that label counts:
+  // the PLL is two "PLL" windows a year (2026-10-13), and taking only the
+  // first named the February opener in the middle of the summer season.
+  const exact = candidates.filter((l) => l.label === label);
+  const pool = exact.length > 0 ? exact : candidates;
   // Bail while the relevant config is in its own window — an empty column there
   // is a schedule gap, not an offseason. Scoped to the matched config so that a
   // column parked on Wimbledon during the Australian Open still answers with
@@ -1382,6 +1407,9 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   climbing: 34.5,
   esports: 35,
   cfl: 36,
+  // Pro lacrosse (2026-10-13): opt-in, so the number only orders the switcher.
+  pll: 36.3,
+  nll: 36.6,
   nrl: 37,
   afl: 38,
   urc: 39,
@@ -1735,6 +1763,12 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
   // UFL: four 15-min quarters and NFL-like scoring, so it mirrors NFL.
   ufl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
+  // Pro lacrosse (2026-10-13): four quarters, goals one at a time, ~22 a game
+  // in the PLL and NLL (2026 median), 40+ in the PLL's sixes Championship
+  // Series. A 1-goal game is the close one; 5+ is comfortable; the Sep 20
+  // PLL final (14-4) is a blowout. A 5th period is sudden-death OT.
+  pll:    { multiplier: 8,   overtimeBonus: 20, scoringDivisor: 6,   regulationPeriods: 4 },
+  nll:    { multiplier: 8,   overtimeBonus: 20, scoringDivisor: 6,   regulationPeriods: 4 },
   // CFL: four quarters, NFL-like scoring (rouges add the odd single point, and
   // a 1-point margin already reads as a one-score game on the curve).
   cfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
@@ -1840,6 +1874,8 @@ const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
   nba: 720, wnba: 600,        // 12-min / 10-min quarters
   ncaaw: 600,                 // 10-min quarters (four of them, like WNBA)
   nfl: 900, ncaaf: 900, ufl: 900, cfl: 900, // 15-min quarters
+  pll: 720,                   // 12-min quarters
+  nll: 900,                   // 15-min quarters
   nhl: 1200,                  // 20-min periods
   ncaah: 1200,                // 20-min periods, same as NHL
   ncaawh: 1200,               // 20-min periods, same as NHL
@@ -3006,6 +3042,7 @@ const COLLEGE_HOCKEY_ROUND_WORD_SPORTS = new Set<Sport>(["ncaah", "ncaawh"]);
 // Regulation length for the timed sports ESPN reports as "End of 4th" etc.
 const END_OF_PLAY_REGULATION: Partial<Record<Sport, number>> = {
   nfl: 4, ncaaf: 4, ufl: 4, cfl: 4, nba: 4, wnba: 4, ncaaw: 4, ncaam: 2, nhl: 3, ncaah: 3, ncaawh: 3,
+  pll: 4, nll: 4,
 };
 
 // "End of 4th" with the score not level IS the final (Jacob 9/12): no more
@@ -3134,6 +3171,15 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     isPlayoff = true;
     if (!playoffLabel) playoffLabel = NRL_FINALS_WEEKS[event.week?.number ?? 0] ?? "Finals";
   }
+  // PLL / NLL: no feed field marks a playoff game, so the round comes off the
+  // date table in lacrossePlayoffs.ts.
+  if (isLacrosseSport(sport)) {
+    const round = lacrossePlayoffRound(sport, event.date ?? "");
+    if (round) {
+      isPlayoff = true;
+      playoffLabel = round;
+    }
+  }
   if (sport === "afl" && event.season?.type === 3) {
     playoffLabel = aflFinalsLabel(competition?.notes?.[0]?.headline ?? "");
   }
@@ -3256,7 +3302,8 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
       ? gameProgress(event, sport, (SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba).regulationPeriods, "in")
       : undefined,
     seriesNote,
-    weekNumber: gridironWeekNumber(sport, event),
+    // PLL: off the 2026 week table (ESPN sends no week). See pllWeekNumber.
+    weekNumber: sport === "pll" ? pllWeekNumber(event.date ?? "") : gridironWeekNumber(sport, event),
     isPlayoff,
     isPreseason,
     playoffLabel,
@@ -3504,6 +3551,10 @@ export function espnGameUrl(game: Game): string {
     // suffix rule as union.
     case "nrl": return `https://www.espn.com/nrl/match/_/gameId/${game.id}/league/3`;
     case "afl": return `https://www.espn.com/afl/game/_/gameId/${game.id}`;
+    // Lacrosse has no /game/ page (404 on 2026-10-13); the box score is the
+    // per-game page that answers 200.
+    case "pll": return `https://www.espn.com/pll/boxscore/_/gameId/${game.id}`;
+    case "nll": return `https://www.espn.com/nll/boxscore/_/gameId/${game.id}`;
     case "epl":
     case "mls":
     case "fifa":
@@ -3575,6 +3626,10 @@ export function sportStreamFallback(sport: Sport): string {
     // fixtures on FOX/FS1, the United Bowl on ABC). FOX games stream on the
     // FOX Sports app, so its live hub is the better landing.
     case "ufl": return "https://www.foxsports.com/live";
+    // The PLL is an ESPN property (2026: ESPN+, ESPN2, ABC for the final), and
+    // every NLL game streams on ESPN+ in the US.
+    case "pll": return "https://www.espn.com/watch/";
+    case "nll": return "https://www.espn.com/watch/";
     case "nhl": return "https://www.espn.com/watch/";
     // ESPN+ carries most college hockey; the tournament finals air on ESPN.
     case "ncaah": return "https://www.espn.com/watch/";
@@ -5469,15 +5524,20 @@ export const PLAYOFF_ENDGAME_WINDOW_DAYS = 30;
 // the league keeps its regular-season slate rather than a wrong playoff one.
 export function isInPlayoffs(sport: Sport, viewDate: Date): boolean {
   const start = PLAYOFF_START_DATES[sport]?.date;
-  const champ = ALL_LEAGUES.find((l) => l.sport === sport && l.championshipDate)?.championshipDate;
-  if (!start || !champ) return false;
+  // A sport with two windows a year (the PLL's Championship Series and main
+  // season) has two championship dates; the playoffs end at the first one on
+  // or after the start.
+  const champs = ALL_LEAGUES.filter((l) => l.sport === sport && l.championshipDate).map((l) => l.championshipDate!);
+  if (!start || champs.length === 0) return false;
   const startDay = new Date(`${start}T12:00:00`);
   const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12);
   if (view < startDay) return false;
-  const [mm, dd] = champ.split("-").map(Number);
-  let end = new Date(startDay.getFullYear(), mm - 1, dd, 12);
-  if (end < startDay) end = new Date(startDay.getFullYear() + 1, mm - 1, dd, 12);
-  return view <= end;
+  const ends = champs.map((champ) => {
+    const [mm, dd] = champ.split("-").map(Number);
+    const end = new Date(startDay.getFullYear(), mm - 1, dd, 12);
+    return end < startDay ? new Date(startDay.getFullYear() + 1, mm - 1, dd, 12) : end;
+  });
+  return view <= new Date(Math.min(...ends.map((d) => d.getTime())));
 }
 
 async function fetchNextGameDayRange(

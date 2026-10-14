@@ -95,6 +95,13 @@ export function logoForTeam(sport: Sport, rawId: string, abbreviation: string, g
       return guid ? `https://a.espncdn.com/guid/${guid}/logos/default.png` : undefined;
     case "llws":
       return llwsFlag(abbreviation);
+    // PLL and NLL key logos by team id: pll/500/<id>.png and nll/500/<id>.png
+    // answer 200 for all 12 PLL and 14 NLL ids on ESPN's /teams list (checked
+    // 2026-10-13); the abbreviation form (pll/500/wat.png) is a 404. The WLL
+    // All-Star side Team Humphrey (132766) has no logo on any path.
+    case "pll":
+    case "nll":
+      return `https://a.espncdn.com/i/teamlogos/${sport}/500/${rawId}.png`;
     case "cricket":
     case "cricketintl":
       return `https://a.espncdn.com/i/teamlogos/cricket/500/${rawId}.png`;

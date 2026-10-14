@@ -1,5 +1,28 @@
 # HideScore — Master Backlog
 
+## 2026-10-13 — Pro lacrosse: PLL + NLL columns (a "Major League Lacrosse" league request)
+
+**Plan:** `~/.claude-c3/plans/major-league-lacrosse-do-merry-bear.md`. Branch `feat/lacrosse` (worktree `~/hs-lacrosse`). Request: Formspree "League request: Major League Lacrosse", Android build `340c0654`, Oct 12 8:51 PM ET, no email so no reply. The MLL merged into the PLL in Dec 2020.
+- `pll` (`lacrosse/pll`, short `pl`) and `nll` (`lacrosse/nll`, short `lx`), both opt-in, group US leagues, 🥍. PLL = two "PLL" windows (Championship Series 02-26 → 03-09, season 05-07 → 09-21); NLL 11-26 → 05-18 like the NHL.
+- ESPN tags EVERY game type 2 "regular-season" with no notes, series or week, finals included. Playoff rounds come off `src/lib/lacrossePlayoffs.ts` by Eastern date; quarterfinals show, semifinals / finals / PLL Championship Series knockouts mask (`pairingMask.ts`). NLL best-of-3: ESPN sends no series object, so no series score.
+- `getSeasonOpener` and `isInPlayoffs` now read every config of a sport (two "PLL" rows named the Feb opener in August).
+- Rating: multiplier 8, OT bonus 20 (5th period = sudden-death OT), divisor 6. Over the 2025-26 NLL season (128 games): 1-goal avg 95, 5-goal avg 72, 10-goal avg 38, OT 100; the 14-4 PLL final rates 37.
+- Logos: `pll/500/<id>.png`, `nll/500/<id>.png` (all 200; the abbreviation form 404s; WLL Team Humphrey has none). Game link = ESPN box score (`/game/` 404s). Watch = ESPN.
+- News: ESPN `/lacrosse/{pll,nll}/news`, r/PLL + r/NLL (33 Reddit jobs, seasonal + rate-limit-prone). TV catalog regenerated.
+- Highlights (PR 1) DARK for both. PLL: own channel 4/5 strict with 1 WRONG (May 30 Atlas–Outlaws got the Aug 8 rematch). NLL: 0/1, titles have no "highlights" word.
+- **PR 2 (`feat/lacrosse-pll-week-gate`): PLL lit behind a week gate.** `pllWeekNumber` (2026 Friday table, Fri–Mon, All-Star weekend none) → `Game.weekNumber`; playoff rounds → `pllPlayoffTitleTokens` ("quarterfinals", "semifinals", "championship game"); `highlightGateMissing` = a PLL game with neither asks for nothing (Championship Series, All-Star). Worker: `premier lacrosse league` in `WEEK_TOKEN_REQUIRED_CHANNELS` + new `WEEK_TOKEN_FORBIDDEN_WITHOUT_WEEK_CHANNELS`. Bake loads `lacrossePlayoffs.ts` (`hlLacrosse`), monitor asks with the week (`pllGate`), minSec 300.
+- Whole-2026 probe (59 games): live worker before the gate 36 right / **15 WRONG** of 51 asked, plus 6 Championship Series games served; local gated worker **51/51 right, 0 wrong**, 8 not asked (6 Championship Series, 2 All-Star). Tests: `tests/youtube-pll-week-gate.test.mjs` (5).
+- `/lacrosse-highlights-without-spoilers` (sitemap, /guides, /spoiler-free-sports, /faq, llms.txt).
+- Tests: `tests/lacrosse-leagues.test.ts`, `tests/visual/lacrosse-columns.spec.ts`.
+
+**Open:**
+- [x] PR 2: PLL week gate built, local probe 51/51 right, PLL lit.
+- [ ] After PR 2 merges: re-run the whole-2026 probe on the live worker (`python3 ~/scripts/hs-pll-probe/probe.py https://hidescore.com gated out.json`, ~10 min), must read 0 WRONG.
+- [ ] Each PLL season: add the year's row to `PLL_WEEK_FRIDAYS` (a year with no row = no PLL buttons).
+- [ ] NLL highlight recheck after the Nov 28, 2026 opener (`NLL | National Lacrosse League`, `UC3-CIE_PQp90hCCD_6js7Yw`).
+- [ ] Each season: add the playoff rows to `lacrossePlayoffs.ts` and the start dates to `playoffDates.ts`; a season with no rows shows every playoff pairing.
+- [ ] After merge: `gsc-index-queue.py --add https://hidescore.com/lacrosse-highlights-without-spoilers` on the mini (needs Jacob's OK).
+
 ## 2026-10-09 — "Built from your requests" on /contact#feedback + optional initials on the feedback form
 
 **Plan:** `~/.claude-secondary/plans/patreon-hidescore-stuff-next-stesp-vivid-wirth.md` (item B). Branch `feat/built-from-requests`.

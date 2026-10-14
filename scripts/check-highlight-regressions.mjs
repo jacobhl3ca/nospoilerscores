@@ -49,6 +49,13 @@ const collegeTransformed = await transform(readFileSync("src/lib/collegeHighligh
 });
 const tempCollege = join(tmpdir(), `hidescore-collegeHighlights-${process.pid}.mjs`);
 writeFileSync(tempCollege, collegeTransformed.code);
+// …and ./lacrossePlayoffs (the PLL week gate, 2026-10-13).
+const laxTransformed = await transform(readFileSync("src/lib/lacrossePlayoffs.ts", "utf8"), {
+  jsc: { parser: { syntax: "typescript" }, target: "es2022" },
+  module: { type: "es6" },
+});
+const tempLax = join(tmpdir(), `hidescore-lacrossePlayoffs-${process.pid}.mjs`);
+writeFileSync(tempLax, laxTransformed.code);
 writeFileSync(
   tempModule,
   transformed.code
@@ -57,7 +64,8 @@ writeFileSync(
       '$1$2$3 with { type: "json" }',
     )
     .replace(/(from\s*")\.\/nflTeamChannels(")/g, `$1./${tempClubs.split("/").pop()}$2`)
-    .replace(/(from\s*")\.\/collegeHighlights(")/g, `$1./${tempCollege.split("/").pop()}$2`),
+    .replace(/(from\s*")\.\/collegeHighlights(")/g, `$1./${tempCollege.split("/").pop()}$2`)
+    .replace(/(from\s*")\.\/lacrossePlayoffs(")/g, `$1./${tempLax.split("/").pop()}$2`),
 );
 const youtube = await import(pathToFileURL(tempModule).href);
 unlinkSync(tempModule);
@@ -65,6 +73,7 @@ unlinkSync(tempRegions);
 unlinkSync(tempClubs);
 unlinkSync(tempCollege);
 unlinkSync(tempCollegeJson);
+unlinkSync(tempLax);
 
 check(
   "NCAAF queries use the full school name (team.location), not ESPN's short form",
@@ -309,6 +318,28 @@ check(
   "UFL stays dark and unmonitored",
   youtube.hasNoTrustedHighlightSource("ufl") === true &&
     !monitor.includes('ufl: "/football/ufl/scoreboard"'),
+);
+// PLL is lit behind its week gate (2026-10-13). Every leg must carry it: the
+// worker's week-token rule for the channel, the client's fail-closed rule, the
+// bake's table loader, and the monitor asking with the week.
+check(
+  "PLL is lit, gated by week or round everywhere, and monitored",
+  youtube.getOfficialChannelName("pll") === "Premier Lacrosse League" &&
+    youtube.hasNoTrustedHighlightSource("pll") === false &&
+    youtube.highlightGateMissing({ sport: "pll", weekNumber: null, isPlayoff: false, playoffLabel: null }) === true &&
+    youtube.getCompetitionTitleTokens("pll", { playoff: true, playoffLabel: "Championship" })[0] === "championship game" &&
+    worker.includes('WEEK_TOKEN_REQUIRED_CHANNELS = new Set(["tsn", "premier lacrosse league"])') &&
+    worker.includes('WEEK_TOKEN_FORBIDDEN_WITHOUT_WEEK_CHANNELS = new Set(["premier lacrosse league"])') &&
+    readFileSync("scripts/prebake-news.mjs", "utf8").includes('channel: "Premier Lacrosse League"') &&
+    readFileSync("scripts/prebake-news.mjs", "utf8").includes("lax.pllWeekNumber(") &&
+    monitor.includes('pll:          "/lacrosse/pll/scoreboard"') &&
+    monitor.includes("function pllGate"),
+);
+// NLL is dark too (2026-10-13: 0/1, no "highlights" word in its titles).
+check(
+  "NLL stays dark and unmonitored",
+  youtube.hasNoTrustedHighlightSource("nll") === true &&
+    !monitor.includes('nll: "/lacrosse/nll/scoreboard"'),
 );
 // NCAA baseball + softball are dark the same way (2026-09-14).
 check(
