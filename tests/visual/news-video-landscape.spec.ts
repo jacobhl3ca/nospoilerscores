@@ -92,6 +92,46 @@ test.describe("phone landscape", () => {
     await expectControlsAtLeast44(page);
   });
 
+  // Dad 10/14 ("frozen on a NFL game & I couldn't get off it"): YouTube's own
+  // controls (the default) and a clip that never started. The layer used to
+  // fade ✕ away after 3s anyway, and with nothing of ours over the frame no
+  // tap could bring it back.
+  test("never played, YouTube's own controls: ✕ stays up and closes", async ({ page }) => {
+    const dialog = await openFakeYouTubeClip(page, { youtubeNativeControls: true }, { autoplay: false });
+    const controls = page.getByTestId("landscape-controls");
+    await page.waitForTimeout(4500);
+    // Not playing, so nothing fades.
+    await expect(controls).toHaveAttribute("data-shown", "true");
+    const close = controls.getByRole("button", { name: "Close" });
+    await expect(close).toBeVisible();
+    expect(Number(await close.evaluate((el) => getComputedStyle(el).opacity))).toBeGreaterThan(0.9);
+    await page.screenshot({ path: test.info().outputPath("landscape-844x390-never-played.png") });
+    // A tap on the black beside the frame does not close the clip.
+    await page.mouse.click(20, LANDSCAPE.height / 2);
+    await expect(dialog).toHaveCount(1);
+    await close.tap();
+    await expect(dialog).toHaveCount(0);
+    await expect(page).not.toHaveURL(/[?&]v=/);
+  });
+
+  test("playing and faded: ✕ still shows and takes the tap", async ({ page }) => {
+    const dialog = await openFakeYouTubeClip(page, { youtubeNativeControls: true });
+    const controls = page.getByTestId("landscape-controls");
+    await expect(controls).toHaveAttribute("data-shown", "false", { timeout: 4500 });
+    const close = controls.getByRole("button", { name: "Close" });
+    expect(Number(await close.evaluate((el) => getComputedStyle(el).opacity))).toBeGreaterThan(0.3);
+    await page.screenshot({ path: test.info().outputPath("landscape-844x390-faded-close.png") });
+    // A tap on the black beside the frame brings the rest back.
+    await page.mouse.click(20, LANDSCAPE.height / 2);
+    await expect(controls).toHaveAttribute("data-shown", "true");
+    await expect(dialog).toHaveCount(1);
+    await expect(controls).toHaveAttribute("data-shown", "false", { timeout: 4500 });
+    // One tap on the faded ✕ closes the clip.
+    await close.tap();
+    await expect(dialog).toHaveCount(0);
+    await expect(page).not.toHaveURL(/[?&]v=/);
+  });
+
   test("direct stream: fills the frame, 44px controls, fade and tap back", async ({ page }) => {
     await openFakeStreamClip(page);
     const controls = page.getByTestId("landscape-controls");
