@@ -17,7 +17,7 @@
 
 **Open:**
 - [x] PR 2: PLL week gate built, local probe 51/51 right, PLL lit.
-- [ ] After PR 2 merges: re-run the whole-2026 probe on the live worker (`/tmp/hs-lax/probe/probe.py https://hidescore.com gated out.json`), must read 0 WRONG.
+- [ ] After PR 2 merges: re-run the whole-2026 probe on the live worker (`python3 ~/scripts/hs-pll-probe/probe.py https://hidescore.com gated out.json`, ~10 min), must read 0 WRONG.
 - [ ] Each PLL season: add the year's row to `PLL_WEEK_FRIDAYS` (a year with no row = no PLL buttons).
 - [ ] NLL highlight recheck after the Nov 28, 2026 opener (`NLL | National Lacrosse League`, `UC3-CIE_PQp90hCCD_6js7Yw`).
 - [ ] Each season: add the playoff rows to `lacrossePlayoffs.ts` and the start dates to `playoffDates.ts`; a season with no rows shows every playoff pairing.
