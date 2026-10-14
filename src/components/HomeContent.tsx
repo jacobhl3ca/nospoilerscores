@@ -31,7 +31,7 @@ import GameCard from "@/components/GameCard";
 import { closeHiddenPins, closeUnseenAutoSlots, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
-import { fetchAllLeagues, fetchSlateGames, fetchTopGamesSpan, fetchLastFinishedDay, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, isTennisTourConfig, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { fetchAllLeagues, fetchSlateGames, fetchTopGamesSpan, hasPlayableClip, fetchLastFinishedDay, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, isTennisTourConfig, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
@@ -48,6 +48,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, E
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import { LeagueMark } from "@/components/LeagueMark";
+import { buildSchedule, visibleScheduleRows, SCHEDULE_FULL_MAX, SCHEDULE_SKIP, type ScheduleLeagueInput, type ScheduleRow } from "@/lib/scheduleDay";
 import VideoModal from "@/components/VideoModal";
 import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
 import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
@@ -216,11 +217,11 @@ function resolveDefaultOffset(mode: "smart" | "today" | "yesterday" | undefined,
   return getSmartDefaultOffset(cutoffHour);
 }
 
-type ViewMode = "scores-plain" | "scores-rated" | "news" | "leagues";
+type ViewMode = "scores-plain" | "scores-rated" | "news" | "leagues" | "schedule";
 
 // iOS-style fixed bottom tab bar. Always pinned to the viewport bottom, sits
-// over scrolled content with a translucent blurred background, four tabs:
-// 🙈 Games  |  🙉 Ratings  |  📰 News  |  🏆 Leagues. Selected state uses accent
+// over scrolled content with a translucent blurred background, five tabs:
+// 🙈 Games  |  🙉 Ratings  |  📰 News  |  🏆 Leagues  |  📅 Schedule. Selected state uses accent
 // color on icon + label (no solid background fill) so it reads "elegant"
 // rather than "chunky pill". Home-indicator clearance via safe-area inset.
 function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: ViewMode; onChange: (m: ViewMode) => void; placement?: "bottom" | "inline" }) {
@@ -264,11 +265,11 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
       {/* Inline (desktop): a subtle segmented-control box so the tabs read as a
           deliberate nav, not floating icons. Bottom (mobile): full-width bar. */}
       <div
-        className={inline ? "flex items-stretch w-72 rounded-xl overflow-hidden" : "max-w-md mx-auto flex items-stretch"}
+        className={inline ? "flex items-stretch w-80 rounded-xl overflow-hidden" : "max-w-md mx-auto flex items-stretch"}
         style={inline ? { background: "var(--bg-card)", border: "1px solid var(--border)" } : undefined}
       >
         {/* The icons carry real alt text (2026-09-25): AI-visibility scanners
-            count alt="" as missing, and these 4 icons render twice per board
+            count alt="" as missing, and these 5 icons render twice per board
             page. Screen readers are unaffected — the button's aria-label wins
             over its contents. */}
         {tab(
@@ -300,6 +301,15 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
           <img src="/trophy-emoji.svg" alt="Trophy" width={24} height={24} className="w-6 h-6" draggable={false} />,
           "Leagues",
           "Leagues (pick what is on the board)",
+        )}
+        {/* Schedule (10/14): the day's games across every league in the
+            switcher, one line each, no scores. */}
+        {tab(
+          "schedule",
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/calendar-emoji.svg" alt="Calendar" width={24} height={24} className="w-6 h-6" draggable={false} />,
+          "Schedule",
+          "Schedule (every league's games for the day)",
         )}
       </div>
     </nav>
@@ -972,6 +982,17 @@ export default function HomeContent({
   // The Leagues tab (9/29): a view in <main>, not a modal, so the tab bars
   // stay up. Session-only — a reload lands back on the board.
   const [showLeagues, setShowLeagues] = useState(false);
+  // The Schedule tab (10/14): the day's games across every switcher league,
+  // one line each. Unlike Leagues it survives a reload, through the same
+  // nss-last-view key the pre-paint script reads (restored below).
+  const [showSchedule, setShowSchedule] = useState(false);
+  // The view saved before this load, read once before anything writes it.
+  // While a stored "schedule" waits on the launch rules, the nss-last-view
+  // write below holds, so the board's default tab cannot overwrite it.
+  const [storedViewAtLoad] = useState<string | null>(() => {
+    try { return typeof window === "undefined" ? null : localStorage.getItem("nss-last-view"); } catch { return null; }
+  });
+  const scheduleRestoring = useRef(storedViewAtLoad === "schedule");
   // The header's Live pill: a session-only filter down to in-progress games.
   const [liveOnly, setLiveOnly] = useState(false);
   // Same, for the News tab's spoiler warning.
@@ -1240,7 +1261,14 @@ export default function HomeContent({
       const demoNews = isDemoNewsRequested();
       const tabView = readTabView();
       if (!keepView) {
-        if (demoNews || landing === "news") setShowNews(true);
+        // Schedule was the last view: back to it, unless a landing setting,
+        // a demo or this tab's own News view says otherwise.
+        const restoreSchedule = scheduleRestoring.current && landing === "remember" && !demoNews && tabView !== "news";
+        scheduleRestoring.current = restoreSchedule;
+        if (restoreSchedule) {
+          setShowSchedule(true);
+          setShowNews(false);
+        } else if (demoNews || landing === "news") setShowNews(true);
         else if (landing === "scores" || landing === "ratings") setShowNews(false);
         else if (tabView) setShowNews(tabView === "news");
         else if (p.showNews && !newDayPassed) setShowNews(true);
@@ -2104,10 +2132,23 @@ export default function HomeContent({
   // Single segmented control in the header replaces the old separate
   // monkey + news buttons. Switching INTO news/ratings runs the same
   // explainer modals as before; switching out is silent.
-  const viewMode: ViewMode = showLeagues ? "leagues" : showNews ? "news" : prefs.showRatings ? "scores-rated" : "scores-plain";
+  const viewMode: ViewMode = showLeagues ? "leagues" : showSchedule ? "schedule" : showNews ? "news" : prefs.showRatings ? "scores-rated" : "scores-plain";
 
   const handleViewModeClick = (mode: ViewMode) => {
     if (mode === viewMode) return;
+    if (mode === "schedule") {
+      // Exclusive with News and Leagues, like Leagues; the ratings pref is
+      // left alone so leaving Schedule goes back to the board tab that was on.
+      if (showNews) {
+        setShowNews(false);
+        updatePrefs({ showNews: false });
+      }
+      if (showLeagues) setShowLeagues(false);
+      setShowSchedule(true);
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+    if (showSchedule) setShowSchedule(false);
     if (mode === "leagues") {
       // Exclusive with News; the ratings pref is left alone, so leaving
       // Leagues goes back to whichever board tab was on.
@@ -2153,7 +2194,7 @@ export default function HomeContent({
   const nativeTabBarRef = useRef<NativeTabBar | null>(null);
   useEffect(() => {
     const bar = connectNativeTabBar((v) => {
-      if (v === "scores-plain" || v === "scores-rated" || v === "news" || v === "leagues") handleViewModeClickRef.current(v);
+      if (v === "scores-plain" || v === "scores-rated" || v === "news" || v === "leagues" || v === "schedule") handleViewModeClickRef.current(v);
     });
     nativeTabBarRef.current = bar;
     return () => { bar?.disconnect(); nativeTabBarRef.current = null; };
@@ -2216,6 +2257,10 @@ export default function HomeContent({
   // re-deriving the launch rules in the inline script) keeps the two in lockstep
   // and self-corrects on the rare morning-reset boundary.
   useEffect(() => {
+    if (scheduleRestoring.current) {
+      if (viewMode !== "schedule") return;
+      scheduleRestoring.current = false;
+    }
     document.documentElement.setAttribute("data-view", viewMode);
     // Leagues is session-only (a reload opens the board), so the pre-paint
     // script keeps the board tab it will actually land on.
@@ -2811,6 +2856,68 @@ export default function HomeContent({
       !switcherOptions.some((o) => o.sport === s) && !prefs.catalogHiddenLeagues?.includes(s)),
     [prefs.removedLeagues, prefs.catalogHiddenLeagues, switcherOptions],
   );
+
+  // The Schedule tab's leagues: every in-season league in the switcher, the
+  // board's columns first in column order, then the rest in switcher order.
+  // Event tiles and the two cross-league columns sit out (SCHEDULE_SKIP).
+  const scheduleLeagues = useMemo(() => {
+    const pool = switcherOptions.filter((o) => !o.offseason && !o.upcomingLabel && !SCHEDULE_SKIP.has(o.sport));
+    const inPool = new Set(pool.map((o) => o.sport));
+    const board = leagues.filter((l) => inPool.has(l.sport));
+    const onBoard = new Set(board.map((l) => l.sport));
+    return [
+      ...board.map((l) => ({ sport: l.sport, label: l.label })),
+      ...pool.filter((o) => !onBoard.has(o.sport)).map((o) => ({ sport: o.sport, label: o.label })),
+    ];
+  }, [switcherOptions, leagues]);
+  // Leagues with no board column are pulled here, one scoreboard each, keyed
+  // by date|sport. The board's own columns reuse `leagues`, so they cost
+  // nothing extra. Today re-pulls every minute while the tab is open, for
+  // the LIVE / Final labels.
+  const [scheduleExtra, setScheduleExtra] = useState<Record<string, Game[] | "failed">>({});
+  const [scheduleBaked, setScheduleBaked] = useState<Awaited<ReturnType<typeof loadBakedHighlights>>>({});
+  const [scheduleOpen, setScheduleOpen] = useState<Record<string, boolean>>({});
+  const scheduleExtraSports = useMemo(() => {
+    const onBoard = new Set(leagues.map((l) => l.sport));
+    return scheduleLeagues.filter((l) => !onBoard.has(l.sport)).map((l) => l.sport);
+  }, [scheduleLeagues, leagues]);
+  const scheduleExtraKey = scheduleExtraSports.join(",");
+  // Until the board's first pull lands, every league would look like an
+  // extra one; wait for it.
+  const scheduleWaitBoard = loading && leagues.length === 0;
+  useEffect(() => {
+    if (!showSchedule || !selectedDate || scheduleWaitBoard) return;
+    let live = true;
+    const date = selectedDate;
+    const sports = scheduleExtraKey ? (scheduleExtraKey.split(",") as Sport[]) : [];
+    const pull = async (fresh: boolean) => {
+      const todo = [...sports];
+      // Six at a time: a full switcher is 20+ scoreboards.
+      const worker = async () => {
+        for (let sport = todo.shift(); sport; sport = todo.shift()) {
+          const key = `${date}|${sport}`;
+          let games: Game[] | "failed";
+          try {
+            // A scoreboard that never answers must not hold "Loading…" up.
+            games = await Promise.race([
+              fetchSlateGames(sport, date),
+              new Promise<"failed">((r) => setTimeout(() => r("failed"), 10_000)),
+            ]);
+          } catch {
+            games = "failed";
+          }
+          if (!live) return;
+          if (!fresh && games === "failed") continue;
+          setScheduleExtra((m) => ({ ...m, [key]: games }));
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(6, sports.length) }, worker));
+    };
+    loadBakedHighlights().then((b) => { if (live) setScheduleBaked(b); });
+    pull(true);
+    const poll = date === getDateString(0) ? setInterval(() => pull(false), 60_000) : null;
+    return () => { live = false; if (poll) clearInterval(poll); };
+  }, [showSchedule, selectedDate, scheduleExtraKey, scheduleWaitBoard]);
   // The sheet's "Edit list" ×, the same strike as Settings' Edit list: the
   // league leaves the catalog and every switcher, and the removed group.
   const hideFromAddMore = (sport: Sport) => {
@@ -3680,6 +3787,126 @@ export default function HomeContent({
   // full page. A tap puts that league in column 1 (the same setter the column
   // switcher uses) and goes back to the board. In-season first, then leagues
   // about to start, then offseason; each group keeps the switcher's order.
+  // The Schedule tab (10/14): the day's games across every in-season switcher
+  // league, grouped by league, one line per game like the widget (time ·
+  // away @ home · network). Never a score; a tap opens the card's modal.
+  const renderScheduleView = () => {
+    const tz = getTimeZone();
+    const boardBySport = new Map(leagues.map((l) => [l.sport, l]));
+    let pending = 0;
+    const inputs: ScheduleLeagueInput[] = scheduleLeagues.map(({ sport, label }) => {
+      const board = boardBySport.get(sport);
+      let games: Game[] = [];
+      if (board) games = board.games;
+      else {
+        const got = scheduleExtra[`${selectedDate}|${sport}`];
+        if (got === undefined) pending++;
+        else if (got !== "failed") games = got;
+      }
+      const shown = filterLeague({ ...(board ?? { sport, label, games }), games }, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
+      return { sport, label: board?.label ?? label, games: shown };
+    });
+    const groups = buildSchedule(inputs, { favoriteTeams: prefs.favoriteTeams, tz });
+    const stillLoading = (loading && leagues.length === 0) || pending > 0;
+    const row = (r: ScheduleRow, i: number) => {
+      const clip = r.state === "post" && hasPlayableClip(r.game, scheduleBaked);
+      const team = (t: ScheduleRow["home"], side: "away" | "home") => (
+        <span className={`flex items-center gap-1.5 min-w-0 font-semibold text-[15px] ${side === "away" ? "justify-end" : ""}`}>
+          {side === "home" && t.logo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+          )}
+          <span className="truncate" title={t.name}>{t.abbr}</span>
+          {side === "away" && t.logo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+          )}
+        </span>
+      );
+      const live = r.timeLabel === "LIVE";
+      return (
+        <li key={r.id} style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}>
+          <button
+            type="button"
+            data-schedule-row={r.id}
+            data-state={r.state}
+            onClick={() => setDetailGame(r.game)}
+            aria-label={`${r.away.name} at ${r.home.name}, ${r.timeLabel}${r.network ? `, ${r.network}` : ""}`}
+            className="w-full grid items-center gap-x-1.5 px-3 py-2 text-left cursor-pointer transition-colors"
+            style={{ gridTemplateColumns: "56px 1fr auto 1fr 64px", color: "var(--text)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <span
+              className={`text-[13px] whitespace-nowrap tabular-nums ${live ? "font-bold text-xs tracking-wide" : ""}`}
+              style={{ color: live ? "#dc2626" : r.state === "pre" ? "var(--text-secondary)" : "var(--text-muted)" }}
+            >
+              {live && <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-[1px]" style={{ background: "#dc2626" }} />}
+              {r.timeLabel}
+            </span>
+            {team(r.away, "away")}
+            <span className="text-sm" style={{ color: "var(--text-muted)" }}>@</span>
+            {team(r.home, "home")}
+            {clip ? (
+              <span className="justify-self-end inline-flex items-center gap-0.5 text-xs font-semibold rounded-full px-2 py-0.5" style={{ background: "var(--accent)", color: "white" }} title="Highlights">
+                <span aria-hidden="true">▶</span> Clip
+              </span>
+            ) : (
+              <span className="text-right text-xs whitespace-nowrap truncate" style={{ color: "var(--text-muted)" }}>{r.network ?? ""}</span>
+            )}
+          </button>
+        </li>
+      );
+    };
+    const dayLabel = selectedDate
+      ? fromYmd(selectedDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
+      : "";
+    return (
+      <section data-testid="schedule-view" aria-labelledby="schedule-title" className="max-w-[720px] mx-auto pt-3">
+        <h2 id="schedule-title" className="text-sm font-semibold mb-2 px-1" style={{ color: "var(--text-muted)" }}>{dayLabel}</h2>
+        {groups.length === 0 ? (
+          <p className="text-center text-sm py-10" style={{ color: "var(--text-muted)" }}>
+            {stillLoading ? "Loading…" : "No games on your leagues this day"}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {groups.map((g) => {
+              const key = `${selectedDate}|${g.sport}`;
+              const { shown, more } = visibleScheduleRows(g.rows, !!scheduleOpen[key]);
+              const collapsible = g.rows.length > SCHEDULE_FULL_MAX;
+              return (
+                <div key={g.sport} data-schedule-league={g.sport} className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--bg-card)" }}>
+                  <div className="flex items-center gap-2 px-3 pt-2 pb-1 text-sm font-bold">
+                    <LeagueMark sport={g.sport} size={18} />
+                    <span>{g.label}</span>
+                    {g.note && <span className="font-normal text-xs truncate" style={{ color: "var(--text-muted)" }}>· {g.note}</span>}
+                  </div>
+                  <ul>
+                    {shown.map(row)}
+                  </ul>
+                  {collapsible && (
+                    <div className="flex justify-center pb-2 pt-1">
+                      <button
+                        type="button"
+                        aria-expanded={!!scheduleOpen[key]}
+                        onClick={() => setScheduleOpen((o) => ({ ...o, [key]: !o[key] }))}
+                        className="text-xs px-3 py-1.5 rounded-full cursor-pointer transition-colors"
+                        style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}
+                      >
+                        {scheduleOpen[key] ? "Show less" : `Show ${more} more`}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {stillLoading && <p className="text-center text-xs py-2" style={{ color: "var(--text-muted)" }}>Loading more leagues…</p>}
+          </div>
+        )}
+      </section>
+    );
+  };
+
   const renderLeaguesView = () => {
     const visibleSlots = SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length;
     const onBoard = sortedLeagues.slice(0, visibleSlots).map((l) => l.sport);
@@ -3869,10 +4096,11 @@ export default function HomeContent({
               // In the news view, the logo acts as "back to scores" — toggle
               // news off in place instead of navigating, since "/" would
               // just rehydrate news from prefs.showNews and bounce the user
-              // right back into the news view. Leagues is left the same way.
-              if (showLeagues) {
+              // right back into the news view. Leagues and Schedule are left the same way.
+              if (showLeagues || showSchedule) {
                 e.preventDefault();
                 setShowLeagues(false);
+                setShowSchedule(false);
                 window.scrollTo({ top: 0, behavior: "auto" });
                 return;
               }
@@ -3901,7 +4129,7 @@ export default function HomeContent({
               phones: the tabs live in the bottom bar and the dates in the
               strip row under this one. */}
           <div className="justify-self-center col-start-2 min-w-0">
-            <div className="hidden sm:block w-80">
+            <div className="hidden sm:block w-[22rem]">
               <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
             </div>
           </div>
@@ -4070,7 +4298,7 @@ export default function HomeContent({
             {/* Live filter (9/29, FotMob review). A filter, not a count: it
                 shows only while something on the board is in progress (or
                 while it is on, so it can be turned off), board views only. */}
-            {!showNews && !showLeagues && (hasLiveGames || liveOnly) && (
+            {!showNews && !showLeagues && !showSchedule && (hasLiveGames || liveOnly) && (
               <button
                 type="button"
                 data-testid="live-toggle"
@@ -4584,7 +4812,7 @@ export default function HomeContent({
             the layout jumps to league columns ~1.5 s later (Jacob 10/2). Both
             conditions: a refresh poll keeps the news up, and an offline or
             failed load (loading false, no leagues) still falls through to it. */}
-        {showLeagues ? renderLeaguesView() : showNews && !(loading && leagues.length === 0) ? (() => {
+        {showLeagues ? renderLeaguesView() : showSchedule ? renderScheduleView() : showNews && !(loading && leagues.length === 0) ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
               label: c.label,
