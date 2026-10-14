@@ -3569,9 +3569,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               // still stopPropagation()s — so the click doesn't dismiss the
               // modal — and leaves modifier/middle-clicks to the browser.
               onClick={(e) => { if (ytMode) trackVideoOut("footer"); handleExternalClick(sourceShareUrl)(e); }}
-              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 inline-flex items-center gap-1.5"
+              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
             >
-              {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : <><YouTubeIcon height={10} />Watch on YouTube</>}
+              {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
             </a>
           )}
           {shareUrl && (
@@ -3621,8 +3621,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   );
 }
 
-// YouTube's own red play mark (the rounded rectangle), for the hand-offs that
-// open youtube.com or the YouTube app. Brand colours, not the text colour.
+// YouTube's own red play mark (the rounded rectangle), only on the embed-blocked
+// hand-off (Jacob 10/13). Brand colours, not the text colour.
 function YouTubeIcon({ height }: { height: number }) {
   return (
     <svg aria-hidden="true" data-yt-icon width={(height * 28) / 20} height={height} viewBox="0 0 28 20" className="shrink-0">
