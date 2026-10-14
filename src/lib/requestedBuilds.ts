@@ -64,9 +64,3 @@ export function requestedBuildDay(date: string): string {
   const [, m, d] = date.split("-").map(Number);
   return `${MONTHS[m - 1]} ${d}`;
 }
-
-// What "This was me" puts in the feedback form for a row with no initials. The
-// note names the row; Jacob reads it and a chat edits this file by hand.
-export function requestedBuildClaim(r: RequestedBuild): string {
-  return `Claim: ${r.title} (asked ${requestedBuildDay(r.date)}). My initials: `;
-}

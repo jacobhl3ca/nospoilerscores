@@ -4,7 +4,8 @@
 // skips anything between <!--email_off--> and <!--/email_off-->, and JSX drops
 // comments from the HTML, so the anchor is written as raw markup.
 // `pill` (2026-10-09) draws it as the same blue pill as DocTopBar's "Open
-// HideScore" button: as a plain underlined link it was easy to miss on /contact.
+// HideScore" button. /about uses it; /contact went back to the plain link on
+// 10/14, where "Send feedback" is the one blue button.
 const PLAIN = 'class="underline underline-offset-2"';
 const PILL =
   'class="inline-block rounded-lg px-3.5 py-1.5 text-sm font-semibold no-underline" style="background: var(--accent); color: #fff"';

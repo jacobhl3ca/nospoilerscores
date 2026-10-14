@@ -6331,8 +6331,9 @@ export default function HomeContent({
         })()}
 
         {/* ONE footer row (Jacob 7/14; reordered 9/25; 9/28: page links only,
-            one style): About · FAQ · Guides · Wall of fame · Contact ·
-            Feedback · Privacy · Terms (10/14: the same row as DocFooter)
+            one style): About · FAQ · Guides · WOF · Contact ·
+            Feedback · Privacy · Terms (10/14: the same row as DocFooter;
+            "WOF" = Wall of fame, short so the row fits one line at 390 px)
             (+ ♥ Rate in the native shells, 9/29).
             Settings came out (the header gear is the one way in), Guides is a
             real page (/guides) rather than a popup, and Feedback goes to
@@ -6350,7 +6351,7 @@ export default function HomeContent({
           <Link href="/about" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</Link>
           <Link href="/faq" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</Link>
           <Link href="/guides" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</Link>
-          <Link href="/wall-of-fame" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Wall of fame</Link>
+          <Link href="/wall-of-fame" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }} aria-label="Wall of fame" title="Wall of fame">WOF</Link>
           <Link href="/contact" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</Link>
           <Link href="/contact#feedback" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</Link>
           <Link href="/privacy" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</Link>

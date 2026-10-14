@@ -8,8 +8,8 @@ import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
 // Added 2026-10-11 (round 2 of "Built from your requests", which sat on
 // /contact from 10/9). People ranked by how many of their requests shipped,
 // then every row as a table. Static data only: src/lib/requestedBuilds.ts.
-// The suggest button, the "This was me" links and the feedback form they open
-// are the one client part (WallOfFameRequests).
+// The suggest button, the initials note and the feedback form they open are
+// the one client part (WallOfFameRequests).
 
 const WALL_TITLE = "Wall of Fame: Built From Your Requests | HideScore";
 const WALL_DESC =
@@ -66,7 +66,7 @@ export default function WallOfFamePage() {
           ))}
         </ol>
 
-        <p>Everyone on this wall gets their next request moved to the top of the list, and 6 months of any supporter perks free.</p>
+        <p>Everyone on this wall gets their next request moved to the top of the list, and 6 months of any future supporter perks free.</p>
       </section>
 
       <WallOfFameRequests />

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   REQUESTED_BUILDS,
-  requestedBuildClaim,
   requestedBuildDay,
   requestedBuildGroup,
   requestedBuildPeople,
@@ -115,12 +114,5 @@ test("sections: one per person in file order, then the rows with no initials", (
   assert.deepEqual(
     sections.filter((s) => s.who).map((s) => ({ who: s.who, count: s.rows.length })),
     requestedBuildPeople(),
-  );
-});
-
-test("claim note names the row and leaves the initials open", () => {
-  assert.equal(
-    requestedBuildClaim({ date: "2026-09-13", kind: "League", title: "CFL", by: [] }),
-    "Claim: CFL (asked Sep 13). My initials: ",
   );
 });
