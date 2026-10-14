@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { formatUpdated, routeFirstPublished, routeLastModified } from "@/lib/routeLastModified";
 import type { TeamPageLeague } from "@/lib/teamPages";
 import { leagueMeta, teamPagePath, teamsInLeague } from "@/lib/teamPageLeagues";
+import { TeamLogo } from "@/components/TeamLogo";
 
 type FaqItem = {
   q: string;
@@ -287,8 +288,7 @@ export default function SeoLandingPage({
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                 >
                   {t.logo && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={t.logo} alt="" width={20} height={20} loading="lazy" decoding="async" className="h-5 w-5 shrink-0 object-contain" />
+                    <TeamLogo src={t.logo} alt="" width={20} height={20} loading="lazy" decoding="async" className="h-5 w-5 shrink-0 object-contain" hide="display" />
                   )}
                   <span className="min-w-0 flex-1">{t.name}</span>
                 </Link>

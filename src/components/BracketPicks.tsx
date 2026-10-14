@@ -44,6 +44,7 @@ import { trackSoon } from "@/lib/umamiTrack";
 import { getApiBase } from "@/lib/youtube";
 import { getTimeZone } from "@/lib/etDay";
 import { AppleLogo, GoogleG } from "./ProviderLogo";
+import { TeamLogo } from "@/components/TeamLogo";
 
 // The Picks tab: tap a winner per series, submit, and see how it went.
 //
@@ -113,11 +114,10 @@ type Post = { state: "idle" | "sending" | "ok" | "warn"; msg?: string };
 
 // ── Seats ────────────────────────────────────────────────────────────────────
 
-function TeamLogo({ team, size }: { team: PickTeam; size: number }) {
+function PickLogo({ team, size }: { team: PickTeam; size: number }) {
   if (!team.logo) return <span className="shrink-0" style={{ width: size }} />;
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <TeamLogo
       src={team.logo}
       alt=""
       loading="lazy"
@@ -127,7 +127,7 @@ function TeamLogo({ team, size }: { team: PickTeam; size: number }) {
       className="object-contain shrink-0"
       style={{ width: size, height: size }}
       draggable={false}
-      onError={(e) => { e.currentTarget.style.display = "none"; }}
+      hide="display"
     />
   );
 }
@@ -174,7 +174,7 @@ function PickSeat({ team, label, picked, faded, status, disabled, onPick, round 
       {team.seed ? (
         <span data-pick-seed className="text-[9px] font-bold tabular-nums w-2 shrink-0" style={{ color: "var(--text-muted)" }}>{hideRanks ? null : team.seed}</span>
       ) : null}
-      <TeamLogo team={team} size={18} />
+      <PickLogo team={team} size={18} />
       <span
         className={`text-[11px] leading-none shrink-0 ${picked ? "font-bold" : "font-medium"}`}
         style={{ color: "var(--text)", textDecoration: wrong ? "line-through" : undefined }}
@@ -568,7 +568,7 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
               <div className="flex-1 flex flex-col justify-center items-center gap-2">
                 {card(finalMatchup, roundHeading(finalMatchup.round, null))}
                 <div data-pick-champion className="flex items-center gap-1.5 text-[11px]" style={{ color: champ ? "var(--text)" : "var(--text-muted)" }}>
-                  {champ ? <TeamLogo team={champ} size={22} /> : null}
+                  {champ ? <PickLogo team={champ} size={22} /> : null}
                   <span className={champ ? "font-bold" : "italic"}>{champ ? `${champ.name}` : championLabel}</span>
                 </div>
               </div>
@@ -948,7 +948,7 @@ function Leaderboard({ bracket, board, locked, results, covered, onReveal, mine,
               <td className="px-1 py-1">
                 {r.champion ? (
                   <span className="flex items-center gap-1" style={{ opacity: busted ? 0.5 : 1 }}>
-                    <TeamLogo team={r.champion} size={14} />
+                    <PickLogo team={r.champion} size={14} />
                     <span style={{ color: "var(--text)", textDecoration: busted ? "line-through" : undefined }}>{r.champion.abbrev}</span>
                   </span>
                 ) : <span style={muted}>—</span>}

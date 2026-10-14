@@ -19,6 +19,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import CalendarButtons from "@/components/CalendarButtons";
 import { buildCalendarEvent } from "@/lib/calendarLink";
 import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
+import { TeamLogo } from "@/components/TeamLogo";
 
 // Typical game length (hours) per sport, used to bound the rain window. Soccer
 // ~2.5h, ball sports ~3.5h; default 3h. The rain-chance block only surfaces
@@ -44,8 +45,7 @@ function TeamRow({ team, record }: { team: Game["homeTeam"]; record?: { text: st
   return (
     <div className="flex items-center gap-3 min-w-0">
       {team.logo
-        // eslint-disable-next-line @next/next/no-img-element
-        ? <img src={team.logo} alt="" width={32} height={32} loading="lazy" decoding="async" className="w-8 h-8 object-contain shrink-0" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+        ? <TeamLogo src={team.logo} alt="" width={32} height={32} loading="lazy" decoding="async" className="w-8 h-8 object-contain shrink-0" />
         : <span className="w-8 h-8 flex items-center justify-center rounded text-xs shrink-0" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>}
       <div className="flex items-baseline gap-3 flex-1 min-w-0">
         <span className="text-base font-semibold truncate" style={{ color: "var(--text)" }}>

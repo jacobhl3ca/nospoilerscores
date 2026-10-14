@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { LOGO_REPLACE, TEAM_PICKER_SKIP, fixTeamLogo, logoForTeam, logoOverride, isPlaceholderTeam, ncaaSchoolLogo } from "../src/lib/teamLogos.ts";
+import { LOGO_REPLACE, TEAM_PICKER_SKIP, darkTeamLogo, fixTeamLogo, logoForTeam, logoOverride, isPlaceholderTeam, ncaaSchoolLogo } from "../src/lib/teamLogos.ts";
 import { LOGO_OVERRIDES, ncaaComLogo } from "../src/lib/teamLogoOverrides.ts";
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -127,4 +127,28 @@ test("every LOGO_REPLACE target ships in public/", () => {
     assert.ok(path.startsWith("/logos/"), key);
     assert.ok(existsSync(join(PUBLIC, path)), `public${path} missing`);
   }
+});
+
+test("dark theme loads ESPN's 500-dark copy, and nothing for art with none", () => {
+  const espn = "https://a.espncdn.com/i/teamlogos";
+  assert.equal(darkTeamLogo(`${espn}/ncaa/500/2294.png`), `${espn}/ncaa/500-dark/2294.png`); // Iowa
+  assert.equal(darkTeamLogo(`${espn}/mlb/500/scoreboard/nyy.png`), `${espn}/mlb/500-dark/scoreboard/nyy.png`);
+  assert.equal(darkTeamLogo(`${espn}/soccer/500/111.png`), `${espn}/soccer/500-dark/111.png`); // Juventus
+  assert.equal(darkTeamLogo(`${espn}/rugby/teams/500/25906.png`), `${espn}/rugby/teams/500-dark/25906.png`);
+  // ESPN has no dark copy for cricket or AFL (404, 2026-10-14).
+  assert.equal(darkTeamLogo(`${espn}/cricket/500/335978.png`), undefined);
+  assert.equal(darkTeamLogo(`${espn}/afl/500/coll.png`), undefined);
+  // Self-hosted, NCAA.com, guid, already-dark and FotMob art load as they are.
+  for (const url of [
+    "/logos/nfl-lar.svg",
+    ncaaComLogo("spalding"),
+    "https://a.espncdn.com/guid/04c5d4b5-21f5-3580-9b69-b97224bf2ffb/logos/default.png",
+    `${espn}/nfl/500-dark/buf.png`,
+    "https://images.fotmob.com/image_resources/logo/teamlogo/205687.png",
+    "https://www.mlbstatic.com/team-logos/147.svg",
+  ]) {
+    assert.equal(darkTeamLogo(url), undefined, url);
+  }
+  // The fixed Rams never gets ESPN's blue-only dark copy back.
+  assert.equal(darkTeamLogo(fixTeamLogo(`${espn}/nfl/500/lar.png`)), undefined);
 });

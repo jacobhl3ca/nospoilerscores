@@ -1,18 +1,8 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
 import type { Sport } from "@/lib/types";
 import { INVERT_IN_DARK, LEAGUE_EMOJI, leagueLogoDark, leagueLogoSmall } from "@/lib/news";
-
-// <html data-theme> is the resolved theme: the pre-paint script, the Theme
-// pills and the OS listener all write it, so it follows a manual Light/Dark
-// pick and not only the OS setting.
-function subscribeTheme(onChange: () => void) {
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-  return () => observer.disconnect();
-}
-const readTheme = () => document.documentElement.getAttribute("data-theme") === "dark";
+import { useDarkTheme, useFailedUrls } from "@/lib/useLogoTheme";
 
 // A league's logo: the first-run league picker, the Settings league chips and
 // the column pills. It sits on the chip itself, no white plate (Jacob 9/30,
@@ -35,14 +25,14 @@ export function LeagueMark({
   className?: string;
 }) {
   const px = size ?? 18;
-  const darkTheme = useSyncExternalStore(subscribeTheme, readTheme, () => false);
+  const darkTheme = useDarkTheme();
   const onDark = tone === "dark" || darkTheme;
   const normalUrl = src ?? leagueLogoSmall(sport);
   const darkUrl = onDark && !src ? leagueLogoDark(sport) : undefined;
   // A failed dark copy falls back to the normal one; when that fails too the
   // mark goes, so the chip reads as plain text and not a broken image or a
   // white dot. Keyed to the URL so a new league tries again.
-  const [failed, setFailed] = useState<string[]>([]);
+  const { failed, markFailed } = useFailedUrls();
   const url = darkUrl && !failed.includes(darkUrl) ? darkUrl : normalUrl;
   const emoji = !src ? LEAGUE_EMOJI[sport] : undefined;
 
@@ -79,7 +69,7 @@ export function LeagueMark({
         className="object-contain"
         style={{ width: px, height: px, filter: invert ? "brightness(0) invert(1)" : undefined }}
         draggable={false}
-        onError={() => setFailed((f) => (f.includes(url) ? f : [...f, url]))}
+        onError={() => markFailed(url)}
       />
     </span>
   );
