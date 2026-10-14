@@ -950,9 +950,11 @@ function aliasTeam(name: string): string {
 
 // The short club name some channels use, tried only after the long alias
 // missed. URC titles "Cardiff v Zebre Parma", so "Cardiff Rugby" found nothing
-// (2026-10-02). Mirrors HL_TEAM_SHORT_ALIASES in scripts/lib/hl-retry.mjs.
+// (2026-10-02). ESPN College Football titled FIU at Jacksonville State (10/13)
+// "FIU Panthers vs. …". Mirrors HL_TEAM_SHORT_ALIASES in scripts/lib/hl-retry.mjs.
 const TEAM_NAME_SHORT_ALIASES: Record<string, string> = {
   "Cardiff Blues": "Cardiff",
+  "Florida International": "FIU",
 };
 
 // [away, home] pairs to query, in order: as given, then the short aliases.

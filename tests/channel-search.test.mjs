@@ -58,6 +58,27 @@ test("the competition token is required when one is given", () => {
   assert.deepEqual(picks, []);
 });
 
+test("a title YouTube cut at 100 characters still names a token it ends inside", () => {
+  // Conference USA, FIU at Jacksonville State, 2026-10-13 (exactly 100 characters).
+  const fiu = "Florida International Panthers vs. Jacksonville State Gamecocks - Highlights | 2026 Regular Season W";
+  const cusa = ["football", "regular season week"];
+  assert.equal([...fiu].length, 100);
+  assert.equal(titleHasCompToken(fiu, cusa), true);
+  // Middle Tennessee at Jacksonville State, Week 4: cut at "We".
+  assert.equal(titleHasCompToken("Middle Tennessee Blue Raiders vs. Jacksonville State Gamecocks - Highlights | 2026 Regular Season We", cusa), true);
+  // The same ending under the cap is a real title that lacks the token.
+  assert.equal(titleHasCompToken("FIU Panthers vs. Jax State Gamecocks - Highlights | 2026 Regular Season W", cusa), false);
+  // At the cap, the cut must reach past the token's first word.
+  const regular = `${"x".repeat(85)} | 2026 Regular`;
+  assert.equal([...regular].length, 100);
+  assert.equal(titleHasCompToken(regular, cusa), false);
+  assert.equal(titleHasCompToken(`${"x".repeat(83)} | 2026 Regular S`, cusa), true);
+  // A one-word token never matches a cut stub ("footb").
+  assert.equal(titleHasCompToken(`${"x".repeat(93)} | footb`, ["football"]), false);
+  // The stub must start a word: "irregular s" is not "regular s".
+  assert.equal(titleHasCompToken(`${"x".repeat(88)} irregular s`, cusa), false);
+});
+
 test("only listed channels have a search page", () => {
   assert.equal(channelSearchHandle("Major League Soccer"), "MLS");
   assert.equal(channelSearchHandle("Portsmouth FC"), "OfficialPompey");
