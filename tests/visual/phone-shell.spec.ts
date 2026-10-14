@@ -1,8 +1,10 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 // Phone shell from the 9/29 FotMob review (Jacob): monkey tab icons, "Games"
-// for tab 1, a 4th Leagues tab, the date strip on its own row, a Live filter
-// pill, and the wordmark in place of the "H" square. Boards are mocked so the
+// for tab 1, the date strip on its own row, a Live filter pill, and the
+// wordmark in place of the "H" square. The bar is Games · Ratings · News ·
+// Schedule (the Leagues tab left 10/14; old iOS builds that still draw it
+// open Settings instead). Boards are mocked so the
 // live game and the Sunday game are exact:
 //   Tue 9/29  MLB  Dodgers at Giants (7:05 pm, scheduled)
 //             NCAAF Oklahoma at Georgia (LIVE) · Texas at Tennessee (final)
@@ -100,13 +102,13 @@ for (const theme of ["light", "dark"] as const) {
       await expect(card(page, "Oklahoma at Georgia")).toBeVisible({ timeout: 30_000 });
     });
 
-    test("bar = Games · Ratings · News · Leagues · Schedule with the five emoji SVGs", async ({ page, browserName }) => {
+    test("bar = Games · Ratings · News · Schedule with the four emoji SVGs", async ({ page, browserName }) => {
       const bar = page.locator(".web-tab-bar nav");
       const tabs = bar.locator("button[data-tab]");
-      await expect(tabs).toHaveCount(5);
-      expect(await tabs.evaluateAll((els) => els.map((e) => e.textContent?.trim()))).toEqual(["Games", "Ratings", "News", "Leagues", "Schedule"]);
+      await expect(tabs).toHaveCount(4);
+      expect(await tabs.evaluateAll((els) => els.map((e) => e.textContent?.trim()))).toEqual(["Games", "Ratings", "News", "Schedule"]);
       expect(await tabs.locator("img").evaluateAll((els) => els.map((e) => new URL((e as HTMLImageElement).src).pathname)))
-        .toEqual(["/monkey-see-no-evil.svg", "/monkey-hear-no-evil.svg", "/news-emoji.svg", "/trophy-emoji.svg", "/calendar-emoji.svg"]);
+        .toEqual(["/monkey-see-no-evil.svg", "/monkey-hear-no-evil.svg", "/news-emoji.svg", "/calendar-emoji.svg"]);
       // Every icon actually loaded.
       expect(await tabs.locator("img").evaluateAll((els) => els.every((e) => (e as HTMLImageElement).naturalWidth > 0))).toBe(true);
       await expect(bar.locator('button[data-tab="scores-plain"]')).toHaveAttribute("title", "Games (no scores, no spoilers)");
@@ -157,27 +159,6 @@ for (const theme of ["light", "dark"] as const) {
       await expect(strip.getByRole("button", { name: "Today" })).not.toHaveAttribute("aria-current", "date");
     });
 
-    test("Leagues view lists leagues; a tap sets column 1 and returns to Games", async ({ page, browserName }) => {
-      await page.locator('.web-tab-bar button[data-tab="leagues"]').click();
-      const view = page.getByTestId("leagues-view");
-      await expect(view).toBeVisible();
-      await expect(view.getByRole("heading", { name: "Leagues" })).toBeVisible();
-      await expect(page.locator("html")).toHaveAttribute("data-view", "leagues");
-      await expect(page.getByTestId("date-strip-row")).toHaveCount(0);
-      expect(await view.locator("button[data-league]").count()).toBeGreaterThan(3);
-      await expect(view.locator('button[data-league="mlb"]')).toContainText("Column 1");
-      await expect(view.locator('button[data-league="ncaaf"]')).toContainText("Column 2");
-      await shot(page, `leagues-${browserName}-${theme}`);
-
-      await view.locator('button[data-league="ncaaf"]').click();
-      await expect(view).toHaveCount(0);
-      await expect(page.locator("html")).toHaveAttribute("data-view", "scores-plain");
-      await expect(page.locator("[data-league-column]").first()).toHaveAttribute("data-league-column", "ncaaf", { timeout: 15_000 });
-      const first = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") ?? "{}").firstLeague);
-      expect(first).toBe("ncaaf");
-      expect(await page.evaluate(() => window.scrollY)).toBe(0);
-    });
-
     test("Live on → only live cards; off → full board", async ({ page, browserName }) => {
       const live = page.getByTestId("live-toggle");
       await live.click();
@@ -220,4 +201,36 @@ test("desktop 1280px: header keeps its layout, plus the Live pill", async ({ pag
   const h = (await header.boundingBox())!.height;
   expect(h).toBeLessThan(70);
   await shot(page, `desktop-${browserName}`);
+});
+
+// Old iOS builds (TestFlight 15–16) still draw a native Leagues tab. Fake the
+// shell's bridge: a "leagues" tap opens Settings and the view stays put; a
+// "schedule" tap still switches views.
+test("native bar: an old build's Leagues tap opens Settings", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page, "light");
+  await page.addInitScript(() => {
+    document.documentElement.setAttribute("data-native-tabbar", "");
+    const sent: unknown[] = [];
+    (window as unknown as { __hsTabMsgs: unknown[] }).__hsTabMsgs = sent;
+    (window as unknown as { webkit: unknown }).webkit = { messageHandlers: { hsTabBar: { postMessage: (m: unknown) => sent.push(m) } } };
+  });
+  await page.goto("/");
+  await expect(card(page, "Oklahoma at Georgia")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".web-tab-bar")).toBeHidden();
+  const tap = (v: string) => page.evaluate((v) => window.dispatchEvent(new CustomEvent("hs-native-tab", { detail: v })), v);
+
+  await tap("leagues");
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-view", "scores-plain");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Settings" })).toHaveCount(0);
+
+  await tap("schedule");
+  await expect(page.locator("html")).toHaveAttribute("data-view", "schedule");
+  // The page told the bar which tab is on.
+  await expect.poll(() => page.evaluate(() => {
+    const m = (window as unknown as { __hsTabMsgs: { view: string }[] }).__hsTabMsgs;
+    return m[m.length - 1]?.view;
+  })).toBe("schedule");
 });

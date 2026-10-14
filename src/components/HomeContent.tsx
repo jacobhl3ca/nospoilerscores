@@ -217,11 +217,11 @@ function resolveDefaultOffset(mode: "smart" | "today" | "yesterday" | undefined,
   return getSmartDefaultOffset(cutoffHour);
 }
 
-type ViewMode = "scores-plain" | "scores-rated" | "news" | "leagues" | "schedule";
+type ViewMode = "scores-plain" | "scores-rated" | "news" | "schedule";
 
 // iOS-style fixed bottom tab bar. Always pinned to the viewport bottom, sits
-// over scrolled content with a translucent blurred background, five tabs:
-// 🙈 Games  |  🙉 Ratings  |  📰 News  |  🏆 Leagues  |  📅 Schedule. Selected state uses accent
+// over scrolled content with a translucent blurred background, four tabs:
+// 🙈 Games  |  🙉 Ratings  |  📰 News  |  📅 Schedule. Selected state uses accent
 // color on icon + label (no solid background fill) so it reads "elegant"
 // rather than "chunky pill". Home-indicator clearance via safe-area inset.
 function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: ViewMode; onChange: (m: ViewMode) => void; placement?: "bottom" | "inline" }) {
@@ -265,11 +265,11 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
       {/* Inline (desktop): a subtle segmented-control box so the tabs read as a
           deliberate nav, not floating icons. Bottom (mobile): full-width bar. */}
       <div
-        className={inline ? "flex items-stretch w-80 rounded-xl overflow-hidden" : "max-w-md mx-auto flex items-stretch"}
+        className={inline ? "flex items-stretch w-72 rounded-xl overflow-hidden" : "max-w-md mx-auto flex items-stretch"}
         style={inline ? { background: "var(--bg-card)", border: "1px solid var(--border)" } : undefined}
       >
         {/* The icons carry real alt text (2026-09-25): AI-visibility scanners
-            count alt="" as missing, and these 5 icons render twice per board
+            count alt="" as missing, and these 4 icons render twice per board
             page. Screen readers are unaffected — the button's aria-label wins
             over its contents. */}
         {tab(
@@ -292,15 +292,6 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
           <img src="/news-emoji.svg" alt="Newspaper" width={24} height={24} className="w-6 h-6 news-tab-emoji" draggable={false} />,
           "News",
           "News (full spoilers)",
-        )}
-        {/* Leagues (9/29, from the FotMob review): pick the board's first
-            column on the fly. Same Twemoji set as the other three icons. */}
-        {tab(
-          "leagues",
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src="/trophy-emoji.svg" alt="Trophy" width={24} height={24} className="w-6 h-6" draggable={false} />,
-          "Leagues",
-          "Leagues (pick what is on the board)",
         )}
         {/* Schedule (10/14): the day's games across every league in the
             switcher, one line each, no scores. */}
@@ -979,11 +970,8 @@ export default function HomeContent({
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
-  // The Leagues tab (9/29): a view in <main>, not a modal, so the tab bars
-  // stay up. Session-only — a reload lands back on the board.
-  const [showLeagues, setShowLeagues] = useState(false);
   // The Schedule tab (10/14): the day's games across every switcher league,
-  // one line each. Unlike Leagues it survives a reload, through the same
+  // one line each. It survives a reload, through the same
   // nss-last-view key the pre-paint script reads (restored below).
   const [showSchedule, setShowSchedule] = useState(false);
   // The view saved before this load, read once before anything writes it.
@@ -2132,35 +2120,22 @@ export default function HomeContent({
   // Single segmented control in the header replaces the old separate
   // monkey + news buttons. Switching INTO news/ratings runs the same
   // explainer modals as before; switching out is silent.
-  const viewMode: ViewMode = showLeagues ? "leagues" : showSchedule ? "schedule" : showNews ? "news" : prefs.showRatings ? "scores-rated" : "scores-plain";
+  const viewMode: ViewMode = showSchedule ? "schedule" : showNews ? "news" : prefs.showRatings ? "scores-rated" : "scores-plain";
 
   const handleViewModeClick = (mode: ViewMode) => {
     if (mode === viewMode) return;
     if (mode === "schedule") {
-      // Exclusive with News and Leagues, like Leagues; the ratings pref is
+      // Exclusive with News; the ratings pref is
       // left alone so leaving Schedule goes back to the board tab that was on.
       if (showNews) {
         setShowNews(false);
         updatePrefs({ showNews: false });
       }
-      if (showLeagues) setShowLeagues(false);
       setShowSchedule(true);
       window.scrollTo({ top: 0, behavior: "auto" });
       return;
     }
     if (showSchedule) setShowSchedule(false);
-    if (mode === "leagues") {
-      // Exclusive with News; the ratings pref is left alone, so leaving
-      // Leagues goes back to whichever board tab was on.
-      if (showNews) {
-        setShowNews(false);
-        updatePrefs({ showNews: false });
-      }
-      setShowLeagues(true);
-      window.scrollTo({ top: 0, behavior: "auto" });
-      return;
-    }
-    if (showLeagues) setShowLeagues(false);
     if (mode === "scores-plain") {
       if (showNews) setShowNews(false);
       updatePrefs({ showNews: false, showRatings: false });
@@ -2189,12 +2164,17 @@ export default function HomeContent({
 
   // The native iOS tab bar (see lib/nativeTabBar.ts): a tap there runs the
   // same handler as the web tabs, and the selected tab follows viewMode.
+  // TestFlight builds 15–16 still draw a Leagues tab (removed 10/14); a tap
+  // there opens Settings, where the Leagues list lives. The open modal hides
+  // the native bar, and the bar shows the right tab again when Settings
+  // closes (nativeTabBar.ts posts on every modal change).
   const handleViewModeClickRef = useRef(handleViewModeClick);
   handleViewModeClickRef.current = handleViewModeClick;
   const nativeTabBarRef = useRef<NativeTabBar | null>(null);
   useEffect(() => {
     const bar = connectNativeTabBar((v) => {
-      if (v === "scores-plain" || v === "scores-rated" || v === "news" || v === "leagues" || v === "schedule") handleViewModeClickRef.current(v);
+      if (v === "scores-plain" || v === "scores-rated" || v === "news" || v === "schedule") handleViewModeClickRef.current(v);
+      else if (v === "leagues") setSettingsOpen(true);
     });
     nativeTabBarRef.current = bar;
     return () => { bar?.disconnect(); nativeTabBarRef.current = null; };
@@ -2262,9 +2242,6 @@ export default function HomeContent({
       scheduleRestoring.current = false;
     }
     document.documentElement.setAttribute("data-view", viewMode);
-    // Leagues is session-only (a reload opens the board), so the pre-paint
-    // script keeps the board tab it will actually land on.
-    if (viewMode === "leagues") return;
     try {
       localStorage.setItem("nss-last-view", viewMode);
     } catch {}
@@ -3783,10 +3760,6 @@ export default function HomeContent({
   // Null = no cards on screen (Feed, or the board has not loaded).
   let newsBar: NewsBarState | null = null;
 
-  // The Leagues tab (9/29, FotMob review): the column switcher's own list as a
-  // full page. A tap puts that league in column 1 (the same setter the column
-  // switcher uses) and goes back to the board. In-season first, then leagues
-  // about to start, then offseason; each group keeps the switcher's order.
   // The Schedule tab (10/14): the day's games across every in-season switcher
   // league, grouped by league, one line per game like the widget (time ·
   // away @ home · network). Never a score; a tap opens the card's modal.
@@ -3907,79 +3880,6 @@ export default function HomeContent({
     );
   };
 
-  const renderLeaguesView = () => {
-    const visibleSlots = SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length;
-    const onBoard = sortedLeagues.slice(0, visibleSlots).map((l) => l.sport);
-    const tier = (o: { offseason?: boolean; upcomingLabel?: string }) => (o.offseason ? 2 : o.upcomingLabel ? 1 : 0);
-    const rows = switcherOptions
-      .map((o, i) => ({ o, i }))
-      .sort((a, b) => tier(a.o) - tier(b.o) || a.i - b.i)
-      .map(({ o }) => o);
-    const pick = (sport: Sport) => {
-      setSlotLeague(0, sport);
-      setShowLeagues(false);
-      window.scrollTo({ top: 0, behavior: "auto" });
-    };
-    const openLeagueSettings = () => {
-      setSettingsOpen(true);
-      // The panel mounts on open; try for a few frames until the section is there.
-      let tries = 0;
-      const go = () => {
-        const el = document.getElementById("settings-leagues");
-        if (el) el.scrollIntoView({ block: "start" });
-        else if (++tries < 20) requestAnimationFrame(go);
-      };
-      requestAnimationFrame(go);
-    };
-    return (
-      <section data-testid="leagues-view" aria-labelledby="leagues-title" className="max-w-xl mx-auto pt-4">
-        <h2 id="leagues-title" className="text-2xl font-bold tracking-tight mb-3" style={{ color: "var(--text)" }}>Leagues</h2>
-        <ul className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--bg-card)" }}>
-          {rows.map((o, i) => {
-            const col = onBoard.indexOf(o.sport);
-            return (
-              <li key={o.sport} style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}>
-                <button
-                  type="button"
-                  data-league={o.sport}
-                  onClick={() => pick(o.sport)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left cursor-pointer transition-colors"
-                  style={{ color: o.offseason ? "var(--text-muted)" : "var(--text)" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  aria-current={col === 0 ? "true" : undefined}
-                >
-                  <span className="inline-flex items-center justify-center w-7 h-7 shrink-0">
-                    <LeagueMark sport={o.sport} size={22} />
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-[15px] font-medium truncate">{o.label}</span>
-                    {(o.upcomingLabel || o.offseason) && (
-                      <span className="block text-xs" style={{ color: "var(--text-muted)" }}>
-                        {o.upcomingLabel ? `Season starts ${o.upcomingLabel}` : "Offseason"}
-                      </span>
-                    )}
-                  </span>
-                  {col >= 0 && (
-                    <span className="flex items-center gap-1 text-xs shrink-0" style={{ color: "var(--accent)" }}>
-                      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                      Column {col + 1}
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <p className="text-center text-xs mt-4 mb-2">
-          <button type="button" onClick={openLeagueSettings} className="underline underline-offset-2 cursor-pointer" style={{ color: "var(--text-muted)" }}>
-            League settings
-          </button>
-        </p>
-      </section>
-    );
-  };
-
   return (
     <WatchQueueContext.Provider value={watchQueueApi}>
     <HideRanksContext.Provider value={!!prefs.hideRanks}>
@@ -4096,10 +3996,9 @@ export default function HomeContent({
               // In the news view, the logo acts as "back to scores" — toggle
               // news off in place instead of navigating, since "/" would
               // just rehydrate news from prefs.showNews and bounce the user
-              // right back into the news view. Leagues and Schedule are left the same way.
-              if (showLeagues || showSchedule) {
+              // right back into the news view. Schedule is left the same way.
+              if (showSchedule) {
                 e.preventDefault();
-                setShowLeagues(false);
                 setShowSchedule(false);
                 window.scrollTo({ top: 0, behavior: "auto" });
                 return;
@@ -4298,7 +4197,7 @@ export default function HomeContent({
             {/* Live filter (9/29, FotMob review). A filter, not a count: it
                 shows only while something on the board is in progress (or
                 while it is on, so it can be turned off), board views only. */}
-            {!showNews && !showLeagues && !showSchedule && (hasLiveGames || liveOnly) && (
+            {!showNews && !showSchedule && (hasLiveGames || liveOnly) && (
               <button
                 type="button"
                 data-testid="live-toggle"
@@ -4363,7 +4262,7 @@ export default function HomeContent({
             row, inside the fixed header, so --header-h measures it and it never
             covers a card. Board views only. The calendar and the one-column
             toggle stay pinned at the right end, outside the scroll area. */}
-        {!showNews && !showLeagues && (
+        {!showNews && (
           <div className="sm:hidden max-w-6xl mx-auto mt-1.5 -mb-2" data-testid="date-strip-row">
             <DateNav variant="strip" selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} initialDate={initialDate} trailing={
               <span className="relative inline-flex items-center shrink-0">
@@ -4402,7 +4301,7 @@ export default function HomeContent({
           view tabs in the top-row middle, so the date nav drops here). On mobile
           it's inline in the header middle instead (above). Scores/rated only;
           centered in max-w-6xl to line up with the middle (MLB) column. */}
-      {!showNews && !showLeagues && (
+      {!showNews && (
         <div className="hidden sm:flex max-w-6xl mx-auto px-4 justify-center pt-2 pb-1">
           <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} initialDate={initialDate} trailing={
             <span className="relative inline-flex items-center">
@@ -4812,7 +4711,7 @@ export default function HomeContent({
             the layout jumps to league columns ~1.5 s later (Jacob 10/2). Both
             conditions: a refresh poll keeps the news up, and an offline or
             failed load (loading false, no leagues) still falls through to it. */}
-        {showLeagues ? renderLeaguesView() : showSchedule ? renderScheduleView() : showNews && !(loading && leagues.length === 0) ? (() => {
+        {showSchedule ? renderScheduleView() : showNews && !(loading && leagues.length === 0) ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
               label: c.label,

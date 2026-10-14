@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-// The Schedule tab (Jacob 10/14): tab 5 of Games · Ratings · News · Leagues ·
-// Schedule. One list of the day's games across the switcher's in-season
+// The Schedule tab (Jacob 10/14): tab 4 of Games · Ratings · News · Schedule
+// (Leagues left the bar the same day). One list of the day's games across the switcher's in-season
 // leagues, grouped by league, one line per game, never a score. Boards are
 // mocked so the slate is exact:
 //   Wed 10/14  MLB   CLE at TB (8:08 pm, scheduled)
@@ -105,7 +105,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(card(page, "Oklahoma at Georgia")).toBeVisible({ timeout: 30_000 });
     });
 
-    test("tab 5 opens one list: board leagues first, then the rest; no scores", async ({ page, browserName }) => {
+    test("tab 4 opens one list: board leagues first, then the rest; no scores", async ({ page, browserName }) => {
       const tab = page.locator('.web-tab-bar button[data-tab="schedule"]');
       await expect(tab).toHaveText("Schedule");
       await tab.click();
@@ -180,7 +180,7 @@ test("desktop 1280px: inline tab, list centred at 720 px max", async ({ page, br
   await page.goto("/");
   await expect(card(page, "Oklahoma at Georgia")).toBeVisible({ timeout: 30_000 });
   const tabs = page.locator("header button[data-tab]");
-  await expect(tabs).toHaveCount(5);
+  await expect(tabs).toHaveCount(4);
   await page.locator('header button[data-tab="schedule"]').click();
   const view = page.getByTestId("schedule-view");
   await expect(view).toBeVisible();
@@ -188,7 +188,7 @@ test("desktop 1280px: inline tab, list centred at 720 px max", async ({ page, br
   const box = (await view.boundingBox())!;
   expect(box.width).toBeLessThanOrEqual(720);
   expect(Math.abs(box.x + box.width / 2 - 640)).toBeLessThan(12);
-  // All five tabs fit inside the header.
+  // All four tabs fit inside the header.
   for (const b of await tabs.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width))) expect(b).toBeGreaterThan(40);
   await shot(page, `schedule-desktop-${browserName}`);
 });
