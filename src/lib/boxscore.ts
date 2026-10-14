@@ -1,5 +1,6 @@
 import type { Game, Sport } from "./types";
 import { BASE_URL, SPORT_PATHS } from "./espn";
+import { fixTeamLogo } from "./teamLogos";
 
 // Our own box score, read from ESPN's per-event summary endpoint (open CORS,
 // ~65 KB gzipped for MLB). The popup fetches it ONLY after the user taps
@@ -73,8 +74,8 @@ function parseGroup(g: unknown): BoxScoreGroup | null {
 }
 
 function logoOf(team: Json): string {
-  if (Array.isArray(team.logos) && isObj(team.logos[0])) return str(team.logos[0].href);
-  return str(team.logo);
+  if (Array.isArray(team.logos) && isObj(team.logos[0])) return fixTeamLogo(str(team.logos[0].href));
+  return fixTeamLogo(str(team.logo));
 }
 
 export function parseBoxScore(json: unknown): BoxScore | null {

@@ -228,7 +228,8 @@ export default async function TeamPageRoute({ params }: PageProps) {
                 name: team.name,
                 sport: meta.schemaSport,
                 memberOf: { "@type": "SportsOrganization", name: meta.schemaLeague },
-                ...(team.logo ? { logo: team.logo } : {}),
+                // Self-hosted logos (/logos/nfl-lar.svg) are site paths; schema.org wants a full URL.
+                ...(team.logo ? { logo: team.logo.startsWith("/") ? `${BASE}${team.logo}` : team.logo } : {}),
                 url,
                 ...(team.venue
                   ? { location: { "@type": "Place", name: team.venue, ...(team.city ? { address: team.city } : {}) } }

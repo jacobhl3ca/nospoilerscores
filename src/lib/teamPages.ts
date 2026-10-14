@@ -282,7 +282,7 @@ export const TEAM_PAGES: TeamPage[] = [
     "name": "Los Angeles Rams",
     "shortName": "Rams",
     "abbreviation": "LAR",
-    "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lar.png",
+    "logo": "/logos/nfl-lar.svg",
     "venue": "SoFi Stadium",
     "city": "Inglewood, CA",
     "division": "NFC West",

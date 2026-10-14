@@ -15,7 +15,7 @@ import { fetchPokerEvent } from "./poker";
 import { parseRadioBroadcasts, type GeoBroadcast } from "./radio";
 import { fetchCuratedBoxingEvent } from "./boxing";
 import { CLIMB_CHANNEL, climbNotStreamedCount, climbRoundLabel, climbSubtitle, climbSubtitleVariants, climbVisibleRounds, type ClimbDiscipline } from "./climbing";
-import { logoForTeam, logoOverride, ncaaSchoolLogo, isPlaceholderTeam } from "./teamLogos";
+import { fixTeamLogo, logoForTeam, logoOverride, ncaaSchoolLogo, isPlaceholderTeam } from "./teamLogos";
 import {
   chessEventState,
   buildChessEventUrl,
@@ -1667,8 +1667,9 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
     ...(competitor.team?.location ? { location: competitor.team.location } : {}),
     ...(competitor.team?.conferenceId != null ? { conferenceId: String(competitor.team.conferenceId) } : {}),
     // ESPN has no artwork for some one-off opponents (mostly D2/D3 schools);
-    // teamLogoOverrides.ts fills those in.
-    logo: (sport === "cricketintl" ? cricketNationLogo(competitor.team?.displayName) : null) || competitor.team?.logo || logoOverride(sport, String(rawId)) || "",
+    // teamLogoOverrides.ts fills those in. fixTeamLogo swaps the few ESPN gets
+    // wrong (the blue-only Rams).
+    logo: fixTeamLogo((sport === "cricketintl" ? cricketNationLogo(competitor.team?.displayName) : null) || competitor.team?.logo || logoOverride(sport, String(rawId)) || ""),
     color: competitor.team?.color ?? "666666",
     score: formatScore(competitor.score ?? "0", sport),
     winner: competitor.winner ?? false,
@@ -6083,7 +6084,7 @@ export function fetchSportTeams(sport: Sport): Promise<SportTeam[]> {
           abbreviation,
           // The worker leagues and the standings rows ship the logo on the
           // item; ESPN's core items don't, hence the CDN-convention synthesis.
-          logo: t.logos?.[0]?.href || logoForTeam(sport, rawId, abbreviation, typeof t.guid === "string" ? t.guid : undefined),
+          logo: fixTeamLogo(t.logos?.[0]?.href || logoForTeam(sport, rawId, abbreviation, typeof t.guid === "string" ? t.guid : undefined)),
           slug: t.slug,
         });
       }
@@ -7173,6 +7174,7 @@ export async function fetchTeamSchedule(
             const primary = t.logos.find((l: { rel?: string[] }) => l.rel?.includes("default")) ?? t.logos[0];
             if (primary?.href) t.logo = primary.href;
           }
+          if (t?.logo) t.logo = fixTeamLogo(t.logo);
           // Score: scoreboard uses a string ("4"); schedule returns an object
           // ({ value, displayValue }). Flatten to the string form so parseGame
           // and calculateRating read the final score — otherwise parseInt gives

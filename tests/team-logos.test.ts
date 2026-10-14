@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { TEAM_PICKER_SKIP, logoForTeam, logoOverride, isPlaceholderTeam, ncaaSchoolLogo } from "../src/lib/teamLogos.ts";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { LOGO_REPLACE, TEAM_PICKER_SKIP, fixTeamLogo, logoForTeam, logoOverride, isPlaceholderTeam, ncaaSchoolLogo } from "../src/lib/teamLogos.ts";
 import { LOGO_OVERRIDES, ncaaComLogo } from "../src/lib/teamLogoOverrides.ts";
+
+const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 
 test("individual-competitor sports never get a team tab", () => {
   for (const s of ["golf", "tennis", "poker", "chess", "boxing", "ufc", "f1", "nascar", "indycar"] as const) {
@@ -80,9 +86,45 @@ test("teams ESPN has no art for get the override, keyed per sport", () => {
   assert.equal(logoForTeam("ncaah", "2779", "USL"), ncaaSchoolLogo("2779"));
 });
 
-test("every override key is a real sport + numeric id and every value is https", () => {
+test("every override key is a real sport + numeric id and every value is https or a shipped file", () => {
   for (const [key, url] of Object.entries(LOGO_OVERRIDES)) {
-    assert.match(key, /^(ncaah|ncaawh|ncaavb|ncaam|ncaaw|ncaaf|ncaabase|ncaasoft|saudi)-\d+$/, key);
-    assert.match(url, /^https:\/\//, key);
+    assert.match(key, /^(ncaah|ncaawh|ncaavb|ncaam|ncaaw|ncaaf|ncaabase|ncaasoft|ncaamsoc|ncaawsoc|saudi|top14|challengecup|premrugby|rugbychamp)-\d+$/, key);
+    if (url.startsWith("/")) assert.ok(existsSync(join(PUBLIC, url)), `${key}: public${url} missing`);
+    else assert.match(url, /^https:\/\//, key);
+  }
+});
+
+test("fixTeamLogo swaps every ESPN copy of the blue-only Rams mark", () => {
+  for (const url of [
+    "https://a.espncdn.com/i/teamlogos/nfl/500/lar.png",
+    "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/lar.png",
+    "https://a.espncdn.com/i/teamlogos/nfl/500-dark/lar.png",
+    "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/lar.png",
+    "https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/lar.png&w=48&h=48",
+  ]) {
+    assert.equal(fixTeamLogo(url), "/logos/nfl-lar.svg", url);
+  }
+  assert.equal(fixTeamLogo("https://a.espncdn.com/i/teamlogos/rugby/teams/500/25906.png"), "/logos/rugby-newcastle-red-bulls.png");
+});
+
+test("fixTeamLogo leaves every other logo alone", () => {
+  for (const url of [
+    "https://a.espncdn.com/i/teamlogos/nfl/500/lac.png", // Chargers, same stadium
+    "https://a.espncdn.com/i/teamlogos/nba/500/lal.png",
+    "https://a.espncdn.com/i/teamlogos/rugby/teams/500/25907.png",
+    ncaaComLogo("spalding"),
+    "/logos/rugby-bayonne.svg",
+  ]) {
+    assert.equal(fixTeamLogo(url), url);
+  }
+  assert.equal(fixTeamLogo(""), "");
+  assert.equal(fixTeamLogo(null), null);
+  assert.equal(fixTeamLogo(undefined), undefined);
+});
+
+test("every LOGO_REPLACE target ships in public/", () => {
+  for (const [key, path] of Object.entries(LOGO_REPLACE)) {
+    assert.ok(path.startsWith("/logos/"), key);
+    assert.ok(existsSync(join(PUBLIC, path)), `public${path} missing`);
   }
 });

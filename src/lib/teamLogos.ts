@@ -42,6 +42,36 @@ export function logoOverride(sport: Sport, rawId: string): string | undefined {
   return LOGO_OVERRIDES[`${sport}-${rawId}`];
 }
 
+// ESPN logos that are wrong, and the self-hosted art (public/logos/) that
+// replaces them wherever ESPN's URL shows up. Keyed by the path after
+// /i/teamlogos/ with `/scoreboard` and `-dark` taken out, so one entry covers
+// every size and theme ESPN serves, and every rugby league sharing the id.
+// Audited 2026-10-14:
+//   - Rams: every ESPN copy (500, scoreboard, 500-dark, the guid logos) is a
+//     blue-only "LA". NFL.com's mark is Royal #003594 + Sol #FFD100.
+//   - Newcastle: renamed Newcastle Red Bulls in Aug 2025, new crest 9 Sep
+//     2025; ESPN still serves the Falcons crest. The card still shows ESPN's
+//     "Newcastle Falcons" name: there is no team display-name override map.
+export const LOGO_REPLACE: Readonly<Record<string, string>> = {
+  "nfl/500/lar.png": "/logos/nfl-lar.svg",
+  "rugby/teams/500/25906.png": "/logos/rugby-newcastle-red-bulls.png",
+};
+
+// "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/lar.png" (or the
+// combiner's ?img= form) → "nfl/500/lar.png". Anything else → undefined.
+export function teamLogoKey(url: string): string | undefined {
+  const m = /\/i\/teamlogos\/([^?&#]+)/.exec(url);
+  return m ? m[1].replace("/scoreboard/", "/").replace(/-dark\//, "/") : undefined;
+}
+
+// The URL to draw for a team logo: the LOGO_REPLACE art when ESPN's is wrong,
+// else the URL unchanged (null / undefined / "" pass through).
+export function fixTeamLogo<T extends string | null | undefined>(url: T): T | string {
+  if (!url) return url;
+  const key = teamLogoKey(url);
+  return (key && LOGO_REPLACE[key]) || url;
+}
+
 // Little League World Series: ESPN's own scoreboard draws a country flag, not a
 // team logo — countries/500/<ISO3>.png for an international champion, usa.png
 // for every US regional (whose abbreviation is a state, "N CA", "NCAL", "TXW").
