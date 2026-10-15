@@ -467,6 +467,16 @@ export default function RootLayout({
             __html: `(function(){try{var v=localStorage.getItem('nss-last-view');if(v==='scores-plain'||v==='scores-rated'||v==='news'||v==='schedule'){document.documentElement.setAttribute('data-view',v);return}}catch(e){}document.documentElement.setAttribute('data-view','scores-plain')})()`,
           }}
         />
+        {/* Wide board, pre-paint (10/15). The static HTML is the 3-column
+            max-w-6xl board; on a ≥1280px screen it widened to max-w-7xl at
+            hydration and the whole board slid sideways (CLS 0.16 at 1440).
+            globals.css widens it up front from this class. Same query as
+            WIDE_BOARD_QUERY in HomeContent. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(window.matchMedia('(min-width: 1280px)').matches){document.documentElement.classList.add('hs-wide-board')}}catch(e){}})()`,
+          }}
+        />
         {/* Footer store badges, pre-paint. The row is in the static HTML, so
             anything that decides NOT to show it has to decide before the first
             paint or the badges are visibly there and then gone.

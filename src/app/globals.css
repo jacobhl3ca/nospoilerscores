@@ -1070,3 +1070,18 @@ iframe#yt-player {
 @media (hover: hover) and (pointer: fine) and (max-width: 39.99rem) {
   .hs-controls-hint { bottom: calc(env(safe-area-inset-bottom) + 4.5rem) !important; }
 }
+
+/* The scores board's width before HomeContent knows the viewport (10/15): on
+   a wide screen (html.hs-wide-board, set pre-paint in layout.tsx) the board
+   starts at max-w-7xl, the width the 5-column load takes, so it does not
+   slide sideways at hydration. data-wide-pending leaves <main> once the
+   viewport check has run. News keeps max-w-6xl, as in HomeContent. */
+html.hs-wide-board:not([data-view="news"]) main[data-wide-pending] {
+  max-width: 80rem;
+}
+[data-wide-only] {
+  display: none;
+}
+html.hs-wide-board:not([data-view="news"]) [data-wide-only] {
+  display: block;
+}

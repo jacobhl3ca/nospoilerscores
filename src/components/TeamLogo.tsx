@@ -1,7 +1,7 @@
 "use client";
 
 import type { ImgHTMLAttributes } from "react";
-import { darkTeamLogo } from "@/lib/teamLogos";
+import { darkTeamLogo, sizedTeamLogo } from "@/lib/teamLogos";
 import { useDarkTheme, useFailedUrls } from "@/lib/useLogoTheme";
 
 // A team logo <img>. In dark theme an ESPN logo loads ESPN's dark-theme copy
@@ -26,9 +26,13 @@ export function TeamLogo({
 }) {
   const darkTheme = useDarkTheme();
   const { failed, markFailed } = useFailedUrls();
-  const darkUrl = darkTheme ? darkTeamLogo(src) : undefined;
-  const url = darkUrl && !failed.includes(darkUrl) ? darkUrl : src;
-  const gone = failed.includes(src);
+  // ESPN logos load at the drawn size (sizedTeamLogo); no width = as given.
+  const px = Number(img.width) || 0;
+  const lightUrl = sizedTeamLogo(src, px);
+  const dark = darkTheme ? darkTeamLogo(src) : undefined;
+  const darkUrl = dark ? sizedTeamLogo(dark, px) : undefined;
+  const url = darkUrl && !failed.includes(darkUrl) ? darkUrl : lightUrl;
+  const gone = failed.includes(lightUrl);
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -39,7 +43,7 @@ export function TeamLogo({
       style={gone ? { ...style, ...(hide === "display" ? { display: "none" } : { visibility: "hidden" }) } : style}
       onError={() => {
         markFailed(url);
-        if (url === src) onFail?.();
+        if (url === lightUrl) onFail?.();
       }}
     />
   );

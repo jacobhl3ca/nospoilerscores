@@ -83,6 +83,19 @@ export function darkTeamLogo(url: string): string | undefined {
   return url.replace("/500/", "/500-dark/");
 }
 
+// An ESPN team logo at the size it draws (10/15). ESPN hands out 500 px PNGs:
+// 11 NCAA logos on a phone board were 311 KB. Its CDN combiner (the league
+// marks in news.ts use it) resizes on request, ~36 KB → ~2 KB at 48 px. `px`
+// = the box the logo draws in, doubled for 2× screens. The dark copy
+// (darkTeamLogo) takes the same route; a missing logo still 404s, so the
+// onError fallbacks work as before. Other hosts and px ≤ 0 pass through.
+export function sizedTeamLogo(url: string, px: number): string {
+  const m = /^https:\/\/a\.espncdn\.com(\/i\/teamlogos\/[^?#]+\.png)$/.exec(url);
+  if (!m || !(px > 0)) return url;
+  const side = Math.round(px * 2);
+  return `https://a.espncdn.com/combiner/i?img=${m[1]}&w=${side}&h=${side}&transparent=true`;
+}
+
 // Little League World Series: ESPN's own scoreboard draws a country flag, not a
 // team logo — countries/500/<ISO3>.png for an international champion, usa.png
 // for every US regional (whose abbreviation is a state, "N CA", "NCAL", "TXW").

@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { LOGO_REPLACE, TEAM_PICKER_SKIP, darkTeamLogo, fixTeamLogo, logoForTeam, logoOverride, isPlaceholderTeam, ncaaSchoolLogo } from "../src/lib/teamLogos.ts";
+import { LOGO_REPLACE, TEAM_PICKER_SKIP, darkTeamLogo, fixTeamLogo, logoForTeam, logoOverride, isPlaceholderTeam, ncaaSchoolLogo, sizedTeamLogo } from "../src/lib/teamLogos.ts";
 import { LOGO_OVERRIDES, ncaaComLogo } from "../src/lib/teamLogoOverrides.ts";
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -151,4 +151,26 @@ test("dark theme loads ESPN's 500-dark copy, and nothing for art with none", () 
   }
   // The fixed Rams never gets ESPN's blue-only dark copy back.
   assert.equal(darkTeamLogo(fixTeamLogo(`${espn}/nfl/500/lar.png`)), undefined);
+});
+
+test("an ESPN team logo loads through the combiner at 2× its drawn size", () => {
+  const espn = "https://a.espncdn.com/i/teamlogos";
+  const combiner = (path: string, side: number) =>
+    `https://a.espncdn.com/combiner/i?img=/i/teamlogos/${path}&w=${side}&h=${side}&transparent=true`;
+  assert.equal(sizedTeamLogo(`${espn}/ncaa/500/2294.png`, 24), combiner("ncaa/500/2294.png", 48));
+  // The dark copy keeps its path, so dark mode stays dark.
+  assert.equal(sizedTeamLogo(`${espn}/ncaa/500-dark/2294.png`, 16), combiner("ncaa/500-dark/2294.png", 32));
+  assert.equal(sizedTeamLogo(`${espn}/nfl/500/scoreboard/buf.png`, 22), combiner("nfl/500/scoreboard/buf.png", 44));
+  // Other hosts, self-hosted art, an unknown size and an already-sized URL pass through.
+  for (const url of [
+    "/logos/nfl-lar.svg",
+    ncaaComLogo("spalding"),
+    "https://a.espncdn.com/guid/04c5d4b5-21f5-3580-9b69-b97224bf2ffb/logos/default.png",
+    "https://images.fotmob.com/image_resources/logo/teamlogo/205687.png",
+    "https://www.mlbstatic.com/team-logos/147.svg",
+    combiner("mlb/500/nyy.png", 48),
+  ]) {
+    assert.equal(sizedTeamLogo(url, 24), url, url);
+  }
+  assert.equal(sizedTeamLogo(`${espn}/mlb/500/nyy.png`, 0), `${espn}/mlb/500/nyy.png`);
 });
