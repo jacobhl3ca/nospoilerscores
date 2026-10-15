@@ -65,7 +65,7 @@ export default function DocFooter({ route }: { route: string }) {
           ),
         )}
       </nav>
-      <SupportLine />
+      <SupportLine here={here} />
     </>
   );
 }

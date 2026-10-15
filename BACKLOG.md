@@ -1,5 +1,22 @@
 # HideScore — Master Backlog
 
+## 2026-10-15 — /sponsors page: built now, hidden until Dec 15
+
+**Plan:** `~/.claude-c3/plans/hidescore-sponsors-page-2026-10-15.md`. Branch `feat/sponsors-page` (worktree `~/hs-sponsors`).
+- `src/lib/sponsors.ts`: `SPONSORS` (name, https url, optional logo, blurb) and `PATRONS` (a name or initials, never an email), both empty. Sponsors and patrons stay OFF `/wall-of-fame`.
+- `/sponsors` (`src/components/SponsorsBody.tsx`): pitch, Sponsors (logo, name, blurb, "Sponsor" pill, `rel="sponsored noopener"`), Patrons (+ Patreon link once `PATREON_URL` is set), "Become a sponsor" (FeedbackBox seeded `Sponsor: `). No prices.
+- One date: `SUPPORT_LIVE_FROM` (`supportLinks.ts`). The body and the footer link are checked in the browser (open Dec 15 with no deploy). The sitemap entry and `robots: noindex` are build-time (`supportLiveOn()`), so they flip on the first deploy on or after Dec 15.
+- Footer link: on the support line ("See the sponsors."), not in `SITE_LINKS`, because the doc footer row is full at one line at 1280 px (a 10th item wraps "Terms").
+- Native shells: the page shows "HideScore is free." only; the support line (and so the link) never renders there.
+- Tests: `tests/sponsors.test.ts`, `tests/visual/sponsors.spec.ts` (Chromium + WebKit on the mini).
+
+**Open:**
+- [ ] Fill `SPONSORS` / `PATRONS` by hand from Patreon and email. Founding fans ($15) go first in `PATRONS`.
+- [ ] The first sponsor invoice is dated Jan 2027 or later (no money before Mon Dec 14; December total under $98).
+- [ ] Paid perks never include TestFlight access (App Review 2.2).
+- [ ] Deploy on or after Dec 15 so the sitemap entry and the index tag flip.
+- [ ] `llms.txt` is a static file, so `/sponsors` is left out. Add the line by hand after Dec 15.
+
 ## 2026-10-14 — Champions Cup from round 1 (a "League request: Investec Champions Cup")
 
 **Plan:** `~/.claude-c3/plans/pasted-content-id-f0b7-skip-to-luminous-muffin.md`. Branch `feat/champions-cup-2026` (worktree `~/hs-champions-cup`). Request: Formspree, Android build `abb1ee72`, Oct 14 1:36 PM ET, initials M.T. (on the wall).
@@ -45,7 +62,7 @@
 **Open:**
 - [x] Initials ticked by Jacob 10/9: K.K. on widget, scroll columns, NCAA men's + women's hockey; I.R. on time zone; CFL, Rugby Nations Championship, La Liga etc. stay blank. "Email field on this form" row dropped.
 - [ ] New request shipped → add a row here. Initials only if the note carried them or the person agreed.
-- [ ] Dec 15 (Patreon on): the $3+ perk = initials on this list under a "Patrons" line.
+- [x] ~~Dec 15 (Patreon on): the $3+ perk = initials on this list under a "Patrons" line.~~ Superseded 2026-10-15: patrons go on `/sponsors`, never on the wall.
 
 ## 2026-10-09 — Highlight gaps left after the 10/2–10/8 audit (no work now)
 

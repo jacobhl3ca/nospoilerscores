@@ -19,7 +19,7 @@ export const SUPPORT_LINKS: SupportLink[] = [
 
 // Same native check the footer uses for the store badges (HomeContent) and
 // the `tag=app` analytics hook in layout.tsx.
-function isNativePlatform(): boolean {
+export function isNativePlatform(): boolean {
   if (typeof window === "undefined") return false;
   type CapacitorGlobal = { Capacitor?: { isNativePlatform?: () => boolean } };
   const cap = (window as unknown as CapacitorGlobal).Capacitor;
@@ -36,9 +36,16 @@ function etYmd(now: Date): string {
   }).format(now);
 }
 
+// The date half of the gate, with no native check. /sponsors (10/15) also
+// calls it at BUILD time for its sitemap entry, footer link, llms.txt line and
+// robots tag, so those flip with the first deploy on or after the live date.
+export function supportLiveOn(now: Date = new Date()): boolean {
+  return etYmd(now) >= SUPPORT_LIVE_FROM;
+}
+
 export function supportLinksVisible(now: Date = new Date(), native: boolean = isNativePlatform()): boolean {
   if (native) return false;
-  return etYmd(now) >= SUPPORT_LIVE_FROM;
+  return supportLiveOn(now);
 }
 
 export function activeSupportLinks(links: SupportLink[] = SUPPORT_LINKS): SupportLink[] {
