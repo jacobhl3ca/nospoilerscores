@@ -20,11 +20,11 @@ test("/contact keeps the heading and links to the wall of fame", async ({ page }
   await page.goto("/contact");
   await expect(page.getByRole("heading", { level: 2, name: "Built from your requests" })).toBeVisible();
   await expect(page.getByTestId("requested-builds")).toHaveCount(0);
-  const link = page.locator("main section").getByRole("link", { name: "See the wall of fame →" });
+  const link = page.locator("main section").getByRole("link", { name: "See the Wall of Fame →" });
   await expect(link).toHaveAttribute("href", "/wall-of-fame");
   await link.click();
   await expect(page).toHaveURL((u) => u.pathname === "/wall-of-fame");
-  await expect(page.getByRole("heading", { level: 1, name: "Wall of fame" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Wall of Fame" })).toBeVisible();
 });
 
 test("feedback form sends initials only when filled", async ({ page }) => {

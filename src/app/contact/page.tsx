@@ -79,7 +79,7 @@ export default function ContactPage() {
         <p>
           Leagues, features and fixes that started as a note from someone using HideScore.{" "}
           <Link href="/wall-of-fame" className="underline underline-offset-2 whitespace-nowrap">
-            See the wall of fame →
+            See the Wall of Fame →
           </Link>
         </p>
 

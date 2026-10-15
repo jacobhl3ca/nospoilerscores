@@ -61,7 +61,7 @@ export default function WallOfFameRequests() {
         Want your initials added or removed?{" "}
         <button
           type="button"
-          onClick={() => open("Wall of fame: please add / remove my initials: ", false)}
+          onClick={() => open("Wall of Fame: please add / remove my initials: ", false)}
           className="underline underline-offset-2 cursor-pointer hover:opacity-80"
           style={muted}
           data-umami-event="wall-initials"

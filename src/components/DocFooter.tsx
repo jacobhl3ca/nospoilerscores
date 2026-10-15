@@ -20,7 +20,7 @@ export const SITE_LINKS: { href: string; label: string; title?: string }[] = [
   { href: "/about", label: "About" },
   { href: "/faq", label: "FAQ" },
   { href: "/guides", label: "Guides" },
-  { href: "/wall-of-fame", label: "WOF", title: "Wall of fame" },
+  { href: "/wall-of-fame", label: "WOF", title: "Wall of Fame" },
   { href: "/contact", label: "Contact" },
   // /contact hosts the feedback form under the email line. Rendered as the
   // form's own trigger below, not a link.
