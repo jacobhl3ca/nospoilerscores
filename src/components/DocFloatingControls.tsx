@@ -8,9 +8,11 @@ import { useEffect, useState } from "react";
 // "Open HideScore" button, so a reader at the end of a long page had to scroll
 // all the way up. Two fixed controls at the bottom:
 // - a ✕ pill, bottom centre: the same link as the top button;
-// - a round arrow, bottom right: ▼ near the top (scrolls to the end), ▲
+// - a round arrow, bottom right: down near the top (scrolls to the end), up
 //   further down (scrolls back to the top). Left out when the page is not
-//   taller than 1.5 screens, where there is nothing to jump over.
+//   taller than 1.5 screens, where there is nothing to jump over. 10/15
+//   (Jacob): a thin line arrow, the feedback form's send arrow at stroke 2,
+//   replaced the solid ▲ / ▼ glyphs.
 // Both sit inside the safe area and are hidden in print (globals.css). The
 // doc page carries extra bottom padding so they never cover its last line.
 const TOP_ZONE = 200;
@@ -71,7 +73,19 @@ export default function DocFloatingControls({ route, href }: { route: string; hr
           className="doc-float doc-float-arrow"
           data-dir={dir}
         >
-          <span aria-hidden="true">{dir === "down" ? "▼" : "▲"}</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {dir === "down" ? (
+              <>
+                <path d="M12 5v14" />
+                <path d="m19 12-7 7-7-7" />
+              </>
+            ) : (
+              <>
+                <path d="M12 19V5" />
+                <path d="m5 12 7-7 7 7" />
+              </>
+            )}
+          </svg>
         </button>
       ) : null}
     </>

@@ -1,14 +1,15 @@
 // What shipped because a user asked for it, for the wall of fame
 // (/wall-of-fame; on /contact from 2026-10-09 to 10/11). Plain data with no
 // imports, so the unit test can load it under node's type stripping
-// (tests/requested-builds.test.ts checks dates, order, kinds and initials).
+// (tests/requested-builds.test.ts checks dates, order, kinds and credits).
 // The page renders rows in this file's order.
 //
-// `by` holds initials only ("K.K."), never a full name or an email. A row's
-// initials go in only after the person agreed: Jacob ticks the mined rows, and
-// from 10/9 the feedback form has its own optional initials field. A row with
-// no initials still shows, under "Asked without a name". The repo is public:
-// nothing that maps initials to a person goes in it.
+// `by` holds the name or the initials the person picked ("K.K."), never an
+// email. A credit goes in only after the person agreed: Jacob ticks the mined
+// rows, and the feedback form has its own optional field (initials from 10/9,
+// a name or initials from 10/15). A row with no credit still shows, under
+// "Asked without a name". The repo is public: nothing beyond what the person
+// chose to show goes in it.
 
 export type RequestedBuildKind = "League" | "Fix" | "Feature";
 export type RequestedBuild = { date: string; kind: RequestedBuildKind; title: string; by: string[] };
@@ -27,6 +28,11 @@ export const REQUESTED_BUILDS: RequestedBuild[] = [
   { date: "2026-08-12", kind: "League", title: "Rugby Nations Championship", by: [] },
   { date: "2026-08-03", kind: "League", title: "La Liga, Serie A, Bundesliga and Ligue 1", by: [] },
 ];
+
+// One link per person on the wall (2026-10-15 perk: their site or profile),
+// keyed by the exact `by` credit. Added only when the person asks for it in a
+// note; https only, never an email. The page marks it rel="ugc nofollow".
+export const WALL_LINKS: Record<string, string> = {};
 
 // The person a row belongs to, for the grouping above ("" = no initials).
 export function requestedBuildGroup(r: RequestedBuild): string {

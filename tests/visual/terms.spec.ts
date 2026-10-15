@@ -34,13 +34,13 @@ for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) 
     await expect(mail).toHaveText("hi@hidescore.com");
     await expect(page.locator("main time")).toHaveAttribute("datetime", /^\d{4}-\d{2}-\d{2}$/);
 
-    // The not-affiliated sentence is in the body once, not in the footer; no
-    // "Terms" link to itself.
+    // The not-affiliated sentence is in the body once, not in the footer. The
+    // footer's "Terms" stays on /terms, marked as the current page (10/15).
     await expect(page.locator("main", { hasText: NOT_AFFILIATED })).toHaveCount(1);
     await expect(main.locator("p", { hasText: NOT_AFFILIATED })).toHaveCount(1);
     await expect(page.locator("main > p", { hasText: NOT_AFFILIATED })).toHaveCount(0);
     const nav = page.getByRole("navigation", { name: "Site" });
-    await expect(nav.getByRole("link", { name: "Terms" })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: "Terms" })).toHaveAttribute("aria-current", "page");
     await expect(nav.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/privacy");
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -50,11 +50,12 @@ for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) 
 
 test("doc footer: Terms is the last link, after Privacy", async ({ page }) => {
   await page.goto("/privacy");
-  const nav = page.getByRole("navigation", { name: "Site" });
-  await expect(nav.getByRole("link").last()).toHaveText("Terms");
-  await expect(nav.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
+  // The link row; "← Back to HideScore" sits on its own line below it (10/15).
+  const row = page.getByRole("navigation", { name: "Site" }).getByTestId("doc-footer-links");
+  await expect(row.getByRole("link").last()).toHaveText("Terms");
+  await expect(row.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
   await page.goto("/about");
-  const labels = await page.getByRole("navigation", { name: "Site" }).getByRole("link").allTextContents();
+  const labels = await page.getByRole("navigation", { name: "Site" }).getByTestId("doc-footer-links").getByRole("link").allTextContents();
   expect(labels.slice(-2)).toEqual(["Privacy", "Terms"]);
   // No not-affiliated line under the doc footer (10/14).
   await page.goto("/faq");

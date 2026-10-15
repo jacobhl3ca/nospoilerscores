@@ -21,7 +21,7 @@ export default function SupportLine() {
 
   const muted = { color: "var(--text-muted)" };
   return (
-    <p className="mt-1 text-xs" style={muted} data-testid="support-line">
+    <p className="mt-1 text-xs text-center" style={muted} data-testid="support-line">
       <span aria-hidden="true">☕</span> HideScore is free and ad-free. Support it on{" "}
       {links.map((l, i) => (
         <span key={l.id}>
