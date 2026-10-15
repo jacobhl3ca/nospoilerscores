@@ -11,6 +11,9 @@ import { useSupportLinks } from "@/components/SupportLine";
 // hidden-trigger FeedbackBox serves both. The per-row "This was me" links came
 // out 10/14. From Dec 15 the Ko-fi and Patreon links sit beside the button,
 // through the same date gate as the footer's support line.
+// 10/15 (Jacob): the button moved from above the list to the end of the page,
+// so a reader sees what got built before the ask, and the note reads "added or
+// changed" (one ask covers a name, initials or a link).
 export default function WallOfFameRequests() {
   const [signal, setSignal] = useState(0);
   const [prefill, setPrefill] = useState("");
@@ -26,7 +29,24 @@ export default function WallOfFameRequests() {
   const muted = { color: "var(--text-muted)" };
   return (
     <>
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <h2 id="built" className="text-lg font-semibold mt-6 mb-4">Built from your requests</h2>
+      <RequestedBuildsList />
+      {/* The note link opens the same form, seeded for a credit change (10/14;
+          name and link from 10/15). The Umami event keeps its old name. */}
+      <p className="text-sm mt-4" style={muted}>
+        Want to be added or changed?{" "}
+        <button
+          type="button"
+          onClick={() => open("Wall of fame: add or change me. I asked for: ", false)}
+          className="underline underline-offset-2 cursor-pointer hover:opacity-80"
+          style={muted}
+          data-umami-event="wall-initials"
+        >
+          Say so in a note.
+        </button>
+      </p>
+
+      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
         <button
           type="button"
           onClick={() => open("", true)}
@@ -53,23 +73,6 @@ export default function WallOfFameRequests() {
           </a>
         ))}
       </div>
-
-      <h2 id="built" className="text-lg font-semibold mt-6 mb-4">Built from your requests</h2>
-      <RequestedBuildsList />
-      {/* The note link opens the same form, seeded for a credit change (10/14;
-          name and link from 10/15). The Umami event keeps its old name. */}
-      <p className="text-sm mt-4" style={muted}>
-        Want your name, initials or link changed?{" "}
-        <button
-          type="button"
-          onClick={() => open("Wall of fame: please change my name / initials / link to: ", false)}
-          className="underline underline-offset-2 cursor-pointer hover:opacity-80"
-          style={muted}
-          data-umami-event="wall-initials"
-        >
-          Say so in a note.
-        </button>
-      </p>
 
       {/* h-0: the box's own wrapper is an inline-flex with only a fixed modal
           in it, which would still add a line of height while the form is open. */}

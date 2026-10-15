@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 // Doc pages' floating controls (DocFloatingControls, 2026-10-09): a ✕ pill at
-// the bottom centre that goes back to the board, and a ▼/▲ arrow at the
-// bottom right that jumps to the end and back. Plus the /contact email as a
-// blue pill. At a phone width and a desktop width.
+// the bottom centre that goes back to the board, and a down/up arrow at the
+// bottom right that jumps to the end and back (a thin line SVG from 10/15).
+// At a phone width and a desktop width.
 //
 // The arrow only shows on a page taller than 1.5 screens. /contact is about
 // 1,100px tall at 390px and 980px at 1440px, so a 600px-high viewport keeps
@@ -34,8 +34,11 @@ for (const size of WIDTHS) {
         expect(box.y + box.height).toBeGreaterThan(size.height - 80);
         expect(box.y + box.height).toBeLessThanOrEqual(size.height);
 
-        // At the top: ▼ goes to the end.
-        await expect(arrow(page)).toHaveText("▼");
+        // At the top: the down arrow goes to the end. A thin line arrow, not
+        // the solid ▼ glyph (10/15).
+        await expect(arrow(page)).toHaveAttribute("data-dir", "down");
+        await expect(arrow(page)).toHaveText("");
+        await expect(arrow(page).locator("svg")).toHaveAttribute("stroke-width", "2");
         await expect(arrow(page)).toHaveAttribute("aria-label", "Scroll to bottom");
         await arrow(page).click();
         await expect
@@ -48,12 +51,12 @@ for (const size of WIDTHS) {
         const closeBox = (await close.boundingBox())!;
         expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(closeBox.y);
 
-        // Now ▲ goes back to the top.
-        await expect(arrow(page)).toHaveText("▲");
+        // Now the up arrow goes back to the top.
+        await expect(arrow(page)).toHaveAttribute("data-dir", "up");
         await expect(arrow(page)).toHaveAttribute("aria-label", "Scroll to top");
         await arrow(page).click();
         await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-        await expect(arrow(page)).toHaveText("▼");
+        await expect(arrow(page)).toHaveAttribute("data-dir", "down");
 
         if (size.width === 390) {
           const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -62,16 +65,8 @@ for (const size of WIDTHS) {
       });
     }
 
-    test("/contact: the email is a blue pill", async ({ page }) => {
-      await page.goto("/contact");
-      const email = page.locator('main a[href^="mailto:"]').first();
-      await expect(email).toBeVisible();
-      await expect(email).toHaveAttribute("href", /^mailto:/);
-      const accent = await page.getByRole("link", { name: "Open HideScore", exact: true }).evaluate((el) => getComputedStyle(el).backgroundColor);
-      const bg = await email.evaluate((el) => getComputedStyle(el).backgroundColor);
-      expect(bg).toBe(accent);
-      expect(bg).not.toBe("rgba(0, 0, 0, 0)");
-    });
+    // The /contact email was a blue pill here until 10/14 (#389, Jacob): it is a
+    // plain link now, checked in wall-of-fame.spec.ts.
 
     test("/notrack (short page): ✕ pill, no arrow", async ({ page }) => {
       await page.goto("/notrack");

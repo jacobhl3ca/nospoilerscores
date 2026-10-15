@@ -174,6 +174,16 @@ test("no This was me buttons, not even on the unnamed rows", async ({ page }) =>
   }
 });
 
+// 10/15 (Jacob): the button closes the page, under the list and its note.
+test("Suggest something sits below the list and the credit note", async ({ page }) => {
+  await page.goto("/wall-of-fame");
+  const button = (await page.getByRole("button", { name: "Suggest something" }).boundingBox())!;
+  const lastRow = (await rows(page).last().boundingBox())!;
+  const note = (await page.getByRole("button", { name: "Say so in a note." }).boundingBox())!;
+  expect(button.y).toBeGreaterThan(lastRow.y + lastRow.height);
+  expect(button.y).toBeGreaterThan(note.y + note.height);
+});
+
 test("support links sit beside the button from Dec 15, not before", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-12-14T12:00:00-05:00"));
   await page.goto("/wall-of-fame");
@@ -190,7 +200,7 @@ test("support links sit beside the button from Dec 15, not before", async ({ pag
   expect(Math.abs(link.y + link.height / 2 - (button.y + button.height / 2))).toBeLessThanOrEqual(4);
 });
 
-test("the doc footer links to the wall as WOF, except on the wall itself", async ({ page }) => {
+test("the doc footer links to the wall as WOF, marked current on the wall itself", async ({ page }) => {
   await page.goto("/about");
   const wof = page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Wall of fame", exact: true });
   await expect(wof).toHaveAttribute("href", "/wall-of-fame");
@@ -199,10 +209,30 @@ test("the doc footer links to the wall as WOF, except on the wall itself", async
   await expect(wof).toHaveAttribute("title", "Wall of fame");
   await page.goto("/wall-of-fame");
   const nav = page.getByRole("navigation", { name: "Site" });
-  await expect(nav.getByRole("link", { name: "Wall of fame" })).toHaveCount(0);
-  await expect(nav.getByRole("link").filter({ hasNotText: "Back to HideScore" })).toHaveText(["About", "FAQ", "Guides", "Contact", "Privacy", "Terms"]);
+  // 10/15: the same 8 items as the homepage row, the current page included.
+  await expect(nav.getByTestId("doc-footer-links").locator("a, button")).toHaveText(["About", "FAQ", "Guides", "WOF", "Contact", "Feedback", "Privacy", "Terms"]);
+  await expect(nav.getByRole("link", { name: "Wall of fame", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(nav.getByRole("button", { name: "Feedback", exact: true })).toBeVisible();
 });
+
+// 10/15: the doc footer row matches the homepage row (centred, 12 px), and
+// "← Back to HideScore" sits on its own line below it.
+for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+  test(`${size.width}px: doc footer row looks like the homepage row, Back to HideScore below`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await page.goto("/wall-of-fame");
+    const nav = page.getByRole("navigation", { name: "Site" });
+    const row = nav.getByTestId("doc-footer-links");
+    await row.scrollIntoViewIfNeeded();
+    expect(await row.evaluate((n) => getComputedStyle(n).justifyContent)).toBe("center");
+    expect(await row.locator("a").first().evaluate((n) => getComputedStyle(n).fontSize)).toBe("12px");
+    const back = nav.getByRole("link", { name: "← Back to HideScore" });
+    const rowBox = (await row.boundingBox())!;
+    const backBox = (await back.boundingBox())!;
+    expect(backBox.y).toBeGreaterThanOrEqual(rowBox.y + rowBox.height);
+    expect(Math.abs(backBox.x + backBox.width / 2 - (rowBox.x + rowBox.width / 2))).toBeLessThanOrEqual(2);
+  });
+}
 
 for (const path of ["/wall-of-fame", "/about"]) {
   for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
@@ -255,11 +285,13 @@ test("board footer row is 1 line at 390px (web)", async ({ page }) => {
   expect(await rowCount(row)).toBe(1);
 });
 
-test("article doc footer is 1 line at 1280px", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto("/nba-highlights-without-spoilers");
-  expect(await rowCount(page.getByRole("navigation", { name: "Site" }))).toBe(1);
-});
+for (const width of [1280, 390]) {
+  test(`article doc footer link row is 1 line at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/nba-highlights-without-spoilers");
+    expect(await rowCount(page.getByRole("navigation", { name: "Site" }).getByTestId("doc-footer-links"))).toBe(1);
+  });
+}
 
 test("the credit note is an underlined link that opens the form seeded for the change", async ({ page }) => {
   await page.goto("/wall-of-fame");
@@ -267,7 +299,7 @@ test("the credit note is an underlined link that opens the form seeded for the c
   await expect(note).toHaveAttribute("data-umami-event", "wall-initials");
   expect(await note.evaluate((n) => getComputedStyle(n).textDecorationLine)).toContain("underline");
   await note.click();
-  await expect(page.locator("#hs-feedback-input")).toHaveValue("Wall of fame: please change my name / initials / link to: ");
+  await expect(page.locator("#hs-feedback-input")).toHaveValue("Wall of fame: add or change me. I asked for: ");
   await expect(page.locator("#hs-feedback-form .kind-pill")).toHaveCount(0);
 });
 

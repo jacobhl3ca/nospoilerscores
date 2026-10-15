@@ -7,6 +7,11 @@
 - Send arrow: accent fill once the message has text, arrow in `--bg` (white on the dark accent is 2.6:1).
 - `requestedBuilds.ts`: `by` = the name or initials the person picked. `WALL_LINKS` (empty) = one https link per person, added only on request; the ranked name links out with `rel="ugc nofollow noopener"`. Promise line adds "a link to their site or profile".
 - Wall note: "Want your name, initials or link changed? Say so in a note." (Umami event stays `wall-initials`.)
+- Round 2 (Jacob 10/15 12:42 PM):
+  - The note reads "Want to be added or changed? Say so in a note." and seeds `Wall of fame: add or change me. I asked for: `. One ask, no pills.
+  - "Suggest something" (plus the Dec 15 support links) moved from above the list to the end of the page, under the note.
+  - DocFooter row = the homepage row: centred, `text-xs`, `gap-x-2`, all 8 items (the current page stays in with `aria-current="page"`). "← Back to HideScore" left the row for its own centred line below it. SupportLine is centred to match.
+  - Doc pages' floating arrow: a thin line SVG (the send arrow at stroke 2) replaced the solid ▲ / ▼ glyphs.
 
 **Open:**
 - [ ] Sponsors + patrons go on their own `/sponsors` page (Part 2 of the plan, hidden until Dec 15), not on the wall. This replaces the 10/9 "Patrons line on this list" item.
