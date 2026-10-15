@@ -376,12 +376,22 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // appear in no ESPN title. ESPN titles by state/country, so the channel was
 // right and the QUERY was the failure. Fixed by highlightTeamName().
 //
-// rugbychamp (Investec Champions Cup): 0/5 on "Investec Champions Cup",
-// "EPCR Rugby" and "Champions Cup". There is no competition-level uploader —
-// the unscoped winner was "Glasgow Warriors", i.e. one of the two CLUBS in the
-// match, and the other four fixtures returned nothing at all. Club channels
-// winning an unscoped search is the same inconsistency that put NWSL behind an
-// exact channel; here there is no exact channel to put it behind.
+// rugbychamp + challengecup (Investec Champions Cup, EPCR Challenge Cup):
+// still dark, re-probed 2026-10-14. The 8/11 probe asked the wrong channel
+// names ("Investec Champions Cup", "EPCR Rugby", "Champions Cup": 0/5). Both
+// cups post to ONE channel, "Investec Champions Cup & EPCR Challenge Cup"
+// (UCqn9RhigXvnvVUkKm5iAjxg). Whole 2025-26 season of both cups (114 games)
+// against the local gated worker, strict: 70 right, 1 WRONG, 1 doubtful, 25
+// missed, 17 with no upload. The WRONG: Toulouse v Sharks (Dec 7) got the
+// Jan 17 "Stade Toulousain v Sale Sharks" cut, because ESPN's "Sharks" is a
+// substring of "Sale Sharks". The doubtful one: Saracens v Toulouse (Jan 11)
+// got "Before They Meet Again | Saracens v Stade Toulousain", posted in July.
+// The misses are channel names ESPN does not use (Bristol Bears, Section
+// Paloise, USAP, Newcastle Red Bulls, Hollywoodbets Sharks). Titles also lead
+// with a verdict ("Champions!", "Historic Victory", "80 points!"), so lighting
+// needs the channel in TITLE_ALWAYS_MASKED_CHANNELS, a "Sharks" alias that
+// cannot match "Sale Sharks", and a re-probe at 0 wrong. Script and results:
+// ~/scripts/hs-epcr-probe/ (probe.mjs, gated-local.json).
 //
 // rugbytest (International Test Match): no single uploader owns the November
 // window. Best was "Quilter Nations Series" at 2/5 — England home tests only,
@@ -494,8 +504,8 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   // Top 14 on 2026-10-03 (see OFFICIAL_CHANNELS).
   // premrugby: "PREM Rugby" and "Premiership Rugby" both 0/5 strict; the
   //   league's clips carry no "A v B" pairing in the title.
-  // challengecup: no fixture played yet (pool round 1 is 2026-10-16).
-  //   RE-PROBE the EPCR channel after round 1.
+  // challengecup: shares the Champions Cup channel; see the rugbychamp note
+  //   above (re-probed 2026-10-14, 1 WRONG, so dark).
   // mlr: 4/8 with one WRONG match, and titles hint at the result.
   "premrugby",
   "challengecup",

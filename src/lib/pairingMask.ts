@@ -73,6 +73,11 @@ const LADDER_SEEDED_ROUND: Partial<Record<Sport, RegExp>> = {
   // "NCAA Women's Volleyball Championship - First Round"; conference
   // tournaments ("SEC Women's Volleyball Tournament - First Round") mask.
   ncaavb: /^NCAA\b.*\bfirst round\b/i,
+  // Champions Cup and Challenge Cup (2026-10-14): labels come off the date
+  // table in playoffDates.ts. The Round of 16 is seeded 1v8 off the pool
+  // ranking, so it shows; the quarterfinals, semifinals and final mask.
+  rugbychamp: /^round of 16$/i,
+  challengecup: /^round of 16$/i,
 };
 
 // Leagues ESPN files without a playoff flag, keyed on parseGame's stage. A
