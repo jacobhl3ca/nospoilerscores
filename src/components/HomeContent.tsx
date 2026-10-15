@@ -5,7 +5,7 @@ import { abortOwn } from "@/lib/abort";
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { NewsMarkSeenContext, markSeen, seenKeys, setSeenSync, useNewsSeenTracker } from "@/lib/newsSeen";
+import { NewsMarkSeenContext, markSeen, seenKeys, setSeenMorningReset, setSeenSync, useNewsSeenTracker, useSeenCutoff } from "@/lib/newsSeen";
 import { pullSeen, pushSeen } from "@/lib/seenSync";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, NewsLayout, type NewsCardPrefs, type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
@@ -3422,13 +3422,19 @@ export default function HomeContent({
   // the source/league set changes, or a pull-to-refresh reloads the feeds.
   const mainRef = useRef<HTMLElement>(null);
   useNewsSeenTracker(mainRef, showNews && prefsHydrated);
+  // Morning reset (Settings → News): opens before the last 4 AM read as not
+  // opened. The cutoff joins the snapshot trigger, so a new morning brings
+  // yesterday's posts back without a reload.
+  const morningReset = prefs.newsSeenMorningReset ?? true;
+  useEffect(() => { setSeenMorningReset(morningReset); }, [morningReset]);
+  const seenCutoff = useSeenCutoff();
   const [seenSnapshot, setSeenSnapshot] = useState<Set<string>>(() => new Set());
   const seenSnapshotTrigger = [
     showNews, prefs.newsHideSeen, newsLayout, prefs.newsEspnBig, newsTypeFilters.join(","), newsRefreshKey,
     prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague,
     prefs.newsThirdLeague, prefs.newsTopNews, prefs.newsFocusLeague, prefs.newsSingleColumn,
     prefs.newsVideosOnly, prefs.showTextPosts, prefs.hideSensitiveNews, prefs.hideCrashNews,
-    (prefs.newsHiddenSources ?? []).join(","),
+    (prefs.newsHiddenSources ?? []).join(","), seenCutoff,
   ].join("|");
   useEffect(() => {
     // localStorage is client-only, so the snapshot is read here, not in render.

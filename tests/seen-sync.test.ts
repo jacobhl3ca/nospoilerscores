@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach, mock } from "node:test";
 
-import { NEWS_SEEN_STORAGE_KEY, isSeen, markSeen, mergeSeen, resetSeenCache, seenSnapshot, setSeenSync } from "../src/lib/newsSeen.ts";
+import { NEWS_SEEN_STORAGE_KEY, isSeen, markSeen, mergeSeen, resetSeenCache, seenSnapshot, setSeenMorningReset, setSeenSync } from "../src/lib/newsSeen.ts";
 import { pullSeen, pushSeen, resetSeenSyncState, stopSeenSync } from "../src/lib/seenSync.ts";
 
 // lib/seenSync under node: a fake fetch records every call, and mock timers
@@ -25,6 +25,9 @@ const realFetch = globalThis.fetch;
 beforeEach(() => {
   (globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage();
   resetSeenCache();
+  // These tests stamp fixed times; the 4 AM rule has its own file
+  // (news-seen-morning.test.ts).
+  setSeenMorningReset(false);
   resetSeenSyncState();
   setSeenSync(null);
   calls = [];

@@ -17,6 +17,54 @@ export const NEWS_SEEN_STORAGE_KEY = "hs.newsSeen.v1";
 export const SEEN_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 export const SEEN_MAX_ENTRIES = 3000;
 
+// Morning reset: an open counts only if it happened after the most recent
+// 4:00 AM on the device clock, so a reader who comes back the next day sees
+// yesterday's posts covered again, next to the new ones. Settings → News
+// "Hide opened headlines again each morning", on unless turned off. A pure
+// read rule, never a delete: the map, the account copy (/api/seen) and every
+// device keep the same times, so seenSync has nothing to undo and no device
+// flips another back. A time zone change or a DST day only moves the cutoff,
+// because it is worked out from the local clock on every read.
+export const MORNING_RESET_HOUR = 4;
+
+// The most recent local 4:00 AM at or before `now`. new Date(y, m, d, 4) is
+// local wall time, so DST and zone changes are the engine's job; a 4 AM that
+// a DST jump skips lands on the first valid time after it.
+export function morningCutoff(now: number): number {
+  const d = new Date(now);
+  const today = new Date(d.getFullYear(), d.getMonth(), d.getDate(), MORNING_RESET_HOUR).getTime();
+  if (today <= now) return today;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, MORNING_RESET_HOUR).getTime();
+}
+
+// The next local 4:00 AM after `now`, for the timer below.
+export function nextMorningCutoff(now: number): number {
+  const d = new Date(now);
+  const today = new Date(d.getFullYear(), d.getMonth(), d.getDate(), MORNING_RESET_HOUR).getTime();
+  if (today > now) return today;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, MORNING_RESET_HOUR).getTime();
+}
+
+// The pure rule: was an open at `openedAt` still "opened" at `now`?
+export function openedCounts(openedAt: number, now: number, morningReset: boolean): boolean {
+  return !morningReset || openedAt >= morningCutoff(now);
+}
+
+// HomeContent sets this from prefs.newsSeenMorningReset (undefined = on).
+let morningReset = true;
+
+export function setSeenMorningReset(on: boolean): void {
+  if (morningReset === on) return;
+  morningReset = on;
+  lastCutoff = openedSince(Date.now());
+  notify();
+}
+
+// Opens before this time read as not opened. -Infinity when the reset is off.
+function openedSince(now: number): number {
+  return morningReset ? morningCutoff(now) : -Infinity;
+}
+
 type SeenMap = Record<string, number>;
 
 // In-memory copy so the filter memos never parse JSON per render. Loaded (and
@@ -42,12 +90,50 @@ function onStorage(e: StorageEvent): void {
   notify();
 }
 
+// A tab left open across 4 AM: a timer aimed at the next cutoff, capped at an
+// hour so a zone change or a sleeping laptop cannot leave it far off, plus a
+// check on focus and on return to the tab. Each one notifies only when the
+// cutoff moved, so the subscribers re-read and the posts cover again.
+let lastCutoff = 0;
+let clockTimer: ReturnType<typeof setTimeout> | null = null;
+const CLOCK_CHECK_MAX_MS = 60 * 60 * 1000;
+
+function checkClock(): void {
+  const now = Date.now();
+  const cutoff = openedSince(now);
+  if (cutoff !== lastCutoff) {
+    lastCutoff = cutoff;
+    notify();
+  }
+  if (clockTimer) clearTimeout(clockTimer);
+  clockTimer = listeners.size === 0 ? null
+    : setTimeout(checkClock, Math.min(nextMorningCutoff(now) - now + 1000, CLOCK_CHECK_MAX_MS));
+}
+
+function onVisible(): void {
+  if (document.visibilityState === "visible") checkClock();
+}
+
 export function subscribeSeen(onChange: () => void): () => void {
-  if (listeners.size === 0 && typeof window !== "undefined") window.addEventListener("storage", onStorage);
-  listeners.add(onChange);
+  if (listeners.size === 0 && typeof window !== "undefined") {
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", checkClock);
+    document.addEventListener("visibilitychange", onVisible);
+    listeners.add(onChange);
+    lastCutoff = openedSince(Date.now());
+    checkClock();
+  } else {
+    listeners.add(onChange);
+  }
   return () => {
     listeners.delete(onChange);
-    if (listeners.size === 0 && typeof window !== "undefined") window.removeEventListener("storage", onStorage);
+    if (listeners.size === 0 && typeof window !== "undefined") {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", checkClock);
+      document.removeEventListener("visibilitychange", onVisible);
+      if (clockTimer) clearTimeout(clockTimer);
+      clockTimer = null;
+    }
   };
 }
 
@@ -139,16 +225,21 @@ export function mergeSeen(remote: Record<string, number>): void {
   notify();
 }
 
-export function isSeen(key: string): boolean {
-  return Object.hasOwn(load(), key);
+// Opened, and (morning reset on) opened after the most recent 4 AM local.
+export function isSeen(key: string, now: number = Date.now()): boolean {
+  const map = load();
+  return Object.hasOwn(map, key) && openedCounts(map[key], now, morningReset);
 }
 
-// A COPY, so a snapshot taken now does not grow as more posts get seen.
-export function seenKeys(): Set<string> {
-  return new Set(Object.keys(load()));
+// A COPY, so a snapshot taken now does not grow as more posts get seen. Same
+// rule as isSeen.
+export function seenKeys(now: number = Date.now()): Set<string> {
+  const since = openedSince(now);
+  return new Set(Object.entries(load()).filter(([, t]) => t >= since).map(([k]) => k));
 }
 
-// A COPY of key -> opened-at, for the account sync to diff against.
+// A COPY of key -> opened-at, for the account sync to diff against. Every
+// entry, the morning reset aside: the sync carries times, not the rule.
 export function seenSnapshot(): Record<string, number> {
   return { ...load() };
 }
@@ -184,8 +275,10 @@ export function resetSeenCache(): void {
 // Hide seen filter is separate and still works from its snapshot.
 export const NewsMarkSeenContext = createContext(false);
 
-const seenVersion = () => version;
-const serverVersion = () => 0;
+// The cutoff is part of the snapshot, so the next render after 4 AM re-reads
+// even before the clock check above fires.
+const seenVersion = () => `${version}|${openedSince(Date.now())}`;
+const serverVersion = () => "0";
 
 // For a card that is its own component. False on the server and on the first
 // client paint, so hydration matches; the marker lands right after.
@@ -200,6 +293,14 @@ export function useSeenLookup(): (key: string) => boolean {
   const on = useContext(NewsMarkSeenContext);
   useSyncExternalStore(subscribeSeen, seenVersion, serverVersion);
   return (key) => on && isSeen(key);
+}
+
+// The current cutoff, for HomeContent's 👁 Hide seen snapshot: a new morning
+// takes a new snapshot, so the posts opened yesterday come back.
+const cutoffSnapshot = () => openedSince(Date.now());
+const serverCutoff = () => 0;
+export function useSeenCutoff(): number {
+  return useSyncExternalStore(subscribeSeen, cutoffSnapshot, serverCutoff);
 }
 
 // Spread onto the element that carries data-news-key.

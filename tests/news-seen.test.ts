@@ -13,6 +13,7 @@ import {
   resetSeenCache,
   seenKeys,
   seenSnapshot,
+  setSeenMorningReset,
   setSeenSync,
   subscribeSeen,
 } from "../src/lib/newsSeen.ts";
@@ -31,6 +32,9 @@ class MemoryStorage {
 beforeEach(() => {
   (globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage();
   resetSeenCache();
+  // These tests stamp fixed times; the 4 AM rule has its own file
+  // (news-seen-morning.test.ts).
+  setSeenMorningReset(false);
   setSeenSync(null);
 });
 
