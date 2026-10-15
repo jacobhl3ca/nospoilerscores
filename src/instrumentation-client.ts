@@ -1,6 +1,8 @@
 import * as Sentry from "@sentry/nextjs";
 import { OWN_ABORT_PATTERN } from "@/lib/abort";
+import { setBreadcrumbSink } from "@/lib/breadcrumb";
 import { labelBlankEvent } from "@/lib/sentryEvents";
+import { isCrawlerHeadRemoval } from "@/lib/sentryNoise";
 
 Sentry.init({
   dsn: "https://b1d8b3efe70b8dbe7f865cd0b5dc832a@o4511667913818112.ingest.us.sentry.io/4511694546534400",
@@ -49,6 +51,11 @@ Sentry.init({
   // "<unknown>". Fill them from the original thrown/rejected value so the
   // next one names its source. Every other event passes through unchanged.
   beforeSend(event, hint) {
+    // GitHub #390: a crawler's renderer took a metadata node out of <head>,
+    // and React threw when it removed that node on the next navigation. Only
+    // that error shape from a crawler user agent; a person's browser still
+    // reports it. See src/lib/sentryNoise.ts.
+    if (isCrawlerHeadRemoval(event, typeof navigator === "undefined" ? undefined : navigator.userAgent)) return null;
     return labelBlankEvent(event, hint?.originalException);
   },
   denyUrls: [
@@ -61,5 +68,8 @@ Sentry.init({
     /stats\.hidescore\.com/, // Umami (self-hosted)
   ],
 });
+
+// Library code (src/lib/mediaSafe.ts) leaves breadcrumbs through this sink.
+setBreadcrumbSink((b) => Sentry.addBreadcrumb(b));
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

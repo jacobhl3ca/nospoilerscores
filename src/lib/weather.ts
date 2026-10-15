@@ -5,7 +5,7 @@
 // conditions and the rain-through-the-day timeline. Forecast horizon is ~15
 // days — games further out just resolve to null (no weather shown).
 
-import { getDeviceTimeZone } from "./etDay";
+import { getDeviceTimeZone, isValidTimeZone } from "./etDay";
 
 export interface WeatherHour {
   hour24: number; // 0-23 local
@@ -78,12 +78,7 @@ function hourLabel(h: number): string {
 // zone override. A real IANA zone returns unchanged.
 function usableTz(tz: string | undefined): string | undefined {
   if (!tz || tz === "auto") return undefined;
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return tz;
-  } catch {
-    return undefined;
-  }
+  return isValidTimeZone(tz) ? tz : undefined;
 }
 
 async function geocode(city: string, region: string): Promise<Geo | null> {
@@ -237,13 +232,16 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
   // (wrong temp/rain/condition), or the day shifted near midnight. Pin the API
   // to the same effective zone so both sides always agree; a real IANA tz keeps
   // the request byte-identical to before (geo.tz already equals the auto zone).
+  // One zone for all three. With no geocoder zone, `timeZone: undefined` would
+  // read the runtime's default zone, which on an Etc/Unknown device (#79) is
+  // not the validated apiTz, so the gametime hour could miss.
   const apiTz = tz ?? getDeviceTimeZone();
-  const localDate = start.toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
+  const localDate = start.toLocaleDateString("en-CA", { timeZone: apiTz }); // YYYY-MM-DD
   // % 24 guards the "24" some ICU builds emit for midnight (same guard as
   // etDay/DateNav). Open-meteo's hourly times run 0–23, so an unguarded "24"
   // would never match `hr === localHour` below and lose the gametime row.
   const localHour = parseInt(
-    start.toLocaleString("en-US", { timeZone: tz, hour: "2-digit", hour12: false }).slice(0, 2),
+    start.toLocaleString("en-US", { timeZone: apiTz, hour: "2-digit", hour12: false }).slice(0, 2),
     10,
   ) % 24;
 

@@ -266,7 +266,7 @@ export default function TeamView({
         probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;${font}`;
         document.body.appendChild(probe);
         const w = probe.offsetWidth;
-        document.body.removeChild(probe);
+        probe.remove();
         return w;
       };
       const NAME_FONT = "font-size:1.125rem;font-weight:700;letter-spacing:0.025em;";
