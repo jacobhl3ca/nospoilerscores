@@ -334,7 +334,9 @@ test("turned on, the column switcher offers ESPN front page on today's board", a
 // /news/espn-front/<YYYYMMDD>.json, and the Yesterday board reads it:
 //   snapshot  strip NHL yh1 · NCAAF y2, y1 · MLB ym1   body: y1 (the hero)
 //   boards    NCAAF y1 y2 · MLB ym1 ym2 · NHL yh1   (all finals)
-// = the hero's NCAAF block first with the hero on top, then NHL, then MLB.
+// = NHL, NCAAF, MLB in strip order, each league's games by start time. The
+// body's hero no longer leads (Jacob 10/15): espn.com's end-of-day pick is a
+// hint that the game was dramatic (orderPastDayByStart).
 // ym2 is on the board but was never on the front page, so it stays out.
 const YESTERDAY = "20260925";
 const YDAY_BOARDS: Record<string, unknown[]> = {
@@ -378,7 +380,7 @@ async function seedYesterday(page: Page, snapshot: unknown | null) {
     : route.fulfill({ status: 404, contentType: "application/json", body: "{}" }));
 }
 
-test("Yesterday: ESPN front page shows the day's snapshot, hero first", async ({ page }) => {
+test("Yesterday: ESPN front page shows the day's snapshot in start-time order, no hero first", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
   await seedYesterday(page, SNAPSHOT);
   await page.goto("/yesterday");
@@ -386,9 +388,9 @@ test("Yesterday: ESPN front page shows the day's snapshot, hero first", async ({
   await expect(col).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("[data-league-column]")).toHaveCount(3);
   await expect(cards(page)).toHaveCount(4, { timeout: 15_000 });
-  expect(await cardNames(page)).toEqual(["Miami at Florida State", "Kansas at Iowa", "Rangers at Devils", "Mets at Phillies"]);
+  expect(await cardNames(page)).toEqual(["Rangers at Devils", "Kansas at Iowa", "Miami at Florida State", "Mets at Phillies"]);
   expect(await col.locator("[data-espn-league]").evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league"))))
-    .toEqual(["ncaaf", "nhl", "mlb"]);
+    .toEqual(["nhl", "ncaaf", "mlb"]);
   await expect(col.getByRole("button", { name: "Royals at Twins — game details" })).toHaveCount(0);
   await expect(col.locator("[data-espn-fallback-note]")).toHaveCount(0);
   // A past day is all finals: no "Final" rule in any column.

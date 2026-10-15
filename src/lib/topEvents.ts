@@ -212,6 +212,23 @@ export function orderByEspnHeader(
   return picked.sort((a, b) => a.at - b.at).map((p) => p.game);
 }
 
+// The ESPN front page on a past day (Jacob 10/15). The day's snapshot keeps
+// espn.com's LAST order of that day, and at night espn.com leads with the
+// biggest result: the top card says "this one was dramatic" before you watch.
+// So a past day keeps which games ESPN showed and the strip's league order,
+// drops the homepage body's featured games, and orders each league's games
+// by start time (strip order breaks a tie). Today's column keeps ESPN's order.
+export function orderPastDayByStart(games: Game[], features: EspnHeaderFeature[]): Game[] {
+  const ordered = orderByEspnHeader(games, features);
+  const league = new Map<Sport, number>();
+  for (const g of ordered) if (!league.has(g.sport)) league.set(g.sport, league.size);
+  const at = (g: Game) => {
+    const t = Date.parse(g.date);
+    return Number.isNaN(t) ? Number.MAX_SAFE_INTEGER : t;
+  };
+  return [...ordered].sort((a, b) => league.get(a.sport)! - league.get(b.sport)! || at(a) - at(b));
+}
+
 // The ESPN front page on a past day with no snapshot: every game of the
 // given leagues, the leagues in the order given (today's strip order), and
 // each league's games in the order they came in. Nothing outside the leagues.

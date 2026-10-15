@@ -317,6 +317,13 @@ export { type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, 
 // old Cards user to ESPN.
 export const FRESH_NEWS_LAYOUT: NewsLayout = "espn";
 
+// Column 3 for a visitor with no stored blob (Jacob 10/15: "instead of ncaaf
+// have the espn front page"). A first visit should show no hint of a result,
+// and a past day's ESPN column is in start-time order (orderPastDayByStart).
+// Not in `defaults`, for the same reason as FRESH_NEWS_LAYOUT: every stored
+// blob on Auto would move too.
+export const FRESH_THIRD_COLUMN: Sport = "top";
+
 // The news layout to render. newsLayout wins; a blob from before it existed
 // carries only newsFeedView (true = Feed).
 export function newsLayoutOf(prefs: { newsLayout?: NewsLayout; newsFeedView?: boolean }): NewsLayout {
@@ -800,9 +807,12 @@ export function loadPreferences(): Preferences {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const stored = raw ? JSON.parse(raw) : null;
-    // No blob = a new visitor: News opens on the ESPN layout. A stored blob
-    // keeps its own layout (none = Cards or Feed, see newsLayoutOf).
-    const prefs = stored ? { ...defaults, ...stored } : { ...defaults, newsLayout: FRESH_NEWS_LAYOUT };
+    // No blob = a new visitor: News opens on the ESPN layout and column 3 is
+    // the ESPN front page. A stored blob keeps its own layout (none = Cards or
+    // Feed, see newsLayoutOf) and its own columns.
+    const prefs = stored
+      ? { ...defaults, ...stored }
+      : { ...defaults, newsLayout: FRESH_NEWS_LAYOUT, thirdLeague: FRESH_THIRD_COLUMN };
     // Do not let the v2 value from defaults disguise a legacy stored blob.
     // HomeContent needs this missing marker to preserve every old checkmark
     // before the first post-deploy save overwrites the blob.
