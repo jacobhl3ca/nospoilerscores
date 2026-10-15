@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   REQUESTED_BUILDS,
+  WALL_LINKS,
   requestedBuildDay,
   requestedBuildGroup,
   requestedBuildPeople,
@@ -10,9 +11,9 @@ import {
 } from "../src/lib/requestedBuilds.ts";
 
 // "Built from your requests" (2026-10-09; on /wall-of-fame from 10/11). The
-// list is public and names people by initials, so these pin the shape: real
-// dates, rows grouped by person (newest first inside a group), known kinds,
-// initials only (no names, no emails).
+// list is public and names people by what they picked, so these pin the
+// shape: real dates, rows grouped by person (newest first inside a group),
+// known kinds, a name or initials (no emails), https-only wall links.
 
 test("every date is a real YYYY-MM-DD day", () => {
   for (const r of REQUESTED_BUILDS) {
@@ -66,14 +67,23 @@ test("every title is set and no row repeats", () => {
   assert.equal(new Set(keys).size, keys.length);
 });
 
-test("credits are initials like K.S., never a name", () => {
+test("credits are a name or initials like K.S., at most 40 characters", () => {
   for (const r of REQUESTED_BUILDS) {
-    for (const by of r.by) assert.match(by, /^([A-Z]\.){1,3}$/, `${r.title}: ${by}`);
+    for (const by of r.by) assert.match(by, /^[A-Z][A-Za-z.' -]{0,39}$/, `${r.title}: ${by}`);
   }
 });
 
-test("no email address anywhere in the list", () => {
+test("no email address anywhere in the list or the links", () => {
   assert.ok(!JSON.stringify(REQUESTED_BUILDS).includes("@"));
+  for (const url of Object.values(WALL_LINKS)) assert.ok(!url.startsWith("mailto:"), url);
+});
+
+test("wall links: one per person on the wall, https only", () => {
+  const people = new Set(requestedBuildPeople().map((p) => p.who));
+  for (const [who, url] of Object.entries(WALL_LINKS)) {
+    assert.ok(people.has(who), `${who} is not on the wall`);
+    assert.equal(new URL(url).protocol, "https:", `${who}: ${url}`);
+  }
 });
 
 test("day label reads the date string, not a UTC Date", () => {

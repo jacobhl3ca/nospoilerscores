@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import WallOfFameRequests from "@/components/WallOfFameRequests";
-import { requestedBuildPeople } from "@/lib/requestedBuilds";
+import { WALL_LINKS, requestedBuildPeople } from "@/lib/requestedBuilds";
 import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
 
 // Added 2026-10-11 (round 2 of "Built from your requests", which sat on
 // /contact from 10/9). People ranked by how many of their requests shipped,
 // then every row as a table. Static data only: src/lib/requestedBuilds.ts.
-// The suggest button, the initials note and the feedback form they open are
+// The suggest button, the credit note and the feedback form they open are
 // the one client part (WallOfFameRequests).
 
 const WALL_TITLE = "Wall of Fame: Built From Your Requests | HideScore";
@@ -59,14 +59,28 @@ export default function WallOfFamePage() {
             <li key={p.who} className="grid grid-cols-[2rem_minmax(0,1fr)] items-baseline">
               <span style={{ color: "var(--text-muted)" }}>{i + 1}.</span>
               <span>
-                <strong>{p.who}</strong>
+                {/* The link perk (10/15): ugc + nofollow, so Google never reads
+                    it as a link swap that could cost hidescore.com rank. */}
+                {WALL_LINKS[p.who] ? (
+                  <a
+                    href={WALL_LINKS[p.who]}
+                    target="_blank"
+                    rel="ugc nofollow noopener"
+                    className="underline underline-offset-2 hover:opacity-80"
+                    data-testid="wall-person-link"
+                  >
+                    <strong>{p.who}</strong>
+                  </a>
+                ) : (
+                  <strong>{p.who}</strong>
+                )}
                 {` · ${p.count} built`}
               </span>
             </li>
           ))}
         </ol>
 
-        <p>Everyone on this wall gets their next request moved to the top of the list, and 6 months of any future supporter perks free.</p>
+        <p>Everyone on this wall gets their next request moved to the top of the list, a link to their site or profile, and 6 months of any future supporter perks free.</p>
       </section>
 
       <WallOfFameRequests />

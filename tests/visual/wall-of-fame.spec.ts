@@ -54,7 +54,7 @@ for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) 
     expect(res?.status()).toBe(200);
     await expect(page.getByRole("heading", { level: 1, name: "Wall of fame" })).toBeVisible();
     await expect(page.getByText("Every item started as a note someone sent us.")).toBeVisible();
-    await expect(page.getByText("Everyone on this wall gets their next request moved to the top of the list, and 6 months of any future supporter perks free.")).toBeVisible();
+    await expect(page.getByText("Everyone on this wall gets their next request moved to the top of the list, a link to their site or profile, and 6 months of any future supporter perks free.")).toBeVisible();
 
     const people = requestedBuildPeople();
     const ranked = page.getByTestId("wall-ranked").locator("li");
@@ -128,7 +128,7 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-test("Suggest something opens the form with kind pills; kind and initials reach Formspree", async ({ page }) => {
+test("Suggest something opens the form with kind pills; kind and name reach Formspree", async ({ page }) => {
   const bodies = await catchPosts(page);
   await page.goto("/wall-of-fame");
   await page.getByRole("button", { name: "Suggest something" }).click();
@@ -145,10 +145,10 @@ test("Suggest something opens the form with kind pills; kind and initials reach 
   await pills.filter({ hasText: "League" }).click();
   await expect(page.locator('#hs-feedback-form .kind-pill[aria-pressed="true"]')).toHaveText(["League"]);
   await page.locator("#hs-feedback-input").fill("Please add the KHL");
-  await page.locator("#hs-feedback-initials").fill("K.S.");
+  await page.locator("#hs-feedback-name").fill("K.S.");
   await send(page).click();
   await expect.poll(() => bodies.length).toBe(1);
-  expect(bodies[0]).toMatchObject({ message: "Please add the KHL", kind: "League", initials: "K.S." });
+  expect(bodies[0]).toMatchObject({ message: "Please add the KHL", kind: "League", name: "K.S." });
   await expect(page.getByText("Thanks, feedback sent")).toBeVisible();
 
   // No pill picked (a second tap unpicks): no kind is sent.
@@ -161,7 +161,7 @@ test("Suggest something opens the form with kind pills; kind and initials reach 
   await expect.poll(() => bodies.length).toBe(2);
   expect(bodies[1]).toMatchObject({ message: "Just a note" });
   expect(bodies[1]).not.toHaveProperty("kind");
-  expect(bodies[1]).not.toHaveProperty("initials");
+  expect(bodies[1]).not.toHaveProperty("name");
 });
 
 test("no This was me buttons, not even on the unnamed rows", async ({ page }) => {
@@ -261,13 +261,13 @@ test("article doc footer is 1 line at 1280px", async ({ page }) => {
   expect(await rowCount(page.getByRole("navigation", { name: "Site" }))).toBe(1);
 });
 
-test("the initials note is an underlined link that opens the form seeded for the change", async ({ page }) => {
+test("the credit note is an underlined link that opens the form seeded for the change", async ({ page }) => {
   await page.goto("/wall-of-fame");
   const note = page.getByRole("button", { name: "Say so in a note." });
   await expect(note).toHaveAttribute("data-umami-event", "wall-initials");
   expect(await note.evaluate((n) => getComputedStyle(n).textDecorationLine)).toContain("underline");
   await note.click();
-  await expect(page.locator("#hs-feedback-input")).toHaveValue("Wall of fame: please add / remove my initials: ");
+  await expect(page.locator("#hs-feedback-input")).toHaveValue("Wall of fame: please change my name / initials / link to: ");
   await expect(page.locator("#hs-feedback-form .kind-pill")).toHaveCount(0);
 });
 

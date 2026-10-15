@@ -6,8 +6,8 @@ import RequestedBuildsList from "@/components/RequestedBuildsList";
 import { useSupportLinks } from "@/components/SupportLine";
 
 // The parts of /wall-of-fame that open the feedback form (2026-10-11): the
-// "Suggest something" button (form with the kind pills) and the initials note
-// under the list (form seeded for an initials change, no pills). One
+// "Suggest something" button (form with the kind pills) and the credit note
+// under the list (form seeded for a credit change, no pills). One
 // hidden-trigger FeedbackBox serves both. The per-row "This was me" links came
 // out 10/14. From Dec 15 the Ko-fi and Patreon links sit beside the button,
 // through the same date gate as the footer's support line.
@@ -56,12 +56,13 @@ export default function WallOfFameRequests() {
 
       <h2 id="built" className="text-lg font-semibold mt-6 mb-4">Built from your requests</h2>
       <RequestedBuildsList />
-      {/* The note link opens the same form, seeded for an initials change (10/14). */}
+      {/* The note link opens the same form, seeded for a credit change (10/14;
+          name and link from 10/15). The Umami event keeps its old name. */}
       <p className="text-sm mt-4" style={muted}>
-        Want your initials added or removed?{" "}
+        Want your name, initials or link changed?{" "}
         <button
           type="button"
-          onClick={() => open("Wall of fame: please add / remove my initials: ", false)}
+          onClick={() => open("Wall of fame: please change my name / initials / link to: ", false)}
           className="underline underline-offset-2 cursor-pointer hover:opacity-80"
           style={muted}
           data-umami-event="wall-initials"

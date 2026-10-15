@@ -51,9 +51,10 @@ export default function FeedbackBox({
 }: { openSignal?: number; prefill?: string; label?: string; seed?: string; hideTrigger?: boolean; kinds?: boolean; primary?: boolean } = {}) {
   const [text, setText] = useState("");
   const [email, setEmail] = useState("");
-  // Opt-in credit for the "Built from your requests" list on /contact
-  // (2026-10-09). Typing initials here is the consent to be thanked by them.
-  const [initials, setInitials] = useState("");
+  // Opt-in credit for the wall of fame (2026-10-09 as initials; a name or
+  // initials from 10/15). Typing it here is the consent to be named there. The
+  // wall shows what the person picks; Jacob adds it to requestedBuilds.ts by hand.
+  const [name, setName] = useState("");
   const [kind, setKind] = useState<RequestKind | "">("");
   const [sent, setSent] = useState(false);
   const [open, setOpen] = useState(false);
@@ -76,7 +77,7 @@ export default function FeedbackBox({
   const close = () => {
     setText("");
     setEmail("");
-    setInitials("");
+    setName("");
     setKind("");
     setOpen(false);
   };
@@ -165,13 +166,13 @@ export default function FeedbackBox({
     const message = text.trim();
     if (!message) return;
     const replyTo = EMAIL_RX.test(trimmedEmail) ? trimmedEmail : "";
-    const credit = initials.trim();
+    const credit = name.trim();
     const picked = kinds ? kind : "";
     setSent(true); // optimistic — the box is throwaway, no error UI needed
     setOpen(false);
     setText("");
     setEmail("");
-    setInitials("");
+    setName("");
     setKind("");
     try {
       await fetch(FORMSPREE_ENDPOINT, {
@@ -184,7 +185,7 @@ export default function FeedbackBox({
           // every submission arrives anonymous and unanswerable (which is
           // exactly what happened to the 2026-08-03 leagues request).
           ...(replyTo ? { email: replyTo, _replyto: replyTo } : {}),
-          ...(credit ? { initials: credit } : {}),
+          ...(credit ? { name: credit } : {}),
           ...(picked ? { kind: picked } : {}),
           _subject: replyTo ? `HideScore feedback from ${replyTo}` : "HideScore feedback",
           source: "hidescore.com",
@@ -370,24 +371,26 @@ export default function FeedbackBox({
             className="w-full text-sm px-3 py-2 rounded outline-none"
             style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
           />
-          <label htmlFor="hs-feedback-initials" className="sr-only">
-            Initials for the thanks list (optional)
+          <label htmlFor="hs-feedback-name" className="sr-only">
+            Name for the Wall of fame (optional)
           </label>
           <input
-            id="hs-feedback-initials"
+            id="hs-feedback-name"
             type="text"
-            value={initials}
-            onChange={(e) => setInitials(e.target.value)}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
                 e.preventDefault();
                 close();
               }
             }}
-            placeholder="Initials for the thanks list (optional)"
-            maxLength={6}
-            autoComplete="off"
-            autoCapitalize="characters"
+            // "Name or initials for…" clips at 390 px; the name field still
+            // takes initials, and the wall shows whatever is typed.
+            placeholder="Name for the Wall of fame (optional)"
+            maxLength={40}
+            autoComplete="name"
+            autoCapitalize="words"
             enterKeyHint="send"
             className="w-full text-sm px-3 py-2 rounded outline-none"
             style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
@@ -436,7 +439,15 @@ export default function FeedbackBox({
               aria-label="Send feedback"
               title="Send feedback"
               className="shrink-0 flex items-center justify-center rounded-full transition-opacity enabled:hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ width: 32, height: 32, background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }}
+              // Accent once there is a message to send (10/15): the grey circle
+              // read the same enabled or not. The arrow takes --bg, not white:
+              // white on the dark theme's #60a5fa is 2.6:1, under the 3:1 an
+              // icon needs.
+              style={
+                text.trim()
+                  ? { width: 32, height: 32, background: "var(--accent)", color: "var(--bg)", border: "1px solid var(--accent)" }
+                  : { width: 32, height: 32, background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }
+              }
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 19V5" />

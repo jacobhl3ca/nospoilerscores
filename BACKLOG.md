@@ -1,5 +1,18 @@
 # HideScore — Master Backlog
 
+## 2026-10-15 — Wall of fame: name field, link perk, blue send arrow
+
+**Plan:** `~/.claude-c3/plans/wondrous-gliding-mountain.md` (Part 1). Branch `feat/wall-name-link`.
+- FeedbackBox: "Initials for the thanks list" (max 6) is now "Name for the Wall of fame (optional)" (max 40, `autoComplete="name"`), id `#hs-feedback-name`, sent to Formspree as `name`. "Name or initials for…" clipped at 390 px; the field still takes initials.
+- Send arrow: accent fill once the message has text, arrow in `--bg` (white on the dark accent is 2.6:1).
+- `requestedBuilds.ts`: `by` = the name or initials the person picked. `WALL_LINKS` (empty) = one https link per person, added only on request; the ranked name links out with `rel="ugc nofollow noopener"`. Promise line adds "a link to their site or profile".
+- Wall note: "Want your name, initials or link changed? Say so in a note." (Umami event stays `wall-initials`.)
+
+**Open:**
+- [ ] Sponsors + patrons go on their own `/sponsors` page (Part 2 of the plan, hidden until Dec 15), not on the wall. This replaces the 10/9 "Patrons line on this list" item.
+- [ ] Patreon page: Jacob sets it up now and presses Launch on Mon Dec 14. When he sends the URL, set `PATREON_URL` (the Dec 15 gate keeps it hidden).
+- [ ] Money: none before Dec 14 (UI ends Dec 13); December total under $98 (Medicaid); first business sponsor invoice Jan 2027 or later. Paid perks never include TestFlight access (App Review 2.2).
+
 ## 2026-10-14 — Champions Cup from round 1 (a "League request: Investec Champions Cup")
 
 **Plan:** `~/.claude-c3/plans/pasted-content-id-f0b7-skip-to-luminous-muffin.md`. Branch `feat/champions-cup-2026` (worktree `~/hs-champions-cup`). Request: Formspree, Android build `abb1ee72`, Oct 14 1:36 PM ET, initials M.T. (on the wall).
@@ -45,7 +58,7 @@
 **Open:**
 - [x] Initials ticked by Jacob 10/9: K.K. on widget, scroll columns, NCAA men's + women's hockey; I.R. on time zone; CFL, Rugby Nations Championship, La Liga etc. stay blank. "Email field on this form" row dropped.
 - [ ] New request shipped → add a row here. Initials only if the note carried them or the person agreed.
-- [ ] Dec 15 (Patreon on): the $3+ perk = initials on this list under a "Patrons" line.
+- [x] ~~Dec 15 (Patreon on): the $3+ perk = initials on this list under a "Patrons" line.~~ Superseded 10/15: patrons go on `/sponsors`, not the wall.
 
 ## 2026-10-09 — Highlight gaps left after the 10/2–10/8 audit (no work now)
 
