@@ -163,7 +163,7 @@ test("icsText is a CRLF VCALENDAR with UTC stamps, escaped SUMMARY and a hidesco
   assert.ok(lines.includes("DTSTAMP:20260913T120000Z"));
   assert.ok(lines.includes("DTSTART:20260913T230500Z"));
   assert.ok(lines.includes("DTEND:20260914T020500Z"));
-  assert.ok(lines.includes("SUMMARY:MLB: Mets at Phillies\\; Game 1\\, of 3"), lines.find((l) => l.startsWith("SUMMARY")));
+  assert.ok(lines.includes("SUMMARY:MLB: Mets at Phillies\\; Game 1\\, of 3"), lines.find((l) => l.startsWith("SUMMARY")) ?? "no SUMMARY line");
   assert.ok(lines.includes("UID:mlb-nym-phi-20260913@hidescore.com"));
   assert.ok(lines.some((l) => /^DESCRIPTION:ESPN · MLB\.TV\\n\\nhttps:\/\/hidescore\.com/.test(l)));
   assert.ok(lines.includes("LOCATION:Citizens Bank Park\\, Philadelphia\\, Pennsylvania"));
