@@ -149,6 +149,14 @@ const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"])
 // results are still refused. Lowercased author names.
 const MASKED_CHAIN_CHANNELS = new Set(["pac-12"]);
 
+// League channels whose match cuts lead with a verdict ("Champions!",
+// "Historic Victory", "Bears Hold On!" — the EPCR channel, both cups, lit
+// 2026-10-15). The client always masks their title bar
+// (TITLE_ALWAYS_MASKED_CHANNELS in src/lib/youtube.ts), so a strict lookup on
+// the channel itself may return such a title. Unscoped results are still
+// refused. Lowercased author names.
+const MASKED_LEAGUE_CHANNELS = new Set(["investec champions cup & epcr challenge cup"]);
+
 // Atlantic Hockey America (NCAA women's hockey chain, lit 2026-09-26) titles
 // every per-game cut as a bare scoreline with the date and nothing else:
 // "Ohio State 2, Penn State 1 OT - Sept. 24, 2026". No "highlights", and the
@@ -1642,6 +1650,10 @@ export default {
           "kansas city", "sam houston", "george washington", "miami (ohio)",
           "georgia southern", "texas southern", "southern miss", "southern utah", "southern illinois",
           "southern indiana", "southern methodist", "southern california",
+          // EPCR (2026-10-15): ESPN's "Sharks" (the Durban club) is inside
+          // "Sale Sharks", and "Bulls" inside "Newcastle Red Bulls". A Toulouse v
+          // Sharks lookup served "Stade Toulousain v Sale Sharks" in the probe.
+          "sale sharks", "newcastle red bulls",
         ];
 
         // Extract team names from query: "Away vs Home highlights ..."
@@ -2742,7 +2754,8 @@ export default {
           const isMaskedOfficialCombatUpload =
             strictChannelParam && isFromChannel && MASKED_COMBAT_CHANNELS.has(preferChannelLower);
           const isMaskedChainUpload =
-            strictChannelParam && isFromChannel && MASKED_CHAIN_CHANNELS.has(preferChannelLower);
+            strictChannelParam && isFromChannel &&
+            (MASKED_CHAIN_CHANNELS.has(preferChannelLower) || MASKED_LEAGUE_CHANNELS.has(preferChannelLower));
           if (
             !isOfficialWorldCupUpload &&
             !isMaskedOfficialCombatUpload &&
