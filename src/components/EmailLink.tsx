@@ -8,7 +8,7 @@
 // 10/14, where "Send feedback" is the one blue button.
 const PLAIN = 'class="underline underline-offset-2"';
 const PILL =
-  'class="inline-block rounded-lg px-3.5 py-1.5 text-sm font-semibold no-underline" style="background: var(--accent); color: #fff"';
+  'class="inline-block rounded-lg px-3.5 py-1.5 text-sm font-semibold no-underline" style="background: var(--accent); color: var(--on-accent)"';
 
 export default function EmailLink({ pill = false }: { pill?: boolean }) {
   return (

@@ -373,7 +373,7 @@ export default function EventDetailModal({
             type="button"
             onClick={() => { openExternal(externalUrl!); onClose(); }}
             className="mt-4 w-full py-2 rounded-lg text-sm font-medium cursor-pointer"
-            style={{ background: "var(--accent)", color: "white" }}
+            style={{ background: "var(--accent)", color: "var(--on-accent)" }}
           >
             {externalNoun}
           </button>

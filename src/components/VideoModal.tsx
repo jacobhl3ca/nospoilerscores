@@ -2367,8 +2367,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         </button>
         <button type="button"
           onClick={(e) => { e.stopPropagation(); const run = pendingSeek.run; setPendingSeek(null); run(); }}
-          className="px-3 py-1.5 rounded-md text-sm font-semibold text-white cursor-pointer"
-          style={{ background: "var(--accent)" }}
+          className="px-3 py-1.5 rounded-md text-sm font-semibold cursor-pointer"
+          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
         >
           Skip anyway
         </button>
@@ -2767,7 +2767,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               aria-label={showCC ? "Hide captions" : "Show captions"}
               className="h-8 px-2.5 flex items-center justify-center rounded-full text-xs font-bold transition-colors cursor-pointer"
               style={{
-                color: showCC ? "white" : "rgba(255,255,255,0.7)",
+                color: showCC ? "var(--on-accent)" : "rgba(255,255,255,0.7)",
                 background: showCC ? "var(--accent)" : "rgba(0,0,0,0.45)",
                 border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.15)",
               }}
@@ -2956,7 +2956,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 aria-label={showCC ? "Hide captions" : "Show captions"}
                 className="h-8 px-2.5 flex items-center justify-center rounded-full text-xs font-bold transition-colors cursor-pointer"
                 style={{
-                  color: showCC ? "white" : "rgba(255,255,255,0.75)",
+                  color: showCC ? "var(--on-accent)" : "rgba(255,255,255,0.75)",
                   background: showCC ? "var(--accent)" : "rgba(0,0,0,0.5)",
                   border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.16)",
                 }}
@@ -3013,8 +3013,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       key={a.videoId}
                       type="button"
                       onClick={() => { failedIdsRef.current = [...failedIdsRef.current, currentId]; setCurrentId(a.videoId); }}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-transform hover:scale-105 cursor-pointer"
-                      style={{ background: "var(--accent)" }}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-transform hover:scale-105 cursor-pointer"
+                      style={{ background: "var(--accent)", color: "var(--on-accent)" }}
                     >
                       <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                       Try {a.label}
@@ -3026,7 +3026,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors cursor-pointer"
                     style={embedAlternates.length
                       ? { color: "rgba(255,255,255,0.7)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }
-                      : { color: "white", background: "var(--accent)" }}
+                      : { color: "var(--on-accent)", background: "var(--accent)" }}
                   >
                     <YouTubeIcon height={14} />
                     Watch on YouTube
@@ -3537,8 +3537,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 <button
                   type="button"
                   onClick={() => openExternal(sourceShareUrl || fallbackUrl)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-transform hover:scale-105 cursor-pointer"
-                  style={{ background: "var(--accent)" }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-transform hover:scale-105 cursor-pointer"
+                  style={{ background: "var(--accent)", color: "var(--on-accent)" }}
                 >
                   {linkLabel}
                   <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>

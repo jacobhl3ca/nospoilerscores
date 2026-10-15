@@ -209,7 +209,7 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
               className="w-8 h-8 flex items-center justify-center rounded-full text-xs cursor-pointer transition-colors"
               style={
                 isSelected
-                  ? { background: "var(--accent)", color: "white", fontWeight: 700 }
+                  ? { background: "var(--accent)", color: "var(--on-accent)", fontWeight: 700 }
                   : {
                       color: isWeekend ? "var(--accent)" : "var(--text)",
                       fontWeight: isToday ? 700 : 400,
@@ -313,14 +313,13 @@ function DateStrip({ selectedDate, onDateChange, trailing, initialOffset, initia
     // eslint-disable-next-line react-hooks/exhaustive-deps -- days/today derive from the date
   }, [mounted, selectedDate]);
 
-  const chip = (key: string, label: string, ariaLabel: string, isSelected: boolean, date?: string) => (
+  const chip = (key: string, label: string, isSelected: boolean, date?: string) => (
     <button
       type="button"
       key={key}
       data-date={date}
       onClick={date ? () => onDateChange(date) : undefined}
       aria-current={isSelected ? "date" : undefined}
-      aria-label={ariaLabel}
       className="date-strip-chip shrink-0 px-3 pt-1.5 pb-2 text-[13px] whitespace-nowrap cursor-pointer transition-colors"
       style={{
         color: isSelected ? "var(--accent)" : "var(--text-muted)",
@@ -344,10 +343,10 @@ function DateStrip({ selectedDate, onDateChange, trailing, initialOffset, initia
         {mounted
           ? days.map((d) => {
               const label = labelFor(d);
-              return chip(d, label, label === formatDayShort(d) ? formatDayName(d) : label, knowsSelection && d === effectiveDate, d);
+              return chip(d, label, knowsSelection && d === effectiveDate, d);
             })
           : ([[-1, "Yesterday"], [0, "Today"], [1, "Tomorrow"]] as const).map(([offset, label]) =>
-              chip(String(offset), label, label, initialDate === undefined && initialOffset === offset))}
+              chip(String(offset), label, initialDate === undefined && initialOffset === offset))}
       </div>
       {trailing && <div className="flex items-center shrink-0 pb-0.5">{trailing}</div>}
     </div>

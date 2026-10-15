@@ -212,7 +212,7 @@ export default function FeedbackBox({
   const triggerClass = primary
     ? "rounded-lg px-3.5 py-1.5 text-sm font-semibold cursor-pointer hover:opacity-90"
     : "underline underline-offset-2 cursor-pointer hover:opacity-80";
-  const triggerStyle = primary ? { background: "var(--accent)", color: "#fff" } : { color: "var(--text-muted)" };
+  const triggerStyle = primary ? { background: "var(--accent)", color: "var(--on-accent)" } : { color: "var(--text-muted)" };
 
   if (!open && !sent) {
     if (hideTrigger) return null;

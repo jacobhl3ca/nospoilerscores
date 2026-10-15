@@ -190,9 +190,9 @@ export default function ControlsHint({ enabled, onDismiss, modalOpen }: Controls
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          aria-label="Keyboard shortcuts"
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium cursor-pointer transition-opacity opacity-45 hover:opacity-100 focus-visible:opacity-100"
-          style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+          aria-label="Keys: keyboard shortcuts"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium cursor-pointer transition-colors text-[var(--text-muted)] hover:text-[var(--text)] focus-visible:text-[var(--text)]"
+          style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
         >
           <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="2" y="6" width="20" height="12" rx="2" />

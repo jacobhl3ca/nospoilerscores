@@ -245,15 +245,16 @@ export default function SeoLandingPage({
         <Link
           href={ctaHref}
           className="inline-block rounded-lg px-5 py-2.5 font-semibold"
-          style={{ background: "var(--accent)", color: "#fff" }}
+          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
           data-umami-event={`seo-open-${route}`}
         >
           {ctaLabel}
         </Link>
         {links.length > 0 && (
-          <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs" style={muted}>
+          <div className="mt-3 flex flex-wrap justify-center gap-x-4 sm:gap-y-1 text-xs" style={muted}>
             {links.map((link) => (
-              <Link key={link.href} href={link.href} className="underline underline-offset-2">
+              // 44 px tall on phones, 24 px on desktop (WCAG 2.5.8 target size).
+              <Link key={link.href} href={link.href} className="inline-flex min-h-11 items-center underline underline-offset-2 sm:min-h-6">
                 {link.label}
               </Link>
             ))}

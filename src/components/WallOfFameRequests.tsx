@@ -31,7 +31,7 @@ export default function WallOfFameRequests() {
           type="button"
           onClick={() => open("", true)}
           className="rounded-lg px-3.5 py-1.5 text-sm font-semibold cursor-pointer hover:opacity-90"
-          style={{ background: "var(--accent)", color: "#fff" }}
+          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
           data-umami-event="wall-suggest"
         >
           Suggest something

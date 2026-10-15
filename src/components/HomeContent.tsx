@@ -653,7 +653,7 @@ function CardChip({ active, onClick, title, ariaLabel, disabled, pressed, dataAt
       style={{
         background: active ? "var(--accent)" : "var(--bg-card)",
         border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-        color: active ? "white" : "var(--text-muted)",
+        color: active ? "var(--on-accent)" : "var(--text-muted)",
         opacity: disabled ? 0.45 : undefined,
       }}
     >
@@ -698,7 +698,7 @@ function PostFilterSwitch({ value, onChange, compact, card, roomy }: {
             // Blue = a filter narrows the posts; All is the neutral raised fill.
             style={{
               background: on ? (f === "all" ? "var(--bg-card-hover)" : "var(--accent)") : "transparent",
-              color: on ? (f === "all" ? "var(--text)" : "white") : "var(--text-muted)",
+              color: on ? (f === "all" ? "var(--text)" : "var(--on-accent)") : "var(--text-muted)",
             }}
           >
             {icons ? <PostFilterIcon value={f} size={inCard ? 14 : 16} /> : POST_FILTER_NAMES[f]}
@@ -777,7 +777,7 @@ function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, 
       style={{
         background: active ? "var(--accent)" : "var(--bg-card)",
         border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-        color: active ? "white" : "var(--text-muted)",
+        color: active ? "var(--on-accent)" : "var(--text-muted)",
         opacity: disabled ? 0.45 : undefined,
       }}
     >
@@ -3820,7 +3820,7 @@ export default function HomeContent({
             <span className="text-sm" style={{ color: "var(--text-muted)" }}>@</span>
             {team(r.home, "home")}
             {clip ? (
-              <span className="justify-self-end inline-flex items-center gap-0.5 text-xs font-semibold rounded-full px-2 py-0.5" style={{ background: "var(--accent)", color: "white" }} title="Highlights">
+              <span className="justify-self-end inline-flex items-center gap-0.5 text-xs font-semibold rounded-full px-2 py-0.5" style={{ background: "var(--accent)", color: "var(--on-accent)" }} title="Highlights">
                 <span aria-hidden="true">▶</span> Clip
               </span>
             ) : (
@@ -4082,7 +4082,7 @@ export default function HomeContent({
                 style={{
                   background: prefs.newsHideSeen ? "var(--accent)" : "var(--bg-card)",
                   border: `1px solid ${prefs.newsHideSeen ? "var(--accent)" : "var(--border)"}`,
-                  color: prefs.newsHideSeen ? "white" : "var(--text-muted)",
+                  color: prefs.newsHideSeen ? "var(--on-accent)" : "var(--text-muted)",
                 }}
                 title={prefs.newsHideSeen
                   ? `Hiding posts you opened — tap to show all (${hiddenSeenCount} hidden)`
@@ -4113,7 +4113,7 @@ export default function HomeContent({
                 style={{
                   background: prefs.newsOldestFirst ? "var(--accent)" : "var(--bg-card)",
                   border: `1px solid ${prefs.newsOldestFirst ? "var(--accent)" : "var(--border)"}`,
-                  color: prefs.newsOldestFirst ? "white" : "var(--text-muted)",
+                  color: prefs.newsOldestFirst ? "var(--on-accent)" : "var(--text-muted)",
                 }}
                 title={prefs.newsOldestFirst ? "Oldest first — tap for newest first" : "Newest first — tap for oldest first"}
                 aria-label={prefs.newsOldestFirst ? "Sort oldest first (on)" : "Sort newest first"}
@@ -4147,7 +4147,7 @@ export default function HomeContent({
                   style={{
                     background: newsFilterOpen ? "var(--accent)" : "var(--bg-card)",
                     border: `1px solid ${newsFilterOpen ? "var(--accent)" : "var(--border)"}`,
-                    color: newsFilterOpen ? "white" : "var(--text-muted)",
+                    color: newsFilterOpen ? "var(--on-accent)" : "var(--text-muted)",
                   }}
                   title="Filter news"
                   aria-label="Filter news"
@@ -4214,7 +4214,7 @@ export default function HomeContent({
                 style={{
                   background: liveOnly ? "var(--accent)" : "var(--bg-card)",
                   border: `1px solid ${liveOnly ? "var(--accent)" : "var(--border)"}`,
-                  color: liveOnly ? "white" : "var(--text-muted)",
+                  color: liveOnly ? "var(--on-accent)" : "var(--text-muted)",
                 }}
                 title={liveOnly ? "Showing live games only — tap for the full board" : "Show live games only"}
                 aria-label="Live games only"
@@ -4236,7 +4236,7 @@ export default function HomeContent({
               style={{
                 background: settingsOpen ? "var(--accent)" : "var(--bg-card)",
                 border: `1px solid ${settingsOpen ? "var(--accent)" : "var(--border)"}`,
-                color: settingsOpen ? "white" : "var(--text-muted)",
+                color: settingsOpen ? "var(--on-accent)" : "var(--text-muted)",
               }}
               title="Settings"
               aria-label="Open settings"
@@ -4578,7 +4578,7 @@ export default function HomeContent({
                 href={`/worldcup?d=${WORLD_CUP_2026_FINAL}`}
                 data-umami-event="wc-hub-final"
                 className="rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-85"
-                style={{ background: "var(--accent)", border: "1px solid var(--accent)", color: "white" }}
+                style={{ background: "var(--accent)", border: "1px solid var(--accent)", color: "var(--on-accent)" }}
               >
                 The final, July 19
               </a>
@@ -4589,7 +4589,7 @@ export default function HomeContent({
                 style={{
                   background: worldCupHubMode === "highlights" ? "var(--accent)" : "var(--bg-card-hover)",
                   border: `1px solid ${worldCupHubMode === "highlights" ? "var(--accent)" : "var(--border)"}`,
-                  color: worldCupHubMode === "highlights" ? "white" : "var(--text)",
+                  color: worldCupHubMode === "highlights" ? "var(--on-accent)" : "var(--text)",
                 }}
               >
                 Highlights
@@ -4604,7 +4604,7 @@ export default function HomeContent({
                 style={{
                   background: worldCupHubMode === "today" ? "var(--accent)" : "var(--bg-card-hover)",
                   border: `1px solid ${worldCupHubMode === "today" ? "var(--accent)" : "var(--border)"}`,
-                  color: worldCupHubMode === "today" ? "white" : "var(--text)",
+                  color: worldCupHubMode === "today" ? "var(--on-accent)" : "var(--text)",
                 }}
               >
                 Today&apos;s matches
@@ -4616,7 +4616,7 @@ export default function HomeContent({
                 style={{
                   background: worldCupHubMode === "tomorrow" ? "var(--accent)" : "var(--bg-card-hover)",
                   border: `1px solid ${worldCupHubMode === "tomorrow" ? "var(--accent)" : "var(--border)"}`,
-                  color: worldCupHubMode === "tomorrow" ? "white" : "var(--text)",
+                  color: worldCupHubMode === "tomorrow" ? "var(--on-accent)" : "var(--text)",
                 }}
               >
                 Tomorrow
@@ -4628,7 +4628,7 @@ export default function HomeContent({
                 style={{
                   background: worldCupHubMode === "highlights" ? "var(--accent)" : "var(--bg-card-hover)",
                   border: `1px solid ${worldCupHubMode === "highlights" ? "var(--accent)" : "var(--border)"}`,
-                  color: worldCupHubMode === "highlights" ? "white" : "var(--text)",
+                  color: worldCupHubMode === "highlights" ? "var(--on-accent)" : "var(--text)",
                 }}
               >
                 Spoiler-free highlights
@@ -5938,7 +5938,7 @@ export default function HomeContent({
                     onClick={() => setSlotLeague(firstEmptySlot, "fifa")}
                     data-umami-event="wc-banner-add-empty-slot"
                     className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
-                    style={{ background: "var(--accent)", color: "white" }}
+                    style={{ background: "var(--accent)", color: "var(--on-accent)" }}
                   >
                     Add the World Cup column
                   </button>
@@ -5948,7 +5948,7 @@ export default function HomeContent({
                     onClick={() => setWcReplaceOpen(true)}
                     data-umami-event="wc-banner-open-replace-picker"
                     className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
-                    style={{ background: "var(--accent)", color: "white" }}
+                    style={{ background: "var(--accent)", color: "var(--on-accent)" }}
                   >
                     Add the World Cup column
                   </button>
@@ -6047,7 +6047,7 @@ export default function HomeContent({
                     onClick={() => setSlotLeague(firstEmptySlot, kickoff.config.sport)}
                     data-umami-event={`kickoff-banner-add-empty-slot-${kickoff.config.sport}`}
                     className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
-                    style={{ background: "var(--accent)", color: "white" }}
+                    style={{ background: "var(--accent)", color: "var(--on-accent)" }}
                   >
                     {kickoffAddLabel}
                   </button>
@@ -6057,7 +6057,7 @@ export default function HomeContent({
                     onClick={() => setKickoffReplaceOpen(true)}
                     data-umami-event={`kickoff-banner-open-replace-picker-${kickoff.config.sport}`}
                     className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
-                    style={{ background: "var(--accent)", color: "white" }}
+                    style={{ background: "var(--accent)", color: "var(--on-accent)" }}
                   >
                     {kickoffAddLabel}
                   </button>
@@ -6351,7 +6351,7 @@ export default function HomeContent({
           <Link href="/about" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</Link>
           <Link href="/faq" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</Link>
           <Link href="/guides" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</Link>
-          <Link href="/wall-of-fame" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }} aria-label="Wall of Fame" title="Wall of Fame">WOF</Link>
+          <Link href="/wall-of-fame" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }} aria-label="WOF: Wall of Fame" title="Wall of Fame">WOF</Link>
           <Link href="/contact" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</Link>
           <Link href="/contact#feedback" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</Link>
           <Link href="/privacy" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</Link>
@@ -6514,7 +6514,7 @@ export default function HomeContent({
               type="button"
               onClick={copyFavLink}
               className="mt-2 w-full py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-              style={{ background: "var(--accent)", color: "white" }}
+              style={{ background: "var(--accent)", color: "var(--on-accent)" }}
             >
               {favToastCopied ? "Copied!" : "Copy favorites link"}
             </button>

@@ -54,7 +54,7 @@ export default function Error({
           type="button"
           onClick={() => unstable_retry()}
           className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-          style={{ background: "var(--accent)", color: "#ffffff" }}
+          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
         >
           Try again
         </button>

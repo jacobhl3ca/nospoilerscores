@@ -33,6 +33,12 @@ const config: CapacitorConfig = {
   ios: {
     limitsNavigationsToAppBoundDomains: true,
   },
+  // No pinch-zoom inside the app (an accidental pinch left the page scaled
+  // and panned, with blank strips). false is Capacitor's default, set here so
+  // it is not lost: on iOS it disables the WKWebView scroll view's pinch, on
+  // Android the WebView's built-in zoom. The website itself stays zoomable;
+  // the app-only viewport lock is in src/app/layout.tsx.
+  zoomEnabled: false,
 };
 
 export default config;

@@ -120,7 +120,7 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
             href={`/worldcup?d=${lastMatchYmd}`}
             data-umami-event="wc-team-last-match"
             className="mb-2 block rounded-lg px-3 py-2 text-sm font-semibold text-center"
-            style={{ background: "var(--accent)", color: "#fff" }}
+            style={{ background: "var(--accent)", color: "var(--on-accent)" }}
           >
             Open {possessive} last match, {formatWorldCupDay(lastMatchYmd)}
           </a>
@@ -130,7 +130,7 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
             href="/worldcup"
             data-umami-event="wc-team-open-hub"
             className="rounded-lg px-3 py-2 text-sm font-semibold text-center"
-            style={{ background: "var(--accent)", color: "#fff" }}
+            style={{ background: "var(--accent)", color: "var(--on-accent)" }}
           >
             Open World Cup hub
           </Link>

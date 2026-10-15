@@ -32,9 +32,11 @@ export default function DocTopBar({
         <div className="flex min-w-0 items-center gap-2.5">
           {/* A "‹" before the logo makes the link read as a way back, not
               just branding (Jacob 9/28: articles still felt stuck-ish). */}
+          {/* The name comes from the text, not an aria-label, so it holds the
+              visible "HideScore" (WCAG 2.5.3); "Back to" and, under a subject
+              on phones, the wordmark are for screen readers only. */}
           <Link
             href="/"
-            aria-label="Back to HideScore"
             className="hover:opacity-80 transition-opacity flex shrink-0 items-center gap-1.5"
             style={{ color: "var(--text)" }}
             data-umami-event={`doc-top-back-${route}`}
@@ -46,7 +48,8 @@ export default function DocTopBar({
               <rect width="32" height="32" rx="6" className="header-logo-bg" />
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
-            <span className={`text-lg font-bold tracking-tight${subject ? " hidden sm:inline" : ""}`}>HideScore</span>
+            <span className="sr-only">Back to </span>
+            <span className={`text-lg font-bold tracking-tight${subject ? " sr-only sm:not-sr-only" : ""}`}>HideScore</span>
           </Link>
           {subject ? (
             <>
@@ -60,7 +63,7 @@ export default function DocTopBar({
         <Link
           href={ctaHref}
           className="inline-block shrink-0 rounded-lg px-3.5 py-1.5 text-sm font-semibold"
-          style={{ background: "var(--accent)", color: "#fff" }}
+          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
           data-umami-event={`doc-top-open-${route}`}
         >
           Open HideScore

@@ -114,7 +114,7 @@ export default function AutoplayBlockedPopover({ anchor, onTurnOff, onClose }: {
         <button type="button"
           onClick={onClose}
           className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
-          style={{ background: "var(--accent)", color: "white" }}
+          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
         >
           Got it
         </button>

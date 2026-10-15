@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import CardHit from "@/components/CardHit";
 import { LeagueEventCard, FightBout, ClimbRound } from "@/lib/types";
 import { fetchFirstVideoId, leadChannelBlocksEmbeds } from "@/lib/youtube";
 import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
@@ -503,14 +504,8 @@ function FightCard({
     <div className={`ns-card-focus rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-      onClick={onShowDetails}
-      // Guard on e.target === e.currentTarget, as GameCard's card-level key
-      // handler does: without it, Space/Enter on the nested play button would
-      // ALSO pop the detail sheet on top of the video the user just started.
-      onKeyDown={clickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(); } } : undefined}
-      role={clickable ? "button" : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      aria-label={clickable ? `${fight.red.name} vs ${fight.blue.name} — event details` : undefined}>
+      onClick={onShowDetails}>
+      {clickable && <CardHit label={`${fight.red.name} vs ${fight.blue.name} — event details`} />}
       {/* Status bar — the game cards' meta row verbatim (GameCard ~640):
           game-meta-row + text-xs fonts (10px on tight boards via CSS), flex-wrap
           + gap-x-1, shrink-0 time, ml-auto broadcast. The broadcast is ALWAYS
@@ -634,11 +629,8 @@ function ClimbRoundCard({
       data-climb-round={round.id}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-      onClick={onShowDetails}
-      onKeyDown={clickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(); } } : undefined}
-      role={clickable ? "button" : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      aria-label={clickable ? `${round.label} — round details` : undefined}>
+      onClick={onShowDetails}>
+      {clickable && <CardHit label={`${round.label} — round details`} />}
       {!hideMeta && <div className="game-meta-row relative flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 sm:gap-x-1.5">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1.5" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           <span aria-hidden="true" className="text-xs leading-none">🧗</span>
@@ -1137,11 +1129,8 @@ export default function EventCard({
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
       onClick={clickable ? openDetails : undefined}
-      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(); } } : undefined}
-      role={clickable ? "button" : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      aria-label={clickable ? `${event.title} — event details` : undefined}
       title={clickable ? event.title : undefined}>
+      {clickable && <CardHit label={`${event.title} — event details`} />}
       {/* Meta row — game-meta-row like FightCard/GameCard, so an F1 tile is the
           SAME height as an MLB card: status/time left, broadcast right (dropped
           when the column is too narrow, same metaCompact rule as UFC). An

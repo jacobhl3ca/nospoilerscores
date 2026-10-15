@@ -78,7 +78,7 @@ export default function BestSpanBar({
           onClick={() => onSpan(s)}
           className={`highlight-btn flex items-center justify-center rounded-md py-1 cursor-pointer ${stacked ? STACKED_FIT_BTN : "px-1.5"}`}
           style={span === s
-            ? { background: "var(--accent)", color: "white" }
+            ? { background: "var(--accent)", color: "var(--on-accent)" }
             : { background: "var(--bg-card-hover)", color: "var(--text)" }}
         >
           <span className={`${chipText} font-medium whitespace-nowrap`}>{(tiny ? TINY : SHORT)[s]}</span>
