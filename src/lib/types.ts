@@ -374,4 +374,7 @@ export interface LeagueData {
   // The empty-column line when the default one is wrong (the Best column on a
   // longer span: "No rated games this week yet").
   emptyLabel?: string;
+  // NCAAF with "Ranked only" on: the cut left the day with no ranked game, so
+  // the column shows "No ranked games today". Set by lib/rankedOnly.ts.
+  rankedOnlyEmpty?: boolean;
 }
