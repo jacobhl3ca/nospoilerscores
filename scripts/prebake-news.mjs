@@ -2649,10 +2649,10 @@ const HL_LEAGUES = [
   // of live lookups soft-block the Worker's SHARED IP, and a Six Nations Saturday
   // is ~3 matches x N readers all scraping at once.
   //
-  // rugbychamp + rugbytest are deliberately absent, matching NO_HIGHLIGHT_FALLBACK:
-  // neither has a single uploader that owns its window (Champions Cup resolved to
-  // one of the two CLUBS; the November tests to fan channels). A league with no
-  // approved channel must not be baked — there is nothing to bake it against.
+  // rugbytest is deliberately absent, matching NO_HIGHLIGHT_FALLBACK: no single
+  // uploader owns its window (the November tests resolved to fan channels). A
+  // league with no approved channel must not be baked — there is nothing to
+  // bake it against.
   { sport: "sixnations",   path: "/rugby/180659/scoreboard",                   channel: "Guinness Men's Six Nations" },
   { sport: "superrugby",   path: "/rugby/242041/scoreboard",                   channel: "Super Rugby Pacific" },
   { sport: "rugbywc",      path: "/rugby/164205/scoreboard",                   channel: "World Rugby" },
@@ -2667,10 +2667,15 @@ const HL_LEAGUES = [
   { sport: "nrl",          path: "/rugby-league/3/scoreboard",                 channel: "NRL - National Rugby League" },
   { sport: "afl",          path: "/australian-football/afl/scoreboard",        channel: "AFL" },
   // URC (added 2026-09-27, 8/8 strict). Top 14 (added 2026-10-03) behind the
-  // home-first + 2-minute gates (HL_MATCH_GATES). Premiership Rugby, the
-  // Challenge Cup and MLR stay dark.
+  // home-first + 2-minute gates (HL_MATCH_GATES). Premiership Rugby and MLR
+  // stay dark.
   { sport: "urc",          path: "/rugby/270557/scoreboard",                   channel: "United Rugby Championship" },
   { sport: "top14",        path: "/rugby/270559/scoreboard",                   channel: "TOP 14 - Officiel" },
+  // Champions Cup + Challenge Cup (added 2026-10-15): one EPCR channel, a cup
+  // title token each, the home-first + 400 s gates, and the channel's club
+  // names (epcrTeamNames.json). See OFFICIAL_CHANNELS in src/lib/youtube.ts.
+  { sport: "rugbychamp",   path: "/rugby/271937/scoreboard",                   channel: "Investec Champions Cup & EPCR Challenge Cup" },
+  { sport: "challengecup", path: "/rugby/272073/scoreboard",                   channel: "Investec Champions Cup & EPCR Challenge Cup" },
   // CFL (added 2026-09-13). ESPN no longer serves the CFL, so `worker: true`
   // reads the slate from our own /api/cfl route (theScore, reshaped to the
   // ESPN scoreboard — see public/_worker.js) instead of site.api.espn.com.
@@ -2709,6 +2714,8 @@ const HL_COMPETITION_TOKENS = {
   ncaawsoc: ["women's soccer", "sec soccer"],
   ncaamsoc: ["acc men's soccer"],
   top14: ["top 14"],
+  rugbychamp: ["champions cup"],
+  challengecup: ["challenge cup"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts. Sent per
 // EVENT: TSN titles the postseason by round with no year, and a playoff card
@@ -2740,6 +2747,8 @@ const HL_MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
+  rugbychamp: { homeFirst: true, minSec: 400 },
+  challengecup: { homeFirst: true, minSec: 400 },
 };
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };
@@ -2831,8 +2840,15 @@ const hlFallbackChain = (sport, primaryChannel, homeTeam, awayTeam, broadcasts) 
     };
   });
 };
+// The two EPCR cups use the channel's club names ("Bristol Bears", "USAP") —
+// the SAME FILE src/lib/youtube.ts reads (EPCR_TEAM_NAMES there).
+const HL_EPCR_SPORTS = new Set(["rugbychamp", "challengecup"]);
+const HL_EPCR_TEAM_NAMES = JSON.parse(
+  readFileSync(new URL("../src/lib/epcrTeamNames.json", import.meta.url), "utf8"),
+);
 const hlHighlightTeamName = (sport, name, location) => {
   if (HL_LOCATION_NAME_SPORTS.has(sport)) return (location && String(location).trim()) || name;
+  if (HL_EPCR_SPORTS.has(sport)) return HL_EPCR_TEAM_NAMES[name] ?? name;
   if (sport !== "llws") return name;
   const code = String(name).trim().split(/\s+/).pop() ?? "";
   return HL_LLWS_REGION_NAMES[code.toUpperCase()] ?? name;

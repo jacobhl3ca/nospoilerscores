@@ -12,6 +12,9 @@ export const CONTAINING_TEAM_NAMES = [
   "kansas city", "sam houston", "george washington", "miami (ohio)",
   "georgia southern", "texas southern", "southern miss", "southern utah", "southern illinois",
   "southern indiana", "southern methodist", "southern california",
+  // EPCR (2026-10-15): "Sharks" is inside "Sale Sharks", "Bulls" inside
+  // "Newcastle Red Bulls".
+  "sale sharks", "newcastle red bulls",
 ];
 
 // A direction before, or a word after, a school's name makes another school:

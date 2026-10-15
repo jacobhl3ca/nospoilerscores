@@ -27,6 +27,9 @@ const tempModule = join(tmpdir(), `hidescore-youtube-${process.pid}.mjs`);
 // temp module into src/, which would leave debris in the repo on a crash.
 const tempRegions = join(tmpdir(), "llwsRegions.json");
 writeFileSync(tempRegions, readFileSync("src/lib/llwsRegions.json", "utf8"));
+// …and the EPCR cup club names (2026-10-15), the same way.
+const tempEpcr = join(tmpdir(), "epcrTeamNames.json");
+writeFileSync(tempEpcr, readFileSync("src/lib/epcrTeamNames.json", "utf8"));
 // …and Node then demands an import attribute on a JSON specifier in ESM
 // (ERR_IMPORT_ATTRIBUTE_MISSING) — SWC's transform doesn't add one, so stamp it
 // onto the emitted specifier. Both halves are needed; either alone still throws.
@@ -62,6 +65,7 @@ writeFileSync(
 const youtube = await import(pathToFileURL(tempModule).href);
 unlinkSync(tempModule);
 unlinkSync(tempRegions);
+unlinkSync(tempEpcr);
 unlinkSync(tempClubs);
 unlinkSync(tempCollege);
 unlinkSync(tempCollegeJson);
@@ -346,18 +350,37 @@ check(
   youtube.hasNoTrustedHighlightSource("ncaavb") === true &&
     !monitor.includes('ncaavb: "/volleyball/womens-college-volleyball/scoreboard"'),
 );
-// Champions Cup + Challenge Cup are dark (re-probed 2026-10-14 on their shared
-// channel, "Investec Champions Cup & EPCR Challenge Cup"; see youtube.ts). The
-// monitor must not scan them.
-for (const [sport, path] of [
-  ["rugbychamp", "/rugby/271937/scoreboard"],
-  ["challengecup", "/rugby/272073/scoreboard"],
+// Champions Cup + Challenge Cup are LIT (2026-10-15) on their shared channel,
+// "Investec Champions Cup & EPCR Challenge Cup", behind a cup title token, the
+// home-first + 400 s gates, the cup club names and an always-covered title (the
+// titles lead with a verdict). The monitor scans both.
+const EPCR_CHANNEL = "Investec Champions Cup & EPCR Challenge Cup";
+for (const [sport, path, token] of [
+  ["rugbychamp", "/rugby/271937/scoreboard", "champions cup"],
+  ["challengecup", "/rugby/272073/scoreboard", "challenge cup"],
 ]) {
   check(
-    `${sport} stays dark and unmonitored`,
-    youtube.hasNoTrustedHighlightSource(sport) === true && !monitor.includes(`"${path}"`),
+    `${sport} is lit, gated and monitored`,
+    youtube.hasNoTrustedHighlightSource(sport) === false &&
+      youtube.getOfficialChannelName(sport) === EPCR_CHANNEL &&
+      JSON.stringify(youtube.getCompetitionTitleTokens(sport)) === JSON.stringify([token]) &&
+      youtube.highlightMatchGateParams(youtube.getHighlightMatchGates(sport)) === "&order=home&minsec=400" &&
+      monitor.includes(`"${path}"`),
   );
 }
+check(
+  "EPCR titles are always covered",
+  youtube.channelAlwaysMasksTitle([EPCR_CHANNEL]) === true,
+);
+// ESPN's "Sharks" is inside "Sale Sharks": the cups ask for the channel's
+// "Hollywoodbets Sharks", and only the cups do (URC and NHL keep "Sharks").
+check(
+  "EPCR club names are scoped to the two cups",
+  youtube.highlightTeamName("rugbychamp", "Sharks") === "Hollywoodbets Sharks" &&
+    youtube.highlightTeamName("challengecup", "Bristol Rugby") === "Bristol Bears" &&
+    youtube.highlightTeamName("urc", "Sharks") === "Sharks" &&
+    youtube.highlightTeamName("nhl", "Sharks") === "Sharks",
+);
 // Conference League, Copa del Rey and DFB-Pokal are dark (2026-09-14): no
 // uploader cleared the 4/5 gate and every candidate served a wrong match. The
 // monitor must not scan them. The FA Cup IS lit, on ESPN FC with a required

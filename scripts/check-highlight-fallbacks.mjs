@@ -95,7 +95,7 @@ const ESPN_PATHS = {
   // highlight buttons shipped with nothing behind them. Same class of gap as
   // the UEFA-cups wave above and the six news feeds on 2026-07-22.
   // ESPN keys rugby by league PATH id, not a slug (see SPORT_PATHS in
-  // src/lib/espn.ts). rugbychamp and rugbytest stay absent — they are in
+  // src/lib/espn.ts). rugbytest stays absent — it is in
   // NO_HIGHLIGHT_FALLBACK, so there is no button to monitor.
   sixnations:   "/rugby/180659/scoreboard",
   superrugby:   "/rugby/242041/scoreboard",
@@ -106,6 +106,9 @@ const ESPN_PATHS = {
   afl:          "/australian-football/afl/scoreboard",
   urc:          "/rugby/270557/scoreboard",
   top14:        "/rugby/270559/scoreboard",
+  // Champions Cup + Challenge Cup (lit 2026-10-15), one EPCR channel.
+  rugbychamp:   "/rugby/271937/scoreboard",
+  challengecup: "/rugby/272073/scoreboard",
   // CFL (added 2026-09-13): NOT an ESPN path. ESPN stopped serving the CFL
   // after 2023, so fetchScoreboard reads this one from our own worker route
   // (theScore reshaped to the ESPN scoreboard — public/_worker.js).
@@ -164,9 +167,8 @@ const OFFICIAL_CHANNELS = {
   // client sees.
   llws: "ESPN",
   // Rugby, verified 2026-08-12 (see the block in src/lib/youtube.ts).
-  // rugbychamp and rugbytest deliberately have NO entry — they are in
-  // NO_HIGHLIGHT_FALLBACK instead, because their only uploaders are fan
-  // channels or one of the two clubs in the match.
+  // rugbytest deliberately has NO entry — it is in NO_HIGHLIGHT_FALLBACK
+  // instead, because its only uploaders are fan channels.
   sixnations: "Guinness Men's Six Nations",
   superrugby: "Super Rugby Pacific",
   rugbywc: "World Rugby",
@@ -175,6 +177,8 @@ const OFFICIAL_CHANNELS = {
   afl: "AFL",
   urc: "United Rugby Championship",
   top14: "TOP 14 - Officiel",
+  rugbychamp: "Investec Champions Cup & EPCR Challenge Cup",
+  challengecup: "Investec Champions Cup & EPCR Challenge Cup",
 };
 
 // Mirrors COMPETITION_TITLE_TOKENS in src/lib/youtube.ts. Keep in sync.
@@ -189,6 +193,8 @@ const COMPETITION_TITLE_TOKENS = {
   ligue1: ["ligue 1"],
   nations: ["nations league"],
   top14: ["top 14"],
+  rugbychamp: ["champions cup"],
+  challengecup: ["challenge cup"],
 };
 // CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts (per
 // event: the round from the card's playoff note). Keep in sync.
@@ -223,6 +229,8 @@ const MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
+  rugbychamp: { homeFirst: true, minSec: 400 },
+  challengecup: { homeFirst: true, minSec: 400 },
 };
 
 const TENNIS_CHANNELS = new Set([
@@ -241,7 +249,7 @@ const HIGHLIGHT_BUFFER_HOURS = {
   ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3, facup: 3, nations: 3, ncaawsoc: 3, ncaamsoc: 3,
   // Rugby union: 80 minutes plus stoppages, so the same 3h window soccer uses.
   sixnations: 3, superrugby: 3, rugbywc: 3, nationschamp: 3,
-  nrl: 3, afl: 4, urc: 3, top14: 3,
+  nrl: 3, afl: 4, urc: 3, top14: 3, rugbychamp: 3, challengecup: 3,
 };
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5,
@@ -249,7 +257,7 @@ const REGULATION_PERIODS = {
   seriea: 2, bundesliga: 2, laliga: 2, ligue1: 2,
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2, facup: 2, nations: 2, ncaawsoc: 2, ncaamsoc: 2,
   sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,
-  nrl: 2, afl: 4, urc: 2, top14: 2,
+  nrl: 2, afl: 4, urc: 2, top14: 2, rugbychamp: 2, challengecup: 2,
 };
 
 // Matches TEAM_NAME_ALIASES in src/lib/youtube.ts. Keep in sync.
@@ -398,8 +406,15 @@ const LLWS_REGION_NAMES = JSON.parse(
 // ncaaf titles use ESPN's team.location ("Western Kentucky"), not the short
 // name ("Western KY") — mirrors LOCATION_NAME_SPORTS in src/lib/youtube.ts.
 const LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb", "ncaawsoc", "ncaamsoc"]);
+// The two EPCR cups use the channel's club names — the same file
+// src/lib/youtube.ts reads (EPCR_TEAM_NAMES there).
+const EPCR_SPORTS = new Set(["rugbychamp", "challengecup"]);
+const EPCR_TEAM_NAMES = JSON.parse(
+  fs.readFileSync(new URL("../src/lib/epcrTeamNames.json", import.meta.url), "utf8"),
+);
 function highlightTeamName(sport, name, location) {
   if (LOCATION_NAME_SPORTS.has(sport)) return (location && String(location).trim()) || name;
+  if (EPCR_SPORTS.has(sport)) return EPCR_TEAM_NAMES[name] ?? name;
   if (sport !== "llws") return name;
   const code = String(name ?? "").trim().split(/\s+/).pop() ?? "";
   return LLWS_REGION_NAMES[code.toUpperCase()] ?? name;
