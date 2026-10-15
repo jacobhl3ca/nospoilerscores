@@ -118,10 +118,11 @@ test("that card is a full-height card — the highlight row, not a short one", a
     page.getByRole("button", { name: "US Open Tennis Championships highlights" }),
   ).toBeVisible({ timeout: 15_000 });
   // Same shape card-height-parity asserts for the team sports: the button lives
-  // in a trailing row on the card, so a card that earned one has two children.
+  // in a trailing row on the card, so a card that earned one has two rows
+  // (beside the stretched details button, .ns-card-hit).
   const rows = await page.evaluate(() => {
     const card = document.querySelector('[aria-label$="game details"]');
-    return { children: card?.children.length ?? 0, hasBtn: !!card?.querySelector(".highlight-btn") };
+    return { children: card?.querySelectorAll(":scope > :not(.ns-card-hit)").length ?? 0, hasBtn: !!card?.querySelector(".highlight-btn") };
   });
   expect(rows.hasBtn).toBe(true);
   expect(rows.children).toBe(2);

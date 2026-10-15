@@ -131,16 +131,16 @@ test("the recap pill sits on top of the NFL and MLB columns on /yesterday, and t
   await expect(nflPill).toBeVisible({ timeout: 15_000 });
   await expect(nflPill).toContainText("Week 1");
   await expect(nflPill.getByRole("button")).toHaveCount(2);
-  await expect(nflPill.getByRole("button", { name: "Top 15 plays (8m)" })).toBeVisible();
-  await expect(nflPill.getByRole("button", { name: "Sunday's best plays (30m)" })).toBeVisible();
+  await expect(nflPill.getByRole("button", { name: "8m: Top 15 plays" })).toBeVisible();
+  await expect(nflPill.getByRole("button", { name: "30m: Sunday's best plays" })).toBeVisible();
   await expect(nflPill).not.toContainText(/Best Plays From Sunday|NFL Season/);
 
   // MLB pill: the two mlb.com cuts.
   const mlbPill = page.locator('[data-league-recap="mlb"]');
   await expect(mlbPill).toBeVisible({ timeout: 15_000 });
   await expect(mlbPill).toContainText("Best of the day");
-  await expect(mlbPill.getByRole("button", { name: "60 seconds (1m)" })).toBeVisible();
-  await expect(mlbPill.getByRole("button", { name: "Best of the day (15m)" })).toBeVisible();
+  await expect(mlbPill.getByRole("button", { name: "1m: 60 seconds" })).toBeVisible();
+  await expect(mlbPill.getByRole("button", { name: "15m: Best of the day" })).toBeVisible();
 
   // On TOP: the pill precedes the column's first game card in document order.
   for (const sport of ["nfl", "mlb"]) {
@@ -177,7 +177,7 @@ test("the recap pill sits on top of the NFL and MLB columns on /yesterday, and t
 
   // Clicking the NFL pill opens the modal on the hand-off card (embed-blocked
   // channel), not a black player.
-  await nflPill.getByRole("button", { name: "Top 15 plays (8m)" }).click();
+  await nflPill.getByRole("button", { name: "8m: Top 15 plays" }).click();
   await expect(page.getByRole("button", { name: /Watch on YouTube/ })).toBeVisible({ timeout: 15_000 });
   await page.keyboard.press("Escape");
 

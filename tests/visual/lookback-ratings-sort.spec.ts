@@ -63,7 +63,7 @@ for (const showRatings of [true, false]) {
     await seed(page, showRatings);
     await page.goto("/");
     await expect(page.getByText(/Last played/)).toBeVisible({ timeout: 30_000 });
-    const names = page.locator('[data-league-column="nfl"]').getByRole("button", { name: / — game details$/ });
+    const names = page.locator('[data-league-column="nfl"]').getByRole("group", { name: / — game details$/ });
     await expect(names).toHaveCount(2);
     const order = await names.evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").replace(/ — game details$/, "")));
     expect(order).toEqual(showRatings ? ["Jets at Bills", "Bears at Packers"] : ["Bears at Packers", "Jets at Bills"]);

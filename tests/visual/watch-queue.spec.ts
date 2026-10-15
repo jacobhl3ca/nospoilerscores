@@ -92,7 +92,7 @@ for (const width of [390, 1440]) {
     await expect(strip(page)).toContainText("Yankees");
     // Above the league column, not inside it.
     const stripBox = await strip(page).boundingBox();
-    const colCard = page.getByRole("button", { name: /Red Sox at New York Yankees/ }).last();
+    const colCard = page.getByRole("group", { name: /Red Sox at New York Yankees/ }).last();
     const colBox = await colCard.boundingBox();
     expect(stripBox!.y + stripBox!.height).toBeLessThanOrEqual(colBox!.y);
     // No score anywhere on the strip.
@@ -128,7 +128,7 @@ test("Settings off switch hides the pill", async ({ page }) => {
   test.skip(!WATCH_QUEUE_ENABLED, "Watch queue is off (WATCH_QUEUE_ENABLED)");
   await setup(page, 1440, { hideWatchLaterPill: true });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /Red Sox at New York Yankees/ }).first()).toBeVisible();
+  await expect(page.getByRole("group", { name: /Red Sox at New York Yankees/ }).first()).toBeVisible();
   await expect(page.locator("[data-watch-later]")).toHaveCount(0);
 });
 
@@ -140,7 +140,7 @@ test("master switch off: no pill, no strip, a saved queue stays hidden", async (
     watchQueue: [{ id: "401999101", league: "mlb", date: "20260930", addedAt: Date.parse("2026-09-30T11:00:00-04:00"), title: "BOS @ NYY" }],
   });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /Red Sox at New York Yankees/ }).first()).toBeVisible();
+  await expect(page.getByRole("group", { name: /Red Sox at New York Yankees/ }).first()).toBeVisible();
   await expect(page.locator("[data-watch-later]")).toHaveCount(0);
   await expect(strip(page)).toHaveCount(0);
 });

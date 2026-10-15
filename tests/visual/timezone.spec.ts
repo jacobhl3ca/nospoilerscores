@@ -112,7 +112,7 @@ async function seed(page: Page, timezone?: string): Promise<string[]> {
 }
 
 const cardText = async (page: Page, name: string) =>
-  (await page.getByRole("button", { name, exact: true }).innerText()).replace(/\s+/g, " ");
+  (await page.getByRole("group", { name, exact: true }).innerText()).replace(/\s+/g, " ");
 
 async function expectCards(page: Page, zone: string) {
   const want = EXPECT[zone];

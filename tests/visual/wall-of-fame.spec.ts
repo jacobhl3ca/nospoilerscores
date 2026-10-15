@@ -229,10 +229,10 @@ test("support links sit beside the button from Dec 15, not before", async ({ pag
 
 test("the doc footer links to the wall as WOF, except on the wall itself", async ({ page }) => {
   await page.goto("/about");
-  const wof = page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Wall of Fame", exact: true });
+  const wof = page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "WOF: Wall of Fame", exact: true });
   await expect(wof).toHaveAttribute("href", "/wall-of-fame");
   await expect(wof).toHaveText("WOF");
-  await expect(wof).toHaveAttribute("aria-label", "Wall of Fame");
+  await expect(wof).toHaveAttribute("aria-label", "WOF: Wall of Fame");
   await expect(wof).toHaveAttribute("title", "Wall of Fame");
   await page.goto("/wall-of-fame");
   const nav = page.getByRole("navigation", { name: "Site" });

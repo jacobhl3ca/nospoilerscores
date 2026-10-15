@@ -76,7 +76,7 @@ test("board footer: WOF after Guides, Terms after Privacy, no not-affiliated lin
   const labels = await footer.locator("a").allTextContents();
   expect(labels.indexOf("Terms")).toBe(labels.indexOf("Privacy") + 1);
   expect(labels.indexOf("WOF")).toBe(labels.indexOf("Guides") + 1);
-  await expect(footer.getByRole("link", { name: "Wall of Fame", exact: true })).toHaveAttribute("href", "/wall-of-fame");
+  await expect(footer.getByRole("link", { name: "WOF: Wall of Fame", exact: true })).toHaveAttribute("href", "/wall-of-fame");
   await expect(footer.getByText(NOT_AFFILIATED)).toHaveCount(0);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);

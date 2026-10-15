@@ -68,12 +68,12 @@ for (const theme of ["light", "dark"] as const) {
       await expect(col).toBeVisible({ timeout: 30_000 });
       // Today's eight, then Sunday's three under a "Tomorrow" tag (the column's
       // look-ahead), so the eight are the cards without the tag.
-      const cards = col.getByRole("button", { name: / — game details$/ });
+      const cards = col.getByRole("group", { name: / — game details$/ });
       await expect(cards.first()).toBeVisible({ timeout: 30_000 });
       await expect(cards.filter({ hasNotText: "Tomorrow" })).toHaveCount(SAT.length);
       await expect(cards.filter({ hasText: "Tomorrow" })).toHaveCount(ROUND1.length - SAT.length - 1);
-      await expect(col.getByRole("button", { name: /Glasgow Warriors at Sale Sharks — game details/ })).toHaveCount(1);
-      await expect(col.getByRole("button", { name: /Stade Francais Paris at Bulls — game details/ })).toHaveCount(1);
+      await expect(col.getByRole("group", { name: /Glasgow Warriors at Sale Sharks — game details/ })).toHaveCount(1);
+      await expect(col.getByRole("group", { name: /Stade Francais Paris at Bulls — game details/ })).toHaveCount(1);
       await expect(col).not.toContainText(SCORE);
       await expect(col).not.toContainText(/offseason/i);
       await page.screenshot({ path: `${QA}/board-oct17-${width}-${theme}-${browserName}.png` });

@@ -92,7 +92,7 @@ async function setup(page: Page, width: number) {
 }
 
 const column = (page: Page) => page.locator('[data-league-column="mlb"]');
-const card = (page: Page) => column(page).getByRole("button", { name: /Mets at Philadelphia Phillies/ }).first();
+const card = (page: Page) => column(page).getByRole("group", { name: /Mets at Philadelphia Phillies/ }).first();
 
 for (const width of [1440, 1024, 390]) {
   test(`Where to watch shows Listen at ${width}px and fits the card`, async ({ page }) => {
@@ -265,7 +265,7 @@ test("event tile: the race sheet shows a Listen row with the track's network", a
   await page.goto("/");
   const title = page.locator('[data-fit-line="title"]').first();
   await expect(title).toHaveText(/YellaWood/);
-  await title.click();
+  await page.getByRole("button", { name: /^YellaWood 500 — event details$/ }).click();
   const row = page.locator(".listen-row");
   await expect(row).toBeVisible();
   await expect(row.getByRole("link", { name: "MRN Radio" })).toHaveAttribute("href", "https://tunein.com/radio/Motor-Racing-Network-s1/");
@@ -277,7 +277,7 @@ test("event tile: a finished race sheet has no Listen row", async ({ page }) => 
   await page.goto("/");
   const title = page.locator('[data-fit-line="title"]').first();
   await expect(title).toHaveText(/YellaWood/);
-  await title.click();
+  await page.getByRole("button", { name: /^YellaWood 500 — event details$/ }).click();
   await expect(page.getByRole("dialog")).toContainText("Talladega");
   await expect(page.locator(".listen-row")).toHaveCount(0);
 });
