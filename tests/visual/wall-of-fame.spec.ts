@@ -1,7 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   REQUESTED_BUILDS,
-  requestedBuildClaim,
   requestedBuildDay,
   requestedBuildPeople,
   requestedBuildSections,
@@ -10,7 +9,7 @@ import {
 // /wall-of-fame (2026-10-11, round 2 of "Built from your requests"): people
 // ranked by builds, every row in a table whose titles share one left edge,
 // coloured kind pills, a "Suggest something" button that opens the feedback
-// form with kind pills, and a "This was me" link on the rows with no initials.
+// form with kind pills. The "This was me" links came out 10/14.
 // Formspree is route-intercepted, so nothing is really sent.
 
 const FORMSPREE = "https://formspree.io/f/mkgqkgyr";
@@ -55,7 +54,7 @@ for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) 
     expect(res?.status()).toBe(200);
     await expect(page.getByRole("heading", { level: 1, name: "Wall of fame" })).toBeVisible();
     await expect(page.getByText("Every item started as a note someone sent us.")).toBeVisible();
-    await expect(page.getByText("Everyone on this wall gets their next request moved to the top of the list, and 6 months of any supporter perks free.")).toBeVisible();
+    await expect(page.getByText("Everyone on this wall gets their next request moved to the top of the list, and 6 months of any future supporter perks free.")).toBeVisible();
 
     const people = requestedBuildPeople();
     const ranked = page.getByTestId("wall-ranked").locator("li");
@@ -165,30 +164,13 @@ test("Suggest something opens the form with kind pills; kind and initials reach 
   expect(bodies[1]).not.toHaveProperty("initials");
 });
 
-test("This was me: only on rows with no initials, opens the form seeded with the row", async ({ page }) => {
-  const bodies = await catchPosts(page);
+test("no This was me buttons, not even on the unnamed rows", async ({ page }) => {
   await page.goto("/wall-of-fame");
-  const blank = REQUESTED_BUILDS.filter((r) => r.by.length === 0);
-  expect(blank.length).toBeGreaterThan(0);
-  await expect(page.getByRole("button", { name: "This was me" })).toHaveCount(blank.length);
+  expect(REQUESTED_BUILDS.some((r) => r.by.length === 0)).toBe(true);
+  await expect(page.getByRole("heading", { name: "Asked without a name" })).toBeVisible();
+  await expect(page.getByText("This was me")).toHaveCount(0);
   for (let i = 0; i < REQUESTED_BUILDS.length; i++) {
-    await expect(rows(page).nth(i).getByRole("button", { name: "This was me" })).toHaveCount(REQUESTED_BUILDS[i].by.length ? 0 : 1);
-  }
-
-  const target = blank[0];
-  await rows(page).filter({ hasText: target.title }).getByRole("button", { name: "This was me" }).click();
-  await expect(page.locator("#hs-feedback-input")).toHaveValue(requestedBuildClaim(target));
-  await expect(page.locator("#hs-feedback-form .kind-pill")).toHaveCount(0);
-  await page.locator("#hs-feedback-input").pressSequentially("J.D.");
-  await send(page).click();
-  await expect.poll(() => bodies.length).toBe(1);
-  expect(bodies[0]).toMatchObject({ message: `${requestedBuildClaim(target)}J.D.` });
-  expect(bodies[0]).not.toHaveProperty("kind");
-
-  // A second row's claim replaces the first one's text.
-  if (blank.length > 1) {
-    await rows(page).filter({ hasText: blank[1].title }).getByRole("button", { name: "This was me" }).click();
-    await expect(page.locator("#hs-feedback-input")).toHaveValue(requestedBuildClaim(blank[1]));
+    await expect(rows(page).nth(i).getByRole("button")).toHaveCount(0);
   }
 });
 
@@ -208,13 +190,75 @@ test("support links sit beside the button from Dec 15, not before", async ({ pag
   expect(Math.abs(link.y + link.height / 2 - (button.y + button.height / 2))).toBeLessThanOrEqual(4);
 });
 
-test("the doc footer links to the wall, except on the wall itself", async ({ page }) => {
+test("the doc footer links to the wall as WOF, except on the wall itself", async ({ page }) => {
   await page.goto("/about");
-  await expect(page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Wall of fame" })).toHaveAttribute("href", "/wall-of-fame");
+  const wof = page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Wall of fame", exact: true });
+  await expect(wof).toHaveAttribute("href", "/wall-of-fame");
+  await expect(wof).toHaveText("WOF");
+  await expect(wof).toHaveAttribute("aria-label", "Wall of fame");
+  await expect(wof).toHaveAttribute("title", "Wall of fame");
   await page.goto("/wall-of-fame");
   const nav = page.getByRole("navigation", { name: "Site" });
   await expect(nav.getByRole("link", { name: "Wall of fame" })).toHaveCount(0);
-  await expect(nav.getByRole("link").filter({ hasNotText: "Back to HideScore" })).toHaveText(["About", "FAQ", "Guides", "Contact", "Feedback", "Privacy", "Terms"]);
+  await expect(nav.getByRole("link").filter({ hasNotText: "Back to HideScore" })).toHaveText(["About", "FAQ", "Guides", "Contact", "Privacy", "Terms"]);
+  await expect(nav.getByRole("button", { name: "Feedback", exact: true })).toBeVisible();
+});
+
+for (const path of ["/wall-of-fame", "/about"]) {
+  for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    test(`${path} ${size.width}px: footer Feedback opens the form in place, no navigation`, async ({ page }) => {
+      await page.setViewportSize(size);
+      const docs: string[] = [];
+      page.on("request", (r) => {
+        if (r.resourceType() === "document" && r.frame() === page.mainFrame()) docs.push(r.url());
+      });
+      await page.goto(path);
+      const url = page.url();
+      const button = page.getByRole("navigation", { name: "Site" }).getByRole("button", { name: "Feedback", exact: true });
+      await button.scrollIntoViewIfNeeded();
+      await button.click();
+      await expect(page.locator("#hs-feedback-input")).toBeVisible({ timeout: 500 });
+      expect(page.url()).toBe(url);
+      expect(docs).toHaveLength(1);
+    });
+  }
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`${theme}: /contact email is a plain link, no accent background`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto("/contact");
+    const email = page.locator('main a[href="mailto:hi@hidescore.com"]').first();
+    await expect(email).toBeVisible();
+    const bg = await email.evaluate((n) => getComputedStyle(n).backgroundColor);
+    expect(bg).toBe("rgba(0, 0, 0, 0)");
+    expect(await email.evaluate((n) => getComputedStyle(n).textDecorationLine)).toContain("underline");
+  });
+}
+
+// Footer rows (10/14, "WOF"): the board footer fits one line on a 390 px
+// phone on the web, and an article's doc footer fits one line on a desktop.
+async function rowCount(loc: Locator) {
+  return loc.evaluate((el) => new Set([...el.children].map((c) => Math.round((c as HTMLElement).getBoundingClientRect().top))).size);
+}
+
+test("board footer row is 1 line at 390px (web)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => localStorage.setItem("nss-preferences", JSON.stringify({
+    favoriteLeagues: ["mlb"], favoriteTeams: [], theme: "light", showRatings: false,
+    skipExplainer: true, skipNewsExplainer: true, showNews: false, leaguesOnboarded: true,
+    defaultLandingView: "scores",
+  })));
+  await page.goto("/");
+  const row = page.locator("footer").locator('a[href="/wall-of-fame"]').locator("xpath=..");
+  await row.scrollIntoViewIfNeeded();
+  expect(await rowCount(row)).toBe(1);
+});
+
+test("article doc footer is 1 line at 1280px", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/nba-highlights-without-spoilers");
+  expect(await rowCount(page.getByRole("navigation", { name: "Site" }))).toBe(1);
 });
 
 test("the initials note is an underlined link that opens the form seeded for the change", async ({ page }) => {

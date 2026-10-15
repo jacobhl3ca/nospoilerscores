@@ -18,7 +18,7 @@ const PAGES: { href: string; h1: string }[] = [
 ];
 
 const LABEL: Record<string, string> = {
-  "/wall-of-fame": "Wall of fame",
+  "/wall-of-fame": "WOF",
   "/about": "About", "/faq": "FAQ", "/guides": "Guides",
   "/contact": "Contact", "/contact#feedback": "Feedback", "/privacy": "Privacy",
   "/terms": "Terms",
@@ -73,7 +73,9 @@ for (const target of PAGES) {
   });
 }
 
-for (const target of PAGES.filter((p) => p.href !== "/about")) {
+// Doc-footer "Feedback" is a button that opens the form in place (10/14),
+// covered in wall-of-fame.spec.ts.
+for (const target of PAGES.filter((p) => p.href !== "/about" && p.href !== "/contact#feedback")) {
   test(`/about footer → ${target.href} is a soft navigation`, async ({ page }) => {
     const docs = await setup(page);
     await page.goto("/about");

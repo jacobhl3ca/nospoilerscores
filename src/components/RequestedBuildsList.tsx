@@ -11,44 +11,22 @@ import { KIND_PILL_CLASS } from "@/lib/requestKinds";
 // day · kind pill · title with fixed first columns, so every title starts at
 // the same x and a long one wraps inside its own column. No borders. Every
 // kind pill is one width, centred (`.kind-pill-even`, 10/14).
-// `onClaim` adds a "This was me" link to the rows with no initials; the caller
-// must then be a client component.
+// The "This was me" link on the unnamed rows came out 10/14: the initials note
+// under the list is the one way to claim a row.
 
-export function RequestedBuildRow({ r, onClaim }: { r: RequestedBuild; onClaim?: (r: RequestedBuild) => void }) {
+export function RequestedBuildRow({ r }: { r: RequestedBuild }) {
   return (
     <li className="grid grid-cols-[4rem_5.5rem_minmax(0,1fr)] items-baseline" data-testid="requested-build-row">
       <time dateTime={r.date} style={{ color: "var(--text-muted)" }}>{requestedBuildDay(r.date)}</time>
       <span>
         <span className={`${KIND_PILL_CLASS} kind-pill-even`} data-kind={r.kind}><span>{r.kind}</span></span>
       </span>
-      <span data-testid="requested-build-title">
-        {r.title}
-        {onClaim && r.by.length === 0 && (
-          <>
-            {" "}
-            <button
-              type="button"
-              onClick={() => onClaim(r)}
-              className="text-xs underline underline-offset-2 cursor-pointer whitespace-nowrap hover:opacity-80"
-              style={{ color: "var(--text-muted)" }}
-              data-umami-event="wall-claim"
-            >
-              This was me
-            </button>
-          </>
-        )}
-      </span>
+      <span data-testid="requested-build-title">{r.title}</span>
     </li>
   );
 }
 
-export default function RequestedBuildsList({
-  rows = REQUESTED_BUILDS,
-  onClaim,
-}: {
-  rows?: RequestedBuild[];
-  onClaim?: (r: RequestedBuild) => void;
-}) {
+export default function RequestedBuildsList({ rows = REQUESTED_BUILDS }: { rows?: RequestedBuild[] }) {
   return (
     <div className="space-y-5" data-testid="requested-builds">
       {requestedBuildSections(rows).map((s) => (
@@ -58,7 +36,7 @@ export default function RequestedBuildsList({
           </h3>
           <ul className="space-y-1.5">
             {s.rows.map((r) => (
-              <RequestedBuildRow key={`${r.date}|${r.title}`} r={r} onClaim={onClaim} />
+              <RequestedBuildRow key={`${r.date}|${r.title}`} r={r} />
             ))}
           </ul>
         </section>

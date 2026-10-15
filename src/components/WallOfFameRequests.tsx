@@ -4,12 +4,12 @@ import { useState } from "react";
 import FeedbackBox from "@/components/FeedbackBox";
 import RequestedBuildsList from "@/components/RequestedBuildsList";
 import { useSupportLinks } from "@/components/SupportLine";
-import { requestedBuildClaim } from "@/lib/requestedBuilds";
 
 // The parts of /wall-of-fame that open the feedback form (2026-10-11): the
-// "Suggest something" button (form with the kind pills) and each "This was me"
-// link (form seeded with the row, no pills). One hidden-trigger FeedbackBox
-// serves both. From Dec 15 the Ko-fi and Patreon links sit beside the button,
+// "Suggest something" button (form with the kind pills) and the initials note
+// under the list (form seeded for an initials change, no pills). One
+// hidden-trigger FeedbackBox serves both. The per-row "This was me" links came
+// out 10/14. From Dec 15 the Ko-fi and Patreon links sit beside the button,
 // through the same date gate as the footer's support line.
 export default function WallOfFameRequests() {
   const [signal, setSignal] = useState(0);
@@ -55,7 +55,7 @@ export default function WallOfFameRequests() {
       </div>
 
       <h2 id="built" className="text-lg font-semibold mt-6 mb-4">Built from your requests</h2>
-      <RequestedBuildsList onClaim={(r) => open(requestedBuildClaim(r), false)} />
+      <RequestedBuildsList />
       {/* The note link opens the same form, seeded for an initials change (10/14). */}
       <p className="text-sm mt-4" style={muted}>
         Want your initials added or removed?{" "}

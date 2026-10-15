@@ -62,7 +62,7 @@ test("doc footer: Terms is the last link, after Privacy", async ({ page }) => {
   await expect(page.getByText(NOT_AFFILIATED)).toHaveCount(0);
 });
 
-test("board footer: Wall of fame after Guides, Terms after Privacy, no not-affiliated line", async ({ page }) => {
+test("board footer: WOF after Guides, Terms after Privacy, no not-affiliated line", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => localStorage.setItem("nss-preferences", JSON.stringify({
     favoriteLeagues: ["mlb"], favoriteTeams: [], theme: "light", showRatings: false,
@@ -75,7 +75,7 @@ test("board footer: Wall of fame after Guides, Terms after Privacy, no not-affil
   await expect(terms).toHaveAttribute("href", "/terms");
   const labels = await footer.locator("a").allTextContents();
   expect(labels.indexOf("Terms")).toBe(labels.indexOf("Privacy") + 1);
-  expect(labels.indexOf("Wall of fame")).toBe(labels.indexOf("Guides") + 1);
+  expect(labels.indexOf("WOF")).toBe(labels.indexOf("Guides") + 1);
   await expect(footer.getByRole("link", { name: "Wall of fame", exact: true })).toHaveAttribute("href", "/wall-of-fame");
   await expect(footer.getByText(NOT_AFFILIATED)).toHaveCount(0);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
