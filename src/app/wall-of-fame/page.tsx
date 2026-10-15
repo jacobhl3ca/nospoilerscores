@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import DocFooter from "@/components/DocFooter";
 import DocTopBar from "@/components/DocTopBar";
 import WallOfFameRequests from "@/components/WallOfFameRequests";
-import { requestedBuildPeople } from "@/lib/requestedBuilds";
+import { REQUESTED_BUILDS, requestedBuildPeople } from "@/lib/requestedBuilds";
 import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
 
 // Added 2026-10-11 (round 2 of "Built from your requests", which sat on
@@ -26,13 +26,13 @@ export const metadata: Metadata = {
     siteName: "HideScore",
     locale: "en_US",
     type: "website",
-    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore wall of fame" }],
+    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore Wall of Fame" }],
   },
   twitter: {
     card: "summary_large_image",
     title: WALL_TITLE,
     description: WALL_DESC,
-    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore wall of fame" }],
+    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore Wall of Fame" }],
   },
 };
 
@@ -41,19 +41,40 @@ export default function WallOfFamePage() {
   const people = requestedBuildPeople();
   return (
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
-      <DocTopBar route="wall-of-fame" subject="Wall of fame" />
-      <h1 className="text-2xl font-bold mb-2">Wall of fame</h1>
-      {updated ? (
-        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
-          Updated <time dateTime={updated.toISOString()}>{formatUpdated(updated)}</time>
+      <DocTopBar route="wall-of-fame" subject="Wall of Fame" />
+      {/* Header (2026-10-15): "Wall of Fame" is a proper name, so Title Case,
+          with an amber trophy tile (the Fix pill's amber family) and a live
+          count. No gradient text, no motion. */}
+      <header className="mb-6" data-testid="wall-header">
+        <div className="flex items-center gap-3 mb-2">
+          <span className="wall-trophy" aria-hidden="true" data-testid="wall-trophy">
+            {/* Lucide "trophy" (ISC licence) */}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 14.66v1.626a2 2 0 0 1-.976 1.696A5 5 0 0 0 7 21.978" />
+              <path d="M14 14.66v1.626a2 2 0 0 0 .976 1.696A5 5 0 0 1 17 21.978" />
+              <path d="M18 9h1.5a1 1 0 0 0 0-5H18" />
+              <path d="M4 22h16" />
+              <path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z" />
+              <path d="M6 9H4.5a1 1 0 0 1 0-5H6" />
+            </svg>
+          </span>
+          <h1 className="text-3xl font-bold">Wall of Fame</h1>
+        </div>
+        <p data-testid="wall-subtitle" style={{ color: "var(--text-secondary)" }}>
+          Every item started as a note someone sent us.
         </p>
-      ) : (
-        <div className="mb-6" />
-      )}
+        <p className="text-sm mt-1" data-testid="wall-meta" style={{ color: "var(--text-muted)" }}>
+          {REQUESTED_BUILDS.length} built so far
+          {updated ? (
+            <>
+              {" · Updated "}
+              <time dateTime={updated.toISOString()}>{formatUpdated(updated)}</time>
+            </>
+          ) : null}
+        </p>
+      </header>
 
       <section className="space-y-4">
-        <p>Every item started as a note someone sent us.</p>
-
         <ol className="space-y-1" data-testid="wall-ranked">
           {people.map((p, i) => (
             <li key={p.who} className="grid grid-cols-[2rem_minmax(0,1fr)] items-baseline">
@@ -96,7 +117,7 @@ export default function WallOfFamePage() {
                 "@id": "https://hidescore.com/wall-of-fame#breadcrumb",
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
-                  { "@type": "ListItem", position: 2, name: "Wall of fame", item: "https://hidescore.com/wall-of-fame" },
+                  { "@type": "ListItem", position: 2, name: "Wall of Fame", item: "https://hidescore.com/wall-of-fame" },
                 ],
               },
             ],

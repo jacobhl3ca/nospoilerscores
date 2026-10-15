@@ -10,7 +10,7 @@ const PAGES: { href: string; h1: string }[] = [
   { href: "/about", h1: "About HideScore" },
   { href: "/faq", h1: "Frequently asked questions" },
   { href: "/guides", h1: "Spoiler-free guides" },
-  { href: "/wall-of-fame", h1: "Wall of fame" },
+  { href: "/wall-of-fame", h1: "Wall of Fame" },
   { href: "/contact", h1: "Contact HideScore" },
   { href: "/contact#feedback", h1: "Contact HideScore" },
   { href: "/privacy", h1: "Privacy Policy" },

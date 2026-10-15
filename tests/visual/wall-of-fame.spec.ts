@@ -52,7 +52,7 @@ for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) 
     await page.setViewportSize(size);
     const res = await page.goto("/wall-of-fame");
     expect(res?.status()).toBe(200);
-    await expect(page.getByRole("heading", { level: 1, name: "Wall of fame" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Wall of Fame" })).toBeVisible();
     await expect(page.getByText("Every item started as a note someone sent us.")).toBeVisible();
     await expect(page.getByText("Everyone on this wall gets their next request moved to the top of the list, and 6 months of any future supporter perks free.")).toBeVisible();
 
@@ -105,6 +105,43 @@ for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) 
     expect(overflow).toBeLessThanOrEqual(0);
   });
 }
+
+// Header (2026-10-15): trophy tile, Title Case h1, subtitle, live count.
+test("header: trophy tile, h1, subtitle in order; meta line counts the builds", async ({ page }) => {
+  await page.goto("/wall-of-fame");
+  const header = page.getByTestId("wall-header");
+  const order = await header.evaluate((h) => {
+    const all = Array.from(h.querySelectorAll("*"));
+    return ['[data-testid="wall-trophy"]', "h1", '[data-testid="wall-subtitle"]'].map((sel) => all.indexOf(h.querySelector(sel)!));
+  });
+  expect(order.every((i) => i >= 0)).toBe(true);
+  expect(order).toEqual([...order].sort((a, b) => a - b));
+  await expect(header.locator("h1")).toHaveText("Wall of Fame");
+  await expect(page.getByTestId("wall-trophy")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.getByTestId("wall-trophy").locator("svg")).toBeVisible();
+  await expect(page.getByTestId("wall-subtitle")).toHaveText("Every item started as a note someone sent us.");
+  await expect(page.getByTestId("wall-meta")).toContainText(`${REQUESTED_BUILDS.length} built so far`);
+  // The subtitle moved out of the section.
+  await expect(page.locator("main section").getByText("Every item started as a note someone sent us.")).toHaveCount(0);
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`${theme}: trophy icon is at least 3:1 on its tile`, async ({ page }) => {
+    await setTheme(page, theme);
+    await page.goto("/wall-of-fame");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    const c = await contrast(page.getByTestId("wall-trophy"));
+    expect(c.ratio, `${c.color} on ${c.background}`).toBeGreaterThanOrEqual(3);
+  });
+}
+
+test("390px: the header causes no horizontal overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/wall-of-fame");
+  await expect(page.getByTestId("wall-header")).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
 
 for (const theme of ["light", "dark"] as const) {
   test(`${theme}: each kind has its own pill colours, all over 4.5:1`, async ({ page }) => {
@@ -192,14 +229,14 @@ test("support links sit beside the button from Dec 15, not before", async ({ pag
 
 test("the doc footer links to the wall as WOF, except on the wall itself", async ({ page }) => {
   await page.goto("/about");
-  const wof = page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Wall of fame", exact: true });
+  const wof = page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Wall of Fame", exact: true });
   await expect(wof).toHaveAttribute("href", "/wall-of-fame");
   await expect(wof).toHaveText("WOF");
-  await expect(wof).toHaveAttribute("aria-label", "Wall of fame");
-  await expect(wof).toHaveAttribute("title", "Wall of fame");
+  await expect(wof).toHaveAttribute("aria-label", "Wall of Fame");
+  await expect(wof).toHaveAttribute("title", "Wall of Fame");
   await page.goto("/wall-of-fame");
   const nav = page.getByRole("navigation", { name: "Site" });
-  await expect(nav.getByRole("link", { name: "Wall of fame" })).toHaveCount(0);
+  await expect(nav.getByRole("link", { name: "Wall of Fame" })).toHaveCount(0);
   await expect(nav.getByRole("link").filter({ hasNotText: "Back to HideScore" })).toHaveText(["About", "FAQ", "Guides", "Contact", "Privacy", "Terms"]);
   await expect(nav.getByRole("button", { name: "Feedback", exact: true })).toBeVisible();
 });
@@ -267,7 +304,7 @@ test("the initials note is an underlined link that opens the form seeded for the
   await expect(note).toHaveAttribute("data-umami-event", "wall-initials");
   expect(await note.evaluate((n) => getComputedStyle(n).textDecorationLine)).toContain("underline");
   await note.click();
-  await expect(page.locator("#hs-feedback-input")).toHaveValue("Wall of fame: please add / remove my initials: ");
+  await expect(page.locator("#hs-feedback-input")).toHaveValue("Wall of Fame: please add / remove my initials: ");
   await expect(page.locator("#hs-feedback-form .kind-pill")).toHaveCount(0);
 });
 
