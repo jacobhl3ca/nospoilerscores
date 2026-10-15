@@ -10,6 +10,8 @@
     "lint": "eslint",
     "visual": "playwright test",
     "visual:update": "playwright test --update-snapshots",
+    "a11y": "playwright test --config playwright.a11y.config.ts",
+    "a11y:update": "A11Y_UPDATE_BASELINE=1 playwright test --config playwright.a11y.config.ts",
     "highlights:check": "node scripts/check-highlight-regressions.mjs",
     "news:check": "node scripts/check-news-feed-coverage.mjs",
     "poker:check": "node scripts/check-poker-events.mjs",
@@ -48,6 +50,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
