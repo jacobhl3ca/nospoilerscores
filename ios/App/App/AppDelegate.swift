@@ -19,9 +19,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         //
         // Tracing stays off deliberately: crashes are the blind spot, performance
         // spans are just quota.
+        //
+        // Debug and simulator runs report as "development" with app-hang tracking
+        // off (#386 #387: every "App Hang Fully Blocked" so far came from the
+        // owner's own simulator runs — a debugger pause or a slow simulator reads
+        // as a hang). Crashes still report from those runs.
         SentrySDK.start { options in
             options.dsn = "https://b1d8b3efe70b8dbe7f865cd0b5dc832a@o4511667913818112.ingest.us.sentry.io/4511694546534400"
+            #if DEBUG || targetEnvironment(simulator)
+            options.environment = "development"
+            options.enableAppHangTracking = false
+            #else
             options.environment = "production"
+            #endif
             options.tracesSampleRate = 0.0
         }
 
