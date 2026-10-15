@@ -34,14 +34,11 @@ import { syncPicksWithAccount } from "@/lib/picksAccount";
 import { fetchAllLeagues, fetchSlateGames, fetchTopGamesSpan, hasPlayableClip, fetchLastFinishedDay, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, isTennisTourConfig, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
-import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn, { mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
-import GameDetailModal from "@/components/GameDetailModal";
-import EventDetailModal from "@/components/EventDetailModal";
 import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, MLB_REVIEW_HIDDEN_KEY, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
-import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts, type CardOverride } from "@/components/NewsColumn";
+import type { NewsSource, PlayHandler, PlayOpts, CardOverride } from "@/components/NewsColumn";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
 import AutoplayBlockedPopover from "@/components/AutoplayBlockedPopover";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, newsCardKeyForSection, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
@@ -49,11 +46,10 @@ import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import { LeagueMark } from "@/components/LeagueMark";
 import { buildSchedule, visibleScheduleRows, SCHEDULE_FULL_MAX, SCHEDULE_SKIP, type ScheduleLeagueInput, type ScheduleRow } from "@/lib/scheduleDay";
-import VideoModal from "@/components/VideoModal";
+import { warmModals, warmedModals, type WarmModals } from "@/components/warmModals";
 import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
 import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
 import { POST_FILTERS, POST_FILTER_NAMES } from "@/lib/postFilter";
-import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
@@ -83,9 +79,10 @@ function shareCardLeague(card?: ShareCardMeta | null): string {
 
 // Rarely opened modals that are closed on first paint load on first open, so
 // their code is not in the board's first-load bundle. VideoModal and the
-// game/event detail sheets stay static: a card tap must open its sheet in the
-// same frame (focus and Escape go to it at once), and a video must start from
-// the tap's user gesture.
+// game/event detail sheets are not next/dynamic: a card tap must open its
+// sheet in the same frame (focus and Escape go to it at once), and a video
+// must start from the tap's user gesture. They load once the board is idle
+// instead (warmModals).
 const WorldCupGroupsModal = dynamic(() => import("@/components/WorldCupGroupsModal"));
 const SlamBracketModal = dynamic(() => import("@/components/SlamBracketModal"));
 const PlayoffPictureModal = dynamic(() => import("@/components/PlayoffPictureModal"));
@@ -93,6 +90,14 @@ const MlbSeasonReviewModal = dynamic(() => import("@/components/MlbSeasonReviewM
 // SettingsPanel stays mounted but renders null while closed, so the static
 // HTML is the same without SSR, and its code loads after the board hydrates.
 const SettingsPanel = dynamic(() => import("@/components/SettingsPanel"), { ssr: false });
+// The News view is not on screen at first paint for a scores visitor, so its
+// code loads when News opens (10/15: first-load JS). The static HTML never
+// renders News (prefs are read after hydration), so ssr: false changes no
+// markup.
+const NewsColumn = dynamic(() => import("@/components/NewsColumn"), { ssr: false });
+const NewsColumnTitle = dynamic(() => import("@/components/NewsColumn").then((m) => m.NewsColumnTitle), { ssr: false });
+const NewsFeed = dynamic(() => import("@/components/NewsFeed"), { ssr: false });
+const AlignedVideoStrip = dynamic(() => import("@/components/AlignedVideoStrip"), { ssr: false });
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -941,6 +946,28 @@ export default function HomeContent({
   // Separate state because an event tile is not a Game; `fight` is set only
   // when one bout of a UFC card was tapped rather than the card as a whole.
   const [detailEvent, setDetailEvent] = useState<{ event: LeagueEventCard; fight?: FightBout; leagueLabel?: string; sport?: Sport } | null>(null);
+  // The video player and detail sheets, once their code is in (warmModals).
+  // Loaded when the first board load is done and the page is idle, or at once
+  // when one is asked for earlier (a shared ?v= link, a very early tap).
+  const [modals, setModals] = useState<WarmModals | null>(warmedModals);
+  const modalAsked = !!videoModal || !!detailGame || !!detailEvent;
+  useEffect(() => {
+    if (modals) return;
+    let live = true;
+    const load = () => { warmModals().then((m) => { if (live) setModals(m); }, () => { /* offline: the next ask retries */ }); };
+    if (modalAsked) {
+      load();
+      return () => { live = false; };
+    }
+    if (loading) return () => { live = false; };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    const id = w.requestIdleCallback ? w.requestIdleCallback(load, { timeout: 3000 }) : window.setTimeout(load, 1000);
+    return () => {
+      live = false;
+      if (w.cancelIdleCallback) w.cancelIdleCallback(id);
+      else window.clearTimeout(id);
+    };
+  }, [modals, modalAsked, loading]);
   const [groupsOpen, setGroupsOpen] = useState(false);
   // The tennis draw and the MLB playoff picture. Both open from the league
   // column's subtitle line and both gate their own contents behind a reveal —
@@ -6620,8 +6647,8 @@ export default function HomeContent({
         </div>
       )}
 
-      {videoModal && (
-        <VideoModal
+      {videoModal && modals && (
+        <modals.VideoModal
           videoId={videoModal.videoId}
           fallbackUrl={videoModal.fallbackUrl}
           playbackUrl={videoModal.playbackUrl}
@@ -6663,8 +6690,8 @@ export default function HomeContent({
         />
       )}
 
-      {detailGame && (
-        <GameDetailModal
+      {detailGame && modals && (
+        <modals.GameDetailModal
           game={detailGameLive ?? detailGame}
           showRatings={prefs.showRatings}
           onClose={() => setDetailGame(null)}
@@ -6682,8 +6709,8 @@ export default function HomeContent({
 
       {/* Event tiles get the same tap-for-details affordance the score cards
           have. `fight` is set when a single UFC bout card was tapped. */}
-      {detailEvent && (
-        <EventDetailModal
+      {detailEvent && modals && (
+        <modals.EventDetailModal
           event={detailEvent.event}
           fight={detailEvent.fight}
           leagueLabel={detailEvent.leagueLabel}
