@@ -19,8 +19,10 @@
          row ends 7 dp in (12 dp from the edge, same as the start), so the
          monkey is centered on the widget; the refresh glyph's right edge
          (its vector has a 3 dp margin, hence -3 dp) lines up with the
-         channel column's right edge. -->
+         channel column's right edge. A 1-row (pager) widget opens the app
+         from this header only; its game row turns the page. -->
     <LinearLayout
+        android:id="@+id/widget_header"
         android:layout_width="match_parent"
         android:layout_height="32dp"
         android:layout_marginEnd="7dp"
