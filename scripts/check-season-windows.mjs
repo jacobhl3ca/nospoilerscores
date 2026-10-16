@@ -76,6 +76,18 @@ const EARLY_OPEN_TOLERANCE_DAYS = 7;
 // alert here is real — this is not a source of recurring noise.
 const IMMINENT_CLOSE_DAYS = 60;
 
+// How far before a window's opening day to look for games it would hide.
+// Bounded by the previous season's close, so a league's own last season never
+// reads as hidden.
+const LATE_OPEN_LOOKBACK_DAYS = 60;
+
+// Windows that open after the first listed game on purpose (see the comment on
+// each row in espn.ts). Their earlier games are not flagged.
+const LATE_OPEN_ON_PURPOSE = {
+  facup: "the window opens with the third round proper, when the top-division clubs enter",
+  copadelrey: "the qualifying rounds stay outside the window",
+};
+
 function parseLeaguePaths() {
   const paths = {};
   for (const m of SRC.matchAll(/^\s{2}(\w+):\s*"(\/[^"]+\/scoreboard)"/gm)) paths[m[1]] = m[2];
@@ -162,9 +174,41 @@ async function fetchByDay(path, range) {
   return { events };
 }
 
+// Rugby (union and league) 400s every day range but serves a whole month
+// (`dates=YYYYMM`, read 2026-10-14), so a 400 tries the months first: two or
+// three calls instead of a ~45-call day walk. Any month that comes back at the
+// event cap, or any failed month, drops to the per-day walk, which is never
+// capped.
+async function fetchByMonth(path, range) {
+  const [from, to] = range.split("-");
+  const months = [];
+  for (let y = +from.slice(0, 4), m = +from.slice(4, 6); y * 100 + m <= +to.slice(0, 6); m === 12 ? (y++, m = 1) : m++) {
+    months.push(`${y}${String(m).padStart(2, "0")}`);
+  }
+  const parts = await Promise.all(months.map((mo) => fetchRange(path, mo)));
+  if (parts.some((p) => p.error || p.events.length >= EVENT_CAP)) return { error: "month walk incomplete" };
+  const lo = `${from.slice(0, 4)}-${from.slice(4, 6)}-${from.slice(6, 8)}`;
+  const hi = `${to.slice(0, 4)}-${to.slice(4, 6)}-${to.slice(6, 8)}`;
+  const seen = new Set();
+  const events = parts
+    .flatMap((p) => p.events)
+    .filter((e) => e.date && !seen.has(e.id) && seen.add(e.id))
+    .filter((e) => e.date.slice(0, 10) >= lo && e.date.slice(0, 10) <= hi);
+  return { events };
+}
+
+const RUGBY_PATH = /^\/rugby(?:-league)?\//;
+
 async function fetchDays(path, range, preseason = false) {
   let first = await fetchRange(path, range);
   let byDay = false;
+  if (first.error === "HTTP 400" && range.includes("-")) {
+    const byMonth = await fetchByMonth(path, range);
+    if (!byMonth.error) {
+      first = byMonth;
+      byDay = true; // never capped, so no slicing below
+    }
+  }
   if ((first.error === "HTTP 404" || first.error === "HTTP 400") && range.includes("-")) {
     first = await fetchByDay(path, range);
     byDay = true;
@@ -195,7 +239,11 @@ async function fetchDays(path, range, preseason = false) {
   // preseason games looks like it starts weeks early; a PRESEASON window
   // (the NFL Preseason backfill entry) measured against regular-season games
   // looks like it ends a month early. So each asks for its own game type.
-  const wanted = events.filter((e) => ((e.season?.type ?? 2) === 1) === preseason);
+  // ⚠️ Rugby is the exception: ESPN tags EVERY union and rugby league game
+  // type 1 (see SEASON_TYPE_1_IS_REGULAR in espn.ts), so the filter dropped
+  // every fixture and all twelve rugby/NRL windows read "unverifiable". That
+  // is how the Champions Cup window sat seven weeks late (2026-10-14).
+  const wanted = RUGBY_PATH.test(path) ? events : events.filter((e) => ((e.season?.type ?? 2) === 1) === preseason);
   return { days: [...new Set(wanted.map((e) => e.askedDay ?? e.date.slice(0, 10)))].sort() };
 }
 
@@ -274,9 +322,126 @@ async function checkTourEvent(cfg, path, now) {
   return { cfg, issues, notes };
 }
 
+// ── The year-round "Tennis" column (added 2026-10-11) ──
+// Not one event but fifteen: the ATP Masters 1000s, the WTA 1000s and the two
+// tour Finals, listed in TENNIS_TOUR_EVENTS in espn.ts because ESPN has no
+// tier field. That table is the part that goes stale, and it goes stale
+// silently (the column just loses a tournament), so this reads the whole
+// year off both feeds and checks each row against it:
+//   - a row with no event this year: the tournament moved, or ESPN gave it a
+//     new id AND a new name. Unverified until ESPN lists it; fix the table.
+//   - a row found by name only, or by id only: one of its two keys drifted.
+//     The column still works; update the other key before it drifts too.
+//   - a match day outside the Tennis window, or inside a Slam's window (those
+//     days show the Slam alone): flagged, that day's matches are hidden.
+// 12 ranged requests of 3–8 MB. ESPN serves a tennis range whole, so two
+// months at a time keeps each response under the size that times out.
+const TENNIS_TOUR_LABEL = "Tennis";
+const TENNIS_TOUR_FEEDS = ["/tennis/atp/scoreboard", "/tennis/wta/scoreboard"];
+// ESPN listed 166 events for 2026 across the two feeds.
+const TENNIS_YEAR_MIN_EVENTS = 100;
+
+// `declared` counts the rows a second, looser way (every `id: "…"` in the
+// table), so a row the strict pattern can no longer read is a failure, not a
+// row this check silently stops covering.
+function parseTennisTourEvents() {
+  const start = SRC.indexOf("export const TENNIS_TOUR_EVENTS");
+  const body = start < 0 ? "" : SRC.slice(start, SRC.indexOf("\n];", start));
+  const rows = [...body.matchAll(/\{\s*id:\s*"(\d+)",\s*city:\s*"([^"]+)",\s*name:\s*\/(.+)\/i,\s*draws:\s*"(\w+)"\s*\}/g)]
+    .map((m) => ({ id: m[1], city: m[2], name: new RegExp(m[3], "i"), draws: m[4] }));
+  return { rows, declared: (body.match(/\bid:\s*"/g) ?? []).length };
+}
+
+async function checkTennisTour(cfg, now) {
+  const issues = [];
+  const notes = [];
+  const { rows, declared } = parseTennisTourEvents();
+  if (!rows.length || rows.length !== declared) {
+    issues.push(`${rows.length} of ${declared} TENNIS_TOUR_EVENTS rows could be read out of espn.ts — the table's shape changed and this check is blind to the rest`);
+    return { cfg, issues, notes };
+  }
+
+  const year = now.getUTCFullYear();
+  const events = new Map();
+  let feedErrors = 0;
+  for (const path of TENNIS_TOUR_FEEDS) {
+    for (let month = 0; month < 12; month += 2) {
+      const range = `${ymd(new Date(Date.UTC(year, month, 1, 12)))}-${ymd(new Date(Date.UTC(year, month + 2, 0, 12)))}`;
+      const r = await fetchRange(path, range);
+      if (r.error) {
+        feedErrors++;
+        notes.push(`${path} ${range}: ${r.error}`);
+        continue;
+      }
+      for (const e of r.events) if (e.id && !events.has(e.id)) events.set(e.id, e);
+    }
+  }
+  if (!events.size) {
+    notes.push(`ESPN returned no ${year} tennis events`);
+    return { cfg, issues, notes };
+  }
+
+  const wants = (row, slug) => slug.includes("singles") && !slug.includes("doubles") && (row.draws === "both" || row.draws === (slug.includes("women") ? "women" : "men"));
+  // ESPN stamps tennis in UTC and plays it everywhere from Beijing to Indian
+  // Wells; the board buckets by US Eastern. Four hours back is that day for
+  // every start time a tournament uses.
+  const etDay = (iso) => new Date(Date.parse(iso) - 4 * 3600_000).toISOString().slice(0, 10);
+  const mmdd = (day) => day.slice(5);
+  const inside = (day, c) => mmdd(day) >= c.startDate && mmdd(day) <= c.endDate;
+  const slams = parseLeagues().filter((l) => l.sport === "tennis" && l.label !== TENNIS_TOUR_LABEL && l.startDate && l.endDate);
+
+  // A whole year's calendar read with no error: a row with no event is then a
+  // row ESPN dropped or re-keyed, and its tournament shows nowhere. With a
+  // failed request, or a year ESPN has barely listed yet, it is only a note.
+  const wholeYear = !feedErrors && events.size >= TENNIS_YEAR_MIN_EVENTS;
+  let firstDay = null;
+  for (const row of rows) {
+    const byId = events.get(`${row.id}-${year}`);
+    const ev = byId ?? [...events.values()].find((e) => !e.major && row.name.test(e.name ?? ""));
+    if (!ev) {
+      const missing = `${row.city}: no ${year} event with id ${row.id} or a name matching ${row.name}`;
+      if (wholeYear) issues.push(`${missing} — moved, or renamed and re-numbered: the column no longer shows it`);
+      else notes.push(`${missing} — not listed yet, or the read was incomplete`);
+      continue;
+    }
+    if (!byId) notes.push(`${row.city}: found by name only ("${ev.name}" is now id ${ev.id}, the table says ${row.id}) — update the id`);
+    else if (!row.name.test(ev.name ?? "")) notes.push(`${row.city}: ESPN now calls id ${row.id} "${ev.name}", which ${row.name} does not match — update the name pattern (the id still carries the column)`);
+
+    // The days the column would show: main-draw singles of the row's draws.
+    // An event ESPN has not drawn yet has no matches, so fall back to its
+    // envelope (endDate is 03:59Z on the day after the final).
+    const played = new Set();
+    for (const g of ev.groupings ?? []) {
+      if (!wants(row, (g.grouping?.slug ?? "").toLowerCase())) continue;
+      for (const m of g.competitions ?? []) {
+        if (/^qualifying/i.test(m.round?.displayName ?? "") || !m.date) continue;
+        played.add(etDay(m.date));
+      }
+    }
+    if (!played.size && ev.date && ev.endDate) {
+      for (let t = Date.parse(ev.date); t < Date.parse(ev.endDate); t += 86400000) played.add(etDay(new Date(t).toISOString()));
+    }
+    const days = [...played].sort();
+    if (!days.length) continue;
+    if (!firstDay || days[0] < firstDay) firstDay = days[0];
+    const outside = days.filter((d) => !inside(d, cfg));
+    if (outside.length) issues.push(`${row.city} ("${ev.name}") plays ${outside[0]}${outside.length > 1 ? ` → ${outside.at(-1)}` : ""} OUTSIDE the Tennis window — those days would be hidden`);
+    for (const slam of slams) {
+      const clash = days.filter((d) => inside(d, slam));
+      if (clash.length) issues.push(`${row.city} ("${ev.name}") plays ${clash[0]}${clash.length > 1 ? ` → ${clash.at(-1)}` : ""} inside the ${slam.label} window, where the column shows the Slam alone`);
+    }
+  }
+  if (firstDay) {
+    const early = diffDays(dayOf(firstDay), mmddToDate(cfg.kickoffDate ?? cfg.startDate, year));
+    if (early > EARLY_OPEN_TOLERANCE_DAYS) issues.push(`opens ${early}d before the first 1000-level match (${firstDay})`);
+  }
+  return { cfg, issues, notes };
+}
+
 async function checkLeague(cfg, paths, now) {
   const path = paths[cfg.sport];
   if (!path || !cfg.startDate || !cfg.endDate) return null;
+  if (cfg.sport === "tennis" && cfg.label === TENNIS_TOUR_LABEL) return checkTennisTour(cfg, now);
   if (TOUR_SPORTS.has(cfg.sport)) return checkTourEvent(cfg, path, now);
 
   const year = now.getUTCFullYear();
@@ -316,25 +481,53 @@ async function checkLeague(cfg, paths, now) {
 
   // Probe a window around each edge rather than the whole season — ESPN caps
   // how much a single ranged request will return.
+  //
+  // The open probe also looks BACK, up to LATE_OPEN_LOOKBACK_DAYS before the
+  // window opens (never past the previous season's close): a game there is a
+  // game the board hides. The old probe only asked "does the window open too
+  // EARLY", so a window that opened seven weeks late (Champions Cup, startDate
+  // 12-05 against a 2026-10-16 round 1) passed in silence.
   const preseason = /preseason/i.test(cfg.label);
+  const windowOpen = mmddToDate(cfg.startDate, openYear);
+  const prevClose = mmddToDate(cfg.endDate, wraps ? openYear : openYear - 1);
+  const lookFrom = new Date(Math.max(shift(windowOpen, -LATE_OPEN_LOOKBACK_DAYS).getTime(), shift(prevClose, 1).getTime()));
+  const openFrom = lookFrom < shift(open, -21) ? lookFrom : shift(open, -21);
   const [openProbe, closeProbe] = await Promise.all([
-    fetchDays(path, `${ymd(shift(open, -21))}-${ymd(shift(open, 21))}`, preseason),
+    fetchDays(path, `${ymd(openFrom)}-${ymd(shift(open, 21))}`, preseason),
     fetchDays(path, `${ymd(shift(close, -30))}-${ymd(shift(close, 45))}`, preseason),
   ]);
 
   const issues = [];
   const notes = [];
 
+  // A day before the window opens is only hidden if no other row for the same
+  // sport covers it (the PLL's two rows, the rugbytest / nationschamp split).
+  const siblings = ALL_ROWS.filter((l) => l.sport === cfg.sport && l !== cfg && l.startDate && l.endDate);
+  const coveredElsewhere = (day) => siblings.some((l) => {
+    const md = day.slice(5);
+    return l.startDate <= l.endDate ? md >= l.startDate && md <= l.endDate : md >= l.startDate || md <= l.endDate;
+  });
+  const lo = lookFrom.toISOString().slice(0, 10);
+  const hi = windowOpen.toISOString().slice(0, 10);
+  const hidden = openProbe.error ? [] : openProbe.days.filter((d) => d >= lo && d < hi && !coveredElsewhere(d));
+  if (hidden.length && !cfg.backfillOnly && !LATE_OPEN_ON_PURPOSE[cfg.sport]) {
+    issues.push(`OPENS ${diffDays(windowOpen, dayOf(hidden[0]))}d AFTER THE FIRST GAME (first game ${hidden[0]}${hidden.length > 1 ? `, ${hidden.length} game days before ${hi}` : ""}) — those games are hidden`);
+  }
+  // The too-early check keeps its old ±21-day probe, so a game just before the
+  // window (hidden or not) still counts as "the season has started".
+  const near = openProbe.error ? [] : openProbe.days.filter((d) => d >= shift(open, -21).toISOString().slice(0, 10));
+
   if (openProbe.error) notes.push(`open probe: ${openProbe.error}`);
-  else if (!openProbe.days.length) notes.push("no fixtures published near the opener yet");
-  else {
-    const first = new Date(`${openProbe.days[0]}T12:00:00Z`);
+  else if (!near.length) {
+    if (!hidden.length) notes.push("no fixtures published near the opener yet");
+  } else {
+    const first = new Date(`${near[0]}T12:00:00Z`);
     const gap = diffDays(first, open);
     // backfillOnly entries (NFL Preseason) open early ON PURPOSE — their job is
     // to fill an otherwise-empty third slot through a thin stretch of the
     // calendar, not to have a game every day. Only their closing edge matters.
     if (gap > EARLY_OPEN_TOLERANCE_DAYS && !cfg.backfillOnly) {
-      issues.push(`opens ${gap}d before the first game (first game ${openProbe.days[0]})`);
+      issues.push(`opens ${gap}d before the first game (first game ${near[0]})`);
     }
   }
 
@@ -365,6 +558,7 @@ const only = (args.find((a) => a.startsWith("--only=")) || "").slice(7).split(",
 const all = args.includes("--all");
 
 const paths = parseLeaguePaths();
+const ALL_ROWS = parseLeagues();
 // --now lets you run the check as if it were another date. The bug this script
 // had for its first day was date-dependent (wrapping leagues anchored to the
 // wrong season all winter) and invisible in August, so being able to say
@@ -376,7 +570,7 @@ if (nowArg && Number.isNaN(now.getTime())) {
   process.exit(2);
 }
 if (nowArg) console.log(`(running as of ${nowArg})\n`);
-const leagues = parseLeagues().filter((l) => {
+const leagues = ALL_ROWS.filter((l) => {
   if (l.yearCycle) return false; // World Cup / Euro cycles: no fixtures most years
   if (only.length) return only.includes(l.sport);
   return all || POPULAR.has(l.sport);

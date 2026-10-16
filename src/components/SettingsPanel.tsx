@@ -10,8 +10,10 @@ import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { closeHiddenPins, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch } from "@/lib/boardSlots";
 import { LeagueMark } from "./LeagueMark";
+import { trackEvent } from "@/lib/track";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
+import { BRACKET_RESULTS_ALWAYS_KEY, loadResultsAlways } from "@/lib/playoffPicture";
 import { FREQUENT_RECORD_LEAGUES, recordKeysForLeagues, toggleRecordLeague, upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import {
   boardHiddenLeagues,
@@ -20,10 +22,15 @@ import {
   DefaultDateMode,
   DefaultLandingView,
   DefaultRatings,
+  FRESH_NEWS_LAYOUT,
 } from "@/lib/preferences";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { clearRememberedPairings, restoreRememberedPairings } from "@/lib/pairingMask";
+import { pushSeen, stopSeenSync } from "@/lib/seenSync";
+import { setSeenSync } from "@/lib/newsSeen";
+import { AppleLogo, GoogleG } from "./ProviderLogo";
 import { getAuthState, cachedAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
+import { TeamLogo } from "@/components/TeamLogo";
 
 interface LeagueOption {
   sport: Sport;
@@ -290,6 +297,23 @@ export default function SettingsPanel({
 }: SettingsPanelProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
 
+  // The MLB bracket's "Always show results" flag (lib/playoffPicture). A
+  // device-local key, not a pref, so it is read when the panel opens; `bracketTick`
+  // re-reads it after the row turns it off.
+  const [bracketTick, setBracketTick] = useState(0);
+  const bracketResultsAlways = useMemo(() => (open && bracketTick >= 0 ? loadResultsAlways() : false), [open, bracketTick]);
+
+  // Umami usage counts (2026-10-01): settings-open per open, then
+  // settings-change {key} the first time each setting changes in that open. A
+  // text box writes on every keystroke, so once per key per open keeps it to
+  // one event. The key names only, never the value.
+  const changedKeysRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!open) return;
+    changedKeysRef.current = new Set();
+    trackEvent("settings-open");
+  }, [open]);
+
   // One "Saved" mark in the header for every write (Jacob 10/1). It was only
   // under the two Links fields. "show" for 2 s, then "fade" while the opacity
   // runs out, then gone. Reduced motion skips the transition.
@@ -297,6 +321,13 @@ export default function SettingsPanel({
   const savedTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => { savedTimersRef.current.forEach(clearTimeout); }, []);
   const updatePrefs = useCallback((update: Partial<Preferences>) => {
+    // A league pin or Reset writes many keys at once: those count as "many".
+    const keys = Object.keys(update).sort();
+    const key = keys.length > 2 ? "many" : keys.join(",");
+    if (key && !changedKeysRef.current.has(key)) {
+      changedKeysRef.current.add(key);
+      trackEvent("settings-change", { key });
+    }
     savePrefs(update);
     savedTimersRef.current.forEach(clearTimeout);
     setSavedMark("show");
@@ -903,6 +934,8 @@ export default function SettingsPanel({
     watchQueue: undefined,
     upcomingRecordLeagues: undefined,
     hideUpcomingRecords: undefined,
+    hideRanks: undefined,
+    foldEliminatedGames: undefined,
     // Reset means "act like a fresh install", and on a fresh install the
     // stars are on for two visits before the app hides them itself. Leaving
     // the counter at 3 would re-hide them on the very next open, which reads
@@ -947,18 +980,24 @@ export default function SettingsPanel({
     // a value left in localStorage from an earlier build hides sources with no
     // UI to clear it — a reset is the only way out. All four have no non-
     // undefined default, so clearing to undefined restores the fresh-install
-    // default (Cards view, no video filter, default order, nothing hidden).
+    // default (no video filter, default order, nothing hidden).
     // newsOldestFirst (the ⇅ control) was the last toolbar pref still
     // surviving a reset; it has no non-undefined default either. Same for
-    // newsHideSeen (the 👁 control).
+    // newsHideSeen (the 👁 control). newsMarkSeen (Settings → News) reads
+    // undefined as on, its default.
+    // The layout is the one a new visitor gets (ESPN since 10/10), set by
+    // name: undefined would read as Cards (newsLayoutOf).
     newsFeedView: undefined,
-    newsLayout: undefined,
+    newsLayout: FRESH_NEWS_LAYOUT,
     newsEspnBig: undefined,
     newsAutoplay: undefined,
-    newsCardPrefs: undefined,
+    // {} and not undefined: an emptied set is one the account copy holds, so
+    // the reset reaches the other devices (prefsMerge carryCardPrefs).
+    newsCardPrefs: {},
     newsVideosOnly: undefined,
     newsOldestFirst: undefined,
     newsHideSeen: undefined,
+    newsMarkSeen: undefined,
     newsTypeFilterOrder: undefined,
     newsHiddenSources: undefined,
     singleColumn: undefined,
@@ -1172,9 +1211,10 @@ export default function SettingsPanel({
               {linkableProviders.map((l) => (
                 <button key={l.key} type="button"
                   onClick={l.onClick}
-                  className="flex-1 min-w-[120px] py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                  className="flex-1 min-w-[120px] py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors inline-flex items-center justify-center gap-2"
                   style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
                 >
+                  {l.key === "apple" ? <AppleLogo size={15} /> : <GoogleG size={15} />}
                   Link {l.label}
                 </button>
               ))}
@@ -1314,7 +1354,7 @@ export default function SettingsPanel({
               in the panel to reach). Was "League columns", fifth. My leagues
               first, as chips (a tick = in the header switcher), then the
               columns as one row of pills like the board header. */}
-          <Section title="Leagues">
+          <Section title="Leagues" id="settings-leagues">
             <div>
               <div className="flex items-center justify-between gap-3 mb-1.5">
                 <span className="text-sm font-medium" style={{ color: "var(--text)" }}>My leagues</span>
@@ -1639,6 +1679,18 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ hidePlayoffRaceTags: !v })}
               />
             )}
+            <ToggleRow
+              label="Show team ranks and seeds"
+              hint="The #8 by a team name, and bracket seeds"
+              checked={!prefs.hideRanks}
+              onChange={(v) => updatePrefs({ hideRanks: !v })}
+            />
+            <ToggleRow
+              label="Fold games with no playoff stakes"
+              hint="Games between two teams already out of the playoffs fold into one row."
+              checked={!!prefs.foldEliminatedGames}
+              onChange={(v) => updatePrefs({ foldEliminatedGames: v ? true : undefined })}
+            />
           </Section>
 
           {/* Default View */}
@@ -1671,6 +1723,7 @@ export default function SettingsPanel({
                     <option key={h} value={h}>{hourLabel(h)}</option>
                   ))}
                 </select>
+                <span className="block">after this hour, a league card&apos;s News button stops asking first</span>
               </p>
             )}
             {/* Time zone (Jacob 10/4): moved up from More settings because a
@@ -1751,6 +1804,11 @@ export default function SettingsPanel({
               label="Hide upsetting news"
               checked={!!(prefs.hideSensitiveNews || prefs.hideCrashNews)}
               onChange={(v) => updatePrefs({ hideSensitiveNews: v, hideCrashNews: v })}
+            />
+            <ToggleRow
+              label="Mark posts you opened"
+              checked={prefs.newsMarkSeen ?? true}
+              onChange={(v) => updatePrefs({ newsMarkSeen: v })}
             />
           </Section>
 
@@ -1959,6 +2017,19 @@ export default function SettingsPanel({
                 checked={!prefs.skipBoxscoreWarning}
                 onChange={(v) => updatePrefs({ skipBoxscoreWarning: !v })}
               />
+              {/* Only while "Always show results" is on in the MLB bracket. */}
+              {bracketResultsAlways && (
+                <ToggleRow
+                  label="Cover MLB bracket results"
+                  hint="Hide each playoff round's series winners until you tap for that round"
+                  checked={false}
+                  onChange={(v) => {
+                    if (!v) return;
+                    try { window.localStorage.removeItem(BRACKET_RESULTS_ALWAYS_KEY); } catch {}
+                    setBracketTick((n) => n + 1);
+                  }}
+                />
+              )}
             </div>
             {/* Links (Jacob 10/4: was its own section above Account). The
                 user's own front-ends (lib/frontendLinks.ts), the Reminder link
@@ -2094,7 +2165,7 @@ export default function SettingsPanel({
             {auth.signedIn && (
               <>
                 <button type="button"
-                  onClick={() => signOut()}
+                  onClick={() => { stopSeenSync(true); signOut(); }}
                   className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
                   style={{ color: "var(--text-muted)" }}
                 >
@@ -2127,9 +2198,14 @@ export default function SettingsPanel({
                       alert("Account not deleted — you didn't type DELETE.");
                       return;
                     }
+                    // No opened-post upload may land after the delete.
+                    stopSeenSync(false);
                     const ok = await deleteAccount();
                     if (ok) window.location.href = "/";
-                    else alert("Couldn't delete your account. Please try again in a moment.");
+                    else {
+                      setSeenSync(pushSeen);
+                      alert("Couldn't delete your account. Please try again in a moment.");
+                    }
                   }}
                   className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
                   style={{ color: "var(--text-muted)" }}
@@ -2226,35 +2302,14 @@ function ProviderMark({ provider }: { provider: string | null }) {
   return null;
 }
 
-// Apple's mark in the text colour: the Account line and the sign-in button.
-// The 🍎 emoji read as a fruit, not the company (Jacob 10/1).
-function AppleLogo({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 17 17" fill="currentColor" aria-hidden="true">
-      <path d="M13.79 9.06c-.02-1.86 1.52-2.75 1.59-2.79-.87-1.27-2.22-1.44-2.7-1.46-1.15-.12-2.24.68-2.82.68-.58 0-1.48-.66-2.43-.64-1.25.02-2.4.73-3.04 1.85-1.3 2.25-.33 5.58.93 7.41.62.9 1.35 1.9 2.31 1.86.93-.04 1.28-.6 2.4-.6 1.12 0 1.43.6 2.41.58 1-.02 1.63-.91 2.24-1.81.71-1.04 1-2.05 1.01-2.1-.02-.01-1.94-.74-1.96-2.95l.01-.34zM11.9 3.38c.51-.62.86-1.48.76-2.34-.74.03-1.64.49-2.17 1.11-.47.55-.89 1.43-.78 2.27.83.07 1.67-.42 2.19-1.04z"/>
-    </svg>
-  );
-}
-
-function GoogleG({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
-      <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
-      <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
-      <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
-      <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
-    </svg>
-  );
-}
-
 // What we actually know about the signed-in account: which identity is linked,
 // which HideScore clients it has been used on (the iPhone app is invisible to the
 // server without the X-HS-Client header — see hsPlatform in lib/prefsSync.ts), and
 // how long it has existed. All of it comes from the canonical users/<uid>.json
 // record in R2 via /api/me.
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   return (
-    <section>
+    <section id={id}>
       <h3 className="text-[11px] uppercase tracking-wide font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
         {title}
       </h3>
@@ -2524,8 +2579,7 @@ function PickerTeamLogo({ logo, name }: { logo?: string; name: string }) {
   const [failed, setFailed] = useState(false);
   if (logo && !failed) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={logo} alt="" loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" onError={() => setFailed(true)} />
+      <TeamLogo src={logo} alt="" loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" onFail={() => setFailed(true)} />
     );
   }
   return (

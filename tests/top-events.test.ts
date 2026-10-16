@@ -264,6 +264,42 @@ test("grouping is stable: regrouping a grouped column changes nothing", () => {
   assert.deepEqual(once.map((g) => g.id), ["d", "b", "a", "c"]);
 });
 
+test("Ratings view: each block's live games and finals sort by rating; upcoming and block order stay", () => {
+  const games = [
+    game({ id: "f1", sport: "ncaaf", state: "post", rating: 40 }),
+    game({ id: "f2", sport: "ncaaf", state: "post", rating: 90 }),
+    game({ id: "f3", sport: "ncaaf", state: "post", rating: null }),
+    game({ id: "l1", sport: "ncaaf", state: "in", rating: null }),
+    game({ id: "l2", sport: "ncaaf", state: "in", rating: 55, liveProgress: 0.3 }),
+    game({ id: "l3", sport: "ncaaf", state: "in", rating: 55, liveProgress: 0.8 }),
+    game({ id: "p1", sport: "ncaaf", state: "pre" }), game({ id: "p2", sport: "ncaaf", state: "pre" }),
+    game({ id: "m1", sport: "mlb", state: "post", rating: 20 }),
+    game({ id: "m2", sport: "mlb", state: "post", rating: 70 }),
+  ];
+  // The featured hero f1 leads its finals in the default view, not in Ratings.
+  const featured = ["ncaaf:f1", "ncaaf:p2"];
+  assert.deepEqual(groupEspnFrontPage(games, featured).map((g) => g.games.map((x) => x.id)), [
+    ["l1", "l2", "l3", "p2", "p1", "f1", "f2", "f3"],
+    ["m1", "m2"],
+  ]);
+  assert.deepEqual(groupEspnFrontPage(games, featured, true).map((g) => [g.sport, g.games.map((x) => x.id)]), [
+    ["ncaaf", ["l3", "l2", "l1", "p2", "p1", "f2", "f1", "f3"]],
+    ["mlb", ["m2", "m1"]],
+  ]);
+});
+
+test("Ratings view: a tied rating keeps the featured order, and regrouping changes nothing", () => {
+  const games = [
+    game({ id: "a", sport: "nfl", state: "post", rating: 60 }),
+    game({ id: "b", sport: "nfl", state: "post", rating: 60 }),
+    game({ id: "c", sport: "nfl", state: "post", rating: 80 }),
+  ];
+  const once = groupEspnFrontPage(games, ["nfl:b"], true).flatMap((g) => g.games);
+  assert.deepEqual(once.map((g) => g.id), ["c", "b", "a"]);
+  const twice = groupEspnFrontPage(once, ["nfl:b"], true).flatMap((g) => g.games);
+  assert.deepEqual(twice.map((g) => g.id), once.map((g) => g.id));
+});
+
 // ── Past days (Jacob 9/29): the day snapshot and its no-snapshot fallback ──
 
 test("orderBySports: the given leagues in the given order, every game, nothing else", () => {

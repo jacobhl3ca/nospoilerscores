@@ -19,8 +19,12 @@ export function hlDateStrs(iso) {
 // The short club name some channels use when the long alias finds nothing.
 // URC titles its Cardiff recaps "Cardiff v Zebre Parma", so "Cardiff Rugby"
 // (the HL_TEAM_ALIASES form) missed and "Cardiff" found it (2026-10-02).
+// ESPN College Football titled FIU at Jacksonville State (10/13) "FIU Panthers
+// vs. Jacksonville State Gamecocks", while its NMSU–FIU cut a week earlier said
+// "Florida International Panthers", so the school name stays the first try.
 export const HL_TEAM_SHORT_ALIASES = {
   "Cardiff Blues": "Cardiff",
+  "Florida International": "FIU",
 };
 
 // The [away, home] pairs to query, in order: the names as given, then the

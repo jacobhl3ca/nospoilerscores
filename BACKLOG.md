@@ -1,5 +1,52 @@
 # HideScore — Master Backlog
 
+## 2026-10-14 — Champions Cup from round 1 (a "League request: Investec Champions Cup")
+
+**Plan:** `~/.claude-c3/plans/pasted-content-id-f0b7-skip-to-luminous-muffin.md`. Branch `feat/champions-cup-2026` (worktree `~/hs-champions-cup`). Request: Formspree, Android build `abb1ee72`, Oct 14 1:36 PM ET, initials M.T. (on the wall).
+- `rugbychamp` was in the app since 8/11 but its window opened 12-05: round 1 (Oct 16–18) hidden, and on Oct 14 the row read offseason, so Settings (Hide offseason on by default) never listed it. Now `10-16 → 05-23`, final `05-22`, `verifiedFor: 2026`. Label stays "Champions Cup" (no sponsor).
+- Gaps closed: PICKER_RANK, LEAGUE_PRIORITY (41.5), calendar 120 min, club rugby tests.
+- Knockouts: ESPN files every EPCR game type 1 with no notes or week, so rounds come off a date table in `playoffDates.ts` (`epcrKnockoutRound`, 2026 + 2027 rows, both cups). Pairing cover: R16 shows (seeded off the pools), QF / SF / Final covered.
+- `check-season-windows.mjs`: rugby paths keep type 1 games (all twelve rugby/NRL windows read "?" before); a 400 tries `dates=YYYYMM` months before the day walk; a game up to 60 days before a window opens (after the previous close) flags "OPENS Nd AFTER THE FIRST GAME". FA Cup and Copa del Rey are on `LATE_OPEN_ON_PURPOSE`. On main's espn.ts it flags Champions Cup (OPENS 50d).
+- Highlights stay DARK for both cups. Both post to one channel, "Investec Champions Cup & EPCR Challenge Cup". Whole 2025-26 probe (114 games, local gated worker): 70 right, 1 WRONG (Toulouse v Sharks got the Sale Sharks cut), 1 doubtful, 25 missed (club names ESPN does not use). Titles lead with a verdict ("Champions!", "Historic Victory"). Script: `~/scripts/hs-epcr-probe/probe.mjs`.
+- Top 14 2026-27 opened Sat Sep 5 (not Sep 12 / Sep 13): fixed on `/rugby-without-spoilers` and in the espn.ts note; that page also had the Top 14 under "dark" after it lit on 10/3.
+- Tests: `tests/champions-cup.test.ts`, `tests/visual/champions-cup.spec.ts` (Chromium + WebKit on the mini).
+
+**Open:**
+- [ ] Re-probe EPCR after round 1, Mon Oct 19: `node ~/scripts/hs-epcr-probe/probe.mjs <worker> "Investec Champions Cup & EPCR Challenge Cup" out.json`. To light: a "Sharks" alias that cannot match "Sale Sharks" (Hollywoodbets Sharks), aliases for Bristol Bears / Section Paloise / USAP / Newcastle Red Bulls / Aviron Bayonnais, the channel in `TITLE_ALWAYS_MASKED_CHANNELS`, then 0 wrong.
+- [ ] Each season: add the next knockout rows to `EPCR_ROUNDS` in `playoffDates.ts` (a season with no rows shows every knockout pairing).
+- [ ] Window audit flags outside rugby (not fixed here): WNBA 2026 games May 8–15 sat before its 05-16 window; NASCAR's Clash (Feb 4) sat a day before 02-05; NCAAW Soccer closes 22 d before its last game.
+- [ ] Reply to M.T.: draft in Gmail (To blank), send only on Jacob's "send it".
+
+## 2026-10-11 — Wall of fame page (/wall-of-fame): round 2 of "Built from your requests"
+
+**Plan:** `~/.claude-c3/plans/that-page-we-were-imperative-dolphin.md` (Job 1). Branch `feat/wall-of-fame-r2`.
+- `/wall-of-fame`: people ranked by builds (`K.K. · 4 built`), the promise line "Everyone on this wall gets any future paid features free.", a "Suggest something" button, then every row as a table. No `<details>` cap.
+- Table (`src/components/RequestedBuildsList.tsx`): grid `[4rem][5.5rem][1fr]`, no borders; one header per person, then "Asked without a name". Initials are in the header only; the "thanks K.K." tail is gone.
+- Kind pills (`.kind-pill[data-kind]` in `globals.css`): League blue, Feature green, Fix amber, Other grey, opaque in both themes, each over 4.5:1.
+- "Suggest something" opens FeedbackBox with the kind pills (new `kinds` prop); the picked one goes to Formspree as `kind`. No pill is picked at open.
+- "This was me" on each row with no initials opens the form seeded `Claim: CFL (asked Sep 13). My initials: `. Nothing is added by code: Jacob reads the inbox and a chat edits `requestedBuilds.ts`.
+- `/contact` keeps the H2 (`#built`) and a link "See the wall of fame →". Doc footer gets "Wall of fame" after Guides (the board footer row does not). Sitemap + llms.txt.
+- Tests: `tests/requested-builds.test.ts` (+ ranked people, sections, claim text), `tests/visual/wall-of-fame.spec.ts` (Chromium + WebKit on the mini).
+
+**Open:**
+- [ ] Repo is public: never commit a map of initials to a person or an email.
+- [ ] Dec 15: the Ko-fi + Patreon links show beside "Suggest something" through the `supportLinks.ts` gate. `PATREON_URL` is still empty.
+- [ ] Not built (Jacob 10/11): signed-in reorder of open requests.
+- [ ] `tests/visual/public-pages.spec.ts` baselines (faq, privacy) are from 10/4 and no longer match main's page heights.
+
+## 2026-10-09 — "Built from your requests" on /contact#feedback + optional initials on the feedback form
+
+**Plan:** `~/.claude-secondary/plans/patreon-hidescore-stuff-next-stesp-vivid-wirth.md` (item B). Branch `feat/built-from-requests`.
+- `src/lib/requestedBuilds.ts`: what shipped because a user asked (8 rows mined from the Formspree mails and the hi@ inbox). Grouped by person: K.K. (4), I.R. (1), then rows with no initials; newest first inside each group. `by` = initials only.
+- `/contact`: H2 "Built from your requests" (`#built`) after "Send feedback"; 10 rows, the rest behind a native `<details>` "Show all N".
+- FeedbackBox: optional "Initials for the thanks list" field (max 6), sent to Formspree as `initials`. Typing it is the consent.
+- Tests: `tests/requested-builds.test.ts` (dates, order, kinds, initials `^([A-Z]\.){1,3}$`, no `@`), `tests/visual/built-from-requests.spec.ts` (Chromium + WebKit on the mini).
+
+**Open:**
+- [x] Initials ticked by Jacob 10/9: K.K. on widget, scroll columns, NCAA men's + women's hockey; I.R. on time zone; CFL, Rugby Nations Championship, La Liga etc. stay blank. "Email field on this form" row dropped.
+- [ ] New request shipped → add a row here. Initials only if the note carried them or the person agreed.
+- [ ] Dec 15 (Patreon on): the $3+ perk = initials on this list under a "Patrons" line.
+
 ## 2026-10-09 — Highlight gaps left after the 10/2–10/8 audit (no work now)
 
 **Plan:** `~/.claude-secondary/plans/frolicking-gliding-hellman.md` §3c. Fixed elsewhere: PR #285 (Pac-12, A&M `&`, SEC volleyball, college soccer, Top 14, UEL TUDN) and `fix/hl-query-fallbacks` (WNBA UTC date, URC "Cardiff", Nations one-letter typo).
@@ -1206,7 +1253,7 @@ _src: 2026-08-03 session_
   > The in-app MLB modal streams MLB's HLS playlists directly. Fine for a hobby site; revisit before an App Store paid tier, ads, sponsorships, or scale. Safer path: anchor out to MLB.com. _src: project_hidescore_mlb_clip_legality.md_
 
 - [ ] **Pre-monetization legal checklist (ToS / fair-use review 2026-06-05/07).** Full risk assessment done; scores/ratings/standings are uncopyrightable facts (Feist v. Rural) → the data layer is low-risk. Before any paid tier / ads / sponsorship-funded scale:
-  > **Video is the hot zone.** Never rehost raw video — embed OFFICIAL players only (already the case; keep it). Prefer YouTube embeds (their API grants embedders a license) but DON'T paywall YouTube playback or strip the player/ads (banned by YouTube API ToS). Treat **MLB highlights** (forge-dapi / HLS) as the single biggest exposure — MLBAM is the most aggressive DMCA enforcer in sports; drop or license them FIRST if charging. (Extends the "MLB clip-embed legality" item above.)
+  > **Video is the hot zone.** Never rehost raw video. ESPN mp4s (since 2026-10-01), MLB statsapi HLS and Reddit clips (v.redd.it + external clip hosts) play in our own player; per-source off switch = `MEDIA_OFF` (`scripts/lib/media-policy.mjs`). Prefer YouTube embeds (their API grants embedders a license) but DON'T paywall YouTube playback or strip the player/ads (banned by YouTube API ToS). Treat **MLB highlights** (forge-dapi / HLS) as the single biggest exposure — MLBAM is the most aggressive DMCA enforcer in sports; drop or license them FIRST if charging. (Extends the "MLB clip-embed legality" item above.)
   > **Commercial use raises exposure across the board.** ESPN(Disney)/MLB/Reddit ToS all grant only *non-commercial* use; a paid tier converts tolerated hobby use into an express breach and weakens fair-use/hot-news defenses. Keep a generous FREE tier as a practical shield.
   > **Reddit** unauth `.json`/`.rss` is deprecated + a ToS violation (already breaking — see the Reddit OAuth fix item up top). **Logos** = trademark + separate copyright risk → prefer team names (see the disclaimer item in T4).
   > A one-time IP-attorney consult on the video features + Pro structure is worth it before real revenue. _src: 2026-06-07 ToS review (this chat); [[project_app_monetization_and_tos]]_

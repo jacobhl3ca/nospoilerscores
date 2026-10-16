@@ -57,9 +57,9 @@ export default function ContactPage() {
 
         <h2 className="text-lg font-semibold mt-6">Email</h2>
         <p>
-          <EmailLink />. A real
-          person reads every message.
+          <EmailLink />
         </p>
+        <p>A real person reads every message.</p>
 
         <h2 id="feedback" className="text-lg font-semibold mt-6 scroll-mt-4">Send feedback</h2>
         <p>
@@ -69,8 +69,19 @@ export default function ContactPage() {
         {/* The homepage footer's "Feedback" links here (2026-09-28). A div,
             not a p: FeedbackBox renders its modal (a div + form) in place. */}
         <div>
-          <FeedbackBox label="Send feedback" />
+          <FeedbackBox label="Send feedback" primary />
         </div>
+
+        {/* Added 2026-10-09, so a note sent from here visibly goes somewhere.
+            10/11: the list itself moved to /wall-of-fame; this keeps the
+            heading (and #built) with a link to it. */}
+        <h2 id="built" className="text-lg font-semibold mt-6">Built from your requests</h2>
+        <p>
+          Leagues, features and fixes that started as a note from someone using HideScore.{" "}
+          <Link href="/wall-of-fame" className="underline underline-offset-2 whitespace-nowrap">
+            See the Wall of Fame →
+          </Link>
+        </p>
 
         <h2 className="text-lg font-semibold mt-6">What to send</h2>
         <ul className="list-disc pl-5 space-y-1.5">
@@ -82,6 +93,10 @@ export default function ContactPage() {
             <Link href="/privacy" className="underline underline-offset-2">privacy policy</Link> has the details.
           </li>
         </ul>
+
+        <p>
+          To report a clip or image you own, email <EmailLink />. We remove it within 1 business day.
+        </p>
 
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
           HideScore is an online app with no office or phone line. It is not affiliated with, endorsed by, or sponsored

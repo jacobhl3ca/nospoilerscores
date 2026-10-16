@@ -88,6 +88,7 @@ export interface HighlightShareParams {
   sourceLabel?: string | null; // friendly source name ("r/worldcup")
   headline?: string | null; // post title, for the preview/text card
   cardKey?: string | null; // ?c= matchup-card key for the iMessage unfurl
+  section?: string | null; // news feed section ("ESPN Video"), only when it differs from sourceLabel
   path?: string; // "/" (default) or "/watch" — see buildHighlightShareUrl
 }
 
@@ -118,6 +119,9 @@ export function buildHighlightShareUrl(p: HighlightShareParams): string | null {
   // Image posts already carry their picture in ?hi, so skip ?hp there.
   if (p.posterUrl && !p.imageUrl) sp.set("hp", p.posterUrl);
   if (p.cardKey) sp.set("c", p.cardKey);
+  // A news post's section, so a reload finds the card it came from. Skipped
+  // when ?hl already says the same thing.
+  if (p.section && p.section !== p.sourceLabel) sp.set("hn", p.section);
   // A YouTube clip opened from /watch shares back to /watch, whose preview is
   // the generic HideScore card. On "/" the worker previews ?v= with the video
   // thumbnail, and a pasted link's thumbnail is often the result. Everything

@@ -44,19 +44,20 @@ import { withoutSettledOdds } from "@/lib/playoffPicture";
 // leaves the pill and only Bracket and Picks remain (Jacob 9/29).
 //
 // `onPlayList`: each button opens its cut with the pill's other cuts as
-// siblings, so the modal pages through them — Shift+←/→ or ↑/↓, or the
+// siblings, so the modal pages through them — Shift+←/→ or Shift+↑/↓, or the
 // ‹ › buttons — without closing (Jacob 9/26: "shift click to cycle the best
 // of day highlights").
 
 // Outer pill and button classes per layout (see the header note). Shared by
 // the real pill and the reserveSlot spacer so their heights always agree.
-const ROW_PILL = "items-center gap-2 px-2.5 py-1.5";
-const STACKED_PILL = "flex-col gap-1 px-1.5 py-1.5";
+// Exported for BestSpanBar, the Best column's pill in the same row.
+export const ROW_PILL = "items-center gap-2 px-2.5 py-1.5";
+export const STACKED_PILL = "flex-col gap-1 px-1.5 py-1.5";
 const ROW_BTN = "gap-1 px-2";
 const STACKED_BTN = "flex-1 min-w-0 gap-0.5 px-0";
 // A phone row with a word button (see fitButtons): each button sized by its
 // text plus an equal share of what is left.
-const STACKED_FIT_BTN = "flex-auto gap-0.5 px-0";
+export const STACKED_FIT_BTN = "flex-auto gap-0.5 px-0";
 
 export type PlayoffsTab = "bracket" | "odds" | "picks";
 const PLAYOFFS_TABS: { key: PlayoffsTab; label: string }[] = [
@@ -80,10 +81,13 @@ export function reviewHeadings(season: number): string[] {
   return [`${season} in review`, `\u2019${String(season).slice(-2)} review`];
 }
 
+const NO_RECORDS: RecapRecord[] = [];
+
 export default function LeagueRecapCard({
   sport,
   date,
   lastPlayedDate,
+  noRecap = false,
   reserveSlot = false,
   onShowPlayoffs,
   hidePlayoffOdds = false,
@@ -99,6 +103,11 @@ export default function LeagueRecapCard({
   // — the NFL Week-1 card must follow that slate through the Tue/Wed the cut
   // posts on. YYYYMMDD, same format as `date`.
   lastPlayedDate?: string | null;
+  // "Only my teams" left the column with no games (Jacob 10/9): no recap
+  // buttons, so a league-wide cut never sits over "No games for your teams".
+  // The Playoffs / review pills and the reserved row still follow their own
+  // rules.
+  noRecap?: boolean;
   // A sibling column on the same side-by-side board shows a pill. With no
   // records of our own, render an invisible row of the same height so the
   // first game cards of every column sit at the same y — the same idea as
@@ -125,7 +134,8 @@ export default function LeagueRecapCard({
   // fetches it with the scores — so the pill is in the column's first paint.
   // Only a cold cache (a direct deep link before that fetch resolves) waits for
   // the effect below.
-  const [records, setRecords] = useState<RecapRecord[]>(() => getRecapsForSync(sport, ymd) ?? []);
+  const [loaded, setRecords] = useState<RecapRecord[]>(() => getRecapsForSync(sport, ymd) ?? []);
+  const records = noRecap ? NO_RECORDS : loaded;
   const [prevKey, setPrevKey] = useState(`${sport}|${ymd}`);
   // Stacked (narrow) until measured — the phone is the case that breaks, so
   // the first paint must not be the one-row layout. A callback ref rather

@@ -1,11 +1,14 @@
-import { useEffect, useId, type RefObject } from "react";
+import { createContext, useContext, useEffect, useId, useSyncExternalStore, type RefObject } from "react";
 
 // News "Hide seen" (Jacob 10/6, 10/8): a post counts as seen when he opens it
 // (the in-app modal, its ‹ prev / next › paging, or the source link), and the
 // header 👁 toggle drops seen posts from every news surface (Cards, Feed, the
-// aligned strip). Scrolling past a post does not count. Device-local on
-// purpose — what one screen has opened says nothing about another — so it
-// lives in its own localStorage key, outside Preferences and its account sync.
+// aligned strip). Scrolling past a post does not count. It lives in its own
+// localStorage key, outside Preferences: 3,000 URLs is far past the 64 KB prefs
+// blob. Signed out it stays on this device. Signed in (Jacob 10/12), every new
+// mark also goes to the account through setSeenSync, and what other devices
+// opened comes back through mergeSeen (lib/seenSync.ts, /api/seen), so
+// "✓ Opened" and Hide seen follow the account across browsers and the app.
 //
 // Key = item.articleUrl || item.id, the same value every card carries as
 // data-news-key, so the tracker below can read it straight off the DOM.
@@ -19,6 +22,34 @@ type SeenMap = Record<string, number>;
 // In-memory copy so the filter memos never parse JSON per render. Loaded (and
 // pruned) on first use, written through on every mark.
 let cache: SeenMap | null = null;
+
+// Cards that draw the "✓ Opened" marker subscribe here (useIsSeen below).
+// `version` moves on every change, so a subscriber that reads many keys has
+// one cheap snapshot to compare.
+const listeners = new Set<() => void>();
+let version = 0;
+
+function notify(): void {
+  version++;
+  for (const listener of [...listeners]) listener();
+}
+
+// Another tab opened a post: drop the in-memory copy so the next read picks
+// up what that tab wrote.
+function onStorage(e: StorageEvent): void {
+  if (e.key !== null && e.key !== NEWS_SEEN_STORAGE_KEY) return;
+  cache = null;
+  notify();
+}
+
+export function subscribeSeen(onChange: () => void): () => void {
+  if (listeners.size === 0 && typeof window !== "undefined") window.addEventListener("storage", onStorage);
+  listeners.add(onChange);
+  return () => {
+    listeners.delete(onChange);
+    if (listeners.size === 0 && typeof window !== "undefined") window.removeEventListener("storage", onStorage);
+  };
+}
 
 function storage(): Storage | null {
   try {
@@ -44,7 +75,9 @@ function load(): SeenMap {
     parsed = {};
   }
   cache = parsed;
-  pruneSeen();
+  // Not pruneSeen: load runs inside a subscriber's snapshot read, and a
+  // notify from there would call the subscribers again.
+  prune(Date.now());
   return cache;
 }
 
@@ -66,13 +99,44 @@ function save(merge: boolean): void {
   }
 }
 
+// The account mirror: HomeContent registers it once signed in, null otherwise.
+// Same shape as setRemoteSync in lib/preferences.ts.
+type SeenSync = (key: string, at: number) => void;
+let seenSync: SeenSync | null = null;
+
+export function setSeenSync(fn: SeenSync | null): void {
+  seenSync = fn;
+}
+
 export function markSeen(key: string, now: number = Date.now()): void {
   if (!key) return;
   const map = load();
   map[key] = now;
   save(true);
+  seenSync?.(key, now);
   // A long session keeps marking; prune here too once the cap is passed.
-  if (Object.keys(cache ?? map).length > SEEN_MAX_ENTRIES) pruneSeen(now);
+  if (Object.keys(cache ?? map).length > SEEN_MAX_ENTRIES) prune(now);
+  notify();
+}
+
+// What the account holds (other devices' opens): union into this device's
+// map, the later time winning per key. Never calls seenSync, so a pull is not
+// echoed back up.
+export function mergeSeen(remote: Record<string, number>): void {
+  if (!remote || typeof remote !== "object" || Array.isArray(remote)) return;
+  const map = load();
+  let changed = false;
+  for (const [k, v] of Object.entries(remote)) {
+    if (!k || typeof v !== "number" || !Number.isFinite(v)) continue;
+    if (Object.hasOwn(map, k) && map[k] >= v) continue;
+    map[k] = v;
+    changed = true;
+  }
+  if (!changed) return;
+  // Merge, like markSeen: another tab may have written since this one loaded.
+  save(true);
+  prune(Date.now());
+  notify();
 }
 
 export function isSeen(key: string): boolean {
@@ -84,21 +148,63 @@ export function seenKeys(): Set<string> {
   return new Set(Object.keys(load()));
 }
 
+// A COPY of key -> opened-at, for the account sync to diff against.
+export function seenSnapshot(): Record<string, number> {
+  return { ...load() };
+}
+
 // Drop entries older than SEEN_MAX_AGE_MS, then keep the newest
 // SEEN_MAX_ENTRIES. Feeds turn over in days, so an old key only costs space.
 export function pruneSeen(now: number = Date.now()): void {
+  if (prune(now)) notify();
+}
+
+// True when it dropped something.
+function prune(now: number): boolean {
   const map = cache ?? load();
   const fresh = Object.entries(map).filter(([, t]) => now - t <= SEEN_MAX_AGE_MS);
   fresh.sort((a, b) => b[1] - a[1]);
   const kept = fresh.slice(0, SEEN_MAX_ENTRIES);
-  if (kept.length === Object.keys(map).length) return;
+  if (kept.length === Object.keys(map).length) return false;
   cache = Object.fromEntries(kept);
   save(false);
+  return true;
 }
 
 // Test hook: forget the in-memory copy so the next call re-reads storage.
 export function resetSeenCache(): void {
   cache = null;
+}
+
+// "✓ Opened" marker (Jacob 10/11): a post he opened stays on screen, dimmed,
+// with a small chip, so he can tell it from the ones he has not read. Settings
+// → News "Mark posts you opened", on unless he turns it off. HomeContent
+// provides the pref; every card that carries data-news-key reads it through
+// the two hooks below and sets data-news-seen (styled in globals.css). The 👁
+// Hide seen filter is separate and still works from its snapshot.
+export const NewsMarkSeenContext = createContext(false);
+
+const seenVersion = () => version;
+const serverVersion = () => 0;
+
+// For a card that is its own component. False on the server and on the first
+// client paint, so hydration matches; the marker lands right after.
+export function useIsSeen(key: string): boolean {
+  const on = useContext(NewsMarkSeenContext);
+  const seen = useSyncExternalStore(subscribeSeen, () => isSeen(key), () => false);
+  return on && seen;
+}
+
+// For a list that draws its cards in one map().
+export function useSeenLookup(): (key: string) => boolean {
+  const on = useContext(NewsMarkSeenContext);
+  useSyncExternalStore(subscribeSeen, seenVersion, serverVersion);
+  return (key) => on && isSeen(key);
+}
+
+// Spread onto the element that carries data-news-key.
+export function seenAttr(seen: boolean): { "data-news-seen"?: "" } {
+  return seen ? { "data-news-seen": "" } : {};
 }
 
 type Keyed = { articleUrl?: string | null; id: string };

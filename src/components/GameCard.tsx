@@ -17,11 +17,13 @@ import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/w
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
-import { revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/pairingMask";
-import { shortenPlayoffLabel } from "@/lib/playoffSubtitle";
+import { pairingRoundLabel, revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/pairingMask";
 import { shouldShowRating } from "@/lib/ratingGate";
 import { useWatchQueue } from "@/components/WatchQueueContext";
 import { usePlayoffRaceTag } from "@/lib/usePlayoffRace";
+import { useHideRanks } from "@/components/HideRanksContext";
+import { shortNetwork } from "@/lib/networkShort";
+import { TeamLogo } from "@/components/TeamLogo";
 
 interface GameCardProps {
   game: Game;
@@ -59,6 +61,10 @@ interface GameCardProps {
   // jump straight to the stream from the green status / network chip — the
   // user's own TV channel link when the network is on the Settings list.)
   onShowDetails?: (game: Game) => void;
+  // The league column's subtitle already names the day's game number
+  // ("NLWC · Game 3"), so the pre-game "Game 3" line is left off this card.
+  // Only LeagueColumn sets it, and only for a single-league column.
+  hideSeriesNote?: boolean;
   // Favorite-star next to each team name (restored 6/11, off by default so the
   // team-schedule view keeps its own header star as the only one there). The
   // column suppresses it for single-matchup Finals views where the favorite
@@ -144,45 +150,6 @@ function alignLiveClockSweep(e: AnimationEvent<HTMLElement>) {
   }
 }
 
-// Compact network label for the inline status-bar chip (Jacob 6/10): the rating
-// badge centers on the card, so the network sits small and short beside it.
-// "MLB.TV" → "MLB", "MLB Network" → "MLB", "Prime Video" → "Prime", "Apple TV+"
-// → "Apple TV". Codes already short (FOX/FS1/ESPN/TBS/ABC/TNT) pass through. The
-// full name stays in the link title/aria, so nothing is lost.
-// Explicit shortenings the generic suffix-stripping below can't derive — a long
-// network name wraps to a second line and grows the card (Jacob 6/23: "ESPN
-// Unlmtd" sat on its own line — "just call it ESPN"). The full name still shows
-// in the "+N" expanded list and the "Watch on …" tooltips.
-const NETWORK_SHORT: Record<string, string> = {
-  "ESPN Unlmtd": "ESPN",
-  "ESPN Unlimited": "ESPN",
-  // Identity, not a shortening — an EXEMPTION from the trailing-"+" strip
-  // below, which exists for "Apple TV+" → "Apple TV" and was silently
-  // collapsing "ESPN+" to "ESPN" too. Those are different products: ESPN is on
-  // the TV, ESPN+ is a separate subscription in another app, and the chip is
-  // the only place most people read it. ESPN's feed still returns it — every
-  // one of the 240 US Open qualifying matches on 2026-08-24..28 came through
-  // as "ESPN+" (the main draw is ESPN / ESPN2 / ABC / ESPN Unlmtd, no plus).
-  "ESPN+": "ESPN+",
-  // Same exemption: the CFL's free stream. Stripped, the chip read "CFL" —
-  // the league's own name, sitting next to the league label.
-  "CFL+": "CFL+",
-  "Marquee Sports Net": "Marquee",
-  "Space City Home Network": "Space City",
-};
-function shortNetwork(name: string): string {
-  if (NETWORK_SHORT[name]) return NETWORK_SHORT[name];
-  // "NBC Sports Bay Area" / "NBC Sports California" / "NBC Sports Phil" → "NBCS …"
-  const nbcs = name.match(/^NBC Sports (.+)$/i);
-  if (nbcs) return `NBCS ${nbcs[1]}`;
-  return name
-    .replace(/\.tv$/i, "")
-    .replace(/\s*Sports Network$/i, "")
-    .replace(/\s*Network$/i, "")
-    .replace(/\s*Video$/i, "")
-    .replace(/\+$/, "")
-    .trim() || name;
-}
 
 // Compact upcoming-game row for the games AFTER the first in an NBA/NHL playoff
 // series (the first renders as a full GameCard). The two teams are fixed for the
@@ -241,7 +208,7 @@ export function CompactUpcomingCard({
   const networkNode = network ? (
     networkHref ? (
       <a
-        {...watchLinkProps(network, networkHref, gameRef(game))}
+        {...watchLinkProps(network, networkHref, gameRef(game), game.sport)}
         className="text-[11px] hover:underline whitespace-nowrap"
         style={{ color: "var(--text-muted)" }}
       >
@@ -307,8 +274,7 @@ export function CompactUpcomingCard({
             audit) — visibility, not display, on error, so a 404'd logo keeps
             its box width instead of collapsing the row. */}
         {home.logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={home.logo} alt="" title={home.displayName} loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 object-contain shrink-0" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+          <TeamLogo src={home.logo} alt="" title={home.displayName} loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 object-contain shrink-0" />
         ) : (
           <span aria-hidden="true" className="flex items-center justify-center w-4 h-4 rounded shrink-0 text-[7px] font-semibold leading-none" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
             {teamInitials(home)}
@@ -361,8 +327,8 @@ export function PairingRevealAll({ games, className = "" }: { games: Game[]; cla
 }
 
 function PairingMaskCard({ game, nextGameDate, leagueTag, showRatings, onReveal }: { game: Game; nextGameDate?: string; leagueTag?: string; showRatings: boolean; onReveal: () => void }) {
-  // ESPN's raw headline ("NLDS - Game 1") in the column subtitle's form ("NLDS · Game 1").
-  const round = game.playoffLabel ? shortenPlayoffLabel(game.playoffLabel) : "Finals";
+  // "NLDS · Game 1" off ESPN's headline; a soccer round ("Round One") off its stage.
+  const round = pairingRoundLabel(game);
   let time = game.state === "in" ? "Live" : game.state === "post" ? "Final" : "";
   // A series slot with no start time yet sits at local midnight in the feed
   // ("TBD @ LAD", 10/3 04:00Z) — startTimeLabel reads ESPN's "TBD" for it.
@@ -430,11 +396,13 @@ function ListenSection({ listen }: { listen: ListenResult }) {
   );
 }
 
-function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues, hideWatchLater }: GameCardProps) {
+function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues, hideWatchLater, hideSeriesNote }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // "Later" pill (Jacob 9/27): queue the game for the Watch queue strip above
   // the board. Null outside the board (no provider) or when Settings hides it.
   const watchQueue = useWatchQueue();
+  // Settings' "Show team ranks and seeds" off: no "#N" chip, any sport or state.
+  const hideRanks = useHideRanks();
   const showWatchLater = !!watchQueue && !hideWatchLater;
   const queued = showWatchLater && watchQueue.isQueued(game);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
@@ -626,8 +594,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
       // remote-image guards in NewsColumn/AlignedVideoStrip/VideoModal).
       // visibility, not display: the box must keep its width so the name
       // stays aligned with the other row.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={team.logo} alt="" title={team.displayName} loading="lazy" decoding="async" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
+      <TeamLogo src={team.logo} alt="" title={team.displayName} loading="lazy" decoding="async" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
     );
 
   // Clicking the card body opens a spoiler-safe details popup. Inner
@@ -710,7 +677,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
           Jacob 9/23: hide it. seriesStatus now only marks the game as part of
           a playoff series; the slot shows the neutral game number from the
           notes headline (game.seriesNote), or nothing when ESPN gives none. */}
-      {game.seriesStatus && game.seriesNote && isFuture && showRatings && isToday && !nextGameDate && (
+      {game.seriesStatus && game.seriesNote && !hideSeriesNote && isFuture && showRatings && isToday && !nextGameDate && (
         <div className="xl:hidden mb-1 text-[11px] text-center italic" style={{ color: "var(--text-muted)" }}>
           {game.seriesNote}
         </div>
@@ -1031,7 +998,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
               // so this badge naturally lands at the true row center instead of
               // centering in whatever slack those two happened to leave (9/18 fix).
               <span className="shrink-0 flex justify-center"><RatingBadge rating={game.rating!} /></span>
-            ) : game.seriesStatus && game.seriesNote && isFuture && showRatings && isToday && !nextGameDate ? (
+            ) : game.seriesStatus && game.seriesNote && !hideSeriesNote && isFuture && showRatings && isToday && !nextGameDate ? (
               // Game number inline ONLY on wide (xl) columns where it fits
               // next to the bare time; narrower columns render it as the banner
               // above instead. Day-of-game only, same gate as the banner (6/12).
@@ -1079,7 +1046,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                   return (
                     <a
                       key={key}
-                      {...watchLinkProps(name, href, gameRef(game))}
+                      {...watchLinkProps(name, href, gameRef(game), game.sport)}
                       className="hover:underline transition-colors whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
                     >
@@ -1182,7 +1149,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 return (
                   <a
                     key={b}
-                    {...watchLinkProps(b, href, gameRef(game))}
+                    {...watchLinkProps(b, href, gameRef(game), game.sport)}
                     className="hover:underline whitespace-normal break-words"
                     style={{ color: "var(--text-muted)" }}
                   >
@@ -1262,7 +1229,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                     (!effectivePastDate && !isFinished). A pre-game standing
                     isn't a spoiler, so it shows on upcoming cards. */}
               {(() => {
-                if (isTBD) return null;
+                if (isTBD || hideRanks) return null;
                 let rank: number | null = null;
                 let title = "";
                 if (game.sport === "fifa") {

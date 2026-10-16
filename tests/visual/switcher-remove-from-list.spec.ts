@@ -3,7 +3,8 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // Jacob 10/8: "add a remove selections button too for removing stuff in the
 // popup". The scores column switcher gets "Remove from list…": tap it, pick
 // rows, then "Remove N" takes them all off the switcher in one save (the same
-// save as unticking them in Settings). Leagues on the board cannot be picked.
+// save as unticking them in Settings). A league on the board can be picked
+// too (Jacob 10/10): its row says which column closes, and that column closes.
 
 const BASE_PREFS = {
   favoriteLeagues: [],
@@ -40,8 +41,13 @@ const saved = (page: Page) =>
 const rowTexts = (switcher: Locator) =>
   switcher.getByRole("button").evaluateAll((els) => els.map((el) => (el.textContent ?? "").trim()));
 
-// Pick-mode rows that can be picked carry aria-pressed.
+// Pick-mode rows carry aria-pressed.
 const pickRows = (switcher: Locator) => switcher.locator("button[aria-pressed]");
+// The rows of leagues that are not on the board.
+const offBoardRows = (switcher: Locator) => pickRows(switcher).filter({ hasNotText: "· closes" });
+const columnSports = (page: Page) =>
+  page.locator("[data-league-column]").evaluateAll((els) => els.map((el) => el.getAttribute("data-league-column")));
+const addButton = (page: Page) => page.getByRole("button", { name: "Add a league column" });
 
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-09-29T15:00:00-04:00"));
@@ -68,16 +74,15 @@ for (const width of [390, 1280]) {
       await expect(confirm).toBeDisabled();
       await expect(confirm).toHaveText("Remove");
 
-      // 2. Board leagues are plain text, not buttons.
-      for (const label of ["MLB", "NFL", "WNBA"]) {
-        await expect(switcher.getByRole("button", { name: new RegExp(`^${label}\\b`) })).toHaveCount(0);
-      }
-      await expect(switcher.getByText(/^WNBA · this col$/)).toBeVisible();
-      await expect(switcher.getByText(/^MLB · col 1$/)).toBeVisible();
+      // 2. Board leagues are rows like the others, tagged with the column
+      // that closes.
+      await expect(pickRows(switcher).filter({ hasText: /^WNBA · closes this col$/ })).toHaveCount(1);
+      await expect(pickRows(switcher).filter({ hasText: /^MLB · closes col 1$/ })).toHaveCount(1);
+      await expect(pickRows(switcher).filter({ hasText: /^NFL · closes col 2$/ })).toHaveCount(1);
 
-      // 3. Pick two, unpick and re-pick one: the count follows.
-      expect(await pickRows(switcher).count()).toBeGreaterThanOrEqual(2);
-      const labels = (await pickRows(switcher).evaluateAll((els) => els.map((el) => (el.textContent ?? "").trim()))).slice(0, 2);
+      // 3. Pick two off-board rows, unpick and re-pick one: the count follows.
+      expect(await offBoardRows(switcher).count()).toBeGreaterThanOrEqual(2);
+      const labels = (await offBoardRows(switcher).evaluateAll((els) => els.map((el) => (el.textContent ?? "").trim()))).slice(0, 2);
       const first = pickRows(switcher).filter({ hasText: labels[0] });
       const second = pickRows(switcher).filter({ hasText: labels[1] });
       await first.click();
@@ -148,12 +153,72 @@ test("a removed default league goes into hiddenLeagues, an opt-in only leaves sh
   const switcher = page.getByRole("dialog", { name: "Switch league" });
   await switcher.getByTestId("league-switcher-remove-from-list").click();
   await pickRows(switcher).filter({ hasText: "ESPN front page" }).click();
-  // A default row: any pickable row that is not the opt-in.
-  const defaultRow = pickRows(switcher).filter({ hasNotText: "ESPN front page" }).first();
+  // A default row: any off-board row that is not the opt-in.
+  const defaultRow = offBoardRows(switcher).filter({ hasNotText: "ESPN front page" }).first();
   await defaultRow.click();
   await switcher.getByTestId("league-switcher-remove-confirm").click();
   const prefs = await saved(page);
   expect(prefs.shownLeagues ?? []).not.toContain("top");
   expect(prefs.hiddenLeagues ?? []).not.toContain("top");
   expect((prefs.hiddenLeagues ?? []).length).toBe(1);
+});
+
+// Jacob 10/10: "WNBA · this col" was greyed out. The league a column shows is
+// a row like the others now; removing it closes that column (no league takes
+// its place) and the + button brings a column back.
+for (const width of [390, 1280]) {
+  test(`${width}px: tick the column's own league, Remove 1, the column closes`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await seedPrefs(page);
+    await page.goto("/");
+    const header = page.getByRole("button", { name: "WNBA", exact: true });
+    await expect(header).toBeVisible(LOAD);
+    await expect.poll(() => columnSports(page), LOAD).toEqual(["mlb", "nfl", "wnba"]);
+    await header.click();
+    const switcher = page.getByRole("dialog", { name: "Switch league" });
+    await switcher.getByTestId("league-switcher-remove-from-list").click();
+    const own = pickRows(switcher).filter({ hasText: /^WNBA · closes this col$/ });
+    await own.click();
+    await expect(own).toHaveAttribute("aria-pressed", "true");
+    const confirm = switcher.getByTestId("league-switcher-remove-confirm");
+    await expect(confirm).toHaveText("Remove 1");
+    if (process.env.HS_SHOTS) await page.screenshot({ path: `${process.env.HS_SHOTS}/remove-sheet-${width}.png` });
+    await confirm.click();
+
+    // The panel closes with its column; the other two columns stay.
+    await expect(switcher).toHaveCount(0);
+    await expect.poll(() => columnSports(page), LOAD).toEqual(["mlb", "nfl"]);
+    await expect(addButton(page)).toBeVisible();
+    const prefs = await saved(page);
+    expect(prefs.hiddenLeagues).toEqual(["wnba"]);
+    expect([prefs.firstLeague, prefs.secondLeague]).toEqual(["mlb", "nfl"]);
+    // The slot keeps its pin, so turning WNBA back on reopens the column;
+    // while WNBA is off the board reads it as closed (closeHiddenPins).
+    expect(prefs.thirdLeague).toBe("wnba");
+    if (process.env.HS_SHOTS) await page.screenshot({ path: `${process.env.HS_SHOTS}/board-after-remove-${width}.png` });
+
+    // Holds through a reload: no league takes the column's place.
+    await page.reload();
+    await expect.poll(() => columnSports(page), LOAD).toEqual(["mlb", "nfl"]);
+    await expect(addButton(page)).toBeVisible();
+  });
+}
+
+test("a league in another column is a row too: removing it closes that column, this one stays", async ({ page }) => {
+  await seedPrefs(page);
+  await page.goto("/");
+  const header = page.getByRole("button", { name: "WNBA", exact: true });
+  await expect(header).toBeVisible(LOAD);
+  await header.click();
+  const switcher = page.getByRole("dialog", { name: "Switch league" });
+  await switcher.getByTestId("league-switcher-remove-from-list").click();
+  await pickRows(switcher).filter({ hasText: /^MLB · closes col 1$/ }).click();
+  await switcher.getByTestId("league-switcher-remove-confirm").click();
+  // The board re-lays out, so the panel closes; the next open has no MLB row.
+  await expect(switcher).toHaveCount(0);
+  await expect.poll(() => columnSports(page), LOAD).toEqual(["nfl", "wnba"]);
+  expect((await saved(page)).hiddenLeagues).toEqual(["mlb"]);
+  await header.click();
+  await expect(switcher).toBeVisible();
+  expect((await rowTexts(switcher)).filter((t) => /^MLB\b/.test(t))).toEqual([]);
 });

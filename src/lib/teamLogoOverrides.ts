@@ -123,4 +123,38 @@ export const LOGO_OVERRIDES: Readonly<Record<string, string>> = {
   "ncaaw-2660": ncaa("umass-boston"), // UMass Boston
   "ncaaw-408": ncaa("washington-adventist"), // Washington Adventist Shock
   "ncaaw-110394": ncaa("whittier"), // Whittier Poets
+
+  // Men's soccer (NCAA.com slugs, checked by eye 2026-10-14)
+  "ncaamsoc-131291": ncaa("spalding"), // Spalding
+  "ncaamsoc-131303": ncaa("hanover"), // Hanover
+  "ncaamsoc-131307": ncaa("farmingdale-st"), // Farmingdale State
+  "ncaamsoc-131311": ncaa("virginia-st"), // Virginia State
+  "ncaamsoc-131320": ncaa("american-intl"), // American International
+  "ncaamsoc-131360": ncaa("westmont-college"), // Westmont
+  "ncaamsoc-131878": ncaa("wilmington-oh"), // Wilmington (OH)
+  "ncaamsoc-131975": ncaa("guilford"), // Guilford
+  "ncaamsoc-132404": ncaa("carroll-wi"), // Carroll (WI)
+  "ncaamsoc-132477": ncaa("lakeland"), // Lakeland
+  "ncaamsoc-132481": ncaa("mary-baldwin"), // Mary Baldwin
+  "ncaamsoc-132652": ncaa("neb-wesleyan"), // Nebraska Wesleyan
+  "ncaamsoc-132654": ncaa("east-mennonite"), // Eastern Mennonite
+  "ncaamsoc-132659": ncaa("ohio-northern"), // Ohio Northern
+  "ncaamsoc-132664": ncaa("greensboro"), // Greensboro
+  "ncaamsoc-22411": ncaa("olivet"), // Olivet
+
+  // Women's soccer
+  "ncaawsoc-131285": ncaa("allen"), // Allen
+  "ncaawsoc-131288": ncaa("virginia-st"), // Virginia State
+  "ncaawsoc-132330": ncaa("holy-family"), // Holy Family
+
+  // Rugby. ESPN files Bordeaux and Lyon in the Top 14 under a second id with
+  // no art; its own Top 14 team list has the crest under 143737 / 143736.
+  "top14-126831": "https://a.espncdn.com/i/teamlogos/rugby/teams/500/143737.png", // Bordeaux Begles
+  "top14-289852": "https://a.espncdn.com/i/teamlogos/rugby/teams/500/143736.png", // LOU Rugby (Lyon)
+  // No ESPN art under any id: self-hosted crests (public/logos/, from the
+  // clubs' Wikipedia pages, 2026-10-14). One key per competition they play.
+  "top14-25912": "/logos/rugby-bayonne.svg", // Aviron Bayonnais
+  "challengecup-25912": "/logos/rugby-bayonne.svg", // Aviron Bayonnais
+  "premrugby-25899": "/logos/rugby-bristol-bears.svg", // Bristol Bears
+  "rugbychamp-25899": "/logos/rugby-bristol-bears.svg", // Bristol Bears
 };

@@ -8,9 +8,13 @@ import {
   dropSeen,
   isSeen,
   markSeen,
+  mergeSeen,
   pruneSeen,
   resetSeenCache,
   seenKeys,
+  seenSnapshot,
+  setSeenSync,
+  subscribeSeen,
 } from "../src/lib/newsSeen.ts";
 
 // Minimal localStorage for node: the store reads globalThis.localStorage.
@@ -27,6 +31,7 @@ class MemoryStorage {
 beforeEach(() => {
   (globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage();
   resetSeenCache();
+  setSeenSync(null);
 });
 
 const stored = () => JSON.parse(globalThis.localStorage.getItem(NEWS_SEEN_STORAGE_KEY) ?? "{}");
@@ -101,4 +106,62 @@ test("a snapshot does not grow: a post seen after it is not dropped", () => {
   assert.deepEqual(dropSeen(items, snapshot).map((i) => i.id), ["2"]);
   // The next snapshot picks it up.
   assert.deepEqual(dropSeen(items, seenKeys()).map((i) => i.id), []);
+});
+
+test("subscribeSeen fires on a mark and on a prune that drops entries, not after unsubscribe", () => {
+  const now = Date.UTC(2026, 9, 11, 12);
+  let fired = 0;
+  const unsubscribe = subscribeSeen(() => { fired++; });
+  markSeen("https://x/1", now - SEEN_MAX_AGE_MS - 1);
+  assert.equal(fired, 1);
+  markSeen("https://x/2", now);
+  assert.equal(fired, 2);
+  // Nothing to drop = no call; the old entry going = one call.
+  pruneSeen(now - SEEN_MAX_AGE_MS);
+  assert.equal(fired, 2);
+  pruneSeen(now);
+  assert.equal(fired, 3);
+  assert.equal(isSeen("https://x/1"), false);
+  unsubscribe();
+  markSeen("https://x/3", now);
+  assert.equal(fired, 3);
+});
+
+test("mergeSeen keeps the later time per key and writes through", () => {
+  const now = Date.now();
+  markSeen("a", now - 5000);
+  markSeen("b", now - 1000);
+  mergeSeen({ a: now - 2000, b: now - 9000, c: now - 3000 });
+  assert.deepEqual(seenSnapshot(), { a: now - 2000, b: now - 1000, c: now - 3000 });
+  resetSeenCache();
+  assert.deepEqual(stored(), { a: now - 2000, b: now - 1000, c: now - 3000 });
+});
+
+test("mergeSeen skips bad entries and prunes entries past 14 days", () => {
+  const now = Date.now();
+  mergeSeen({ old: now - SEEN_MAX_AGE_MS - 60_000, ok: now, nan: Number.NaN, str: "1" as unknown as number, "": now });
+  assert.deepEqual([...seenKeys()], ["ok"]);
+});
+
+test("mergeSeen notifies subscribers only when it adds something", () => {
+  let fired = 0;
+  const unsubscribe = subscribeSeen(() => { fired++; });
+  const now = Date.now();
+  mergeSeen({ a: now });
+  assert.equal(fired, 1);
+  mergeSeen({ a: now - 1 });
+  assert.equal(fired, 1);
+  unsubscribe();
+});
+
+test("setSeenSync fires once per markSeen, never on a merge, and stops at null", () => {
+  const calls: [string, number][] = [];
+  setSeenSync((key, at) => { calls.push([key, at]); });
+  markSeen("https://x/1", 111);
+  mergeSeen({ "https://x/2": Date.now() });
+  markSeen("", 222);
+  assert.deepEqual(calls, [["https://x/1", 111]]);
+  setSeenSync(null);
+  markSeen("https://x/3");
+  assert.equal(calls.length, 1);
 });

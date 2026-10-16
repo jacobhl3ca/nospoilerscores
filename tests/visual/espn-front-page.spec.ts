@@ -228,12 +228,74 @@ test("ESPN's highlighted games lead the column, ahead of the strip's order", asy
     .evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league")))).toEqual(["mlb", "nhl", "ncaaf"]);
 });
 
-test("ratings mode keeps ESPN's order instead of re-sorting by rating", async ({ page }) => {
+// Ratings view (Jacob 10/6: "espn frontpage league is not ordered by rating
+// when in ratings tab"): inside a league block the finals sort by rating like
+// every other column's. The strip lists a 56-3 blowout before a 47-44 final;
+// ratings on puts the close one first, ratings off keeps the strip's order.
+// Live still leads the block in both.
+for (const showRatings of [true, false]) {
+  test(`ratings ${showRatings ? "on" : "off"}: an ESPN front page block's finals ${showRatings ? "sort by rating" : "keep ESPN's order"}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1180, height: 820 });
+    await seed(page, { showRatings });
+    const strip = { sports: [{ slug: "football", leagues: [{ slug: "college-football", events: [{ id: "c5", priority: 0 }, { id: "c1", priority: 1 }, { id: "c2", priority: 2 }] }] }] };
+    await page.route("**/apis/v2/scoreboard/header**", (route: Route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(strip) }));
+    await page.route("**/apis/site/v2/sports/football/college-football/scoreboard**", (route: Route) => {
+      const events = new URL(route.request().url()).searchParams.get("dates") === TODAY ? [
+        event("c5", T("7", "Rutgers", "RUTG", "3"), T("8", "Ohio State", "OSU", "56"), "2026-09-26T16:00:00Z", "final"),
+        ...BOARDS["football/college-football"].slice(0, 2),
+      ] : [];
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ events }) });
+    });
+    await page.goto("/");
+    await expect(cards(page)).toHaveCount(3, { timeout: 30_000 });
+    expect(await cardNames(page)).toEqual(showRatings
+      ? ["Oklahoma at Georgia", "Texas at Tennessee", "Rutgers at Ohio State"]
+      : ["Oklahoma at Georgia", "Rutgers at Ohio State", "Texas at Tennessee"]);
+  });
+}
+
+// Jacob 10/11 ("i like the final line one so we can match"): the league
+// columns draw a thin "Final" rule between a day's unfinished games and its
+// finals, and the ESPN front page column drew none. Each block now draws the
+// same rule, under the same gate: only when the block has both. Here NHL h1 is
+// final too, so:
+//   NCAAF  live c2 · rule · final c1
+//   NHL    final h1          (all final: no rule)
+//   MLB    scheduled m1      (nothing final: no rule)
+// The NCAAF column beside it draws its own rule, and the two look the same.
+test("an ESPN front page block draws the Final rule between its unfinished games and its finals", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
-  await seed(page, { showRatings: true });
+  await seed(page, { firstLeague: "ncaaf" });
+  await page.route("**/apis/site/v2/sports/hockey/nhl/scoreboard**", (route: Route) => {
+    const events = new URL(route.request().url()).searchParams.get("dates") === TODAY
+      ? [event("h1", T("21", "Hurricanes", "CAR", "5"), T("22", "Predators", "NSH", "2"), "2026-09-26T16:00:00Z", "final")]
+      : [];
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ events }) });
+  });
   await page.goto("/");
+  const col = page.locator('[data-league-column="top"]');
   await expect(cards(page)).toHaveCount(4, { timeout: 30_000 });
-  expect(await cardNames(page)).toEqual(EXPECTED);
+  const block = (sport: string) => col.locator(`[data-espn-league="${sport}"]`);
+  await expect(block("ncaaf").locator("[data-final-divider]")).toHaveCount(1);
+  await expect(block("ncaaf").locator("[data-final-divider]")).toHaveText("Final");
+  // Cards and the rule in the order the block draws them.
+  const order = await block("ncaaf").locator('[data-final-divider], [aria-label$=" — game details"]')
+    .evaluateAll((els) => els.map((e) => e.hasAttribute("data-final-divider") ? "rule" : (e.getAttribute("aria-label") ?? "").replace(/ — game details$/, "")));
+  expect(order).toEqual(["Oklahoma at Georgia", "rule", "Texas at Tennessee"]);
+  await expect(block("nhl").locator("[data-final-divider]")).toHaveCount(0);
+  await expect(block("mlb").locator("[data-final-divider]")).toHaveCount(0);
+  await expect(col.locator("[data-final-divider]")).toHaveCount(1);
+  // Same rule as the league column next to it: one element, one look.
+  const leagueRule = page.locator('[data-league-column="ncaaf"] [data-final-divider]');
+  await expect(leagueRule).toHaveCount(1);
+  const look = (el: Element) => {
+    const cs = getComputedStyle(el);
+    const label = getComputedStyle(el.querySelector("span")!);
+    return { html: el.innerHTML, height: el.getBoundingClientRect().height, opacity: cs.opacity, margin: cs.margin, fontSize: label.fontSize, transform: label.textTransform };
+  };
+  expect(await col.locator("[data-final-divider]").evaluate(look)).toEqual(await leagueRule.evaluate(look));
+  if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/espn-front-page-final-rule.png` });
 });
 
 // Opt-in while it is tested (Jacob 9/26: "default off for all"): no row
@@ -329,6 +391,8 @@ test("Yesterday: ESPN front page shows the day's snapshot, hero first", async ({
     .toEqual(["ncaaf", "nhl", "mlb"]);
   await expect(col.getByRole("button", { name: "Royals at Twins — game details" })).toHaveCount(0);
   await expect(col.locator("[data-espn-fallback-note]")).toHaveCount(0);
+  // A past day is all finals: no "Final" rule in any column.
+  await expect(page.locator("[data-final-divider]")).toHaveCount(0);
   if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/espn-front-page-yesterday.png` });
 });
 
@@ -451,4 +515,36 @@ test("ESPN front page: with no free column, a picked column takes the league", a
   expect(saved.shownLeagues ?? []).toContain("nhl");
   // Adding also lifts a catalog strike.
   expect(saved.catalogHiddenLeagues).toBeUndefined();
+});
+
+// Jacob 10/9: a league that already has a column on the board shows its plain
+// label. "MLB +" next to the MLB column only opened a useless Add popover.
+test("ESPN front page: a league that already has a column shows no +", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seed(page);
+  await page.goto("/");
+  const col = page.locator('[data-league-column="top"]');
+  await expect(col).toBeVisible({ timeout: 30_000 });
+  await expect(cards(page)).toHaveCount(4, { timeout: 15_000 });
+  await expect(col.locator('[data-espn-league="mlb"]').getByText("MLB", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add MLB to a column" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add NHL to a column" })).toHaveCount(1);
+});
+
+// The lead block's label sits in the recap row when a sibling (here MLB's
+// Playoffs pill) holds one, and that row label is the one that wore the "+".
+test("ESPN front page: the lead label of a league with a column is not clickable", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seed(page, { secondLeague: "ncaaf" });
+  await page.goto("/");
+  const col = page.locator('[data-league-column="top"]');
+  await expect(col).toBeVisible({ timeout: 30_000 });
+  await expect(cards(page)).toHaveCount(4, { timeout: 15_000 });
+  const label = col.getByText("NCAAF", { exact: true }).first();
+  await expect(label).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add NCAAF to a column" })).toHaveCount(0);
+  await expect(col.getByRole("button", { name: /^NCAAF\b/ })).toHaveCount(0);
+  await label.click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add NHL to a column" })).toHaveCount(1);
 });

@@ -1,18 +1,21 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout, ClimbRound } from "./types";
+import { abortOwn } from "./abort";
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
 import { espnFeaturedKeys, espnFrontPageSports, orderByEspnHeader, orderBySports, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_MIN_GAMES, prevYmd, rankBestYesterday } from "./bestYesterday";
+import { TOP_GAMES_COLUMN_LABEL, TOP_GAMES_EMPTY_LABEL, isTopGamesFile, pickTopGames, type TopGamesFile, type TopGamesSpan } from "./topGames";
 import { getApiBase, highlightTeamName } from "./youtube";
 import { getChannelVerifiedBakedId, loadBakedHighlights, type BakedHighlight } from "./highlights";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
+import { PLAYOFF_START_DATES, epcrKnockoutRound, isEpcrSport } from "./playoffDates";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { parseRadioBroadcasts, type GeoBroadcast } from "./radio";
 import { fetchCuratedBoxingEvent } from "./boxing";
 import { CLIMB_CHANNEL, climbNotStreamedCount, climbRoundLabel, climbSubtitle, climbSubtitleVariants, climbVisibleRounds, type ClimbDiscipline } from "./climbing";
-import { logoForTeam, logoOverride, ncaaSchoolLogo, isPlaceholderTeam } from "./teamLogos";
+import { fixTeamLogo, logoForTeam, logoOverride, ncaaSchoolLogo, isPlaceholderTeam } from "./teamLogos";
 import {
   chessEventState,
   buildChessEventUrl,
@@ -414,6 +417,17 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "tennis", label: "French Open",  startDate: "05-20", endDate: "06-09", kickoffDate: "05-23", championshipDate: "06-06", verifiedFor: 2027, excludeFromAuto: true },
   { sport: "tennis", label: "Wimbledon",    startDate: "06-26", endDate: "07-14", kickoffDate: "06-28", championshipDate: "07-11", verifiedFor: 2027, firstPref: true, displaySlot: "center", slotPrecedence: 4 },
   { sport: "tennis", label: "US Open",      startDate: "08-24", endDate: "09-15", kickoffDate: "08-29", championshipDate: "09-12", verifiedFor: 2027, firstPref: true, displaySlot: "center", slotPrecedence: 3 },
+  // ── Tennis, the rest of the year (added 2026-10-11 on a user request) ──
+  // One opt-in column for the ATP Masters 1000s, the WTA 1000s and the two
+  // tour Finals (TENNIS_TOUR_EVENTS below), men and women together. Never
+  // auto-picked (excludeFromAuto), so nobody's board changes; it is added from
+  // Add more… or by pinning tennis. ESPN read 10/11: the first 1000 of 2026
+  // is Doha (main draw Feb 8), the last event is the ATP Finals (Nov 15–22).
+  // The window opens the day after the Aus Open's closes, so a pinned tennis
+  // column in December still names the Aus Open as its return.
+  // Keep this line AFTER the four Slams: every "active config" lookup takes
+  // the first match, so inside a Slam window the column is the Slam.
+  { sport: "tennis", label: "Tennis",       startDate: "02-02", endDate: "11-30", kickoffDate: "02-08", verifiedFor: 2026, excludeFromAuto: true },
   // ── FIFA World Cup (every 4 years; 2026 was the most recent anchor) ──
   // startDate opened to 06-04 (tournament opens 06-11) so the column previews
   // live NOW with the opener via the next-game-day lookahead. Revert to 06-11
@@ -605,10 +619,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // endDate runs a week past the Grey Cup so the final's own day (and the
   // 2025-style Sunday Nov 16 slot) still resolves the column on a past tab.
   { sport: "cfl", label: "CFL", startDate: "06-04", endDate: "11-22", championshipDate: "11-15", verifiedFor: 2026, excludeFromAuto: true },
-  // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Auto-eligible
-  // in season, but low priority so it only fills open summer/fall slots after
-  // the core leagues and major tournament windows.
-  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", scheduleReleaseDate: "12-01", verifiedFor: 2026 },
+  // WNBA: regular season May 16 – mid-Sept, playoffs to the end of October.
+  // Auto-eligible in season, but low priority so it only fills open summer/fall
+  // slots after the core leagues and major tournament windows. The Finals are
+  // best-of-7 now: ESPN lists Game 1 Oct 17 … Game 7 (if necessary) Oct 31
+  // (read live 2026-10-10), so the old 10-19 end hid the column mid-Finals.
+  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "11-01", championshipDate: "10-31", scheduleReleaseDate: "12-01", verifiedFor: 2026 },
   // ── Little League World Series (three weeks in August) ──
   // Window is ESPN's own /baseball/llb calendar, read live 2026-08-11:
   // 2026-08-10 → 2026-08-30, 16 game days, championship on the last one.
@@ -642,7 +658,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Rugby World Cup is quadrennial; 2027 (Australia) is the next edition, so
   // the anchor is 2027 rather than the 2028 used by the Euro.
   { sport: "rugbywc", label: "Rugby World Cup", startDate: "10-01", endDate: "11-13", championshipDate: "11-13", verifiedFor: 2027, excludeFromAuto: true, yearCycle: { mod: 4, anchor: 2027 } },
-  { sport: "rugbychamp", label: "Champions Cup", startDate: "12-05", endDate: "05-23", championshipDate: "05-23", verifiedFor: 2025, excludeFromAuto: true },
+  // Champions Cup (re-read 2026-10-14, after a user could not find it): the
+  // 2026-27 season opens Fri 2026-10-16 (Gloucester v Bordeaux). Pool rounds
+  // Oct 16–18, Dec 11–13, Jan 8–10, Jan 15–17; R16 ~Apr 2, QF ~Apr 9, SF ~Apr
+  // 30, final Sat 2027-05-22. The old "12-05" start hid round 1 and kept the
+  // column "offseason" (so out of Settings) until December.
+  { sport: "rugbychamp", label: "Champions Cup", startDate: "10-16", endDate: "05-23", championshipDate: "05-22", verifiedFor: 2026, excludeFromAuto: true },
   { sport: "superrugby", label: "Super Rugby", startDate: "02-13", endDate: "06-20", championshipDate: "06-20", verifiedFor: 2026, excludeFromAuto: true },
   // Internationals (summer/autumn tours + one-off tests). No championship —
   // it is a run of standalone fixtures, not a competition with a final, so
@@ -714,7 +735,8 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "premrugby", label: "Prem Rugby", startDate: "09-25", endDate: "06-20", championshipDate: "06-19", verifiedFor: 2026, excludeFromAuto: true },
   { sport: "urc", label: "URC", startDate: "09-25", endDate: "06-19", championshipDate: "06-18", verifiedFor: 2026, excludeFromAuto: true },
   // Top 14: the feed still lists 2025-26 (opened 2025-09-06, final 2026-06-27)
-  // plus the 2026-27 opener (2026-09-13). The window spans both edges.
+  // plus the 2026-27 opener (Sat 2026-09-05, re-read 2026-10-14; the old note
+  // said 09-13, which is a ghost copy of a round 2 game). The window spans both edges.
   { sport: "top14", label: "Top 14", startDate: "09-05", endDate: "06-28", championshipDate: "06-27", verifiedFor: 2026, excludeFromAuto: true },
   // Challenge Cup: pool round 1 on 2026-10-16, final 2027-05-21.
   { sport: "challengecup", label: "Challenge Cup", startDate: "10-16", endDate: "05-22", championshipDate: "05-21", verifiedFor: 2026, excludeFromAuto: true },
@@ -1371,6 +1393,7 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   urc: 39,
   premrugby: 40,
   top14: 41,
+  rugbychamp: 41.5,
   challengecup: 42,
   mlr: 43,
 };
@@ -1651,8 +1674,9 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
     ...(competitor.team?.location ? { location: competitor.team.location } : {}),
     ...(competitor.team?.conferenceId != null ? { conferenceId: String(competitor.team.conferenceId) } : {}),
     // ESPN has no artwork for some one-off opponents (mostly D2/D3 schools);
-    // teamLogoOverrides.ts fills those in.
-    logo: (sport === "cricketintl" ? cricketNationLogo(competitor.team?.displayName) : null) || competitor.team?.logo || logoOverride(sport, String(rawId)) || "",
+    // teamLogoOverrides.ts fills those in. fixTeamLogo swaps the few ESPN gets
+    // wrong (the blue-only Rams).
+    logo: fixTeamLogo((sport === "cricketintl" ? cricketNationLogo(competitor.team?.displayName) : null) || competitor.team?.logo || logoOverride(sport, String(rawId)) || ""),
     color: competitor.team?.color ?? "666666",
     score: formatScore(competitor.score ?? "0", sport),
     winner: competitor.winner ?? false,
@@ -2286,6 +2310,13 @@ function volleyballRating(competitors: VolleyballCompetitor[], period: number, s
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
+// How far the last generic rating's uncapped sum went past 100, per event.
+// Many finished games land on exactly 100 (73% of a month's best, 10/10), so
+// the top games spans (lib/topGames.ts) break that tie with the headroom
+// instead of the date. A WeakMap, so calculateRating's signature and its other
+// callers stay as they are.
+const ratingExcess = new WeakMap<object, number>();
+
 function calculateRating(game: RatingGame): number | null {
   const competition = game.competitions?.[0];
   if (!competition) return null;
@@ -2403,7 +2434,9 @@ function calculateRating(game: RatingGame): number | null {
   // added to the set later, the exact ucl/uel drift the penalty comment warns of.
   const lateDramaBonus = SOCCER_SPORTS.has(sport) ? soccerLateDramaBonus(competition) : 0;
 
-  const raw = Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus + lateDramaBonus - lowScoringPenalty)));
+  const sum = baseScore + overtimeBonus + scoringBonus + comebackBonus + lateDramaBonus - lowScoringPenalty;
+  const raw = Math.max(0, Math.min(100, Math.round(sum)));
+  if (state === "post" && sum > 100) ratingExcess.set(game, Math.round((sum - 100) * 10) / 10);
 
   return liveTimeCap(raw, progress);
 }
@@ -2444,6 +2477,100 @@ function tennisEtYmd(iso: string): string {
   }
 }
 
+// ── The year-round "Tennis" column (added 2026-10-11) ──
+// The Slam columns show ESPN's `major: true` events. The "Tennis" config in
+// ALL_LEAGUES covers the rest of the year, limited to the top tier: the nine
+// ATP Masters 1000s, the ten WTA 1000s and the two tour Finals. ESPN has no
+// tier field on the event (read 10/11: every event is season.type 2, and the
+// feed also carries the 250s, 500s and WTA 125s), so the tier is this table.
+//
+// Keyed on ESPN's tournament id, the part of the event id before the year
+// ("315-2026"). It did not change from 2025 to 2026 for any row checked, while
+// the name is mostly the sponsor ("BNP Paribas Open" is Indian Wells,
+// "Internazionali BNL d'Italia" is Rome) and changes with the contract. `name`
+// is the fallback for an id ESPN re-issues, and what the monthly
+// check-season-windows run compares against the feed. Each pattern was tested
+// against all 166 of ESPN's 2026 event names (tests/tennis-tour.test.ts).
+//
+// `draws`: the level is per draw, not per event. Dubai and Beijing are WTA
+// 1000s whose men's draw is an ATP 500, and Doha's ATP 500 is a separate event
+// with "Qatar" in its name too, so those rows keep the women's singles only.
+//
+// A 1000 that moves city or a new one (ESPN issues a new id): add a row here.
+// scripts/check-season-windows.mjs --only=tennis names a row with no event.
+type TennisDraw = "men" | "women";
+export type TennisTourEvent = { id: string; city: string; name: RegExp; draws: TennisDraw | "both" };
+export const TENNIS_TOUR_EVENTS: TennisTourEvent[] = [
+  { id: "256", city: "Doha", name: /\bQatar\b/i, draws: "women" },
+  { id: "25", city: "Dubai", name: /\bDubai\b/i, draws: "women" },
+  { id: "411", city: "Indian Wells", name: /^BNP Paribas Open$/i, draws: "both" },
+  { id: "713", city: "Miami", name: /\bMiami Open\b/i, draws: "both" },
+  { id: "42", city: "Monte-Carlo", name: /\bMonte[- ]Carlo\b/i, draws: "men" },
+  { id: "413", city: "Madrid", name: /\bMadrid Open\b/i, draws: "both" },
+  { id: "414", city: "Rome", name: /\bInternazionali\b.*\bd['’]Italia\b/i, draws: "both" },
+  { id: "421", city: "Canada", name: /\bNational Bank Open\b/i, draws: "both" },
+  { id: "718", city: "Cincinnati", name: /\bCincinnati\b/i, draws: "both" },
+  { id: "959", city: "Beijing", name: /^China Open$/i, draws: "women" },
+  { id: "315", city: "Shanghai", name: /\bShanghai\b.*\bMasters\b/i, draws: "men" },
+  { id: "381", city: "Wuhan", name: /\bWuhan\b/i, draws: "women" },
+  { id: "13", city: "Paris", name: /\bParis Masters\b/i, draws: "men" },
+  { id: "382", city: "WTA Finals", name: /^WTA Finals\b/i, draws: "women" },
+  { id: "339", city: "ATP Finals", name: /^(?!.*\bNext Gen\b).*\bATP Finals\b/i, draws: "men" },
+];
+
+// The table row for an ESPN tennis event, or null for everything below the
+// 1000 level. The id decides; the name only speaks for an id not in the table.
+export function tennisTourEvent(event: { id?: string; name?: string }): TennisTourEvent | null {
+  const id = (event.id ?? "").split("-")[0];
+  const byId = TENNIS_TOUR_EVENTS.find((t) => t.id === id);
+  if (byId) return byId;
+  const name = event.name ?? "";
+  return (name && TENNIS_TOUR_EVENTS.find((t) => t.name.test(name))) || null;
+}
+
+// Does this event (and, when given, this draw of it) belong in the "Tennis"
+// column? `drawSlug` is ESPN's grouping slug ("mens-singles").
+export function isBigTennisEvent(event: { id?: string; name?: string }, drawSlug?: string): boolean {
+  const tour = tennisTourEvent(event);
+  if (!tour) return false;
+  if (!drawSlug || tour.draws === "both") return true;
+  return tour.draws === (/women/i.test(drawSlug) ? "women" : "men");
+}
+
+const TENNIS_TOUR_LABEL = "Tennis";
+// The year-round "Tennis" row, as against the four Slam rows. Its matches have
+// no highlight clip (the bake is Slam-only), so nothing that needs one (Best
+// of yesterday, the top-games bake) counts it as tennis being in season.
+export function isTennisTourConfig(league: Pick<LeagueConfig, "sport" | "label">): boolean {
+  return league.sport === "tennis" && league.label === TENNIS_TOUR_LABEL;
+}
+// A day the "Tennis" column owns: inside its window and outside every Slam's.
+// The two never share a day, so a Slam column is the Slam alone, exactly as
+// before the tour column existed.
+export function isTennisTourDay(ymd: string): boolean {
+  if (!/^\d{8}$/.test(ymd)) return false;
+  const day = new Date(`${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}T12:00:00`);
+  let tour = false;
+  for (const l of ALL_LEAGUES) {
+    if (l.sport !== "tennis" || !isLeagueActive(l, day)) continue;
+    if (!isTennisTourConfig(l)) return false;
+    tour = true;
+  }
+  return tour;
+}
+
+// "Quarterfinal" → "QF", "Round 3" → "R3": the round as the card chip writes
+// it. (The Slam column subtitle keeps its own tennisRoundTiers.)
+export function tennisRoundShort(label: string): string {
+  return label
+    .replace(/Quarterfinals?/i, "QF")
+    .replace(/Semifinals?/i, "SF")
+    .replace(/Round Robin/i, "RR")
+    .replace(/Qualifying/i, "Qual")
+    .replace(/(\d+)(?:st|nd|rd|th)?\s+Round/i, "R$1")
+    .replace(/Round (\d+)/i, "R$1");
+}
+
 // Minimal shapes of ESPN's tennis scoreboard payload — only the fields the
 // parser below reads. Real matches are athlete-based competitors nested in
 // event.groupings[] (see buildTennisGames), not team-based like other sports.
@@ -2467,13 +2594,15 @@ type TennisMatch = {
   broadcasts?: { names?: string[] }[];
   round?: { displayName?: string };
 };
-type TennisEvent = { id?: string; date: string; name?: string };
+type TennisEvent = { id?: string; date: string; name?: string; major?: boolean };
 // The scoreboard event that wraps the draws: singles/doubles live under
 // groupings[], each grouping holding the actual matches (competitions[]).
 type TennisGrouping = { grouping?: { slug?: string }; competitions?: TennisMatch[] };
 type TennisScoreboardEvent = TennisEvent & { major?: boolean; groupings?: TennisGrouping[] };
 
-function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string): Game {
+// `tour`: the match's TENNIS_TOUR_EVENTS row, for a match in the year-round
+// "Tennis" column; null for a Slam match, which parses exactly as before.
+function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string, tour: TennisTourEvent | null = null): Game {
   const comps = match.competitors ?? [];
   const home = comps.find((c) => c.homeAway === "home") ?? comps[0];
   const away = comps.find((c) => c.homeAway === "away") ?? comps[1];
@@ -2516,7 +2645,8 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   // singles) needs 3. The grouping slug tells us which — ESPN's `format` field
   // is unreliable (reports 5 for both). Hoisted above the rating block so the
   // "went the distance" gate can require the winner to have actually reached it.
-  const setsToWin = /women/.test(slug) ? 2 : 3;
+  // Only the Slams play men's best-of-5; every tour event is best-of-3.
+  const setsToWin = /women/.test(slug) || tour ? 2 : 3;
   let rating: number | null = null;
   if (state === "post") {
     // GREAT is reserved for a match that went to a deciding final set (2-1 or
@@ -2548,7 +2678,8 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   // with the same broadcasts[].names[] shape as team sports (see parseGame).
   const broadcasts: string[] = [];
   for (const b of match.broadcasts ?? []) {
-    for (const bn of b.names ?? []) {
+    for (const raw of b.names ?? []) {
+      const bn = normalizeNetworkName(raw);
       if (!broadcasts.includes(bn)) broadcasts.push(bn);
     }
   }
@@ -2585,6 +2716,10 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
     decidingSet,
     streamUrl: null,
     primeStreamUrl: null,
+    // The "Tennis" column can hold two tournaments on one day (Shanghai and
+    // Wuhan share a week), each at its own round, so every card names both:
+    // "Shanghai · QF". Same chip the cricket column uses for its formats.
+    ...(tour ? { formatTag: [tour.city, tennisRoundShort(match.round?.displayName ?? "")].filter(Boolean).join(" · ") } : {}),
   };
 }
 
@@ -2592,11 +2727,23 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
 // inclusive {from, to} range of ET days. The range form feeds the endgame
 // lookahead: ESPN's tennis scoreboard ignores `?dates=A-B` and always returns
 // the whole tournament, so the window has to be applied here, per match.
-export function buildTennisGames(events: TennisScoreboardEvent[], when?: string | { from: string; to: string }): Game[] {
+//
+// `tourColumn`: which of the two tennis columns is asking. The "Tennis" column
+// takes the tour events and no Slam; a Slam column takes the Slam and no tour
+// event. It is the VIEWED day's column (isTennisTourDay), not the match's day:
+// a lookahead from the Aus Open's last day reaches Doha a week later, and
+// those matches do not belong under an "Aus Open" header. Unset = the day
+// itself (a range: its first day).
+export function buildTennisGames(
+  events: TennisScoreboardEvent[],
+  when?: string | { from: string; to: string },
+  tourColumn?: boolean,
+): Game[] {
   const range = typeof when === "object" ? when : null;
   // No-date fallback uses the shared service day so tennis matches the rest of
   // the app's notion of "today" (normally `when` is always passed).
   const target = range ? null : (when ?? toYmd(getEtServiceDate()));
+  const tourMode = tourColumn ?? isTennisTourDay(range ? range.from : String(target));
   const games: Game[] = [];
   for (const event of events) {
     // Grand Slam only. The ATP scoreboard also returns the week's tune-up
@@ -2604,19 +2751,28 @@ export function buildTennisGames(events: TennisScoreboardEvent[], when?: string 
     // Libéma Open appear too, with their qualifying matches. Without this gate
     // those non-Slam matches leak into the "French Open" column (Jacob 6/7).
     // All four Slams carry major:true; the tune-ups are major:false.
-    if (!event.major) continue;
+    // The one other way in (2026-10-11): a 1000-level or Finals event, for the
+    // year-round "Tennis" column — see TENNIS_TOUR_EVENTS. A call builds one
+    // column or the other, never a mix (tourMode).
+    const tour = event.major ? null : tennisTourEvent(event);
+    if (tourMode ? !tour : !event.major) continue;
     for (const grouping of event.groupings ?? []) {
       const slug = (grouping.grouping?.slug ?? "").toLowerCase();
       // Singles draws only.
       if (!slug.includes("singles") || slug.includes("doubles")) continue;
+      // And, for a tour event, only the draw that is 1000-level.
+      if (tour && !isBigTennisEvent(event, slug)) continue;
       for (const match of grouping.competitions ?? []) {
         if ((match.competitors?.length ?? 0) < 2) continue;
         const day = tennisEtYmd(match.date ?? "");
         if (range ? (day < range.from || day > range.to) : day !== target) continue;
+        // The "Tennis" column is main draws only. A Slam column drops
+        // nothing, as before.
+        if (tour && /^qualifying/i.test(match.round?.displayName ?? "")) continue;
         const sn = match.status?.type?.name ?? "";
         if (sn.includes("POSTPONED") || sn.includes("CANCELED") || sn.includes("SUSPENDED")) continue;
         try {
-          games.push(parseTennisMatch(match, event, slug));
+          games.push(parseTennisMatch(match, event, slug, tour));
         } catch {
           // A single malformed match must not blank the whole draw.
         }
@@ -2634,7 +2790,7 @@ export function buildTennisGames(events: TennisScoreboardEvent[], when?: string 
 // competition.notes — for finished cup ties ESPN puts the RESULT there
 // ("Paris Saint-Germain win 4-3 on penalties"). Returns null for league play
 // so regular-season games show no stage line.
-function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
+function deriveStage(altGameNote?: string, seasonSlug?: string, sport?: Sport): string | null {
   const seg = (altGameNote ?? "").split(",").map((s) => s.trim()).filter(Boolean).pop() ?? "";
   // Cup rounds (FA Cup / Copa del Rey / DFB-Pokal / Conference League, read
   // 2026-09-14): altGameNote is "English FA Cup, Third Round", "German Cup,
@@ -2644,6 +2800,28 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     return seg;
   }
   const slug = (seasonSlug ?? "").toLowerCase().trim();
+  // MLS + NWSL playoffs (read 2026-10-03 off the 2025 playoffs): ESPN flags
+  // neither as postseason and the notes carry the series result ("X win series
+  // 2-0"), so the round lives only in season.slug: "eastern-conference-playoffs
+  // ---round-one", "mls-cup", "playoffs---semifinals" (NWSL). An unknown suffix
+  // still names the playoffs, so pairingMask covers it.
+  const conf = /^(eastern|western)-conference-playoffs---(.+)$/.exec(slug);
+  if (conf) {
+    const side = conf[1] === "eastern" ? "East" : "West";
+    const round: Record<string, string> = { "wild-card": "Wild Card", "round-one": "Round One", semifinals: "Semifinal", final: "Final" };
+    return `${side} ${round[conf[2]] ?? "Playoffs"}`;
+  }
+  if (slug === "mls-cup") return "MLS Cup";
+  const nwsl = /^playoffs---(.+)$/.exec(slug);
+  if (nwsl) {
+    const round: Record<string, string> = { quarterfinals: "Quarterfinal", semifinals: "Semifinal", championship: "Championship" };
+    return round[nwsl[1]] ?? "Playoffs";
+  }
+  // Any other MLS or NWSL slug that names the postseason ("mls-cup-playoffs
+  // ---round-two", "nwsl-championship") is still a playoff round, so it gets a
+  // stage and pairingMask covers it. Scoped to the two leagues: deriveStage
+  // runs for every sport.
+  if ((sport === "mls" || sport === "nwsl") && /play-?offs?|mls-cup|championship/.test(slug)) return "Playoffs";
   const slugMap: Record<string, string> = {
     "group-stage": "Group Stage",
     "round-of-32": "Round of 32",
@@ -2668,6 +2846,11 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     "fourth-round": "Fourth Round",
     "fifth-round": "Fifth Round",
     "league-phase": "League Phase",
+    // Libertadores qualifying (pairingMask covers the Third Stage: its
+    // pairings come from the Second Stage winners).
+    "first-stage": "First Stage",
+    "second-stage": "Second Stage",
+    "third-stage": "Third Stage",
     "knockout-round-playoffs": "Knockout Round Playoffs",
     "knockout-round-play-offs": "Knockout Round Playoffs",
     // Nations League (read 2026-09-26 off the 2024-25 knockouts): the altGameNote
@@ -2864,7 +3047,8 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   // Gather broadcasts
   const broadcasts: string[] = [];
   for (const b of competition?.broadcasts ?? []) {
-    for (const name of b.names ?? []) {
+    for (const raw of b.names ?? []) {
+      const name = normalizeNetworkName(raw);
       if (!broadcasts.includes(name)) broadcasts.push(name);
     }
   }
@@ -2958,6 +3142,15 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     isPlayoff = true;
     if (!playoffLabel) playoffLabel = NRL_FINALS_WEEKS[event.week?.number ?? 0] ?? "Finals";
   }
+  // Champions Cup / Challenge Cup: every game is type 1 with no notes, so the
+  // knockout round comes off the date table in playoffDates.ts.
+  if (isEpcrSport(sport)) {
+    const round = epcrKnockoutRound(sport, event.date ?? "");
+    if (round) {
+      isPlayoff = true;
+      playoffLabel = round;
+    }
+  }
   if (sport === "afl" && event.season?.type === 3) {
     playoffLabel = aflFinalsLabel(competition?.notes?.[0]?.headline ?? "");
   }
@@ -3036,7 +3229,7 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   const awayProbable = sport === "mlb" ? probablePitcher(away) : null;
 
   const cricketInfo = sport === "cricketintl" ? cricketMatchInfo(event as CricketEventLike) : null;
-  const stage = cricketInfo ? cricketInfo.stage : deriveStage(competition?.altGameNote, event.season?.slug);
+  const stage = cricketInfo ? cricketInfo.stage : deriveStage(competition?.altGameNote, event.season?.slug, sport);
 
   // Penalty shootout: a soccer knockout decided (or being decided) by spot
   // kicks — level after extra time, the pure tune-in moment. ESPN tags it via a
@@ -3075,6 +3268,7 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     stage,
     formatTag: cricketInfo?.formatTag ?? null,
     rating: calculateRating(event),
+    ...(ratingExcess.has(event) ? { ratingExcess: ratingExcess.get(event) } : {}),
     liveProgress: event.status?.type?.state === "in"
       ? gameProgress(event, sport, (SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba).regulationPeriods, "in")
       : undefined,
@@ -3236,7 +3430,7 @@ function hasPrimeBroadcast(game: Game): boolean {
 // timeout/error rather than throwing, so callers fall back to empty data.
 async function fetchTimed(url: string, timeoutMs = 8000): Promise<Response | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => abortOwn(controller), timeoutMs);
   try {
     return await fetch(url, { cache: "no-store", signal: controller.signal });
   } catch {
@@ -3249,7 +3443,7 @@ async function fetchTimed(url: string, timeoutMs = 8000): Promise<Response | nul
 async function fetchWithRetry(url: string, retries = 2, timeoutMs = 10000): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => abortOwn(controller), timeoutMs);
     try {
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timer);
@@ -3969,6 +4163,13 @@ function countryNameFromFlagUrl(url: string): string {
   return COUNTRY_NAMES[code] ?? code.toUpperCase();
 }
 
+// ESPN sends "Fox" from Oct 2026 (it sent "FOX" on 9/26). The brand is all
+// caps, and lib/collegeHighlights matches the exact "FOX", so every broadcast
+// name runs through this as it enters the app ("Fox Deportes" → "FOX Deportes").
+export function normalizeNetworkName(name: string): string {
+  return name.trim().replace(/\bFox\b/g, "FOX");
+}
+
 // Pull broadcast network names off an ESPN competition (handles the
 // names[]/media.shortName/name shapes the racing + mma feeds use).
 type BroadcastEntry = { names?: string[]; media?: { shortName?: string }; name?: string };
@@ -3983,7 +4184,7 @@ function eventBroadcasts(comp: { broadcasts?: BroadcastEntry[] } | null | undefi
     else if (b?.media?.shortName) out.push(b.media.shortName);
     else if (typeof b?.name === "string") out.push(b.name);
   }
-  return [...new Set(out.filter(Boolean))];
+  return [...new Set(out.filter(Boolean).map(normalizeNetworkName))];
 }
 
 // Minimal shapes of ESPN's F1/UFC single-event payload — only the fields
@@ -4872,7 +5073,8 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
   // Gather broadcasts
   const broadcasts: string[] = [];
   for (const b of competition?.broadcasts ?? []) {
-    for (const name of b.names ?? []) {
+    for (const raw of b.names ?? []) {
+      const name = normalizeNetworkName(raw);
       if (!broadcasts.includes(name)) broadcasts.push(name);
     }
   }
@@ -5195,6 +5397,73 @@ async function fetchGamesAcrossDays(
   return gathered;
 }
 
+// The WTA half of ESPN's tennis scoreboard. SPORT_PATHS.tennis is the ATP
+// feed, and a Slam is on both, so the Slam columns never needed this one. The
+// year-round "Tennis" column does: Doha, Wuhan and the WTA Finals are on the
+// WTA feed only.
+const TENNIS_WTA_PATH = "/tennis/wta/scoreboard";
+
+// Every tennis event for `dates` (one YYYYMMDD day, an A-B range, or unset for
+// ESPN's own today): the ATP feed, plus the WTA feed for the "Tennis" column
+// (`tourColumn`). A Slam column reads the ATP feed only, as it always has. A
+// combined event (Indian Wells, the China Open) is on both feeds with both
+// draws, so the first copy is kept.
+// null = every feed asked for failed. `partial` = one of two failed.
+async function fetchTennisEvents(dates: string | undefined, tourColumn: boolean): Promise<{ events: TennisScoreboardEvent[]; partial: boolean } | null> {
+  const urls = [scoreboardUrl("tennis")];
+  if (tourColumn) urls.push(new URL(BASE_URL + TENNIS_WTA_PATH));
+  const feeds = await Promise.all(urls.map(async (url) => {
+    if (dates) url.searchParams.set("dates", dates);
+    try {
+      // ESPN's tennis payload is large (the whole tournament, every draw), so
+      // no retries and a short timeout: see scoreboardFetchArgs.
+      const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs("tennis"));
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data?.events ?? []) as TennisScoreboardEvent[];
+    } catch {
+      return null;
+    }
+  }));
+  if (feeds.every((f) => f === null)) return null;
+  const seen = new Set<string>();
+  const events = feeds.flatMap((f) => f ?? []).filter((e) => {
+    if (!e.id) return true;
+    if (seen.has(e.id)) return false;
+    seen.add(e.id);
+    return true;
+  });
+  return { events, partial: feeds.some((f) => f === null) };
+}
+
+// Every singles match in [from, to] (YYYYMMDD, inclusive), one ranged request
+// per feed. ESPN's tennis scoreboard still takes `dates=A-B` (checked
+// 2026-10-11, HTTP 200) and answers with every tournament that touches the
+// range, whole; buildTennisGames applies the window per match.
+//
+// A range on the "Tennis" column's days is held for a few minutes. The board
+// re-pulls every column each 10 s while any game on it is live, and this
+// column asks twice (the endgame count, then the next match day) on two feeds
+// of 1–5 MB each. What the range feeds is the upcoming and the last-played
+// slate, not a live score, so a few minutes old is fine. Held as JSON: callers
+// stamp fields onto the games they get. A Slam column's ranges are never held,
+// and neither is a read that lost one of its two feeds.
+const TENNIS_RANGE_TTL_MS = 5 * 60_000;
+const tennisRangeCache = new Map<string, { at: number; json: string }>();
+async function fetchTennisRangeGames(from: string, to: string, tourColumn: boolean): Promise<Game[] | null> {
+  const key = tourColumn ? `${from}-${to}|${getTimeZone()}` : null;
+  const held = key ? tennisRangeCache.get(key) : undefined;
+  if (held && Date.now() - held.at < TENNIS_RANGE_TTL_MS) return JSON.parse(held.json) as Game[];
+  const read = await fetchTennisEvents(`${from}-${to}`, tourColumn);
+  if (!read) return null;
+  const games = buildTennisGames(read.events, { from, to }, tourColumn);
+  if (key && !read.partial) {
+    for (const [k, v] of tennisRangeCache) if (Date.now() - v.at >= TENNIS_RANGE_TTL_MS) tennisRangeCache.delete(k);
+    tennisRangeCache.set(key, { at: Date.now(), json: JSON.stringify(games) });
+  }
+  return games;
+}
+
 // How far ahead fetchNextGameDayRange reads in ONE request. Shared with the
 // offseason-opener gate in fetchAllLeagues so the gate can never green-light a
 // league whose opener sits outside the span the fetch would actually cover.
@@ -5204,6 +5473,29 @@ const RANGE_LOOKAHEAD_DAYS = 80;
 // ENDGAME_WINDOW_DAYS shows all of them under today's cards (see fetchLeague).
 export const ENDGAME_MAX = 5;
 export const ENDGAME_WINDOW_DAYS = 7;
+// The same slate for a league in its playoffs (isInPlayoffs): a wider window so
+// a whole Finals series shows from Game 1 (the WNBA Finals spread 7 games over
+// 15 days), and room for a best-of-7.
+export const PLAYOFF_ENDGAME_MAX = 7;
+export const PLAYOFF_ENDGAME_WINDOW_DAYS = 30;
+
+// True between a league's PLAYOFF_START_DATES date and its season-table
+// championshipDate (inclusive). The championship MM-DD is placed in the first
+// year on or after the start date, so the NFL's Jan 9 start pairs with that
+// season's Feb 14. A stale start date (last season's row) is simply false:
+// the league keeps its regular-season slate rather than a wrong playoff one.
+export function isInPlayoffs(sport: Sport, viewDate: Date): boolean {
+  const start = PLAYOFF_START_DATES[sport]?.date;
+  const champ = ALL_LEAGUES.find((l) => l.sport === sport && l.championshipDate)?.championshipDate;
+  if (!start || !champ) return false;
+  const startDay = new Date(`${start}T12:00:00`);
+  const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12);
+  if (view < startDay) return false;
+  const [mm, dd] = champ.split("-").map(Number);
+  let end = new Date(startDay.getFullYear(), mm - 1, dd, 12);
+  if (end < startDay) end = new Date(startDay.getFullYear() + 1, mm - 1, dd, 12);
+  return view <= end;
+}
 
 async function fetchNextGameDayRange(
   sport: Sport,
@@ -5211,9 +5503,11 @@ async function fetchNextGameDayRange(
   windowDays = RANGE_LOOKAHEAD_DAYS,
   // allDays: every upcoming fixture in the window, reduced to ONE NBA/NHL
   // series. allGames: every upcoming fixture in the window, chronological, no
-  // series grouping (the endgame slate). maxDays: every fixture from the first
-  // N distinct ET match-days. Default (none): the earliest day only.
-  opts?: { allDays?: boolean; allGames?: boolean; maxDays?: number },
+  // series grouping (the endgame slate); stopAbove ends the day walk early once
+  // more than that many are in hand (the caller only wants a count past it).
+  // maxDays: every fixture from the first N distinct ET match-days. Default
+  // (none): the earliest day only.
+  opts?: { allDays?: boolean; allGames?: boolean; stopAbove?: number; maxDays?: number },
 ): Promise<{ date: string; games: Game[] } | null> {
   const base = fromDate
     ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
@@ -5229,19 +5523,8 @@ async function fetchNextGameDayRange(
   // RANGE_FANOUT_CHUNK_DAYS — because ESPN now answers their ranges with 400.
   let rangedTennis: Game[] | null = null;
   if (sport === "tennis") {
-    const url = scoreboardUrl(sport);
-    url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
-    try {
-      // ESPN's tennis scoreboard payload is large during Slams. Do not let a
-      // ranged tennis lookahead retry for ~30s before admitting there is no slate.
-      const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
-      if (!res.ok) return null;
-      const data = await res.json();
-      const events: ScoreboardEvent[] = data?.events ?? [];
-      rangedTennis = buildTennisGames(events as unknown as TennisScoreboardEvent[], { from: ymd(start), to: ymd(end) });
-    } catch {
-      return null;
-    }
+    rangedTennis = await fetchTennisRangeGames(ymd(start), ymd(end), isTennisTourDay(ymd(base)));
+    if (!rangedTennis) return null;
   }
   // Group by the fixture's ET calendar day, return the earliest day's slate.
   const dayOf = (iso: string) => {
@@ -5257,10 +5540,16 @@ async function fetchNextGameDayRange(
   });
   const upcoming = (gs: Game[]) => gs.filter((g) => g.state === "pre" || g.state === "in");
   const distinctDays = (gs: Game[]) => new Set(gs.map((g) => dayOf(g.date)).filter(Boolean)).size;
-  // allDays wants the whole window; maxDays wants N distinct match-days; the
-  // default wants just the first day — stop as soon as that much is in hand.
-  const wanted = opts?.allDays ? Infinity : (opts?.maxDays ?? 1);
-  const games = upcoming(rangedTennis ?? await fetchGamesAcrossDays(sport, days, (gs) => distinctDays(upcoming(gs)) >= wanted));
+  // allDays and allGames want the whole window (allGames stops once it holds
+  // more than stopAbove); maxDays wants N distinct match-days; the default
+  // wants just the first day — stop as soon as that much is in hand. allGames
+  // used to stop after the first chunk with any game, which was harmless at
+  // the 7-day endgame window (one chunk) but cut the 30-day playoff window to
+  // its first week.
+  const enough = opts?.allGames
+    ? (gs: Game[]) => upcoming(gs).length > (opts.stopAbove ?? Infinity)
+    : (gs: Game[]) => distinctDays(upcoming(gs)) >= (opts?.allDays ? Infinity : (opts?.maxDays ?? 1));
+  const games = upcoming(rangedTennis ?? await fetchGamesAcrossDays(sport, days, enough));
   if (!games.length) return null;
   const chrono = (gs: Game[]) => [...gs].sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
   const leadDay = (gs: Game[]) => { let f = ""; for (const g of gs) { const d = dayOf(g.date); if (d && (!f || d < f)) f = d; } return f; };
@@ -5340,7 +5629,18 @@ async function fetchPreviousGameDayRange(
     const d = new Date(base); d.setDate(d.getDate() - (i + 1)); return ymd(d);
   });
   const finished = (gs: Game[]) => gs.filter((g) => g.state === "post");
-  const games = finished(await fetchGamesAcrossDays(sport, days, (gs) => finished(gs).length > 0));
+  let games: Game[];
+  if (sport === "tennis") {
+    // The day walk below can never find a tennis match: eventsToGames drops
+    // the 0-competitor tournament wrapper, so it read 14 scoreboards for
+    // nothing. The year-round "Tennis" column has gaps of a week or more
+    // between events, so it gets a real lookback, in one ranged request. A
+    // Slam column keeps the answer it always got (none), without the requests.
+    if (!isTennisTourDay(ymd(base))) return null;
+    games = finished(await fetchTennisRangeGames(days[days.length - 1], days[0], true) ?? []);
+  } else {
+    games = finished(await fetchGamesAcrossDays(sport, days, (gs) => finished(gs).length > 0));
+  }
   if (!games.length) return null;
   const dayOf = (iso: string) => {
     try {
@@ -5357,6 +5657,36 @@ async function fetchPreviousGameDayRange(
   }
   if (!latest) return null;
   return { date: latest, games: games.filter((g) => dayOf(g.date) === latest) };
+}
+
+// The board day a league page's "Open …" button lands on: the most recent day,
+// today included, with a finished game or event in that league. A weekly league
+// (NFL, college football, F1, UFC) is empty on most "yesterdays", so the old
+// fixed /yesterday link often opened a day with nothing to watch. Null = no
+// finished game in the lookback, or a failed fetch; the caller keeps its default.
+export async function fetchLastFinishedDay(sport: Sport): Promise<string | null> {
+  const today = toYmd(getEtServiceDate());
+  if (sport === "f1" || sport === "ufc" || sport === "nascar" || sport === "indycar") {
+    try {
+      const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+      url.searchParams.set("dates", `${shiftYmd(today, -EVENT_LOOKBACK_DAYS)}-${today}`);
+      const res = await fetchWithRetry(url.toString());
+      if (!res.ok) return null;
+      const data = await res.json();
+      const done = ((data.events ?? []) as LeagueEvent[]).filter((e) => e.status?.type?.state === "post");
+      const last = done[done.length - 1];
+      if (!last) return null;
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit" })
+        .format(new Date(last.date)).replace(/-/g, "");
+      return day && day <= today ? day : null;
+    } catch {
+      return null;
+    }
+  }
+  // fetchPreviousGameDayRange walks back from the day BEFORE its anchor, so
+  // anchoring on tomorrow puts today's finished games in the walk.
+  const last = await fetchPreviousGameDayRange(sport, nextYmd(today));
+  return last && last.date <= today ? last.date : null;
 }
 
 // A finished day's scoreboard does not change. Best of yesterday reads up to
@@ -5377,6 +5707,16 @@ export async function fetchGames(
   const finishedKey = date && date < toYmd(getEtServiceDate()) ? `${sport}|${date}|${getTimeZone()}` : null;
   const held = finishedKey ? finishedDayCache.get(finishedKey) : undefined;
   if (held && Date.now() - held.at < FINISHED_DAY_TTL_MS) return { games: JSON.parse(held.json) as Game[], failed: false };
+  // Tennis nests its real matches in event.groupings[].competitions[] with
+  // athlete-based competitors — flattened by a dedicated parser, not the
+  // team-based path below (which would drop the 0-competitor tournament
+  // wrapper). It also reads up to two feeds: see fetchTennisEvents.
+  if (sport === "tennis") {
+    const tourColumn = isTennisTourDay(date ?? toYmd(getEtServiceDate()));
+    const read = await fetchTennisEvents(date, tourColumn);
+    if (!read) return { games: [], failed: true };
+    return { games: buildTennisGames(read.events, date, tourColumn), failed: false };
+  }
   const url = scoreboardUrl(sport);
   // Soccer fixtures can kick off in the local midnight hour (a western-US World
   // Cup night game is 12 AM ET). ESPN buckets those under their raw calendar
@@ -5419,9 +5759,6 @@ export async function fetchGames(
   };
   let data: { events?: unknown[] } | null;
   try {
-    // ESPN's tennis scoreboard payload is large during Slams and has been the
-    // slowest selected column. Keep it from holding the whole board skeleton;
-    // a miss still falls back to the last good per-date cache below.
     const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
     if (!res.ok) return failWithCacheFallback();
     data = await res.json();
@@ -5438,13 +5775,6 @@ export async function fetchGames(
   }
 
   const events = data?.events ?? [];
-
-  // Tennis nests its real matches in event.groupings[].competitions[] with
-  // athlete-based competitors — flattened by a dedicated parser, not the
-  // team-based path below (which would drop the 0-competitor tournament wrapper).
-  if (sport === "tennis") {
-    return { games: buildTennisGames(events as TennisScoreboardEvent[], date), failed: false };
-  }
 
   let games: Game[] = eventsToGames(events as ScoreboardEvent[], sport);
   // Drop the adjacent-day fixtures the 2-day soccer window pulled in, keeping
@@ -5770,7 +6100,7 @@ export function fetchSportTeams(sport: Sport): Promise<SportTeam[]> {
           abbreviation,
           // The worker leagues and the standings rows ship the logo on the
           // item; ESPN's core items don't, hence the CDN-convention synthesis.
-          logo: t.logos?.[0]?.href || logoForTeam(sport, rawId, abbreviation, typeof t.guid === "string" ? t.guid : undefined),
+          logo: fixTeamLogo(t.logos?.[0]?.href || logoForTeam(sport, rawId, abbreviation, typeof t.guid === "string" ? t.guid : undefined)),
           slug: t.slug,
         });
       }
@@ -5907,7 +6237,7 @@ async function fetchMlbVideos(date: string): Promise<MlbVideoEntry[]> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const timer = setTimeout(() => abortOwn(ctrl), 8000);
       const res = await fetch(`${getApiBase()}/api/mlb-videos?date=${date}`, { signal: ctrl.signal });
       clearTimeout(timer);
       if (!res.ok) continue;
@@ -6150,7 +6480,9 @@ export interface BestYesterdayOptions {
 // check is getChannelVerifiedBakedId against the record's own uploader — the
 // freshness, matchup and duplicate gates the card applies — so a stale or
 // mismatched record cannot put a card with no button in the column.
-function hasPlayableClip(game: Game, baked: Record<string, BakedHighlight>): boolean {
+// Exported for the top-games bake (scripts/lib/top-games-bake.mjs), which
+// applies the same bar to the longer spans.
+export function hasPlayableClip(game: Game, baked: Record<string, BakedHighlight>): boolean {
   if (game.sport === "mlb") return !!(game.mlbRecapPlaybackUrl || game.mlbCondensedPlaybackUrl);
   if (game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed)) return true;
   const rec = baked[`${game.sport}:${game.id}`];
@@ -6200,6 +6532,44 @@ export function fetchBestYesterday(todayYmd: string, opts: BestYesterdayOptions 
   bestYesterdayCache.set(key, { at: Date.now(), data });
   data.catch(() => bestYesterdayCache.delete(key));
   return data;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOP GAMES — the Best of yesterday column's longer spans (Jacob 10/10)
+// ═══════════════════════════════════════════════════════════════
+// Read from the mini's bake (news/top-games-<span>.json, lib/topGames.ts), not
+// live: ESPN serves one day per request, so a year cannot be pulled from a
+// browser. Only fetched when the user picks a span (or "All leagues"), and held
+// for the session like loadBakedHighlights. A failed read is dropped at once
+// so the next pick retries.
+const TOP_GAMES_TTL_MS = 10 * 60_000;
+const topGamesCache = new Map<TopGamesSpan, { at: number; data: Promise<TopGamesFile | null> }>();
+
+export function loadTopGamesFile(span: TopGamesSpan): Promise<TopGamesFile | null> {
+  const hit = topGamesCache.get(span);
+  if (hit && Date.now() - hit.at < TOP_GAMES_TTL_MS) return hit.data;
+  const data = (async (): Promise<TopGamesFile | null> => {
+    const res = await fetch(`${getApiBase()}/news/top-games-${span}.json`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`top-games ${span} HTTP ${res.status}`);
+    const body: unknown = await res.json();
+    return isTopGamesFile(body) && body.span === span ? body : null;
+  })();
+  topGamesCache.set(span, { at: Date.now(), data });
+  data.catch(() => topGamesCache.delete(span));
+  return data;
+}
+
+// The Best column's games for a baked span. `sources` = the user's leagues,
+// or null for every league ("All leagues").
+export async function fetchTopGamesSpan(span: TopGamesSpan, sources: Sport[] | null): Promise<LeagueData> {
+  const base = { sport: "best" as Sport, label: TOP_GAMES_COLUMN_LABEL[span], emptyLabel: TOP_GAMES_EMPTY_LABEL[span] };
+  try {
+    const file = await loadTopGamesFile(span);
+    if (!file) return { ...base, games: [], fetchFailed: true };
+    return { ...base, games: pickTopGames(file, sources), fetchFailed: false };
+  } catch {
+    return { ...base, games: [], fetchFailed: true };
+  }
 }
 
 // One league's games for one slate day, with the same NHL/MLB video
@@ -6441,27 +6811,46 @@ export async function fetchAllLeagues(
     // an empty schedule. On a fetch failure games is also [] — falling back
     // there would render tomorrow's slate labeled "Tomorrow" on the Today
     // tab, which reads as a bug. A failed league carries fetchFailed instead.
-    // NBA/NHL in the playoffs surface their upcoming slate even when there ARE
-    // games today, so the column shows TODAY'S games AND what's coming
-    // (Jacob 6/4). Every other league — including the World Cup (Jacob 6/19) —
-    // only falls back to the lookahead when today's slate is empty, so games
+    // A league in its playoffs (isInPlayoffs: PLAYOFF_START_DATES → its
+    // championshipDate — NBA, NHL, WNBA, MLB, NFL, March Madness) surfaces its
+    // upcoming slate even when there ARE games today, so the column shows
+    // TODAY'S games AND what's coming (Jacob 6/4, widened to every playoff
+    // league 10/10). Every other league — including the World Cup (Jacob 6/19)
+    // — only falls back to the lookahead when today's slate is empty, so games
     // stay on their real days instead of stacking tomorrow's slate under today.
+    //
+    // NBA/NHL in May/June keep their own series rule (nbaNhlSeries, below): it
+    // shows ONE series so the two conference finals never interleave (Jacob
+    // 6/5), which a plain count of games cannot promise. Kept on the month
+    // check so it still holds in a season whose PLAYOFF_START_DATES row is stale.
     const isPlayoffMonth = viewDate.getMonth() === 4 /* May */ || viewDate.getMonth() === 5 /* Jun */;
-    const nbaNhlPlayoff = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth;
-    const alwaysShowUpcoming = nbaNhlPlayoff;
+    const nbaNhlSeries = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth;
+    const inPlayoffs = nbaNhlSeries || isInPlayoffs(cfg.sport, viewDate);
+    const alwaysShowUpcoming = inPlayoffs;
     // Endgame slate (Jacob 9/11–9/12): once a league has ≤ ENDGAME_MAX games
     // left in the next ENDGAME_WINDOW_DAYS, show every one of them with its
     // day/time — a Slam from the semis, the NFL from the divisional round, the
     // World Series, a UCL final. Above that count the column keeps its normal
     // today-only slate so regular weeks never stack (the 6/19 World Cup call):
     // the domestic soccer leagues run 9–10 fixtures a week, so ≤5 fires only
-    // at the very end of a bracket. NBA/NHL keep their own series rule below
-    // (it already shows the whole remaining series). Event-tile and non-ESPN
-    // sports returned before this point. ONE ranged request per column.
+    // at the very end of a bracket. Event-tile and non-ESPN sports returned
+    // before this point. ONE ranged request per column.
+    //
+    // In the playoffs (Jacob 10/10) the window widens to
+    // PLAYOFF_ENDGAME_WINDOW_DAYS and the cap to PLAYOFF_ENDGAME_MAX, so a
+    // Finals shows every listed game from a week out: the WNBA Finals read
+    // Game 1 10/17 alone from 10/10, with Games 2–4 (10/19–10/24) already on
+    // ESPN. What that admits elsewhere: NFL wild-card weekend (6 games in 30
+    // days) shows whole, as does the divisional round (4) — the intended
+    // "whole bracket" reading. MLB's Division Series (up to 4 series × 5) and
+    // the two LCS together run past 7, so MLB keeps its normal slate (today +
+    // the next game day) until the World Series.
     let endgame = false;
-    if (!failed && !isPastView && !nbaNhlPlayoff) {
-      const ahead = await fetchNextGameDayRange(cfg.sport, date, ENDGAME_WINDOW_DAYS, { allGames: true });
-      if (ahead && ahead.games.length <= ENDGAME_MAX) {
+    if (!failed && !isPastView && !nbaNhlSeries) {
+      const windowDays = inPlayoffs ? PLAYOFF_ENDGAME_WINDOW_DAYS : ENDGAME_WINDOW_DAYS;
+      const maxGames = inPlayoffs ? PLAYOFF_ENDGAME_MAX : ENDGAME_MAX;
+      const ahead = await fetchNextGameDayRange(cfg.sport, date, windowDays, { allGames: true, stopAbove: maxGames });
+      if (ahead && ahead.games.length <= maxGames) {
         nextGameDay = ahead;
         endgame = true;
       }
@@ -6473,7 +6862,7 @@ export async function fetchAllLeagues(
         // instead of a bare "No games" — not several days stacked onto today.
         // 80-day window covers the long pre-kickoff gap; maxDays:1 = one day.
         nextGameDay = await fetchNextGameDayRange(cfg.sport, date, 80, { maxDays: 1 });
-      } else if (nbaNhlPlayoff) {
+      } else if (nbaNhlSeries) {
         // NBA/NHL playoffs: only a handful of games remain (Conf Finals →
         // Cup/Finals) — surface EVERY one in a single ranged request, not just
         // the next game day. 30-day window covers a full series from Game 1.
@@ -6801,6 +7190,7 @@ export async function fetchTeamSchedule(
             const primary = t.logos.find((l: { rel?: string[] }) => l.rel?.includes("default")) ?? t.logos[0];
             if (primary?.href) t.logo = primary.href;
           }
+          if (t?.logo) t.logo = fixTeamLogo(t.logo);
           // Score: scoreboard uses a string ("4"); schedule returns an object
           // ({ value, displayValue }). Flatten to the string form so parseGame
           // and calculateRating read the final score — otherwise parseInt gives
@@ -6907,6 +7297,12 @@ export async function fetchNextGameDay(
   daysToCheck = 7,
   fromDate?: string // YYYYMMDD — search from this date instead of today
 ): Promise<{ date: string; games: Game[] } | null> {
+  // Tennis: the same answer from one ranged request. A single-day tennis
+  // request returns the whole tournament anyway, so seven of them in parallel
+  // were seven copies of one large payload (and fourteen for the "Tennis"
+  // column, which reads two feeds).
+  if (sport === "tennis") return fetchNextGameDayRange(sport, fromDate, daysToCheck);
+
   const base = fromDate
     ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
     : new Date();

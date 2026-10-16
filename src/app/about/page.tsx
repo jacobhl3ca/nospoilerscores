@@ -117,7 +117,7 @@ export default function AboutPage() {
           Contact
         </h2>
         <p>
-          Email <EmailLink />, or send a note from the feedback form on
+          Email <EmailLink pill />, or send a note from the feedback form on
           the <Link href="/contact" className="underline underline-offset-2">contact page</Link>. Bug reports, missing
           leagues and spoilers that got through are all welcome.
         </p>

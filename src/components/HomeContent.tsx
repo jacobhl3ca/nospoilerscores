@@ -1,51 +1,54 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode, type CSSProperties } from "react";
+import { abortOwn } from "@/lib/abort";
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
-import { markSeen, seenKeys, useNewsSeenTracker } from "@/lib/newsSeen";
+import { NewsMarkSeenContext, markSeen, seenKeys, setSeenSync, useNewsSeenTracker } from "@/lib/newsSeen";
+import { pullSeen, pushSeen } from "@/lib/seenSync";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
 import { Preferences, Theme, NewsLayout, type NewsCardPrefs, type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
-import { accountPrefsBase, samePrefs } from "@/lib/prefsMerge";
+import { mergeAddMorePicks } from "@/lib/addMorePicks";
+import { accountPrefsBase, carryCardPrefs, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
-import { filterLeague } from "@/lib/favoritesFilter";
+import { applyFavoritesFilter, favoritesEmptied, filterLeague } from "@/lib/favoritesFilter";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import { LeaguePickerModal } from "./LeaguePickerModal";
 import type { BestYesterdayOptions } from "@/lib/espn";
 import { ESPN_FRONT_PAGE_LABEL, TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_LABEL, bestYesterdaySourceSports, prevYmd } from "@/lib/bestYesterday";
+import { TOP_GAMES_COLUMN_LABEL, isTopGamesSpan, type TopGamesSpan } from "@/lib/topGames";
+import BestSpanBar from "./BestSpanBar";
 import { fromYmd, etSlateYmd, nextYmd, getTimeZone } from "@/lib/etDay";
 import { WATCH_QUEUE_ENABLED, toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
 import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
+import { HideRanksContext } from "@/components/HideRanksContext";
 import GameCard from "@/components/GameCard";
 import { closeHiddenPins, closeUnseenAutoSlots, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
-import { fetchAllLeagues, fetchSlateGames, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { fetchAllLeagues, fetchSlateGames, fetchTopGamesSpan, hasPlayableClip, fetchLastFinishedDay, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, isTennisTourConfig, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn, { mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
 import EventDetailModal from "@/components/EventDetailModal";
-import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
-import SlamBracketModal from "@/components/SlamBracketModal";
-import PlayoffPictureModal from "@/components/PlayoffPictureModal";
-import MlbSeasonReviewModal from "@/components/MlbSeasonReviewModal";
 import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, MLB_REVIEW_HIDDEN_KEY, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
 import FeedbackBox from "@/components/FeedbackBox";
 import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts, type CardOverride } from "@/components/NewsColumn";
-import SettingsPanel from "@/components/SettingsPanel";
 import AddLeaguePopover from "@/components/AddLeaguePopover";
 import AutoplayBlockedPopover from "@/components/AutoplayBlockedPopover";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ESPN_FRONT_PAGE_CASCADE, ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, GENERAL_REDDIT_SOURCE, redditSourcesFor, newsCardKeyForSection, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
+import { LeagueMark } from "@/components/LeagueMark";
+import { buildSchedule, visibleScheduleRows, SCHEDULE_FULL_MAX, SCHEDULE_SKIP, type ScheduleLeagueInput, type ScheduleRow } from "@/lib/scheduleDay";
 import VideoModal from "@/components/VideoModal";
 import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
 import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
@@ -54,16 +57,42 @@ import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import { parseWorldCupDateParam, worldCup2026Ended, worldCupLastMatchYmd, WORLD_CUP_2026_FINAL } from "@/lib/worldCup2026";
 import LeagueRecapCard, { type PlayoffsTab } from "@/components/LeagueRecapCard";
+import NewsSpoilerConfirm from "@/components/NewsSpoilerConfirm";
+import { markNewsOkDay, newsNeedsConfirm, readNewsOkDay } from "@/lib/newsOkDay";
 import { fetchPlayoffPicture, fieldIsSet } from "@/lib/playoffPicture";
+import { fetchNflPicture } from "@/lib/nflPlayoffPicture";
+import { nflClinchSnapshot, type ClinchSnapshot } from "@/lib/eliminatedFold";
 import { getRecapsFor, getRecapsForSync, preloadRecapsFor } from "@/lib/recaps";
 import { RUNNING_BUILD_ID, LAST_CHECK_KEY, RELOADED_FOR_KEY, checkIsDue, pageIsBusy, parseBuildId, shouldReload } from "@/lib/buildCheck";
 import { OFFLINE_BOARD_KEY, formatOfflineUpdated, latestBoardSnapshot, loadBoardSnapshot, pullLooksOffline, saveBoardSnapshot } from "@/lib/offlineBoard";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { connectNativeTabBar, type NativeTabBar } from "@/lib/nativeTabBar";
 import { useAppStore, storeReviewHref } from "@/lib/useAppStore";
 import { useRateLinkVisible, noteRateTapped } from "@/lib/rateApp";
 import { noteFooterTap, reportNavRecovered } from "@/lib/navRecovered";
 import SupportLine from "@/components/SupportLine";
+import { TeamLogo } from "@/components/TeamLogo";
+
+// The league key at the front of a share-card key (`mlb-bos-nyy-20260930`),
+// for the video-play Umami field. No card (TBD teams, the MLB review cuts) =
+// "unknown".
+function shareCardLeague(card?: ShareCardMeta | null): string {
+  return card?.key.split("-")[0] || "unknown";
+}
+
+// Rarely opened modals that are closed on first paint load on first open, so
+// their code is not in the board's first-load bundle. VideoModal and the
+// game/event detail sheets stay static: a card tap must open its sheet in the
+// same frame (focus and Escape go to it at once), and a video must start from
+// the tap's user gesture.
+const WorldCupGroupsModal = dynamic(() => import("@/components/WorldCupGroupsModal"));
+const SlamBracketModal = dynamic(() => import("@/components/SlamBracketModal"));
+const PlayoffPictureModal = dynamic(() => import("@/components/PlayoffPictureModal"));
+const MlbSeasonReviewModal = dynamic(() => import("@/components/MlbSeasonReviewModal"));
+// SettingsPanel stays mounted but renders null while closed, so the static
+// HTML is the same without SSR, and its code loads after the board hydrates.
+const SettingsPanel = dynamic(() => import("@/components/SettingsPanel"), { ssr: false });
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -119,6 +148,9 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
     // See lib/dismissals.ts.
     kickoffBannersDismissed: mergeDismissedKeys(local.kickoffBannersDismissed, remote.kickoffBannersDismissed),
     wcBannerDismissed: local.wcBannerDismissed || remote.wcBannerDismissed || undefined,
+    // An account copy without per-card news values must not put a card that
+    // hides its headlines back on the toolbar's value — see carryCardPrefs.
+    newsCardPrefs: carryCardPrefs(local.newsCardPrefs, remote.newsCardPrefs),
     // The account copy wins, but pruned like a local load (3 days, cap 20),
     // so a stale queue is not written back and re-pushed to every device.
     watchQueue: pruneWatchQueue(remote.watchQueue, getDateString(0)),
@@ -144,7 +176,7 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
 // useCallback) can take it off a ref instead of closing over prefs.
 function bestYesterdayOptions(p: Preferences, date: string, slotCount: number): BestYesterdayOptions {
   const yesterday = fromYmd(prevYmd(date));
-  const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && isLeagueActive(l, yesterday));
+  const inSeason = (s: Sport) => ALL_LEAGUES.some((l) => l.sport === s && !isTennisTourConfig(l) && isLeagueActive(l, yesterday));
   const auto = pickAndAssignLeagues(fromYmd(date), slotCount, boardHiddenLeagues(p)).map((l) => l.sport);
   const board = closeHiddenPins([p.firstLeague, p.secondLeague, p.thirdLeague, p.fourthLeague, p.fifthLeague], boardHiddenLeagues(p) ?? [])
     .slice(0, slotCount)
@@ -186,11 +218,11 @@ function resolveDefaultOffset(mode: "smart" | "today" | "yesterday" | undefined,
   return getSmartDefaultOffset(cutoffHour);
 }
 
-type ViewMode = "scores-plain" | "scores-rated" | "news";
+type ViewMode = "scores-plain" | "scores-rated" | "news" | "schedule";
 
 // iOS-style fixed bottom tab bar. Always pinned to the viewport bottom, sits
-// over scrolled content with a translucent blurred background, three tabs:
-// 🙈 No ratings  |  🙉 With ratings  |  📰 News. Selected state uses accent
+// over scrolled content with a translucent blurred background, four tabs:
+// 🙈 Games  |  🙉 Ratings  |  📰 News  |  📅 Schedule. Selected state uses accent
 // color on icon + label (no solid background fill) so it reads "elegant"
 // rather than "chunky pill". Home-indicator clearance via safe-area inset.
 function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: ViewMode; onChange: (m: ViewMode) => void; placement?: "bottom" | "inline" }) {
@@ -238,15 +270,15 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         style={inline ? { background: "var(--bg-card)", border: "1px solid var(--border)" } : undefined}
       >
         {/* The icons carry real alt text (2026-09-25): AI-visibility scanners
-            count alt="" as missing, and these 3 icons render twice per board
+            count alt="" as missing, and these 4 icons render twice per board
             page. Screen readers are unaffected — the button's aria-label wins
             over its contents. */}
         {tab(
           "scores-plain",
           // eslint-disable-next-line @next/next/no-img-element
           <img src="/monkey-see-no-evil.svg" alt="See-no-evil monkey" width={24} height={24} className="w-6 h-6" draggable={false} />,
-          "Scores",
-          "Scores (no ratings, no spoilers)",
+          "Games",
+          "Games (no scores, no spoilers)",
         )}
         {tab(
           "scores-rated",
@@ -261,6 +293,15 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
           <img src="/news-emoji.svg" alt="Newspaper" width={24} height={24} className="w-6 h-6 news-tab-emoji" draggable={false} />,
           "News",
           "News (full spoilers)",
+        )}
+        {/* Schedule (10/14): the day's games across every league in the
+            switcher, one line each, no scores. */}
+        {tab(
+          "schedule",
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/calendar-emoji.svg" alt="Calendar" width={24} height={24} className="w-6 h-6" draggable={false} />,
+          "Schedule",
+          "Schedule (every league's games for the day)",
         )}
       </div>
     </nav>
@@ -510,6 +551,20 @@ const SLOT_INDICES = [0, 1, 2, 3, 4];
 // like the phone's 28px calendar icon, and only at 390px and up: below that the
 // header row is already full (the calendar reaches the moon at 375), so a
 // narrower phone keeps Settings → Board layout as its switch.
+// The Live filter's cut of one column: in-progress games only (the same
+// state === "in" test as the LIVE badge and the 10 s poll), with no next- or
+// last-slate fallback. Golf and event columns stay only while they are live.
+function liveOnlyLeague(league: LeagueData): LeagueData {
+  return {
+    ...league,
+    games: league.games.filter((g) => g.state === "in"),
+    nextGameDay: undefined,
+    previousGameDay: undefined,
+    golfTournament: league.golfTournament?.roundStatus === "in" ? league.golfTournament : undefined,
+    eventCard: league.eventCard?.state === "in" ? league.eventCard : undefined,
+  };
+}
+
 function SingleColToggle({ active, onClick, compact }: { active: boolean; onClick: () => void; compact?: boolean }) {
   return (
     <button
@@ -557,8 +612,14 @@ function HeadlinesIcon({ on, size = 16 }: { on: boolean; size?: number }) {
     ? <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
     : <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>;
 }
-function MediaIcon({ size = 16 }: { size?: number }) {
-  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>;
+// Media off = the same picture crossed out (Jacob 10/10), like Autoplay.
+function MediaIcon({ on, size = 16 }: { on: boolean; size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-media-icon={on ? "on" : "off"}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" />{!on && <line x1="1" y1="1" x2="23" y2="23" data-slash="" />}</svg>;
+}
+// Show all / Hide all (Jacob 10/11): the Media frame with the Headlines eye
+// inside, since the chip sets both. Off = crossed out, like Media.
+function ShowAllIcon({ on, size = 16 }: { on: boolean; size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" data-showall-icon={on ? "on" : "off"}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M6.5 12s2-3.5 5.5-3.5 5.5 3.5 5.5 3.5-2 3.5-5.5 3.5S6.5 12 6.5 12z" /><circle cx="12" cy="12" r="1" />{!on && <line x1="1" y1="1" x2="23" y2="23" data-slash="" />}</svg>;
 }
 function VideosOnlyIcon({ size = 16 }: { size?: number }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>;
@@ -604,15 +665,22 @@ function CardChip({ active, onClick, title, ariaLabel, disabled, pressed, dataAt
 // Posts switch in a labeled row (Cards/Feed toolbar, the Reddit bar): one
 // segmented control, All / No text / Videos (Jacob 10/9). `value` null = the
 // cards differ, so no segment shows pressed. Compact = the same 3 icons.
-function PostFilterSwitch({ value, onChange, compact }: {
-  value: PostFilter | null; onChange: (f: PostFilter) => void; compact?: boolean;
+// `card` (that card's name) = the switch in a subreddit card's header (Jacob
+// 10/10: all 3 choices in view beat one cycling chip): 3 icons at the 28px
+// CardChip height, so the header row does not grow. `roomy` = wider segments,
+// for a wide card (a phone, the 1-column board).
+function PostFilterSwitch({ value, onChange, compact, card, roomy }: {
+  value: PostFilter | null; onChange: (f: PostFilter) => void; compact?: boolean; card?: string; roomy?: boolean;
 }) {
+  const inCard = card !== undefined;
+  const icons = compact || inCard;
   return (
     <div
       role="group"
-      aria-label="Post filter"
+      aria-label={inCard ? `Post filter: ${card}` : "Post filter"}
       data-testid="post-filter-switch"
-      className="inline-flex shrink-0 rounded-full p-0.5"
+      data-card={card}
+      className={`inline-flex shrink-0 rounded-full p-0.5${inCard ? " h-7" : ""}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
       {POST_FILTERS.map((f) => {
@@ -623,17 +691,17 @@ function PostFilterSwitch({ value, onChange, compact }: {
             key={f}
             onClick={() => onChange(f)}
             aria-pressed={on}
-            aria-label={compact ? `Posts: ${POST_FILTER_NAMES[f]}` : undefined}
-            title={`Posts: ${POST_FILTER_NAMES[f]}`}
+            aria-label={icons ? `Posts: ${POST_FILTER_NAMES[f]}` : undefined}
+            title={inCard ? `Posts in ${card}: ${POST_FILTER_NAMES[f]}` : `Posts: ${POST_FILTER_NAMES[f]}`}
             data-post-filter={f}
-            className={`inline-flex items-center gap-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${compact ? "px-2 py-1" : "px-3 py-1"}`}
+            className={`inline-flex items-center gap-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${inCard ? (roomy ? "h-full px-2" : "h-full px-1") : compact ? "px-2 py-1" : "px-3 py-1"}`}
             // Blue = a filter narrows the posts; All is the neutral raised fill.
             style={{
               background: on ? (f === "all" ? "var(--bg-card-hover)" : "var(--accent)") : "transparent",
               color: on ? (f === "all" ? "var(--text)" : "white") : "var(--text-muted)",
             }}
           >
-            {compact ? <PostFilterIcon value={f} size={16} /> : POST_FILTER_NAMES[f]}
+            {icons ? <PostFilterIcon value={f} size={inCard ? 14 : 16} /> : POST_FILTER_NAMES[f]}
           </button>
         );
       })}
@@ -641,8 +709,8 @@ function PostFilterSwitch({ value, onChange, compact }: {
   );
 }
 
-// Posts in a card header (no room for 3 segments at 575px): one chip that
-// cycles All → No text → Videos.
+// Posts in a card header too narrow for the 3-segment switch (a 225px
+// column): one chip that cycles All → No text → Videos.
 function PostFilterCardChip({ value, onChange, name }: {
   value: PostFilter; onChange: (f: PostFilter) => void; name: string;
 }) {
@@ -661,6 +729,18 @@ function PostFilterCardChip({ value, onChange, name }: {
   );
 }
 
+// Media / Headlines / Posts as a labeled row shows them (the Cards toolbar,
+// the Reddit bar). posts null = the cards differ.
+type NewsBarState = { media: boolean; titles: boolean; posts: PostFilter | null };
+
+// Calls `children` when React renders THIS component, which is after
+// HomeContent's own render has run to its end. The Cards toolbar sits above
+// the news board in the tree, but its chips show state the board works out
+// further down the same render (which cards are on screen).
+function RenderLate({ children }: { children: () => ReactNode }) {
+  return <>{children()}</>;
+}
+
 // Autoplay chip titles (toolbar + ESPN Videos header).
 const AUTOPLAY_TITLE = "Play the video in focus, muted. Tap it for sound.";
 const AUTOPLAY_PAUSED_TITLE = "Paused while Media is blurred. Turn Media on to play clips.";
@@ -673,10 +753,10 @@ const BIG_REDDIT_COLS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-col
 // A new key (10/9): the r4 note under the toolbar used v1 of the old one.
 const AUTOPLAY_BLOCKED_POPUP_KEY = "hs.autoplayBlockedPopup.v1";
 
-function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, children }: {
+function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, testId, children }: {
   active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean;
   // Icon only (the toolbar row is too narrow for labels): see useToolbarFit.
-  compact?: boolean; children: ReactNode;
+  compact?: boolean; testId?: string; children: ReactNode;
 }) {
   return (
     <button
@@ -692,6 +772,7 @@ function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, 
       // icon-button convention used elsewhere (e.g. SingleColToggle above).
       aria-label={ariaLabel}
       aria-pressed={active}
+      data-testid={testId}
       className={`news-chip inline-flex shrink-0 items-center gap-1.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${compact ? "news-chip-compact px-2.5" : "px-3.5"}`}
       style={{
         background: active ? "var(--accent)" : "var(--bg-card)",
@@ -721,6 +802,10 @@ const POPULAR_WORLD_CUP_TEAMS = [
 // short enough that a new user never notices the hold.
 const PICKER_AUTH_GRACE_MS = 1500;
 
+// How long a league-page hand-off (`?lg=`) waits for that league's last
+// finished day before the board opens on its default day instead.
+const LANDING_LOOKUP_MS = 3000;
+
 export default function HomeContent({
   initialOffset,
   initialDate,
@@ -742,6 +827,12 @@ export default function HomeContent({
   // day, so the error state says "offline" instead of "Failed to load".
   const [offline, setOffline] = useState<{ savedAt: number | null } | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
+  // `?lg=nfl` from a league page's "Open …" button (SeoLandingPage ctaHref).
+  // The board opens on that league's last finished day and the first-run
+  // picker starts with it chosen. Read in the date effect below, not during
+  // render: on a client-side Link the address bar is not updated until after
+  // the new page renders. Invalid keys are ignored.
+  const landingLeagueRef = useRef<Sport | null>(null);
 
   // Compute smart default date client-side only to avoid SSG hydration mismatch.
   // Reads the persisted defaultDateMode pref so "always today" / "always yesterday"
@@ -761,7 +852,25 @@ export default function HomeContent({
         return;
       }
       const stored = loadPreferences();
-      setSelectedDate(getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode, stored.smartCutoffHour)));
+      const fallback = getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode, stored.smartCutoffHour));
+      const lg = new URLSearchParams(window.location.search).get("lg");
+      const landingLeague = ALL_LEAGUES.some((l) => l.sport === lg && !l.hidden) ? (lg as Sport) : null;
+      landingLeagueRef.current = landingLeague;
+      if (!landingLeague) {
+        setSelectedDate(fallback);
+        return;
+      }
+      // League page hand-off: wait for the league's last finished day, capped so
+      // a slow ESPN answer only costs LANDING_LOOKUP_MS before the default day.
+      let settled = false;
+      const settle = (d: string | null) => {
+        if (settled) return;
+        settled = true;
+        setSelectedDate(d ?? fallback);
+      };
+      const timer = window.setTimeout(() => settle(null), LANDING_LOOKUP_MS);
+      fetchLastFinishedDay(landingLeague).then(settle, () => settle(null));
+      return () => { settled = true; window.clearTimeout(timer); };
     }
   }, [initialOffset, initialDate, worldCupHub, selectedDate]);
   // First-time notice for the Ratings tab. Was a blocking confirm dialog until
@@ -782,7 +891,7 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; seenKey?: string | null };
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[]; forceTitleMask?: boolean; league?: string | null; trackLeague?: string; seenKey?: string | null; titlesShown?: boolean | null; section?: string | null; restored?: boolean };
   const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
   // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
   // image, headline, the area around the player), so one mis-tap while reading
@@ -799,6 +908,11 @@ export default function HomeContent({
   const REOPEN_MS = 8000;
   const videoModalRef = useRef<VideoModalState | null>(null);
   useEffect(() => { videoModalRef.current = videoModal; }, [videoModal]);
+  // The post a reloaded modal reopened (its source link = the item's seen key).
+  // 👁 Hide seen leaves it in its card while that modal is open, so the card's
+  // list still holds it and the modal gets its ‹ › back (see adoptSiblings).
+  const restoredSeenKeyRef = useRef<string | null>(null);
+  useEffect(() => { if (!videoModal?.restored) restoredSeenKeyRef.current = null; }, [videoModal]);
   const [reopenVideo, setReopenVideo] = useState<VideoModalState | null>(null);
   const reopenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearReopen = useCallback(() => {
@@ -826,7 +940,7 @@ export default function HomeContent({
   // The same, for the EVENT tiles (races, UFC bouts, boxing, chess, poker).
   // Separate state because an event tile is not a Game; `fight` is set only
   // when one bout of a UFC card was tapped rather than the card as a whole.
-  const [detailEvent, setDetailEvent] = useState<{ event: LeagueEventCard; fight?: FightBout; leagueLabel?: string } | null>(null);
+  const [detailEvent, setDetailEvent] = useState<{ event: LeagueEventCard; fight?: FightBout; leagueLabel?: string; sport?: Sport } | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
   // The tennis draw and the MLB playoff picture. Both open from the league
   // column's subtitle line and both gate their own contents behind a reveal —
@@ -857,8 +971,24 @@ export default function HomeContent({
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
+  // The Schedule tab (10/14): the day's games across every switcher league,
+  // one line each. It survives a reload, through the same
+  // nss-last-view key the pre-paint script reads (restored below).
+  const [showSchedule, setShowSchedule] = useState(false);
+  // The view saved before this load, read once before anything writes it.
+  // While a stored "schedule" waits on the launch rules, the nss-last-view
+  // write below holds, so the board's default tab cannot overwrite it.
+  const [storedViewAtLoad] = useState<string | null>(() => {
+    try { return typeof window === "undefined" ? null : localStorage.getItem("nss-last-view"); } catch { return null; }
+  });
+  const scheduleRestoring = useRef(storedViewAtLoad === "schedule");
+  // The header's Live pill: a session-only filter down to in-progress games.
+  const [liveOnly, setLiveOnly] = useState(false);
   // Same, for the News tab's spoiler warning.
   const [newsNotice, setNewsNotice] = useState(false);
+  // An ESPN front page label's News button waiting on "are you sure" (the
+  // league it opens). Only while it is still early; see src/lib/newsOkDay.ts.
+  const [newsConfirm, setNewsConfirm] = useState<Sport | null>(null);
   // Per-column team-name abbreviation reports (keyed by slot; null-report =
   // column left/has no names). Any abbreviated game column → namesCompact, so
   // the UFC column's fighter names shrink exactly when the team names beside
@@ -951,6 +1081,9 @@ export default function HomeContent({
   // Whether the sign-in reconcile has had its say about this device's prefs.
   // Only the first-run league picker waits on it — see the mount effect.
   const [authSettled, setAuthSettled] = useState(false);
+  // The launch pull itself is done (applied, skipped, or signed out), with no
+  // grace timer: it lifts the headline hold below, which must outlast the pull.
+  const [pullSettled, setPullSettled] = useState(false);
   // A signed-in account that has already used the downloaded app does not need
   // an install prompt on the web. This is account history from /api/me, not a
   // guess based on the current browser's user agent.
@@ -1013,7 +1146,7 @@ export default function HomeContent({
         const keep = new URLSearchParams();
         // Preserve any highlight deep-link params (?v= and the h*-prefixed media
         // a non-YouTube clip carries) while stripping the consumed pref params.
-        for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c"]) {
+        for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c", "hn"]) {
           const val = params.get(k);
           if (val) keep.set(k, val);
         }
@@ -1032,6 +1165,11 @@ export default function HomeContent({
       const hLabel = params.get("hl");
       const hHead = params.get("ht");
       const hPoster = params.get("hp");
+      // The news post's section: ?hn, else ?hl (the share URL drops ?hn when
+      // the two match).
+      const hSection = params.get("hn") || hLabel || null;
+      // A game card's highlight (?c=) is not a news post, so no card list is its own.
+      const restored = !params.get("c");
       // A shared-highlight link cold-loaded with ?demo=1 still on (sessionStorage
       // sticky, see demoMode.ts) is the same real-content leak openVideoModal/
       // openEmbedModal guard against — this reopen path sets videoModal state
@@ -1044,8 +1182,10 @@ export default function HomeContent({
         // back on. So the title cover is on here whatever the Settings toggle
         // says (it defaults off since 9/8). It still lifts once the title reads clean.
         const forceTitleMask = /^\/watch\/?$/.test(window.location.pathname);
-        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster, forceTitleMask });
+        restoredSeenKeyRef.current = hSource || null;
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster, forceTitleMask, section: hSection, restored });
       } else if (hStream || hEmbed || hImage) {
+        restoredSeenKeyRef.current = hSource || null;
         setVideoModal({
           videoId: "",
           fallbackUrl: hSource,
@@ -1055,6 +1195,8 @@ export default function HomeContent({
           poster: hImage || hPoster || null,
           sourceLabel: hLabel || null,
           headline: hHead || null,
+          section: hSection,
+          restored,
         });
       }
     }
@@ -1068,7 +1210,9 @@ export default function HomeContent({
     //     off            → always off on launch
     //     on             → always on on launch
     //   News view: see the landing-view rule below (it can drop to Scores).
-    const applyLaunchState = (p: Preferences) => {
+    // `keepView` = the re-run on the account copy: the view is the one this
+    // launch already chose, so a pull 1-3 s in never opens or closes News.
+    const applyLaunchState = (p: Preferences, keepView = false) => {
       const landing = p.defaultLandingView ?? "remember";
       const ratingsMode = p.defaultRatings ?? "auto";
       if (ratingsMode === "on") {
@@ -1105,13 +1249,22 @@ export default function HomeContent({
       const newDayPassed = !!p.lastOpenDay && p.lastOpenDay !== getDateString(0);
       const demoNews = isDemoNewsRequested();
       const tabView = readTabView();
-      if (demoNews || landing === "news") setShowNews(true);
-      else if (landing === "scores" || landing === "ratings") setShowNews(false);
-      else if (tabView) setShowNews(tabView === "news");
-      else if (p.showNews && !newDayPassed) setShowNews(true);
-      // ?demo=1&view=news wants the first-time spoiler-warning bar ON SCREEN
-      // for the shot, not skipped like every other first-time explainer here.
-      if (demoNews) setNewsNotice(true);
+      if (!keepView) {
+        // Schedule was the last view: back to it, unless a landing setting,
+        // a demo or this tab's own News view says otherwise.
+        const restoreSchedule = scheduleRestoring.current && landing === "remember" && !demoNews && tabView !== "news";
+        scheduleRestoring.current = restoreSchedule;
+        if (restoreSchedule) {
+          setShowSchedule(true);
+          setShowNews(false);
+        } else if (demoNews || landing === "news") setShowNews(true);
+        else if (landing === "scores" || landing === "ratings") setShowNews(false);
+        else if (tabView) setShowNews(tabView === "news");
+        else if (p.showNews && !newDayPassed) setShowNews(true);
+        // ?demo=1&view=news wants the first-time spoiler-warning bar ON SCREEN
+        // for the shot, not skipped like every other first-time explainer here.
+        if (demoNews) setNewsNotice(true);
+      }
       document.documentElement.setAttribute("data-theme", getResolvedTheme(p.theme));
       // Apply the headline reveal state at launch (mirrored in the effect below)
       // so reveal-on users don't see a one-frame blur flash before it runs.
@@ -1173,6 +1326,11 @@ export default function HomeContent({
         setAppAccountUse(Boolean(auth.signedIn && (auth.platforms?.ios || auth.platforms?.android)));
         if (!auth.signedIn) return;
         setRemoteSync(pushRemotePrefs);
+        // Opened posts follow the account too (lib/seenSync): new marks go up,
+        // other devices' marks come down. Its own request, so it never holds
+        // up the prefs pull below.
+        setSeenSync(pushSeen);
+        void pullSeen();
         // A device that submitted a bracket before the account knew about it
         // hands its picks token up now, so the account's other devices can
         // adopt it without anyone opening the Picks tab here (lib/picksAccount).
@@ -1184,7 +1342,7 @@ export default function HomeContent({
           if (pullIsStale(mark)) return;
           const merged = mergeRemotePreferences(loadPreferences(), remote);
           savePreferences(merged); // persist locally (and re-affirm to server via the hook)
-          applyLaunchState(merged);
+          applyLaunchState(merged, true);
         } else {
           pushRemotePrefs(loadPreferences()); // first sign-in for this account
         }
@@ -1192,10 +1350,22 @@ export default function HomeContent({
         /* sync is best-effort; the app stays fully functional without it */
       } finally {
         settleAuth();
+        // Same batch as the account copy's setPrefs above, so the effect that
+        // lifts html.hs-prefs-settling runs after the cards hold its values.
+        setPullSettled(true);
       }
     })();
     return () => window.clearTimeout(graceTimer);
   }, []);
+
+  // A signed-in tab keeps every news headline blurred until the account copy
+  // is in (html.hs-prefs-settling, set pre-paint in layout.tsx from the cached
+  // sign-in): this device's copy may say show where the account's says hide,
+  // and for the 1-3 s the pull takes that was a headline in the clear (Jacob
+  // 10/10). Lifted here, after the commit that carries the pulled prefs.
+  useEffect(() => {
+    if (pullSettled) document.documentElement.classList.remove("hs-prefs-settling");
+  }, [pullSettled]);
 
   // The pre-paint scripts in layout.tsx hide the store badges from a cached
   // guess. React owns them from the moment it has a real answer, so drop each
@@ -1240,6 +1410,8 @@ export default function HomeContent({
         setIsSignedIn(Boolean(auth.signedIn));
         setAppAccountUse(Boolean(auth.signedIn && (auth.platforms?.ios || auth.platforms?.android)));
         if (!auth.signedIn || !alive) return;
+        // What another device opened since this tab last looked.
+        void pullSeen();
         const mark = pullMark();
         const remote = await fetchRemotePrefs();
         if (!remote || !alive || Object.keys(remote).length === 0) return;
@@ -1395,19 +1567,23 @@ export default function HomeContent({
   const scrollOnRef = useRef(scrollOn);
   scrollOnRef.current = scrollOn;
 
-  // The shareable hidescore link for a modal payload — identical to the modal's
-  // own "Copy link" (see buildHighlightShareUrl). Returned root-relative ("/?…")
+  // The hidescore link for a modal payload, for the ADDRESS BAR: the modal's
+  // own "Copy link" (see buildHighlightShareUrl) minus the headline (?ht). The
+  // address bar and the browser history are on screen with Headlines off, so
+  // the post's headline must not sit there in plain text (Jacob 10/10). Copy
+  // link keeps ?ht for the recipient's preview card, and a pasted link that
+  // carries it still opens with it. Returned root-relative ("/?…")
   // so (a) pushState is same-origin in every shell (prod / iOS app / localhost)
   // and (b) it lands on "/", where the worker injects the per-share OG preview.
   // Exception: a YouTube clip on /watch stays on /watch (see highlightSharePath),
   // so its preview is the generic card, not the thumbnail.
   // Carries NO pref params, so copying the address bar shares the clip cleanly —
-  // the recipient keeps their own leagues — exactly like Copy link. Syncing this
-  // into the URL bar is why "copy the URL bar" == "Copy link".
+  // the recipient keeps their own leagues — like Copy link.
   const modalShareHref = useCallback((m: {
     videoId?: string | null; playbackUrl?: string | null; embedUrl?: string | null;
     imageUrl?: string | null; poster?: string | null; fallbackUrl?: string | null;
-    sourceLabel?: string | null; headline?: string | null; shareCard?: ShareCardMeta | null;
+    sourceLabel?: string | null; shareCard?: ShareCardMeta | null;
+    section?: string | null;
   }) => {
     const abs = buildHighlightShareUrl({
       videoId: m.videoId || null,
@@ -1417,14 +1593,16 @@ export default function HomeContent({
       posterUrl: m.poster || null,
       sourceUrl: m.fallbackUrl || null,
       sourceLabel: m.sourceLabel || null,
-      headline: m.headline || null,
+      headline: null,
       cardKey: m.shareCard?.key ?? null,
+      section: m.section || null,
       path: highlightSharePath(),
     });
     return abs ? abs.replace(/^https?:\/\/[^/]+/, "") : null;
   }, []);
 
-  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => {
+  // `league` is appended by LeagueColumn for analytics (VideoModal's trackLeague).
+  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[], league?: string) => {
     clearReopen();
     // See demoHighlightPoster's comment in demoMode.ts: a resolved videoId can
     // still be a real clip even off an anonymized card, because it's keyed by
@@ -1435,7 +1613,7 @@ export default function HomeContent({
       setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       return;
     }
-    setVideoModal({ videoId, fallbackUrl, shareCard, alternates });
+    setVideoModal({ videoId, fallbackUrl, shareCard, alternates, league, trackLeague: shareCardLeague(shareCard) });
     const href = modalShareHref({ videoId, fallbackUrl, shareCard });
     if (href) window.history.pushState({ videoModal: true }, "", href);
   }, [modalShareHref, clearReopen]);
@@ -1452,7 +1630,7 @@ export default function HomeContent({
       setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       return;
     }
-    setVideoModal({ videoId: "", fallbackUrl, embedUrl, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard });
+    setVideoModal({ videoId: "", fallbackUrl, embedUrl, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard, trackLeague: shareCardLeague(shareCard) });
     const href = modalShareHref({ embedUrl, fallbackUrl, playbackUrl: playbackUrl || null, sourceLabel, shareCard });
     window.history.pushState({ videoModal: true }, "", href ?? window.location.href);
   }, [modalShareHref, clearReopen]);
@@ -1477,8 +1655,12 @@ export default function HomeContent({
     siblings: opts.siblings || null,
     sibIndex: opts.index ?? null,
     seenKey: opts.seenKey || null,
+    titlesShown: opts.titlesShown ?? null,
+    section: opts.section || null,
   }), []);
-  const playNewsVideo = useCallback<PlayHandler>((opts) => {
+  // `league` is only for the video-play / video-finished Umami fields: the
+  // column's league key, or "news" for a feed that mixes leagues.
+  const openNewsVideo = useCallback((opts: PlayOpts, league: string) => {
     clearReopen();
     // News posts embed real third-party photos/clips (Reddit, ESPN) that the
     // board-side anonymizer never touches — same substitution as the two
@@ -1488,7 +1670,7 @@ export default function HomeContent({
       setVideoModal({ videoId: "", fallbackUrl: "", imageUrl: demoHighlightPoster(), headline: DEMO_HIGHLIGHT_HEADLINE, sourceLabel: "Stream" });
       return;
     }
-    const m = optsToModal(opts);
+    const m = { ...optsToModal(opts), trackLeague: league };
     // Opening a news post marks it seen. The card-click tracker already did;
     // this covers openers outside a card. Idempotent.
     if (m.seenKey) markSeen(m.seenKey);
@@ -1500,6 +1682,21 @@ export default function HomeContent({
     const href = modalShareHref(m);
     if (href) window.history.pushState({ videoModal: true }, "", href);
   }, [optsToModal, modalShareHref, clearReopen]);
+  const playNewsVideo = useCallback<PlayHandler>((opts) => openNewsVideo(opts, "news"), [openNewsVideo]);
+  // One stable handler per league for the per-league news columns, so a column
+  // does not see a new onPlayVideo on every board render. Each one reads the
+  // current openNewsVideo through the ref.
+  const openNewsVideoRef = useRef(openNewsVideo);
+  useEffect(() => { openNewsVideoRef.current = openNewsVideo; }, [openNewsVideo]);
+  const newsPlayHandlers = useRef(new Map<string, PlayHandler>());
+  const newsPlayFor = useCallback((league: string): PlayHandler => {
+    let h = newsPlayHandlers.current.get(league);
+    if (!h) {
+      h = (opts) => openNewsVideoRef.current(opts, league);
+      newsPlayHandlers.current.set(league, h);
+    }
+    return h;
+  }, []);
   // Page to the previous/next post in the same news list without closing the
   // modal (dir = -1 / +1). No-op past either edge. replaceState (not push) keeps
   // the URL bar pointed at the post you're actually looking at, without spamming
@@ -1509,7 +1706,7 @@ export default function HomeContent({
       if (!m?.siblings || m.sibIndex == null) return m;
       const ni = m.sibIndex + dir;
       if (ni < 0 || ni >= m.siblings.length) return m;
-      const nm = optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni });
+      const nm = { ...optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni }), trackLeague: m.trackLeague };
       // Paging to a post opens it, so it counts as seen.
       if (nm.seenKey) markSeen(nm.seenKey);
       if (typeof window !== "undefined") {
@@ -1520,6 +1717,31 @@ export default function HomeContent({
     });
   }, [optsToModal, modalShareHref]);
 
+  // A modal reopened from the address bar (a reload) has no post list, so no
+  // ‹ › arrows. Every news card reports its list here once it loads; the first
+  // one that holds the open post gives the modal its list. A later, longer list
+  // that holds it too replaces it while the modal is still the reloaded post: a
+  // card's list grows as its sources load. Only the list changes, never the
+  // media (that would reload the player) or the address bar. The list also
+  // gives the post its headline back: the address bar no longer carries it
+  // (see modalShareHref), and it shows under the card's own blur rule.
+  const adoptSiblings = useCallback((list: PlayOpts[]) => {
+    // No reloaded modal open (the usual case): skip the state update entirely.
+    if (!videoModalRef.current?.restored) return;
+    setVideoModal((m) => {
+      if (!m?.restored || (m.siblings && m.siblings.length >= list.length)) return m;
+      const pick = (o: PlayOpts): string | null | undefined =>
+        m.videoId ? o.videoId : m.playbackUrl ? o.playbackUrl : m.embedUrl ? o.embedUrl : m.imageUrl ? o.imageUrl : o.fallbackUrl;
+      const want = m.videoId || m.playbackUrl || m.embedUrl || m.imageUrl || m.fallbackUrl;
+      if (!want) return m;
+      // Same media AND same source link first: one clip can sit in two posts.
+      let i = list.findIndex((o) => pick(o) === want && (!m.fallbackUrl || o.fallbackUrl === m.fallbackUrl));
+      if (i < 0) i = list.findIndex((o) => pick(o) === want);
+      if (i < 0) return m;
+      return { ...m, siblings: list, sibIndex: i, seenKey: list[i].seenKey ?? m.seenKey, titlesShown: m.titlesShown ?? list[i].titlesShown ?? null, headline: m.headline ?? list[i].headline ?? null };
+    });
+  }, []);
+
   // Wipe the highlight deep-link params (?v / ?h* / ?c) out of the address bar,
   // leaving anything else on the URL alone. Used on every dismiss that does NOT
   // rewind history — a COLD-LOADED share link has no videoModal entry to pop,
@@ -1529,7 +1751,7 @@ export default function HomeContent({
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     let changed = false;
-    for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c"]) {
+    for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c", "hn"]) {
       if (params.has(k)) { params.delete(k); changed = true; }
     }
     if (!changed) return;
@@ -1554,7 +1776,10 @@ export default function HomeContent({
       // COLD-LOADED share link never rewinds history (there's no videoModal
       // entry to pop), so re-pushing the identical URL would just stack a
       // duplicate entry that Back can't do anything useful with.
-      const here = window.location.pathname + window.location.search;
+      // A pasted link may still carry ?ht, which this tab's own links never do.
+      const q = new URLSearchParams(window.location.search);
+      q.delete("ht");
+      const here = `${window.location.pathname}?${q.toString()}`;
       if (href && href !== here) window.history.pushState({ videoModal: true }, "", href);
     }
   }, [reopenVideo, clearReopen, modalShareHref]);
@@ -1855,6 +2080,11 @@ export default function HomeContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasLiveGames, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague]);
 
+  // Live is about now: moving the board off Today turns the filter off.
+  useEffect(() => {
+    if (liveOnly && selectedDate && selectedDate !== getDateString(0)) setLiveOnly(false);
+  }, [liveOnly, selectedDate]);
+
   // Back online after showing the saved board: one silent pull, which clears
   // the "Offline" line when it lands. Same request as a normal load.
   const isOffline = offline !== null;
@@ -1891,10 +2121,22 @@ export default function HomeContent({
   // Single segmented control in the header replaces the old separate
   // monkey + news buttons. Switching INTO news/ratings runs the same
   // explainer modals as before; switching out is silent.
-  const viewMode: ViewMode = showNews ? "news" : prefs.showRatings ? "scores-rated" : "scores-plain";
+  const viewMode: ViewMode = showSchedule ? "schedule" : showNews ? "news" : prefs.showRatings ? "scores-rated" : "scores-plain";
 
   const handleViewModeClick = (mode: ViewMode) => {
     if (mode === viewMode) return;
+    if (mode === "schedule") {
+      // Exclusive with News; the ratings pref is
+      // left alone so leaving Schedule goes back to the board tab that was on.
+      if (showNews) {
+        setShowNews(false);
+        updatePrefs({ showNews: false });
+      }
+      setShowSchedule(true);
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+    if (showSchedule) setShowSchedule(false);
     if (mode === "scores-plain") {
       if (showNews) setShowNews(false);
       updatePrefs({ showNews: false, showRatings: false });
@@ -1923,12 +2165,17 @@ export default function HomeContent({
 
   // The native iOS tab bar (see lib/nativeTabBar.ts): a tap there runs the
   // same handler as the web tabs, and the selected tab follows viewMode.
+  // TestFlight builds 15–16 still draw a Leagues tab (removed 10/14); a tap
+  // there opens Settings, where the Leagues list lives. The open modal hides
+  // the native bar, and the bar shows the right tab again when Settings
+  // closes (nativeTabBar.ts posts on every modal change).
   const handleViewModeClickRef = useRef(handleViewModeClick);
   handleViewModeClickRef.current = handleViewModeClick;
   const nativeTabBarRef = useRef<NativeTabBar | null>(null);
   useEffect(() => {
     const bar = connectNativeTabBar((v) => {
-      if (v === "scores-plain" || v === "scores-rated" || v === "news") handleViewModeClickRef.current(v);
+      if (v === "scores-plain" || v === "scores-rated" || v === "news" || v === "schedule") handleViewModeClickRef.current(v);
+      else if (v === "leagues") setSettingsOpen(true);
     });
     nativeTabBarRef.current = bar;
     return () => { bar?.disconnect(); nativeTabBarRef.current = null; };
@@ -1938,18 +2185,31 @@ export default function HomeContent({
   // A pick in news column 3's own switcher. A league overrides the column;
   // undefined (Auto) hands it back to scores column 3. `autoId` is the column
   // Auto lands on, so a one-column Focus view can follow it.
+  const newsThirdLeaguePatch = (sport: Sport | undefined, autoId: Sport | "espn" = "espn"): Partial<Preferences> => ({
+    newsThirdLeague: sport,
+    newsTopNews: false,
+    // Drop an old "Top news" pull-left too, so Auto puts col 3 back third.
+    newsGenericSlot: undefined,
+    newsGenericHidden: false,
+    // Keep a one-column Focus view pointed at the replacement column.
+    newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
+  });
   const setNewsThirdLeague = (sport: Sport | undefined, autoId: Sport | "espn" = "espn", extra: Partial<Preferences> = {}) => {
-    updatePrefs({
-      ...extra,
-      newsThirdLeague: sport,
-      newsTopNews: false,
-      // Drop an old "Top news" pull-left too, so Auto puts col 3 back third.
-      newsGenericSlot: undefined,
-      newsGenericHidden: false,
-      // Keep a one-column Focus view pointed at the replacement column.
-      newsFocusLeague: prefs.newsFocusLeague ? (sport ?? autoId) : undefined,
-    });
+    updatePrefs({ ...extra, ...newsThirdLeaguePatch(sport, autoId) });
   };
+
+  // The News-ok day (src/lib/newsOkDay.ts): 5 s of News, or any highlight on
+  // screen, means spoilers are no longer a worry today, so an ESPN front
+  // page label's News button stops asking first.
+  useEffect(() => {
+    if (!showNews) return;
+    const t = setTimeout(() => markNewsOkDay(getDateString(0)), 5000);
+    return () => clearTimeout(t);
+  }, [showNews]);
+  const videoPlaying = !!(videoModal && (videoModal.videoId || videoModal.playbackUrl || videoModal.embedUrl));
+  useEffect(() => {
+    if (videoPlaying) markNewsOkDay(getDateString(0));
+  }, [videoPlaying]);
 
   // Update favicon based on ratings toggle
   useEffect(() => {
@@ -1978,6 +2238,10 @@ export default function HomeContent({
   // re-deriving the launch rules in the inline script) keeps the two in lockstep
   // and self-corrects on the rare morning-reset boundary.
   useEffect(() => {
+    if (scheduleRestoring.current) {
+      if (viewMode !== "schedule") return;
+      scheduleRestoring.current = false;
+    }
     document.documentElement.setAttribute("data-view", viewMode);
     try {
       localStorage.setItem("nss-last-view", viewMode);
@@ -2312,7 +2576,7 @@ export default function HomeContent({
     // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
     "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw", "ncaah", "cfl", "ncaawh", "ncaavb", "ufl", "ncaabase", "ncaasoft",
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricketintl", "cricket", "nrl", "afl",
-    "urc", "premrugby", "top14", "challengecup", "mlr",
+    "urc", "premrugby", "top14", "rugbychamp", "challengecup", "mlr",
     "climbing", "chess", "poker", "esports",
     // ── soccer block, bottom ──
     "epl", "ucl", "uel", "uecl", "nations", "laliga", "seriea", "bundesliga", "ligue1",
@@ -2395,7 +2659,7 @@ export default function HomeContent({
   // way Settings' catalog judges it (against today), in the first-run
   // picker's popularity order. The sheet itself hides the offseason pills
   // until its toggle is on. Settings-style, a turned-off league is listed
-  // too, and picking it turns it back on (see pickAddMore).
+  // too, and picking it turns it back on (see addFromAddMore).
   const addMoreOptions = useMemo(
     () => [...settingsLeagueOptions].sort((a, b) => pickerRank(a.sport) - pickerRank(b.sport)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pickerRank reads only the literal PICKER_RANK
@@ -2407,6 +2671,20 @@ export default function HomeContent({
     () => upcomingRecordLeagues({ upcomingRecordLeagues: prefs.upcomingRecordLeagues, hideUpcomingRecords: prefs.hideUpcomingRecords }),
     [prefs.upcomingRecordLeagues, prefs.hideUpcomingRecords],
   );
+
+  // "Fold games with no playoff stakes": ESPN's NFL standings, read only while
+  // the setting is on. Fetched again on a date change once an hour old; a
+  // failed fetch leaves null, and nothing folds (lib/eliminatedFold.ts).
+  const [nflClinch, setNflClinch] = useState<ClinchSnapshot | null>(null);
+  const nflClinchAt = nflClinch?.at ?? 0;
+  useEffect(() => {
+    if (!prefs.foldEliminatedGames || Date.now() - nflClinchAt < 60 * 60 * 1000) return;
+    const ctrl = new AbortController();
+    fetchNflPicture(ctrl.signal)
+      .then((p) => { if (p) setNflClinch(nflClinchSnapshot(p, Date.now())); })
+      .catch(() => {});
+    return () => abortOwn(ctrl);
+  }, [prefs.foldEliminatedGames, selectedDate, nflClinchAt]);
 
   const teamLeagueOptions = useMemo(() => {
     const seen = new Set<Sport>();
@@ -2434,9 +2712,12 @@ export default function HomeContent({
         updatePrefs({ leaguesOnboarded: true });
         return;
       }
+      // Arrived from a league page: that league starts chosen.
+      const landing = landingLeagueRef.current;
+      if (landing && pickerOptions.some((o) => o.sport === landing)) setPickerSel([landing]);
       setShowLeaguePicker(true);
     }
-  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled, updatePrefs]);
+  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled, updatePrefs, pickerOptions]);
 
   // How many leagues the picker lets you take = how many columns this viewport
   // will actually render (3 phone / 5 wide). It said "up to 3" on a desktop that
@@ -2506,6 +2787,38 @@ export default function HomeContent({
     }),
     [thirdLeagueOptions, prefs, boardHidden],
   );
+  // The Best column's span row (Jacob 10/10, lib/topGames.ts). The spans rank
+  // by rating, so the row only shows while ratings do; with ratings off the
+  // column is plain Best of yesterday whatever was picked. Yesterday on the
+  // user's own leagues is the live column; any other choice reads the mini's
+  // bake (fetchTopGamesSpan). "My leagues" there = every league in the user's
+  // switcher, in or out of season (a year spans several seasons); "All
+  // leagues" = every league in the bake.
+  const bestSpan: TopGamesSpan = prefs.showRatings && isTopGamesSpan(prefs.bestSpan) ? prefs.bestSpan : "yesterday";
+  const bestAllLeagues = prefs.showRatings && !!prefs.bestAllLeagues;
+  const bestSpanSources = useMemo(() => {
+    const hidden = boardHidden ?? [];
+    const pinned = [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague];
+    const out: Sport[] = [];
+    for (const l of ALL_LEAGUES) {
+      if (l.hidden || hidden.includes(l.sport) || out.includes(l.sport)) continue;
+      if (!l.excludeFromAuto || prefs.shownLeagues?.includes(l.sport) || pinned.includes(l.sport) || prefs.favoriteLeagues.includes(l.sport)) out.push(l.sport);
+    }
+    return out;
+  }, [boardHidden, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, prefs.shownLeagues, prefs.favoriteLeagues]);
+  const bestBaked = bestOnBoard && (bestSpan !== "yesterday" || bestAllLeagues);
+  const bestSpanKey = `${bestSpan}|${bestAllLeagues ? "*" : bestSpanSources.join(",")}`;
+  const [bestSpanData, setBestSpanData] = useState<{ key: string; data: LeagueData } | null>(null);
+  useEffect(() => {
+    if (!bestBaked) return;
+    let live = true;
+    const key = bestSpanKey;
+    fetchTopGamesSpan(bestSpan, bestAllLeagues ? null : bestSpanSources).then((data) => {
+      if (live) setBestSpanData({ key, data });
+    });
+    return () => { live = false; };
+  }, [bestBaked, bestSpan, bestAllLeagues, bestSpanSources, bestSpanKey]);
+
   // Best of yesterday has no news feed, so the news switchers skip it. ESPN
   // front page does (espn.com's headlines + clips), so it is a league row
   // there too, first like in the scores switcher (Jacob 9/26).
@@ -2521,6 +2834,68 @@ export default function HomeContent({
       !switcherOptions.some((o) => o.sport === s) && !prefs.catalogHiddenLeagues?.includes(s)),
     [prefs.removedLeagues, prefs.catalogHiddenLeagues, switcherOptions],
   );
+
+  // The Schedule tab's leagues: every in-season league in the switcher, the
+  // board's columns first in column order, then the rest in switcher order.
+  // Event tiles and the two cross-league columns sit out (SCHEDULE_SKIP).
+  const scheduleLeagues = useMemo(() => {
+    const pool = switcherOptions.filter((o) => !o.offseason && !o.upcomingLabel && !SCHEDULE_SKIP.has(o.sport));
+    const inPool = new Set(pool.map((o) => o.sport));
+    const board = leagues.filter((l) => inPool.has(l.sport));
+    const onBoard = new Set(board.map((l) => l.sport));
+    return [
+      ...board.map((l) => ({ sport: l.sport, label: l.label })),
+      ...pool.filter((o) => !onBoard.has(o.sport)).map((o) => ({ sport: o.sport, label: o.label })),
+    ];
+  }, [switcherOptions, leagues]);
+  // Leagues with no board column are pulled here, one scoreboard each, keyed
+  // by date|sport. The board's own columns reuse `leagues`, so they cost
+  // nothing extra. Today re-pulls every minute while the tab is open, for
+  // the LIVE / Final labels.
+  const [scheduleExtra, setScheduleExtra] = useState<Record<string, Game[] | "failed">>({});
+  const [scheduleBaked, setScheduleBaked] = useState<Awaited<ReturnType<typeof loadBakedHighlights>>>({});
+  const [scheduleOpen, setScheduleOpen] = useState<Record<string, boolean>>({});
+  const scheduleExtraSports = useMemo(() => {
+    const onBoard = new Set(leagues.map((l) => l.sport));
+    return scheduleLeagues.filter((l) => !onBoard.has(l.sport)).map((l) => l.sport);
+  }, [scheduleLeagues, leagues]);
+  const scheduleExtraKey = scheduleExtraSports.join(",");
+  // Until the board's first pull lands, every league would look like an
+  // extra one; wait for it.
+  const scheduleWaitBoard = loading && leagues.length === 0;
+  useEffect(() => {
+    if (!showSchedule || !selectedDate || scheduleWaitBoard) return;
+    let live = true;
+    const date = selectedDate;
+    const sports = scheduleExtraKey ? (scheduleExtraKey.split(",") as Sport[]) : [];
+    const pull = async (fresh: boolean) => {
+      const todo = [...sports];
+      // Six at a time: a full switcher is 20+ scoreboards.
+      const worker = async () => {
+        for (let sport = todo.shift(); sport; sport = todo.shift()) {
+          const key = `${date}|${sport}`;
+          let games: Game[] | "failed";
+          try {
+            // A scoreboard that never answers must not hold "Loading…" up.
+            games = await Promise.race([
+              fetchSlateGames(sport, date),
+              new Promise<"failed">((r) => setTimeout(() => r("failed"), 10_000)),
+            ]);
+          } catch {
+            games = "failed";
+          }
+          if (!live) return;
+          if (!fresh && games === "failed") continue;
+          setScheduleExtra((m) => ({ ...m, [key]: games }));
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(6, sports.length) }, worker));
+    };
+    loadBakedHighlights().then((b) => { if (live) setScheduleBaked(b); });
+    pull(true);
+    const poll = date === getDateString(0) ? setInterval(() => pull(false), 60_000) : null;
+    return () => { live = false; if (poll) clearInterval(poll); };
+  }, [showSchedule, selectedDate, scheduleExtraKey, scheduleWaitBoard]);
   // The sheet's "Edit list" ×, the same strike as Settings' Edit list: the
   // league leaves the catalog and every switcher, and the removed group.
   const hideFromAddMore = (sport: Sport) => {
@@ -2561,29 +2936,45 @@ export default function HomeContent({
     });
   };
 
-  // A tap in the Add more… sheet does what the dropdown row for that column
-  // does. Like pinning in Settings, picking a turned-off league turns it back
-  // on — otherwise the column would show the next league instead. News
-  // column 3 only keeps a pick that is in the news switcher, so a league from
-  // outside it (an opt-in or offseason one) is added to shownLeagues too.
-  const pickAddMore = (sport: Sport) => {
+  // The Add more… sheet's Add (Jacob 10/1: "multi select", "add btn"). The
+  // sheet splits the picks (planAddMorePicks). The column's pick (`now[0]`) does
+  // what the dropdown row for that column does; the other in-season picks
+  // join the column's league list, so its ‹ › arrows and dropdown reach them.
+  // The other offseason picks show nowhere until their season starts, so
+  // they are only saved (the sheet's note says so). No column opens. Like pinning in
+  // Settings, every pick comes back on if it was turned off — otherwise the
+  // column would show the next league instead. News column 3 only keeps a
+  // pick that is in the news switcher, so a first pick from outside it (an
+  // opt-in one) is added to shownLeagues too.
+  const addFromAddMore = (now: Sport[], later: Sport[]) => {
     const target = addMoreFor;
     setAddMoreFor(null);
-    if (!target) return;
-    const hidden = prefs.hiddenLeagues ?? [];
-    const struck = prefs.catalogHiddenLeagues ?? [];
-    const unhide: Partial<Preferences> = {
-      ...(hidden.includes(sport) ? { hiddenLeagues: hidden.length > 1 ? hidden.filter((s) => s !== sport) : undefined } : {}),
-      ...(struck.includes(sport) ? { catalogHiddenLeagues: struck.length > 1 ? struck.filter((s) => s !== sport) : undefined } : {}),
-      ...(prefs.removedLeagues?.includes(sport) ? { removedLeagues: dropRemoved(prefs.removedLeagues, sport) } : {}),
+    const picks = [...now, ...later];
+    const first = now[0];
+    if (!target || !picks.length) return;
+    const pinned = savedSlotPrefs();
+    // In the switcher once its hides are lifted (switcherOptions' own rule).
+    const listedWhenShown = (sport: Sport) =>
+      !!thirdLeagueOptions.find((o) => o.sport === sport)?.defaultInSwitcher
+      || pinned.includes(sport)
+      || prefs.favoriteLeagues.includes(sport);
+    const lists = {
+      hiddenLeagues: prefs.hiddenLeagues,
+      catalogHiddenLeagues: prefs.catalogHiddenLeagues,
+      removedLeagues: prefs.removedLeagues,
+      shownLeagues: prefs.shownLeagues,
     };
-    if (target.kind === "news" && target.slotIdx === 2) {
-      const shown = prefs.shownLeagues ?? [];
-      const inSwitcher = newsSwitcherOptions.some((o) => o.sport === sport) || shown.includes(sport);
-      setNewsThirdLeague(sport, target.autoId ?? "espn", inSwitcher ? unhide : { ...unhide, shownLeagues: [...shown, sport] });
+    if (!first) {
+      updatePrefs(mergeAddMorePicks(picks, lists, listedWhenShown));
       return;
     }
-    setSlotLeague(target.slotIdx, sport, unhide);
+    if (target.kind === "news" && target.slotIdx === 2) {
+      const patch = mergeAddMorePicks(picks, lists, (s) =>
+        s === first ? newsSwitcherOptions.some((o) => o.sport === s) : listedWhenShown(s));
+      setNewsThirdLeague(first, target.autoId ?? "espn", patch);
+      return;
+    }
+    setSlotLeague(target.slotIdx, first, mergeAddMorePicks(picks, lists, (s) => s === first || listedWhenShown(s)));
   };
   const leagueLabelFor = (sport: Sport) =>
     thirdLeagueOptions.find((o) => o.sport === sport)?.label
@@ -2725,6 +3116,42 @@ export default function HomeContent({
   // around could still reorder columns for users with stale localStorage prefs,
   // breaking the "Auto on col N = the column's default" guarantee.
   const sortedLeagues = leagues;
+
+  // The "News" link under the ESPN front page column's header (LeagueColumn
+  // onOpenNews, Jacob 10/10; not on the league rows or the recap pills). It
+  // passes "top": the reader is looking at espn.com's front page, so News
+  // opens on the ESPN layout and column 3 is left alone.
+  // A league (no caller today) opens the tab and, when it is not already one
+  // of the News columns, takes column 3 the way that column's own switcher
+  // would. One updatePrefs: two in a row would each spread the same stale
+  // `prefs` and the second would drop showNews.
+  const newsColumnShows = (sport: Sport): boolean => {
+    const queue = [...sortedLeagues];
+    const slotSports = [0, 1, 2].map((i) => (selectedSlotLeagues[i] === "empty" ? undefined : queue.shift()?.sport));
+    if (slotSports[0] === sport || slotSports[1] === sport) return true;
+    if (prefs.newsGenericHidden) return false;
+    if (prefs.newsThirdLeague) return prefs.newsThirdLeague === sport;
+    const topNewsPicked = prefs.newsTopNews ?? (prefs.newsGenericSlot !== undefined);
+    return !topNewsPicked && slotSports[2] === sport;
+  };
+  const openNewsFor = (sport: Sport, warned: boolean) => {
+    setNewsConfirm(null);
+    setShowNews(true);
+    updatePrefs({
+      showNews: true,
+      skipNewsExplainer: true,
+      ...(sport === "top"
+        ? { newsLayout: "espn" as const, newsFeedView: false }
+        : newsColumnShows(sport) ? {} : newsThirdLeaguePatch(sport, "espn")),
+    });
+    // The confirm already warned; the first-time bar would say it twice.
+    if (!prefs.skipNewsExplainer && !warned) setNewsNotice(true);
+    window.scrollTo({ top: 0 });
+  };
+  const requestNews = (sport: Sport) => {
+    if (newsNeedsConfirm(getETHour(), prefs.smartCutoffHour ?? 13, readNewsOkDay(), getDateString(0))) setNewsConfirm(sport);
+    else openNewsFor(sport, false);
+  };
 
   // Source cards use the current deterministic smart cascade. Ignore stale
   // newsSourceOrder values from the removed drag-reorder UI: otherwise an old
@@ -3005,7 +3432,10 @@ export default function HomeContent({
   ].join("|");
   useEffect(() => {
     // localStorage is client-only, so the snapshot is read here, not in render.
-    if (showNews && prefs.newsHideSeen) setSeenSnapshot(seenKeys());
+    if (!(showNews && prefs.newsHideSeen)) return;
+    const keys = seenKeys();
+    if (restoredSeenKeyRef.current) keys.delete(restoredSeenKeyRef.current);
+    setSeenSnapshot(keys);
   }, [seenSnapshotTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
   const hideSeenKeys = prefs.newsHideSeen ? seenSnapshot : undefined;
   // Per-surface "dropped as seen" counts, summed for the 👁 tooltip.
@@ -3190,6 +3620,18 @@ export default function HomeContent({
   // (sport, ymd) rule as recapTopCard, same slot → league queue as
   // slotEntries — so every LeagueRecapCard can reserve the row. Cheap:
   // getRecapsFor reads the session-cached /news/recaps.json.
+  // The recap pill reads the league as its column draws it under "Only my
+  // teams" (Jacob 10/9): the "Last played" date follows the filtered slate,
+  // and a column the filter left empty gets no recap.
+  const favStrict = prefs.favoritesOnlyStrict ?? NO_FAV_STRICT;
+  const recapView = (league: LeagueData) => {
+    const f = filterLeague(league, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict);
+    const shown = applyFavoritesFilter(league, f);
+    return {
+      lastPlayedDate: shown.games.length ? null : shown.previousGameDay?.date,
+      emptied: favoritesEmptied(league, f, selectedDate < getDateString(0)),
+    };
+  };
   const recapQueryKey = (() => {
     if (selectedDate > getDateString(0)) return "";
     const queue = [...sortedLeagues];
@@ -3198,7 +3640,9 @@ export default function HomeContent({
       if (selectedSlotLeagues[slotIdx] === "empty") continue;
       const league = queue.shift();
       if (!league) continue;
-      const ymd = (league.games.length ? null : league.previousGameDay?.date) || selectedDate;
+      const view = recapView(league);
+      if (view.emptied) continue;
+      const ymd = view.lastPlayedDate || selectedDate;
       pairs.push(`${league.sport}:${ymd}`);
     }
     return pairs.join(",");
@@ -3262,6 +3706,11 @@ export default function HomeContent({
     .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
     .some((l) => l.sport === "mlb");
   const bracketPillShown = bracketPillDue && mlbColumnShown;
+  // The Best column's span pill (BestSpanBar, ratings on) sits in the same
+  // row, so it reserves it on sibling columns too.
+  const bestBarShown = prefs.showRatings && sortedLeagues
+    .slice(0, SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length)
+    .some((l) => l.sport === "best");
   // Odds leave the pill once the field is set (Jacob 9/29). From the
   // postseason's first day that is a given; in the last week before it the
   // standings say so, fetched only then since no earlier day can have all
@@ -3275,7 +3724,7 @@ export default function HomeContent({
     fetchPlayoffPicture(ctrl.signal)
       .then((p) => { if (!ctrl.signal.aborted) setMlbFieldSet(!!p && fieldIsSet(p)); })
       .catch(() => {});
-    return () => ctrl.abort();
+    return () => abortOwn(ctrl);
   }, [fieldCheckDue]);
   const hidePlayoffOdds = (mlbPostDay != null && mlbPostDay >= 0) || (fieldCheckDue && mlbFieldSet);
   const reviewPillShown = reviewPillDue && mlbColumnShown;
@@ -3304,10 +3753,136 @@ export default function HomeContent({
   };
   const anyRecap = (recapSportsSync
     ? recapSportsSync.size > 0
-    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown;
+    : recapSports.key === recapQueryKey && recapSports.sports.size > 0) || bracketPillShown || reviewPillShown || bestBarShown;
+
+  // What the toolbar's Show all / Media / Headlines / Posts show: the state of
+  // the cards on screen (Cards view and the ESPN layout). The news board sets
+  // it while it renders below; the toolbar reads it in RenderLate.
+  // Null = no cards on screen (Feed, or the board has not loaded).
+  let newsBar: NewsBarState | null = null;
+
+  // The Schedule tab (10/14): the day's games across every in-season switcher
+  // league, grouped by league, one line per game like the widget (time ·
+  // away @ home · network). Never a score; a tap opens the card's modal.
+  const renderScheduleView = () => {
+    const tz = getTimeZone();
+    const boardBySport = new Map(leagues.map((l) => [l.sport, l]));
+    let pending = 0;
+    const inputs: ScheduleLeagueInput[] = scheduleLeagues.map(({ sport, label }) => {
+      const board = boardBySport.get(sport);
+      let games: Game[] = [];
+      if (board) games = board.games;
+      else {
+        const got = scheduleExtra[`${selectedDate}|${sport}`];
+        if (got === undefined) pending++;
+        else if (got !== "failed") games = got;
+      }
+      const shown = filterLeague({ ...(board ?? { sport, label, games }), games }, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
+      return { sport, label: board?.label ?? label, games: shown };
+    });
+    const groups = buildSchedule(inputs, { favoriteTeams: prefs.favoriteTeams, tz });
+    const stillLoading = (loading && leagues.length === 0) || pending > 0;
+    const row = (r: ScheduleRow, i: number) => {
+      const clip = r.state === "post" && hasPlayableClip(r.game, scheduleBaked);
+      const team = (t: ScheduleRow["home"], side: "away" | "home") => (
+        <span className={`flex items-center gap-1.5 min-w-0 font-semibold text-[15px] ${side === "away" ? "justify-end" : ""}`}>
+          {side === "home" && t.logo && (
+            <TeamLogo src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" />
+          )}
+          <span className="truncate" title={t.name}>{t.abbr}</span>
+          {side === "away" && t.logo && (
+            <TeamLogo src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" />
+          )}
+        </span>
+      );
+      const live = r.timeLabel === "LIVE";
+      return (
+        <li key={r.id} style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}>
+          <button
+            type="button"
+            data-schedule-row={r.id}
+            data-state={r.state}
+            onClick={() => setDetailGame(r.game)}
+            aria-label={`${r.away.name} at ${r.home.name}, ${r.timeLabel}${r.network ? `, ${r.network}` : ""}`}
+            className="w-full grid items-center gap-x-1.5 px-3 py-2 text-left cursor-pointer transition-colors"
+            style={{ gridTemplateColumns: "56px 1fr auto 1fr 64px", color: "var(--text)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <span
+              className={`text-[13px] whitespace-nowrap tabular-nums ${live ? "font-bold text-xs tracking-wide" : ""}`}
+              style={{ color: live ? "#dc2626" : r.state === "pre" ? "var(--text-secondary)" : "var(--text-muted)" }}
+            >
+              {live && <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-[1px]" style={{ background: "#dc2626" }} />}
+              {r.timeLabel}
+            </span>
+            {team(r.away, "away")}
+            <span className="text-sm" style={{ color: "var(--text-muted)" }}>@</span>
+            {team(r.home, "home")}
+            {clip ? (
+              <span className="justify-self-end inline-flex items-center gap-0.5 text-xs font-semibold rounded-full px-2 py-0.5" style={{ background: "var(--accent)", color: "white" }} title="Highlights">
+                <span aria-hidden="true">▶</span> Clip
+              </span>
+            ) : (
+              <span className="text-right text-xs whitespace-nowrap truncate" style={{ color: "var(--text-muted)" }}>{r.network ?? ""}</span>
+            )}
+          </button>
+        </li>
+      );
+    };
+    const dayLabel = selectedDate
+      ? fromYmd(selectedDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
+      : "";
+    return (
+      <section data-testid="schedule-view" aria-labelledby="schedule-title" className="max-w-[720px] mx-auto pt-3">
+        <h2 id="schedule-title" className="text-sm font-semibold mb-2 px-1" style={{ color: "var(--text-muted)" }}>{dayLabel}</h2>
+        {groups.length === 0 ? (
+          <p className="text-center text-sm py-10" style={{ color: "var(--text-muted)" }}>
+            {stillLoading ? "Loading…" : "No games on your leagues this day"}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {groups.map((g) => {
+              const key = `${selectedDate}|${g.sport}`;
+              const { shown, more } = visibleScheduleRows(g.rows, !!scheduleOpen[key]);
+              const collapsible = g.rows.length > SCHEDULE_FULL_MAX;
+              return (
+                <div key={g.sport} data-schedule-league={g.sport} className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--bg-card)" }}>
+                  <div className="flex items-center gap-2 px-3 pt-2 pb-1 text-sm font-bold">
+                    <LeagueMark sport={g.sport} size={18} />
+                    <span>{g.label}</span>
+                    {g.note && <span className="font-normal text-xs truncate" style={{ color: "var(--text-muted)" }}>· {g.note}</span>}
+                  </div>
+                  <ul>
+                    {shown.map(row)}
+                  </ul>
+                  {collapsible && (
+                    <div className="flex justify-center pb-2 pt-1">
+                      <button
+                        type="button"
+                        aria-expanded={!!scheduleOpen[key]}
+                        onClick={() => setScheduleOpen((o) => ({ ...o, [key]: !o[key] }))}
+                        className="text-xs px-3 py-1.5 rounded-full cursor-pointer transition-colors"
+                        style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}
+                      >
+                        {scheduleOpen[key] ? "Show less" : `Show ${more} more`}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {stillLoading && <p className="text-center text-xs py-2" style={{ color: "var(--text-muted)" }}>Loading more leagues…</p>}
+          </div>
+        )}
+      </section>
+    );
+  };
 
   return (
     <WatchQueueContext.Provider value={watchQueueApi}>
+    <HideRanksContext.Provider value={!!prefs.hideRanks}>
+    <NewsMarkSeenContext.Provider value={prefs.newsMarkSeen ?? true}>
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Keyboard skip link (WCAG 2.4.1) — visually hidden until focused, then
           jumps a Tab user past the sticky header / date nav straight to the
@@ -3420,7 +3995,13 @@ export default function HomeContent({
               // In the news view, the logo acts as "back to scores" — toggle
               // news off in place instead of navigating, since "/" would
               // just rehydrate news from prefs.showNews and bounce the user
-              // right back into the news view.
+              // right back into the news view. Schedule is left the same way.
+              if (showSchedule) {
+                e.preventDefault();
+                setShowSchedule(false);
+                window.scrollTo({ top: 0, behavior: "auto" });
+                return;
+              }
               if (showNews) {
                 e.preventDefault();
                 setShowNews(false);
@@ -3435,62 +4016,20 @@ export default function HomeContent({
             className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0 justify-self-start col-start-1"
             style={{ color: "var(--text)" }}
           >
-            <span className="hidden xl:inline text-lg font-bold tracking-tight">HideScore</span>
-            <svg className="xl:hidden w-7 h-7 header-logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-              <rect width="32" height="32" rx="6" className="header-logo-bg" />
-              <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
-            </svg>
+            {/* The wordmark at every width (9/29). The "H" square held the
+                phone slot only while the date nav shared this row; the dates
+                now have their own row below. */}
+            <span className="text-lg font-bold tracking-tight">HideScore</span>
           </Link>
 
           {/* Top-row middle (col 2): the view tabs on sm+ (page-centered between
-              two 1fr cols → lines up with the middle MLB column). On small screens
-              the tabs drop to the fixed bottom bar, so the date nav takes this slot
-              instead (scores/rated only) — sitting cleanly in the top row. */}
-          {/* Mobile: center the date nav within col 2 so it sits evenly
-              between the H logo and the theme toggle (Jacob 6/1). Desktop is
-              already centered (the view tabs line up under the middle MLB
-              column). The leading spacer is dropped on phones so the centering
-              is true (not biased by the trailing calendar icon). */}
+              two 1fr cols → lines up with the middle MLB column). Empty on
+              phones: the tabs live in the bottom bar and the dates in the
+              strip row under this one. */}
           <div className="justify-self-center col-start-2 min-w-0">
-            <div className="hidden sm:block w-80">
+            <div className="hidden sm:block w-[22rem]">
               <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
             </div>
-            {/* Mobile: date nav sits inline in the header middle (the view tabs
-                live in the fixed bottom bar on phones, so this slot is free).
-                Scores/Rated only. Calendar = bare icon after the › arrow. */}
-            {!showNews && (
-              <div className="sm:hidden flex justify-center">
-                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} initialDate={initialDate} trailing={
-                  <span className="relative inline-flex items-center mr-2 shrink-0">
-                    <button
-                      type="button"
-                      data-cal-toggle
-                      onClick={() => setCalendarOpen(!calendarOpen)}
-                      className="ml-0.5 w-7 h-7 shrink-0 flex items-center justify-center rounded-full transition-colors cursor-pointer"
-                      style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
-                      title="Pick a date"
-                      aria-label="Pick a date"
-                      aria-haspopup="dialog"
-                      aria-expanded={calendarOpen}
-                    >
-                      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                      </svg>
-                    </button>
-                    {calendarOpen && (
-                      <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
-                    )}
-                    {/* The single-column toggle left this row on 6/18 (the 32px
-                        copy crowded col 2 into the moon in col 3) and Settings
-                        was the only way to flip it on a phone. Jacob 9/22 turned
-                        it on at the PC, it followed him to the phone, and he had
-                        to go landscape to find a button. It is back at the
-                        calendar's 28px size, from 390px up (see SingleColToggle). */}
-                    <SingleColToggle compact active={prefs.singleColumn ?? false} onClick={() => updatePrefs({ singleColumn: !prefs.singleColumn })} />
-                  </span>
-                } />
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0 justify-self-end col-start-3">
@@ -3654,6 +4193,42 @@ export default function HomeContent({
               </div>
             )}
 
+            {/* Live filter (9/29, FotMob review). A filter, not a count: it
+                shows only while something on the board is in progress (or
+                while it is on, so it can be turned off), board views only. */}
+            {!showNews && !showSchedule && (hasLiveGames || liveOnly) && (
+              <button
+                type="button"
+                data-testid="live-toggle"
+                onClick={() => {
+                  if (liveOnly) {
+                    setLiveOnly(false);
+                    return;
+                  }
+                  setLiveOnly(true);
+                  // Live means now: pull the board back to Today.
+                  const today = getDateString(0);
+                  if (selectedDate !== today) setSelectedDate(today);
+                }}
+                className="monkey-toggle h-10 sm:h-11 px-3 flex items-center gap-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+                style={{
+                  background: liveOnly ? "var(--accent)" : "var(--bg-card)",
+                  border: `1px solid ${liveOnly ? "var(--accent)" : "var(--border)"}`,
+                  color: liveOnly ? "white" : "var(--text-muted)",
+                }}
+                title={liveOnly ? "Showing live games only — tap for the full board" : "Show live games only"}
+                aria-label="Live games only"
+                aria-pressed={liveOnly}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`w-2 h-2 rounded-full${liveOnly ? " animate-pulse" : ""}`}
+                  style={{ background: liveOnly ? "white" : "#dc2626" }}
+                />
+                Live
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
@@ -3682,6 +4257,38 @@ export default function HomeContent({
           </div>
         </div>
 
+        {/* Phone date strip (9/29, FotMob style): its own row under the top
+            row, inside the fixed header, so --header-h measures it and it never
+            covers a card. Board views only. The calendar and the one-column
+            toggle stay pinned at the right end, outside the scroll area. */}
+        {!showNews && (
+          <div className="sm:hidden max-w-6xl mx-auto mt-1.5 -mb-2" data-testid="date-strip-row">
+            <DateNav variant="strip" selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} initialDate={initialDate} trailing={
+              <span className="relative inline-flex items-center shrink-0">
+                <button
+                  type="button"
+                  data-cal-toggle
+                  onClick={() => setCalendarOpen(!calendarOpen)}
+                  className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+                  style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
+                  title="Pick a date"
+                  aria-label="Pick a date"
+                  aria-haspopup="dialog"
+                  aria-expanded={calendarOpen}
+                >
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </button>
+                {calendarOpen && (
+                  <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
+                )}
+                {/* One-column toggle: on the phone since 9/22 (see SingleColToggle). */}
+                <SingleColToggle compact active={prefs.singleColumn ?? false} onClick={() => updatePrefs({ singleColumn: !prefs.singleColumn })} />
+              </span>
+            } />
+          </div>
+        )}
       </header>
       {/* Gives back the flow space the now-fixed header vacated — sized by
           var(--header-h), the same variable .league-sticky-top pins at, which
@@ -3746,7 +4353,7 @@ export default function HomeContent({
           <div ref={toolbarFit.scrollerRef} className="news-toolbar-scroll max-w-6xl mx-auto px-4 overflow-x-auto" data-compact={toolbarFit.compact ? "" : undefined}>
           <div ref={toolbarFit.rowRef} className="w-max mx-auto flex flex-nowrap items-center gap-2 pt-2 pb-2">
             <div className="inline-flex shrink-0 rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-              {([["Cards", "cards"], ["Feed", "feed"], ["ESPN", "espn"]] as const).map(([label, layout]) => (
+              {([["ESPN", "espn"], ["Cards", "cards"], ["Feed", "feed"]] as const).map(([label, layout]) => (
                 <button
                   type="button"
                   key={label}
@@ -3773,8 +4380,34 @@ export default function HomeContent({
                 </button>
               ))}
             </div>
-            {/* ESPN layout (r5): the toolbar keeps only the layout switch;
-                every option button sits in its card's header (espnCardOverride). */}
+            {/* The chips show the state of the cards on screen, which the
+                board below works out (newsBar), so they render late. Feed has
+                no cards: the global prefs.
+                ESPN layout (r5): the toolbar keeps the layout switch and Show
+                all; every other option button sits in its card's header
+                (newsCardOverrideFor). */}
+            <RenderLate>{() => {
+              const bar: NewsBarState = newsBar ?? {
+                media: prefs.revealNewsMedia === true,
+                titles: !!prefs.revealNewsTitles,
+                posts: postFilterOf(prefs.newsVideosOnly, prefs.showTextPosts),
+              };
+              const allShown = bar.media && bar.titles;
+              return (<>
+            {/* Show all / Hide all (Jacob 10/11): Media + Headlines in every
+                card, one tap, every layout. On only when every card shows
+                both (one card off = Show all, so one tap fixes the lot). */}
+            <NewsToggleChip
+              compact={toolbarFit.compact}
+              active={allShown}
+              onClick={() => setGlobalNewsPref({ revealNewsMedia: !allShown, revealNewsTitles: !allShown }, ["revealMedia", "revealTitles"])}
+              title={allShown ? "Blur every card's media and headlines" : "Show every card's media and headlines"}
+              ariaLabel="Show or hide everything in every card"
+              testId="news-show-all"
+            >
+              <ShowAllIcon on={allShown} />
+              <span>{allShown ? "Hide all" : "Show all"}</span>
+            </NewsToggleChip>
             {newsLayout !== "espn" && (<>
             {/* Autoplay first (Jacob 10/9 r6). It dims while Media is blurred:
                 blurred clips do not play, so an on-looking chip with nothing
@@ -3796,22 +4429,22 @@ export default function HomeContent({
                 first (Jacob 10/9 r6). */}
             <NewsToggleChip
               compact={toolbarFit.compact}
-              active={prefs.revealNewsMedia === true}
-              onClick={() => setGlobalNewsPref({ revealNewsMedia: prefs.revealNewsMedia !== true }, ["revealMedia"])}
+              active={bar.media}
+              onClick={() => setGlobalNewsPref({ revealNewsMedia: !bar.media }, ["revealMedia"])}
               title="Show or spoiler-blur news image and video previews"
               ariaLabel="Toggle media reveal"
             >
-              <MediaIcon />
+              <MediaIcon on={bar.media} />
               <span>Media</span>
             </NewsToggleChip>
             <NewsToggleChip
               compact={toolbarFit.compact}
-              active={!!prefs.revealNewsTitles}
-              onClick={() => setGlobalNewsPref({ revealNewsTitles: !prefs.revealNewsTitles }, ["revealTitles"])}
+              active={bar.titles}
+              onClick={() => setGlobalNewsPref({ revealNewsTitles: !bar.titles }, ["revealTitles"])}
               title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
               ariaLabel="Toggle headline reveal"
             >
-              <HeadlinesIcon on={!!prefs.revealNewsTitles} />
+              <HeadlinesIcon on={bar.titles} />
               <span>Headlines</span>
             </NewsToggleChip>
             {/* One Posts switch, All / No text / Videos (Jacob 10/9): it
@@ -3819,10 +4452,12 @@ export default function HomeContent({
                 states (with Videos only on, Text posts did nothing). */}
             <PostFilterSwitch
               compact={toolbarFit.compact}
-              value={postFilterOf(prefs.newsVideosOnly, prefs.showTextPosts)}
+              value={bar.posts}
               onChange={(f) => setGlobalNewsPref(globalPostFilterPatch(f), ["videosOnly", "textPosts"])}
             />
             </>)}
+            </>);
+            }}</RenderLate>
           </div>
           </div>
         </div>
@@ -4075,7 +4710,7 @@ export default function HomeContent({
             the layout jumps to league columns ~1.5 s later (Jacob 10/2). Both
             conditions: a refresh poll keeps the news up, and an offline or
             failed load (loading false, no leagues) still falls through to it. */}
-        {showNews && !(loading && leagues.length === 0) ? (() => {
+        {showSchedule ? renderScheduleView() : showNews && !(loading && leagues.length === 0) ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
               label: c.label,
@@ -4086,6 +4721,135 @@ export default function HomeContent({
                 ? () => fetchLeagueNews(c.sport!, 10)
                 : () => fetchPrebaked(c.key),
             }));
+          // Each news card's header carries its own buttons (ESPN layout:
+          // Jacob 10/8 r5, order 10/9 r6; Cards view: 10/10). ESPN Videos in
+          // the ESPN layout = Autoplay, Big, Media, Headlines; every other
+          // ESPN or video card = Media, Headlines; each subreddit = Media,
+          // Headlines, Posts. Media / Headlines / Posts act on that card only
+          // (newsCardPrefs, falling back to the global pref); Big and Autoplay
+          // stay global. Autoplay dims while this card's Media is blurred.
+          // The labeled rows (Cards toolbar, Reddit bar) set the global prefs
+          // and clear these per-card values.
+          const inEspnLayout = newsLayout === "espn";
+          const cardPrefs = prefs.newsCardPrefs ?? {};
+          const setCardPref = (key: string, patch: Partial<NonNullable<typeof cardPrefs[string]>>) =>
+            updatePrefs({ newsCardPrefs: { ...cardPrefs, [key]: { ...cardPrefs[key], ...patch } } });
+          // What one card shows: its own pref, else the global one. The card
+          // headers and the labeled rows' state both read this.
+          const resolveCard = (key: string) => {
+            const cp = cardPrefs[key] ?? {};
+            // Posts is a subreddit card's control. A card without it shows
+            // every post in the ESPN layout (its two ESPN cards) and follows
+            // the toolbar's Posts switch in Cards view, as it always did.
+            const isSub = classifySource({ key }) === "reddit";
+            return {
+              isSub,
+              titles: cp.revealTitles ?? !!prefs.revealNewsTitles,
+              media: cp.revealMedia ?? prefs.revealNewsMedia === true,
+              vOnly: isSub ? cp.videosOnly ?? !!prefs.newsVideosOnly : !inEspnLayout && !!prefs.newsVideosOnly,
+              text: isSub ? cp.textPosts ?? !!prefs.showTextPosts : inEspnLayout || !!prefs.showTextPosts,
+            };
+          };
+          // A labeled row's state over the cards on screen: a chip shows on
+          // only when every card is on (mixed = off, so one tap turns all
+          // on); Posts shows no segment while the subs differ.
+          const barStateFor = (shown: { key?: string; label: string }[]): NewsBarState => {
+            const cards = shown.map((c) => resolveCard(c.key ?? c.label));
+            const subFilters = new Set(cards.filter((c) => c.isSub).map((c) => postFilterOf(c.vOnly, c.text)));
+            return {
+              media: cards.length > 0 ? cards.every((c) => c.media) : prefs.revealNewsMedia === true,
+              titles: cards.length > 0 ? cards.every((c) => c.titles) : !!prefs.revealNewsTitles,
+              posts: subFilters.size === 0
+                ? postFilterOf(prefs.newsVideosOnly, prefs.showTextPosts)
+                : subFilters.size === 1 ? [...subFilters][0] : null,
+            };
+          };
+          // The form of a subreddit card's Posts control, by its column. ONE
+          // width test, both layouts: is the column 280px or wider?
+          //   "switch"    a wide column (a phone, the 1-column board, an ESPN
+          //               layout with 1-2 subs): the 3-icon switch, always.
+          //   "switch-xl" a narrowCol column, 225px below the xl breakpoint
+          //               and 280px from it: the switch from xl up, else the
+          //               one cycling chip. At 225px the switch leaves the
+          //               label 2 letters, and under ~210px it does not fit.
+          //   "chip"      a column that stays under 280px at every width
+          //               (ESPN Big with 3 subs).
+          type PostsForm = "switch" | "switch-xl" | "chip";
+          const newsCardOverrideFor = (postsForm: PostsForm) => (source: NewsSource): CardOverride => {
+            const key = source.key ?? source.label;
+            const isVideos = inEspnLayout && key === ESPN_LAYOUT_VIDEOS.key;
+            const { isSub, titles, media, vOnly, text } = resolveCard(key);
+            const name = source.label;
+            const posts = postFilterOf(vOnly, text);
+            const setPosts = (f: PostFilter) => setCardPref(key, postFilterPatch(f));
+            // A Cards-view card with no Posts control leaves text posts to
+            // the global class (html.show-text-posts), as before.
+            const ownPosts = isSub || inEspnLayout;
+            return {
+              className: `news-card-titles-${titles ? "on" : "off"} news-card-media-${media ? "on" : "off"}${ownPosts ? ` news-card-textposts-${text ? "on" : "off"}` : ""}`,
+              titlesShown: titles,
+              videosOnly: vOnly,
+              showTextPosts: text,
+              noPostFilter: !ownPosts,
+              controls: (
+                <>
+                  {isVideos && (
+                    <CardChip
+                      active={newsAutoplay}
+                      onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
+                      title={newsAutoplay && !media ? AUTOPLAY_PAUSED_TITLE : AUTOPLAY_TITLE}
+                      ariaLabel="Toggle news autoplay"
+                      disabled={newsAutoplay && !media}
+                    >
+                      <AutoplayIcon on={newsAutoplay} size={14} />
+                    </CardChip>
+                  )}
+                  {isVideos && (
+                    <CardChip
+                      active={!!prefs.newsEspnBig}
+                      onClick={() => { window.scrollTo(0, 0); updatePrefs({ newsEspnBig: !prefs.newsEspnBig }); }}
+                      title="One wide column of big ESPN clips"
+                      ariaLabel="Toggle big ESPN videos"
+                    >
+                      <BigIcon size={14} />
+                    </CardChip>
+                  )}
+                  <CardChip
+                    active={media}
+                    onClick={() => setCardPref(key, { revealMedia: !media })}
+                    title={`Show or blur the images and videos in ${name}`}
+                    ariaLabel={`Toggle media reveal: ${name}`}
+                  >
+                    <MediaIcon on={media} size={14} />
+                  </CardChip>
+                  <CardChip
+                    active={titles}
+                    onClick={() => setCardPref(key, { revealTitles: !titles })}
+                    title={`Show or blur the headlines in ${name}`}
+                    ariaLabel={`Toggle headline reveal: ${name}`}
+                  >
+                    <HeadlinesIcon on={titles} size={14} />
+                  </CardChip>
+                  {isSub && postsForm === "switch" && (
+                    <PostFilterSwitch card={name} roomy value={posts} onChange={setPosts} />
+                  )}
+                  {isSub && postsForm === "switch-xl" && (
+                    <>
+                      <span className="hidden xl:contents">
+                        <PostFilterSwitch card={name} value={posts} onChange={setPosts} />
+                      </span>
+                      <span className="contents xl:hidden">
+                        <PostFilterCardChip value={posts} onChange={setPosts} name={name} />
+                      </span>
+                    </>
+                  )}
+                  {isSub && postsForm === "chip" && (
+                    <PostFilterCardChip value={posts} onChange={setPosts} name={name} />
+                  )}
+                </>
+              ),
+            };
+          };
           // Build visible news entries. Each of the three mirrors its scores
           // column; column 3 can also be set on its own (see thirdColEntry).
           // Type/hidden filters are applied at render-time so the dropdown
@@ -4475,90 +5239,6 @@ export default function HomeContent({
             }
             const redditShown = redditCols.slice(0, 3);
             const big = !!prefs.newsEspnBig;
-            // Each card's header carries its own buttons (Jacob 10/8 r5, order
-            // 10/9 r6): ESPN Videos = Autoplay, Big, Media, Headlines; Top
-            // Headlines = Media, Headlines; each subreddit = Media, Headlines,
-            // Posts (one chip that cycles All / No text / Videos, Jacob 10/9).
-            // Media / Headlines / Posts act on that card only (newsCardPrefs,
-            // falling back to the global pref); Big and Autoplay stay global.
-            // Autoplay dims while this card's Media is blurred. The Reddit bar
-            // sets the global prefs and clears these per-card values.
-            const cardPrefs = prefs.newsCardPrefs ?? {};
-            const setCardPref = (key: string, patch: Partial<NonNullable<typeof cardPrefs[string]>>) =>
-              updatePrefs({ newsCardPrefs: { ...cardPrefs, [key]: { ...cardPrefs[key], ...patch } } });
-            // What one card shows: its own pref, else the global one. The card
-            // headers and the Reddit bar's state both read this.
-            const resolveCard = (key: string) => {
-              const cp = cardPrefs[key] ?? {};
-              const isEspn = key === ESPN_LAYOUT_VIDEOS.key || key === ESPN_LAYOUT_HEADLINES.key;
-              return {
-                isEspn,
-                titles: cp.revealTitles ?? !!prefs.revealNewsTitles,
-                media: cp.revealMedia ?? prefs.revealNewsMedia === true,
-                // Posts does not apply to the ESPN cards.
-                vOnly: isEspn ? false : cp.videosOnly ?? !!prefs.newsVideosOnly,
-                text: isEspn ? true : cp.textPosts ?? !!prefs.showTextPosts,
-              };
-            };
-            const espnCardOverride = (source: NewsSource): CardOverride => {
-              const key = source.key ?? source.label;
-              const isVideos = key === ESPN_LAYOUT_VIDEOS.key;
-              const { isEspn, titles, media, vOnly, text } = resolveCard(key);
-              const name = source.label;
-              return {
-                className: `news-card-titles-${titles ? "on" : "off"} news-card-media-${media ? "on" : "off"} news-card-textposts-${text ? "on" : "off"}`,
-                videosOnly: vOnly,
-                showTextPosts: text,
-                controls: (
-                  <>
-                    {isVideos && (
-                      <CardChip
-                        active={newsAutoplay}
-                        onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
-                        title={newsAutoplay && !media ? AUTOPLAY_PAUSED_TITLE : AUTOPLAY_TITLE}
-                        ariaLabel="Toggle news autoplay"
-                        disabled={newsAutoplay && !media}
-                      >
-                        <AutoplayIcon on={newsAutoplay} size={14} />
-                      </CardChip>
-                    )}
-                    {isVideos && (
-                      <CardChip
-                        active={big}
-                        onClick={() => { window.scrollTo(0, 0); updatePrefs({ newsEspnBig: !big }); }}
-                        title="One wide column of big ESPN clips"
-                        ariaLabel="Toggle big ESPN videos"
-                      >
-                        <BigIcon size={14} />
-                      </CardChip>
-                    )}
-                    <CardChip
-                      active={media}
-                      onClick={() => setCardPref(key, { revealMedia: !media })}
-                      title={`Show or blur the images and videos in ${name}`}
-                      ariaLabel={`Toggle media reveal: ${name}`}
-                    >
-                      <MediaIcon size={14} />
-                    </CardChip>
-                    <CardChip
-                      active={titles}
-                      onClick={() => setCardPref(key, { revealTitles: !titles })}
-                      title={`Show or blur the headlines in ${name}`}
-                      ariaLabel={`Toggle headline reveal: ${name}`}
-                    >
-                      <HeadlinesIcon on={titles} size={14} />
-                    </CardChip>
-                    {!isEspn && (
-                      <PostFilterCardChip
-                        value={postFilterOf(vOnly, text)}
-                        onChange={(f) => setCardPref(key, postFilterPatch(f))}
-                        name={name}
-                      />
-                    )}
-                  </>
-                ),
-              };
-            };
             // No column titles (Jacob 10/8): each card's own header already
             // says ESPN Videos / ESPN Top Headlines / r/<sub>, and the titles
             // pushed Big's first clip half a screen down. Rows hug their
@@ -4574,7 +5254,8 @@ export default function HomeContent({
               hiddenCategories: hiddenNewsCategories,
               hideSeenKeys,
               onSeenHiddenCount: reportSeenHidden,
-              cardOverride: espnCardOverride,
+              cardOverride: newsCardOverrideFor("switch"),
+              onSiblingList: adoptSiblings,
             };
             const k = `espn-${newsRefreshKey}`;
             // The Reddit bar (Jacob 10/9): a pinned, labeled row on top of the
@@ -4582,14 +5263,14 @@ export default function HomeContent({
             // pref for EVERY card (ESPN Videos, Top Headlines, each sub). A chip
             // shows on only when every shown card is on (mixed = off, so one
             // tap turns all on); Posts shows no segment while the subs differ.
-            const shownCards = [ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)]
-              .map((c) => resolveCard(c.key ?? c.label));
-            const barMedia = shownCards.every((c) => c.media);
-            const barTitles = shownCards.every((c) => c.titles);
-            const subFilters = new Set(shownCards.filter((c) => !c.isEspn).map((c) => postFilterOf(c.vOnly, c.text)));
-            const barPosts: PostFilter | null = subFilters.size === 1 ? [...subFilters][0] : null;
+            // The toolbar's Show all chip reads the same state (newsBar).
+            newsBar = barStateFor(
+              [ESPN_LAYOUT_VIDEOS, ESPN_LAYOUT_HEADLINES, ...redditShown.flatMap((c) => c.cascade)]);
+            const { media: barMedia, titles: barTitles, posts: barPosts } = newsBar;
             // --news-titlebar-h = the bar's height (h-11), so each sub's own
-            // header (.news-source-sticky-top) pins under the bar.
+            // header (.news-source-sticky-top) pins under the bar. Equal pin
+            // numbers can still crack apart at a fractional zoom; each row's
+            // seam lip (globals.css) fills it.
             const redditSection = (children: ReactNode) => (
               <section
                 aria-labelledby="news-espn-reddit-h"
@@ -4614,7 +5295,7 @@ export default function HomeContent({
                         title="Show or blur the images and videos in every card"
                         ariaLabel="Toggle media reveal: every card"
                       >
-                        <MediaIcon />
+                        <MediaIcon on={barMedia} />
                         <span>Media</span>
                       </NewsToggleChip>
                       <NewsToggleChip
@@ -4666,6 +5347,8 @@ export default function HomeContent({
               );
             }
             const redditWidth = redditShown.length >= 3 ? narrowCol : "flex-1 min-w-0 max-w-[360px]";
+            // 3 subs: narrowCol columns (Big: a 720px grid, 229px each).
+            const redditOverride = newsCardOverrideFor(redditShown.length >= 3 ? (big ? "chip" : "switch-xl") : "switch");
             return (
               <div className="flex flex-col gap-6 pt-2" data-testid="news-espn-layout">
                 {big ? (
@@ -4721,6 +5404,7 @@ export default function HomeContent({
                         sources={cascadeToSources(c.cascade)}
                         widthClassName={big ? "min-w-0" : redditWidth}
                         {...columnProps}
+                        cardOverride={redditOverride}
                       />
                     ))}
                   </div>,
@@ -4744,6 +5428,7 @@ export default function HomeContent({
                 groups={feedGroups}
                 refreshKey={newsRefreshKey}
                 onPlay={playNewsVideo}
+                onSiblingList={adoptSiblings}
                 showTextPosts={!!prefs.showTextPosts}
                 videosOnly={!!prefs.newsVideosOnly}
                 oldestFirst={!!prefs.newsOldestFirst}
@@ -4755,6 +5440,18 @@ export default function HomeContent({
             );
           }
 
+          // Cards view: the toolbar's Media / Headlines / Posts read like the
+          // Reddit bar, over every card on screen (the ESPN headlines folded
+          // into the strip's tail are rows of that strip card, not a card).
+          const mergedMobile = isMobile && renderedEntries.length > 1;
+          // wideCol (1 column) or narrowCol: see widthClassFor.
+          const cardsOverride = newsCardOverrideFor(effectiveColCount === 1 ? "switch" : "switch-xl");
+          newsBar = barStateFor(mergedMobile
+            ? mobileMergedSources()
+            : renderedEntries.flatMap((entry, idx) => [
+                ...(stripActive ? stripCols[idx].slice(0, 1) : []),
+                ...sourcesForEntry(entry, idx),
+              ]));
           return (
             <>
               {stripActive && (
@@ -4799,6 +5496,7 @@ export default function HomeContent({
                     key={`avs-${newsRefreshKey}`}
                     sources={stripCols.map((s) => s[0])}
                     onPlay={playNewsVideo}
+                    onSiblingList={adoptSiblings}
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
                     tailColIdx={useEspnTopTail ? espnColIdx : undefined}
                     showTextPosts={!!prefs.showTextPosts}
@@ -4808,6 +5506,7 @@ export default function HomeContent({
                     hideSeenKeys={hideSeenKeys}
                     autoplay={newsAutoplay}
                     onSeenHiddenCount={reportSeenHidden}
+                    cardOverride={cardsOverride}
                   />
                 </>
               )}
@@ -4819,7 +5518,7 @@ export default function HomeContent({
                     columns stay centered (multi-column only; 1-col centers the
                     + below the single column). */}
                 {newsOnAddColumn && effectiveColCount !== 1 && <div aria-hidden className="shrink-0" style={{ width: 44 }} />}
-                {isMobile && renderedEntries.length > 1 ? (
+                {mergedMobile ? (
                   // Phones: one merged, hand-ordered feed (no per-league titles —
                   // the cards span every league, so a single league header would
                   // be misleading). See mobileMergedSources for the order.
@@ -4829,6 +5528,7 @@ export default function HomeContent({
                     sources={mobileMergedSources()}
                     hideTitle
                     onPlayVideo={playNewsVideo}
+                    onSiblingList={adoptSiblings}
                     widthClassName={widthClassFor()}
                     videosOnly={!!prefs.newsVideosOnly}
                     showTextPosts={!!prefs.showTextPosts}
@@ -4837,6 +5537,7 @@ export default function HomeContent({
                     hideSeenKeys={hideSeenKeys}
                     autoplayVideos={newsAutoplay}
                     onSeenHiddenCount={reportSeenHidden}
+                    cardOverride={cardsOverride}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -4859,7 +5560,8 @@ export default function HomeContent({
                       autoSport={entry.slotIdx === 2 ? thirdAutoSport : autoSlotSports[entry.slotIdx]}
                       autoIsEspn={entry.slotIdx === 2 && thirdAutoIsEspn}
                       hideTitle={stripActive}
-                      onPlayVideo={playNewsVideo}
+                      onPlayVideo={newsPlayFor(entry.sport ?? entry.id)}
+                      onSiblingList={adoptSiblings}
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
                       showTextPosts={!!prefs.showTextPosts}
@@ -4868,6 +5570,7 @@ export default function HomeContent({
                       hideSeenKeys={hideSeenKeys}
                       autoplayVideos={newsAutoplay}
                       onSeenHiddenCount={reportSeenHidden}
+                      cardOverride={cardsOverride}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).
                       removable={renderedEntries.length > 1}
@@ -4956,7 +5659,6 @@ export default function HomeContent({
             // "Only my teams" decides the Final split on the games the columns
             // will actually draw, or a column could show a "Final" header with
             // no cards under it.
-            const favStrict = prefs.favoritesOnlyStrict ?? NO_FAV_STRICT;
             const shownGames = (l: LeagueData) => filterLeague(l, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
             const hasNonFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state !== "post"));
             const hasFinished = !isPast && sortedLeagues.some(l => shownGames(l).some(g => g.state === "post"));
@@ -4978,14 +5680,16 @@ export default function HomeContent({
               onPlayHighlight: openVideoModal,
               onPlayEmbed: openEmbedModal,
               onShowDetails: (g: Game) => setDetailGame(g),
-              onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
+              onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string, sport?: Sport) => setDetailEvent({ event, fight, leagueLabel, sport }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               onShowSlamBracket: () => setSlamBracketOpen(true),
               onAddLeague: (sport: Sport, anchor: DOMRect) => setAddLeague({ sport, anchor }),
+              onOpenNews: !showNews ? requestNews : null,
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
               upcomingRecordLeagues: recordLeagues,
+              foldClinch: prefs.foldEliminatedGames ? nflClinch : null,
               onAbbrevReport,
               namesCompact,
             };
@@ -4994,6 +5698,32 @@ export default function HomeContent({
             // treatment.
             const crossDayProps = (league: LeagueData) =>
               league.sport === "best" ? { isPastDate: true, isToday: false } : {};
+            // The Best column on a baked span (or "All leagues") swaps in the
+            // bake's games; until they arrive it says so instead of showing
+            // yesterday's under a "This week" header.
+            const bestShown = (league: LeagueData): LeagueData => {
+              if (league.sport !== "best" || !bestBaked) return league;
+              if (bestSpanData?.key === bestSpanKey) return bestSpanData.data;
+              return { sport: "best", label: TOP_GAMES_COLUMN_LABEL[bestSpan], games: [], emptyLabel: "Loading…" };
+            };
+            // The header's Live pill cuts each column to its in-progress games.
+            const boardShown = (league: LeagueData): LeagueData =>
+              liveOnly ? liveOnlyLeague(bestShown(league)) : bestShown(league);
+            // With ratings on, the Best column's span pill IS its top card: it
+            // takes the recap / Playoff pill row (BestSpanBar matches a pill's
+            // height), so there is no spacer above it. Ratings off: no pill,
+            // the spacer as before.
+            const bestTopCard = (league: LeagueData) => {
+              if (league.sport !== "best" || !prefs.showRatings) return recapTopCard(league);
+              return (
+                <BestSpanBar
+                  span={bestSpan}
+                  allLeagues={bestAllLeagues}
+                  onSpan={(span) => updatePrefs({ bestSpan: span === "yesterday" ? undefined : span })}
+                  onAllLeagues={(on) => updatePrefs({ bestAllLeagues: on ? true : undefined })}
+                />
+              );
+            };
             // Per-slot swap dropdowns: every column lists every in-season
             // league plus the explicitly-labelled offseason NBA option.
             // Leagues already shown in another column come through greyed (via
@@ -5017,12 +5747,15 @@ export default function HomeContent({
             // the one day it must NOT appear — the live football Sunday — is
             // held out by the record's own skipDays, not by a rule here.
             // Tomorrow and later stay clear.
-            const recapTopCard = (league: LeagueData) => isPast || isToday
-              ? (
+            const recapTopCard = (league: LeagueData) => {
+              if (!isPast && !isToday) return undefined;
+              const view = recapView(league);
+              return (
                 <LeagueRecapCard
                   sport={league.sport}
                   date={selectedDate}
-                  lastPlayedDate={league.games.length ? null : league.previousGameDay?.date}
+                  lastPlayedDate={view.lastPlayedDate}
+                  noRecap={view.emptied}
                   reserveSlot={reserveRecapSlot}
                   onShowPlayoffs={bracketPillDue && league.sport === "mlb"
                     ? (tab) => { setPlayoffPictureTab(tab); setPlayoffPictureOpen(true); }
@@ -5035,8 +5768,8 @@ export default function HomeContent({
                   reviewSections={reviewSections}
                   onPlayList={playNewsVideo}
                 />
-              )
-              : undefined;
+              );
+            };
             // The ESPN front page has no recap or pill of its own, so where the
             // board reserves the row its top card is only the spacer, and its
             // first league label takes that row (see LeagueColumn leadLabelSlot).
@@ -5530,7 +6263,8 @@ export default function HomeContent({
                   {slotEntries.map((entry) => (
                     <LeagueColumn
                       key={`${entry.league.sport}-${entry.slotIdx}`}
-                      league={entry.league}
+                      league={boardShown(entry.league)}
+                      liveOnly={liveOnly}
                       slotIdx={entry.slotIdx}
                       onReorderSlots={reorderSlots}
                       {...commonProps}
@@ -5541,7 +6275,7 @@ export default function HomeContent({
                       widthClassName={colWidthClass}
                       condense={singleColumn}
                       footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
-                      topCard={recapTopCard(entry.league)}
+                      topCard={bestTopCard(entry.league)}
                       topCardIsSpacer={recapRowIsSpacer(entry.league)}
                     />
                   ))}
@@ -5564,7 +6298,8 @@ export default function HomeContent({
                 {slotEntries.map((entry) => (
                   <LeagueColumn
                     key={`${entry.league.sport}-${entry.slotIdx}`}
-                    league={entry.league}
+                    league={boardShown(entry.league)}
+                    liveOnly={liveOnly}
                     slotIdx={entry.slotIdx}
                     onReorderSlots={reorderSlots}
                     {...commonProps}
@@ -5574,7 +6309,7 @@ export default function HomeContent({
                     widthClassName={colWidthClass}
                     condense={singleColumn}
                     footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
-                    topCard={recapTopCard(entry.league)}
+                    topCard={bestTopCard(entry.league)}
                     topCardIsSpacer={recapRowIsSpacer(entry.league)}
                   />
                 ))}
@@ -5596,7 +6331,9 @@ export default function HomeContent({
         })()}
 
         {/* ONE footer row (Jacob 7/14; reordered 9/25; 9/28: page links only,
-            one style): About · FAQ · Guides · Contact · Feedback · Privacy
+            one style): About · FAQ · Guides · WOF · Contact ·
+            Feedback · Privacy · Terms (10/14: the same row as DocFooter;
+            "WOF" = Wall of fame, short so the row fits one line at 390 px)
             (+ ♥ Rate in the native shells, 9/29).
             Settings came out (the header gear is the one way in), Guides is a
             real page (/guides) rather than a popup, and Feedback goes to
@@ -5614,9 +6351,11 @@ export default function HomeContent({
           <Link href="/about" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>About</Link>
           <Link href="/faq" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</Link>
           <Link href="/guides" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Guides</Link>
+          <Link href="/wall-of-fame" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }} aria-label="Wall of Fame" title="Wall of Fame">WOF</Link>
           <Link href="/contact" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Contact</Link>
           <Link href="/contact#feedback" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Feedback</Link>
           <Link href="/privacy" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</Link>
+          <Link href="/terms" prefetch={false} onClick={noteFooterTap} className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Terms</Link>
           {/* Native shells only (9/29): the web has no store to rate on. A plain
               <a> with no target, like Settings' "Rate this app", so the store
               app opens on the review sheet. A link is all the store rules
@@ -5637,9 +6376,6 @@ export default function HomeContent({
             </a>
           )}
         </div>
-        {/* Legal line (10/3, ahead of the Product Hunt launch): the About page
-            sentence, so every board visit carries it too. */}
-        <p className="max-w-md">HideScore is not affiliated with, endorsed by, or sponsored by any league, team or broadcaster.</p>
         {/* No visible trigger: kept mounted only so Settings' "Send feedback"
             and "Request a league" can open the form in place. */}
         <FeedbackBox openSignal={feedbackSignal} prefill={feedbackPrefill} hideTrigger />
@@ -5696,7 +6432,7 @@ export default function HomeContent({
               className="inline-block transition-opacity hover:opacity-80"
               data-umami-event="install-appstore-badge"
             >
-              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+              <img src="/app-store-badge.svg" alt="Download on the App Store" width={120} height={40} className="block h-10 w-auto" />
             </a>
             {!(prefsHydrated && prefs.playBadgeDismissed) && (
               /* relative + an absolutely placed dismiss control, the same shape
@@ -5804,15 +6540,18 @@ export default function HomeContent({
         />
       )}
 
-      {/* A column switcher's Add more… (Jacob 9/29): the same sheet, one tap
-          switches the column. */}
+      {/* A column switcher's Add more… (Jacob 9/29): the same sheet. Tap
+          several pills, then one Add (Jacob 10/1). */}
       {addMoreFor && (
         <LeaguePickerModal
           title="More leagues"
           options={addMoreOptions}
-          mode="single"
+          mode="add"
           selected={addMoreFor.current ? [addMoreFor.current] : []}
-          onPick={pickAddMore}
+          onAdd={addFromAddMore}
+          // resolveSlot keeps NBA as the one offseason slot pin; news column
+          // 3 keeps any pick through shownLeagues.
+          columnTakes={(s) => (addMoreFor.kind === "news" && addMoreFor.slotIdx === 2) || s === "nba"}
           onClose={() => setAddMoreFor(null)}
           showOffseason={!!prefs.showOffseasonInPicker}
           onToggleOffseason={() => updatePrefs({ showOffseasonInPicker: prefs.showOffseasonInPicker ? undefined : true })}
@@ -5891,6 +6630,7 @@ export default function HomeContent({
           embedUrl={videoModal.embedUrl}
           poster={videoModal.poster}
           sourceLabel={videoModal.sourceLabel}
+          league={videoModal.league}
           headline={videoModal.headline}
           byline={videoModal.byline}
           published={videoModal.published}
@@ -5898,6 +6638,13 @@ export default function HomeContent({
           shareCard={videoModal.shareCard}
           maskVideoTitle={prefs.maskVideoTitle ?? false}
           forceTitleMask={!!videoModal.forceTitleMask}
+          // A tap from a card carries that card's Headlines value. A reloaded
+          // or pasted post has none, so where cards have their own buttons
+          // (ESPN layout, Cards view) it follows the card its section belongs
+          // to (null = the global Headlines button).
+          titlesShown={videoModal.titlesShown ?? (newsLayout !== "feed"
+            ? prefs.newsCardPrefs?.[newsCardKeyForSection(videoModal.section ?? videoModal.sourceLabel) ?? ""]?.revealTitles ?? null
+            : null)}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           keysButton={!prefs.hideControlsHint}
           seekControl={prefs.videoSeekControl ?? "both"}
@@ -5907,6 +6654,8 @@ export default function HomeContent({
           onPrev={videoModal.siblings && (videoModal.sibIndex ?? 0) > 0 ? () => stepVideo(-1) : undefined}
           onNext={videoModal.siblings && (videoModal.sibIndex ?? 0) < videoModal.siblings.length - 1 ? () => stepVideo(1) : undefined}
           alternates={videoModal.alternates}
+          trackLeague={videoModal.trackLeague}
+          trackPage={worldCupHub ? "worldcup" : isToday ? "today" : selectedDate === getDateString(-1) ? "yesterday" : "other"}
           extraLink={reviewLinkDue && mlbReview && videoModal.sourceLabel === "MLB.com"
             ? { label: `All ${mlbReview.season} cuts`, onClick: () => { closeVideoModal("explicit"); setReviewOpen(true); } }
             : null}
@@ -5938,6 +6687,7 @@ export default function HomeContent({
           event={detailEvent.event}
           fight={detailEvent.fight}
           leagueLabel={detailEvent.leagueLabel}
+          sport={detailEvent.sport}
           onClose={() => setDetailEvent(null)}
           reminderLinkTemplate={prefs.reminderLinkTemplate}
         />
@@ -5948,6 +6698,16 @@ export default function HomeContent({
           highlightGroup={groupsHighlight}
           selectedDate={selectedDate}
           onClose={() => { setGroupsOpen(false); setGroupsHighlight(null); }}
+        />
+      )}
+
+      {newsConfirm && (
+        <NewsSpoilerConfirm
+          onCancel={() => setNewsConfirm(null)}
+          onConfirm={() => {
+            markNewsOkDay(getDateString(0));
+            openNewsFor(newsConfirm, true);
+          }}
         />
       )}
 
@@ -6057,6 +6817,8 @@ export default function HomeContent({
         <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} />
       </div>
     </div>
+    </NewsMarkSeenContext.Provider>
+    </HideRanksContext.Provider>
     </WatchQueueContext.Provider>
   );
 }

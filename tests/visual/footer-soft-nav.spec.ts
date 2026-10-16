@@ -10,14 +10,18 @@ const PAGES: { href: string; h1: string }[] = [
   { href: "/about", h1: "About HideScore" },
   { href: "/faq", h1: "Frequently asked questions" },
   { href: "/guides", h1: "Spoiler-free guides" },
+  { href: "/wall-of-fame", h1: "Wall of Fame" },
   { href: "/contact", h1: "Contact HideScore" },
   { href: "/contact#feedback", h1: "Contact HideScore" },
   { href: "/privacy", h1: "Privacy Policy" },
+  { href: "/terms", h1: "Terms of Use" },
 ];
 
 const LABEL: Record<string, string> = {
+  "/wall-of-fame": "WOF",
   "/about": "About", "/faq": "FAQ", "/guides": "Guides",
   "/contact": "Contact", "/contact#feedback": "Feedback", "/privacy": "Privacy",
+  "/terms": "Terms",
 };
 
 async function setup(page: Page) {
@@ -69,7 +73,9 @@ for (const target of PAGES) {
   });
 }
 
-for (const target of PAGES.filter((p) => p.href !== "/about")) {
+// Doc-footer "Feedback" is a button that opens the form in place (10/14),
+// covered in wall-of-fame.spec.ts.
+for (const target of PAGES.filter((p) => p.href !== "/about" && p.href !== "/contact#feedback")) {
   test(`/about footer → ${target.href} is a soft navigation`, async ({ page }) => {
     const docs = await setup(page);
     await page.goto("/about");

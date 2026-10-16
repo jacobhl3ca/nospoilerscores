@@ -250,6 +250,50 @@ for (const { name, width, height } of [
   });
 }
 
+// Jacob 10/10: on the Today board a Best card (2 team rows + a play button)
+// stood ~10px taller than the upcoming NFL card beside it (an 18px time ·
+// network line + 2 team rows). The Best column slims its play button to that
+// line's height (globals.css [data-slim-hl]), so the two cards are equal.
+for (const { name, width, height } of [
+  { name: "phone", width: 390, height: 844 },
+  { name: "desktop", width: 1180, height: 820 },
+]) {
+  test(`a Best card is the height of an upcoming card beside it (${name} ${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await seed(page);
+    // An NFL game tonight, so the NFL column holds one upcoming card.
+    const tonight = event("511", T("5", "Giants", "NYG", ""), T("6", "Cowboys", "DAL", ""), "2026-09-24T00:15:00Z", "scheduled");
+    await page.route("**/apis/site/v2/sports/football/nfl/scoreboard**", (route) => {
+      const dates = new URL(route.request().url()).searchParams.get("dates");
+      const events = dates === YESTERDAY ? BOARDS["football/nfl"] : dates === TODAY ? [tonight] : [];
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ events }) });
+    });
+    await page.goto("/");
+    const best = page.locator('[data-league-column="best"]');
+    await expect(best.locator('button[aria-label*="ighlight" i], button[title*="ighlight" i]')).toHaveCount(5, { timeout: 30_000 });
+    const upcoming = page.locator('[data-league-column="nfl"]').getByRole("button", { name: "Giants at Cowboys — game details" });
+    await expect(upcoming).toBeVisible({ timeout: 15_000 });
+    const upH = (await upcoming.boundingBox())!.height;
+    const cards = best.getByRole("button", { name: / — game details$/ });
+    for (let i = 0; i < 5; i++) {
+      const h = (await cards.nth(i).boundingBox())!.height;
+      expect(Math.abs(h - upH), `Best card ${i} is ${h.toFixed(1)}px, the upcoming NFL card ${upH.toFixed(1)}px`).toBeLessThanOrEqual(1);
+    }
+    // The slim button is the meta line's 18px and keeps its label centred.
+    const btn = best.locator(".hl-slot .highlight-btn").first();
+    expect((await btn.boundingBox())!.height).toBeCloseTo(18, 0);
+    const label = (await btn.boundingBox())!;
+    const inner = await btn.evaluate((el) => {
+      const r = document.createRange(); r.selectNodeContents(el);
+      const b = r.getBoundingClientRect(); return { y: b.y, h: b.height };
+    });
+    expect(Math.abs((inner.y + inner.h / 2) - (label.y + label.height / 2)), "label off centre").toBeLessThanOrEqual(1.5);
+    // Other columns keep the full 28px button.
+    await expect(page.locator('[data-league-column="nfl"] [data-slim-hl], [data-league-column="wnba"][data-slim-hl]')).toHaveCount(0);
+    if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/best-slim-${width}.png` });
+  });
+}
+
 test("Best of yesterday replaces the Auto league even when that league has a game today", async ({ page }) => {
   await page.setViewportSize({ width: 1180, height: 820 });
   await seed(page);
@@ -314,4 +358,230 @@ test("a column pinned to Best of yesterday closes once it is turned off", async 
   await expect(page.locator('[data-league-column="nfl"]')).toBeVisible({ timeout: 30_000 });
   const order = await page.locator("[data-league-column]").evaluateAll((els) => els.map((e) => e.getAttribute("data-league-column")));
   expect(order).toEqual(["nfl", "wnba"]);
+});
+
+// ── Top games span row (Jacob 10/10, lib/topGames.ts) ─────────────────────
+// With ratings on, the column gets a Yesterday · This week · This month · This
+// year pill and an "All leagues" switch, in the recap / Playoff pill row. A span other than Yesterday reads the
+// mini's bake (news/top-games-<span>.json), mocked here: NFL 2, WNBA 1, and an
+// MLS game rated highest — MLS is hidden, so it shows only with All leagues.
+const bakedGame = (sport: string, id: string, away: string, home: string, rating: number, iso: string) => ({
+  id, sport, date: iso, name: `${away} at ${home}`, shortName: `${away.slice(0, 3).toUpperCase()} @ ${home.slice(0, 3).toUpperCase()}`,
+  state: "post", statusDetail: "Final", clock: "0:00", period: 4, completed: true, penaltyShootout: false,
+  homeTeam: { id: `${sport}-h${id}`, abbreviation: home.slice(0, 3).toUpperCase(), displayName: home, shortDisplayName: home, location: home, logo: "", color: "666666", score: "52", winner: true, record: "3-1", rank: null },
+  awayTeam: { id: `${sport}-a${id}`, abbreviation: away.slice(0, 3).toUpperCase(), displayName: away, shortDisplayName: away, location: away, logo: "", color: "666666", score: "49", winner: false, record: "1-3", rank: null },
+  broadcasts: [], radio: [], venue: null, venueLocation: null, venueRoof: null, homeProbable: null, awayProbable: null,
+  stage: null, formatTag: null, rating, seriesNote: null, weekNumber: 3, isPlayoff: false, isPreseason: false,
+  playoffLabel: null, seriesStatus: null, recapUrl: null, boxscoreUrl: null, streamUrl: null, primeStreamUrl: null, noHitterPitchingTeam: null,
+});
+const WEEK_FILE = JSON.stringify({
+  v: 1, span: "week", from: "20260916", to: YESTERDAY, generatedAt: "2026-09-23T14:00:00Z", days: { covered: 7, total: 7 },
+  leagues: {
+    nfl: [bakedGame("nfl", "511", "Ravens", "Steelers", 96, "2026-09-21T17:00:00Z"), bakedGame("nfl", "512", "Rams", "Saints", 81, "2026-09-18T00:15:00Z")],
+    wnba: [bakedGame("wnba", "611", "Mercury", "Lynx", 88, "2026-09-19T23:00:00Z")],
+    mls: [bakedGame("mls", "811", "Timbers", "Union", 99, "2026-09-20T23:30:00Z")],
+  },
+});
+const WEEK_MINE = ["Ravens at Steelers", "Mercury at Lynx", "Rams at Saints"];
+const WEEK_SCORES = ["52", "49"];
+
+async function seedWeek(page: Page) {
+  await page.route("**/news/top-games-*.json", (route) => {
+    const span = /top-games-([a-z]+)\.json/.exec(route.request().url())?.[1];
+    return span === "week"
+      ? route.fulfill({ status: 200, contentType: "application/json", body: WEEK_FILE })
+      : route.fulfill({ status: 404, body: "" });
+  });
+}
+
+test("ratings off: the column has no span row", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page);
+  await page.goto("/");
+  const col = page.locator('[data-league-column="best"]');
+  await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
+  await expect(col.locator("[data-best-span-bar]")).toHaveCount(0);
+});
+
+for (const { name, width, height } of [
+  { name: "phone", width: 390, height: 844 },
+  { name: "desktop", width: 1180, height: 820 },
+]) {
+  test(`span row: This week reads the bake, All leagues adds the rest (${name} ${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await seed(page, { showRatings: true });
+    await seedWeek(page);
+    await page.goto("/");
+    const col = page.locator('[data-league-column="best"]');
+    await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
+    const bar = col.locator("[data-best-span-bar]");
+    await expect(bar.getByRole("button", { pressed: true })).toHaveAccessibleName("Yesterday");
+    await expect(bar.getByRole("button")).toHaveCount(4);
+    // One row of four, and no label spills out of its button.
+    const chipTops = await bar.locator("[data-best-span]").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+    expect(new Set(chipTops).size, "the four chips share one row").toBe(1);
+    const rowBox = (await bar.locator('[role="group"]').boundingBox())!;
+    expect(rowBox.height).toBeLessThan(30);
+    for (const b of await bar.locator("[data-best-span]").all()) {
+      const fits = await b.evaluate((el) => el.scrollWidth <= el.clientWidth);
+      expect(fits, `${await b.getAttribute("data-best-span")} label overflows its button`).toBe(true);
+    }
+
+    await bar.getByRole("button", { name: "This week" }).click();
+    await expect(col.getByRole("heading").first()).toHaveText(width < 640 ? "Week" : "Best this week");
+    const cards = col.getByRole("button", { name: / — game details$/ });
+    await expect(cards).toHaveCount(3, { timeout: 15_000 });
+    // Best rating first.
+    const names = await cards.evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")?.replace(/ — game details$/, "")));
+    expect(names).toEqual(WEEK_MINE);
+    await expect(col.getByRole("button", { name: "Timbers at Union — game details" })).toHaveCount(0);
+
+    // All leagues: the hidden MLS game, rated highest, leads.
+    await bar.getByRole("switch", { name: "All leagues" }).click();
+    await expect(cards).toHaveCount(4);
+    await expect(cards.first()).toHaveAccessibleName("Timbers at Union — game details");
+
+    // No score and no winner anywhere in the column.
+    const dom = await col.evaluate((el) => el.outerHTML);
+    for (const s of WEEK_SCORES) expect(dom, `score ${s} leaked into the column`).not.toMatch(new RegExp(`>\\s*${s}\\s*<`));
+    const text = (await col.innerText()).replace(/\s+/g, " ");
+    expect(text).not.toMatch(/\b\d{1,3}\s*[-–]\s*\d{1,3}\b/);
+    expect(text).not.toMatch(/\b(beat|beats|won|defeat(s|ed)?)\b/i);
+    if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/best-week-${width}.png` });
+
+    // The choice is saved, and ratings off puts the column back on Yesterday.
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+    expect(saved.bestSpan).toBe("week");
+    expect(saved.bestAllLeagues).toBe(true);
+  });
+}
+
+test("span row: a span with no bake yet says so instead of showing yesterday", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { showRatings: true, extra: { bestSpan: "month" } });
+  await seedWeek(page);
+  await page.goto("/");
+  const col = page.locator('[data-league-column="best"]');
+  await expect(col.getByRole("heading").first()).toHaveText("Best this month", { timeout: 30_000 });
+  await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(0);
+  await expect(col).toContainText("Schedule unavailable");
+});
+
+// The span pill sits IN the recap pill row (Jacob 10/10: "those yesterday this
+// week etc should be in highlights position … on top"): first thing under the
+// header, level with a sibling's pill and the same height, no spacer above it.
+// An NFL weekly recap gives the NFL column a real pill to line up with.
+const NFL_RECAP = JSON.stringify({
+  fetchedAt: "2026-09-23T14:00:00Z",
+  recaps: {
+    nfl: [
+      { sport: "nfl", key: "top15", heading: "Week 3", label: "Top 15 plays", cadence: "weekly", coversWeek: 3, windowStart: "20260916", windowEnd: "20260924", videoId: "XUpaSUiyy5I", pageUrl: "https://www.youtube.com/watch?v=XUpaSUiyy5I", channel: "NFL", durationSec: 481, t: 1, sourcePolicy: "official-channel" },
+    ],
+  },
+});
+
+for (const { name, width, height, layout } of [
+  { name: "narrow phone", width: 340, height: 740, layout: "stacked" },
+  { name: "phone", width: 390, height: 844, layout: "stacked" },
+  { name: "desktop", width: 1180, height: 820, layout: "stacked" },
+  { name: "wide desktop", width: 1440, height: 900, layout: "row" },
+]) {
+  test(`span pill takes the recap pill row: level with the NFL pill, same height (${name} ${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    // Pinned third: a wide board has five slots, so Auto is not the third.
+    await seed(page, { showRatings: true, extra: { thirdLeague: "best" } });
+    await seedWeek(page);
+    await page.route("**/news/recaps.json", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: NFL_RECAP }));
+    await page.goto("/");
+    const col = page.locator('[data-league-column="best"]');
+    await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
+    const bar = col.locator("[data-best-span-bar]");
+    const pill = page.locator('[data-league-recap="nfl"]');
+    await expect(pill).toBeVisible({ timeout: 15_000 });
+    await expect(pill).toHaveAttribute("data-recap-layout", layout);
+    await expect(bar).toHaveAttribute("data-recap-layout", layout);
+    // The pill is the column's whole top card: no spacer row above it.
+    await expect(col.locator("[data-league-recap-spacer]")).toHaveCount(0);
+
+    const barBox = (await bar.boundingBox())!;
+    const pillBox = (await pill.boundingBox())!;
+    expect(Math.abs(barBox.y - pillBox.y), `bar top ${barBox.y} vs pill top ${pillBox.y}`).toBeLessThanOrEqual(2);
+    expect(Math.abs(barBox.height - pillBox.height), `bar height ${barBox.height} vs pill height ${pillBox.height}`).toBeLessThanOrEqual(2);
+
+    // Nothing runs past the pill or clips, selected or not, on any span.
+    for (const span of ["Yesterday", "This week"]) {
+      await bar.getByRole("button", { name: span }).click();
+      await expect(bar.getByRole("button", { pressed: true })).toHaveAccessibleName(span);
+      const m = await bar.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const kids = [...el.querySelectorAll<HTMLElement>("button")];
+        return {
+          overflow: el.scrollWidth - el.clientWidth,
+          past: kids.filter((k) => k.getBoundingClientRect().right > r.right - 1 || k.getBoundingClientRect().left < r.left + 1).length,
+          clipped: kids.filter((k) => k.scrollWidth > k.clientWidth).length,
+          switchPastHeading: (() => {
+            const sw = el.querySelector<HTMLElement>("[data-best-all-leagues]")!.getBoundingClientRect();
+            const h = el.querySelector<HTMLElement>("[data-best-span-heading]")?.getBoundingClientRect();
+            return h ? Math.max(0, Math.round(sw.height - h.height)) : 0;
+          })(),
+        };
+      });
+      expect(m, `on ${span}`).toEqual({ overflow: 0, past: 0, clipped: 0, switchPastHeading: 0 });
+    }
+    await bar.getByRole("button", { name: "Yesterday" }).click();
+    await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5);
+
+    // First cards level across every column.
+    const tops = await page.evaluate(() => {
+      const byCol = new Map<string, number>();
+      for (const colEl of document.querySelectorAll<HTMLElement>("[data-league-column]")) {
+        const card = colEl.querySelector<HTMLElement>('[aria-label$="game details"]');
+        if (card) byCol.set(colEl.dataset.leagueColumn!, Math.round(card.getBoundingClientRect().top));
+      }
+      return [...byCol.values()];
+    });
+    expect(tops.length).toBeGreaterThanOrEqual(2);
+    expect(Math.max(...tops) - Math.min(...tops), `first card tops ${tops}`).toBeLessThanOrEqual(1);
+    if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/best-bar-${width}.png`, animations: "disabled" });
+  });
+}
+
+test("span pill with no sibling pill: the other columns hold the row, first cards level", async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await seed(page, { showRatings: true });
+  await seedWeek(page);
+  // No recap anywhere, the month archive included: against production the
+  // real archive gave the NFL column a "Week 2 highlights" pill for 9/22.
+  await page.route(/\/news\/recaps(\.json|\/[^/]+\.json)/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: '{"fetchedAt":"2026-09-23T14:00:00Z","recaps":{}}' }));
+  await page.goto("/");
+  const col = page.locator('[data-league-column="best"]');
+  await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
+  await expect(col.locator("[data-best-span-bar]")).toBeVisible();
+  const spacer = page.locator('[data-league-recap-spacer="nfl"]');
+  await expect(spacer).toHaveCount(1);
+  const barBox = (await col.locator("[data-best-span-bar]").boundingBox())!;
+  const spacerBox = (await spacer.boundingBox())!;
+  expect(Math.abs(barBox.y - spacerBox.y)).toBeLessThanOrEqual(2);
+  expect(Math.abs(barBox.height - spacerBox.height)).toBeLessThanOrEqual(2);
+});
+
+test("span pill on a one-column board: still the first thing under the header, same pill look", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page, { showRatings: true, extra: { singleColumn: true } });
+  await seedWeek(page);
+  await page.goto("/");
+  const col = page.locator('[data-league-column="best"]');
+  await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
+  const bar = col.locator("[data-best-span-bar]");
+  await expect(bar).toBeVisible();
+  await expect(bar.getByRole("button")).toHaveCount(4);
+  const gap = await col.evaluate((el) => {
+    const bar = el.querySelector<HTMLElement>("[data-best-span-bar]")!.getBoundingClientRect();
+    const card = el.querySelector<HTMLElement>('[aria-label$="game details"]')!.getBoundingClientRect();
+    return Math.round(card.top - bar.bottom);
+  });
+  // Only the pill's own mb-2 between it and the first card.
+  expect(gap).toBeLessThanOrEqual(12);
 });

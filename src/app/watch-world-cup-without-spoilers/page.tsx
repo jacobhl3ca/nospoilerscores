@@ -247,12 +247,10 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                 // MODIFIED) so the JSON-LD and OG freshness signals never drift.
                 datePublished: PUBLISHED,
                 dateModified: MODIFIED,
-                author: { "@type": "Organization", name: "HideScore" },
-                publisher: {
-                  "@type": "Organization",
-                  name: "HideScore",
-                  logo: { "@type": "ImageObject", url: "https://hidescore.com/icon-512.png" },
-                },
+                // The layout's Organization node (name, url, logo), by @id, as
+                // SeoLandingPage's Articles do. The inline copies had no url.
+                author: { "@id": "https://hidescore.com/#organization" },
+                publisher: { "@id": "https://hidescore.com/#organization" },
                 mainEntityOfPage: "https://hidescore.com/watch-world-cup-without-spoilers",
                 // Tie this guide into the site's WebSite entity (@id declared in
                 // layout.tsx's @graph) rather than letting it read as a standalone

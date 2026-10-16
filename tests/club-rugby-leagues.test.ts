@@ -33,8 +33,8 @@ const yt = await jiti.import<{
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
 const src = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
-const CLUB = ["premrugby", "urc", "top14", "challengecup", "mlr"] as const;
-const IDS = { premrugby: "267979", urc: "270557", top14: "270559", challengecup: "272073", mlr: "289262" };
+const CLUB = ["premrugby", "urc", "top14", "rugbychamp", "challengecup", "mlr"] as const;
+const IDS = { premrugby: "267979", urc: "270557", top14: "270559", rugbychamp: "271937", challengecup: "272073", mlr: "289262" };
 
 test("a URC game survives the type-1 filter and rates off real half-time rows", () => {
   const games = espn.eventsToGames([fixture("urc-round1-event.json")], "urc");
@@ -99,10 +99,10 @@ test("rugby tests show in 2026 for the Aug–Oct tests, and still in odd years",
   assert.ok(on(new Date(2027, 6, 10)), "odd-year July tests unchanged");
 });
 
-test("URC and Top 14 are lit; the other three stay dark", () => {
+test("URC and Top 14 are lit; the other four stay dark", () => {
   assert.equal(yt.hasNoTrustedHighlightSource("urc"), false);
   assert.equal(yt.hasNoTrustedHighlightSource("top14"), false);
-  for (const s of ["premrugby", "challengecup", "mlr"]) assert.equal(yt.hasNoTrustedHighlightSource(s), true, s);
+  for (const s of ["premrugby", "rugbychamp", "challengecup", "mlr"]) assert.equal(yt.hasNoTrustedHighlightSource(s), true, s);
   const bake = src("../scripts/prebake-news.mjs");
   const audit = src("../scripts/check-highlight-fallbacks.mjs");
   assert.ok(/sport: "urc",\s+path: "\/rugby\/270557\/scoreboard",\s+channel: "United Rugby Championship"/.test(bake));
@@ -128,7 +128,7 @@ test("URC and Top 14 are lit; the other three stay dark", () => {
 
 test("every union column reads the shared r/rugbyunion bake", () => {
   const news = src("../src/lib/news.ts");
-  for (const s of ["sixnations", "urc", "premrugby", "top14", "challengecup", "mlr", "rugbytest"]) {
+  for (const s of ["sixnations", "urc", "premrugby", "top14", "rugbychamp", "challengecup", "mlr", "rugbytest"]) {
     assert.ok(news.includes(`${s}: { key: "reddit-rugbyunion", label: "r/rugbyunion" }`), s);
   }
   assert.ok(src("../scripts/prebake-news.mjs").includes('["reddit-rugbyunion", () => fetchReddit("rugbyunion", "r/rugbyunion")]'));

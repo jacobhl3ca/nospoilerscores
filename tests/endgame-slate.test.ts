@@ -49,8 +49,12 @@ const espn = await jiti.import<{
   buildTennisGames: (events: unknown[], when?: string | { from: string; to: string }) => GameLike[];
   ALL_LEAGUES: Array<{ sport: string; label: string; hidden?: boolean }>;
   isLeagueActive: (l: unknown, d: Date) => boolean;
+  isTennisTourDay: (ymd: string) => boolean;
   ENDGAME_MAX: number;
   ENDGAME_WINDOW_DAYS: number;
+  PLAYOFF_ENDGAME_MAX: number;
+  PLAYOFF_ENDGAME_WINDOW_DAYS: number;
+  isInPlayoffs: (sport: string, d: Date) => boolean;
 }>("../src/lib/espn.ts");
 const etDay = await jiti.import<{ getEtServiceDate: () => Date; toYmd: (d: Date) => string }>("../src/lib/etDay.ts");
 
@@ -77,14 +81,26 @@ const isoOn = (ymd: string, hourUtc = 18) => `${ymd.slice(0, 4)}-${ymd.slice(4, 
 const dayOfIso = (iso: string) => iso.slice(0, 10).replace(/-/g, "");
 
 function activeDay(sport: string, from: string, step: 1 | -1, extra?: (d: Date) => boolean): string {
+  const day = maybeActiveDay(sport, from, step, extra);
+  if (!day) throw new Error(`no active day for ${sport}`);
+  return day;
+}
+function maybeActiveDay(sport: string, from: string, step: 1 | -1, extra?: (d: Date) => boolean): string | null {
   const configs = espn.ALL_LEAGUES.filter((l) => l.sport === sport && !l.hidden);
   for (let i = 0; i < 800; i++) {
     const ymd = plusDays(from, i * step);
     const d = ymdToDate(ymd);
     if (configs.some((c) => espn.isLeagueActive(c, d)) && (!extra || extra(d))) return ymd;
   }
-  throw new Error(`no active day for ${sport}`);
+  return null;
 }
+
+// The tennis fixture is a Slam, so its scenarios run on a Slam's own day. The
+// year-round "Tennis" column (2026-10-11) owns every other tennis day, reads
+// two feeds there and holds its ranged lookahead for a few minutes; its tests
+// are in tennis-tour.test.ts.
+const slamDay = (from: string, step: 1 | -1) =>
+  activeDay("tennis", from, step, (d) => !espn.isTennisTourDay(etDay.toYmd(d)));
 
 // ── fetch stub ──────────────────────────────────────────────────────────────
 // A tiny ESPN: team-sport scoreboards honour `?dates=A` and `?dates=A-B` by
@@ -175,7 +191,7 @@ test("the fixtures still carry the shapes this file relies on", () => {
 // ── THE BUG: Slam finals were invisible under the semis ─────────────────────
 
 test("tennis: the two singles finals ride under today's finished semis, on their own days", async () => {
-  const day = activeDay("tennis", TODAY, 1);
+  const day = slamDay(TODAY, 1);
   const [sat, sun] = [plusDays(day, 1), plusDays(day, 2)];
   serve({ tennis: tennisPayload({ semis: day, finals: [sat, sun], doubles: sat }) });
   const league = await column("tennis", day);
@@ -189,7 +205,7 @@ test("tennis: the two singles finals ride under today's finished semis, on their
 });
 
 test("tennis: an empty day before the finals shows BOTH finals, not just the first day", async () => {
-  const day = activeDay("tennis", TODAY, 1);
+  const day = slamDay(TODAY, 1);
   const [sat, sun] = [plusDays(day, 1), plusDays(day, 2)];
   serve({ tennis: tennisPayload({ semis: plusDays(day, -1), finals: [sat, sun] }) });
   const league = await column("tennis", day);
@@ -200,7 +216,7 @@ test("tennis: an empty day before the finals shows BOTH finals, not just the fir
 });
 
 test("tennis: eight quarterfinals ahead is above the cap — a day with games shows only that day", async () => {
-  const day = activeDay("tennis", TODAY, 1);
+  const day = slamDay(TODAY, 1);
   serve({ tennis: tennisPayload({ semis: day, qf: [plusDays(day, 1), plusDays(day, 2)] }) });
   const league = await column("tennis", day);
   assert.ok(league);
@@ -209,7 +225,7 @@ test("tennis: eight quarterfinals ahead is above the cap — a day with games sh
 });
 
 test("tennis: eight quarterfinals ahead of an empty day keeps the old next-day-only lookahead", async () => {
-  const day = activeDay("tennis", TODAY, 1);
+  const day = slamDay(TODAY, 1);
   serve({ tennis: tennisPayload({ qf: [plusDays(day, 1), plusDays(day, 2)] }) });
   const league = await column("tennis", day);
   assert.ok(league);
@@ -219,7 +235,7 @@ test("tennis: eight quarterfinals ahead of an empty day keeps the old next-day-o
 });
 
 test("tennis: the past tab never surfaces the finals", async () => {
-  const day = activeDay("tennis", plusDays(TODAY, -1), -1);
+  const day = slamDay(plusDays(TODAY, -1), -1);
   serve({ tennis: tennisPayload({ semis: day, finals: [plusDays(day, 1), plusDays(day, 2)] }) });
   const league = await column("tennis", day);
   assert.ok(league);
@@ -320,4 +336,73 @@ test("NBA in June: the one-series playoff rule still wins over the endgame count
   assert.equal(league.nextGameDay?.date, d1);
   assert.deepEqual(league.nextGameDay?.games.map((g) => dayOfIso(g.date)), [d1, d3], "one series, not the interleaved four");
   assert.ok(league.nextGameDay?.games.every((g) => ["SA", "NY"].includes(g.homeTeam.abbreviation)));
+});
+
+// ── Playoff lookahead (Jacob 10/10) ─────────────────────────────────────────
+// A league between its PLAYOFF_START_DATES date and its championshipDate reads
+// the endgame slate over PLAYOFF_ENDGAME_WINDOW_DAYS with room for
+// PLAYOFF_ENDGAME_MAX, so a Finals shows every listed game from a week out.
+// PLAYOFF_START_DATES is a per-season table: once a row goes stale there is no
+// playoff day ahead to anchor on, and these skip rather than fail.
+
+test("isInPlayoffs: start date through championshipDate, year-aware", () => {
+  const on = (iso: string) => new Date(`${iso}T12:00:00`);
+  assert.equal(espn.PLAYOFF_ENDGAME_MAX, 7);
+  assert.equal(espn.PLAYOFF_ENDGAME_WINDOW_DAYS, 30);
+  assert.equal(espn.isInPlayoffs("wnba", on("2026-09-13")), false, "day before the start");
+  assert.equal(espn.isInPlayoffs("wnba", on("2026-09-14")), true);
+  assert.equal(espn.isInPlayoffs("wnba", on("2026-10-31")), true, "Game 7 day");
+  assert.equal(espn.isInPlayoffs("wnba", on("2026-11-01")), false);
+  assert.equal(espn.isInPlayoffs("mlb", on("2026-10-10")), true);
+  assert.equal(espn.isInPlayoffs("nfl", on("2027-01-20")), true, "Jan start pairs with that season's Feb 14");
+  assert.equal(espn.isInPlayoffs("nfl", on("2027-02-15")), false);
+  assert.equal(espn.isInPlayoffs("nfl", on("2026-10-10")), false);
+  assert.equal(espn.isInPlayoffs("wnba", on("2027-10-10")), false, "a stale row never reads as next season's playoffs");
+  assert.equal(espn.isInPlayoffs("epl", on("2026-10-10")), false, "no playoff row");
+});
+
+const wnbaFinals = (day: string) =>
+  // The 2026 Finals as ESPN listed them on 10/10: Game 1 a week out, then
+  // 10/19, 10/22, 10/24 — 4 games over 15 days.
+  teamEvents(TEAMS.nba, [[plusDays(day, 7), 19], [plusDays(day, 9), 23], [plusDays(day, 12), 23], [plusDays(day, 14), 19]]);
+
+test("WNBA Finals in the playoffs: all four listed games show, not just Game 1", async (t) => {
+  const day = maybeActiveDay("wnba", TODAY, 1, (d) => {
+    const end = new Date(d); end.setDate(end.getDate() + 14);
+    return espn.isInPlayoffs("wnba", d) && espn.isInPlayoffs("wnba", end);
+  });
+  if (!day) return t.skip("PLAYOFF_START_DATES.wnba is stale");
+  const events = wnbaFinals(day);
+  serve({ teams: { path: "/basketball/wnba/", events } });
+  const league = await column("wnba", day);
+  assert.ok(league);
+  assert.equal(league.games.length, 0);
+  assert.equal(league.nextGameDay?.date, plusDays(day, 7));
+  assert.deepEqual(league.nextGameDay?.games.map((g) => g.id), events.map((e) => e.id));
+  assert.equal(rangedRequests().length, 0);
+});
+
+test("WNBA out of the playoffs: the same four games show only the one inside 7 days", async () => {
+  const day = activeDay("wnba", TODAY, 1, (d) => !espn.isInPlayoffs("wnba", d));
+  const events = wnbaFinals(day);
+  serve({ teams: { path: "/basketball/wnba/", events } });
+  const league = await column("wnba", day);
+  assert.ok(league);
+  assert.deepEqual(league.nextGameDay?.games.map((g) => g.id), [events[0].id]);
+});
+
+test("MLB Division Series: above the playoff cap it keeps today's games + the next game day", async (t) => {
+  const day = maybeActiveDay("mlb", TODAY, 1, (d) => espn.isInPlayoffs("mlb", d));
+  if (!day) return t.skip("PLAYOFF_START_DATES.mlb is stale");
+  const [d1, d2, d3] = [1, 2, 3].map((n) => plusDays(day, n));
+  // Two games today, then four a day: twelve ahead, well past 7.
+  const plan: Array<[string, number]> = [[day, 17], [day, 21]];
+  for (const d of [d1, d2, d3]) for (const h of [16, 18, 20, 23]) plan.push([d, h]);
+  const events = teamEvents(TEAMS.nba, plan);
+  serve({ teams: { path: "/baseball/mlb/", events } });
+  const league = await column("mlb", day);
+  assert.ok(league);
+  assert.equal(league.games.length, 2, "today's games stay");
+  assert.equal(league.nextGameDay?.date, d1, "in the playoffs today's games AND the next day show");
+  assert.deepEqual(league.nextGameDay?.games.map((g) => dayOfIso(g.date)), [d1, d1, d1, d1]);
 });

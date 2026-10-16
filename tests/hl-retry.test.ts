@@ -40,6 +40,12 @@ test("Cardiff Blues gets a short-name retry, other teams do not", () => {
   assert.deepEqual(yt.highlightNamePairs("Zebre", "Cardiff Blues"), retry.hlNamePairs("Zebre", "Cardiff Blues"));
 });
 
+test("FIU gets a short-name retry: ESPN College Football titled the 10/13 game \"FIU Panthers vs. …\"", () => {
+  const pairs = [["Florida International", "Jacksonville State"], ["FIU", "Jacksonville State"]];
+  assert.deepEqual(retry.hlNamePairs("Florida International", "Jacksonville State"), pairs);
+  assert.deepEqual(yt.highlightNamePairs("Florida International", "Jacksonville State"), pairs);
+});
+
 test("short alias tables match between bake and client", () => {
   const ytSrc = readFileSync(new URL("../src/lib/youtube.ts", import.meta.url), "utf8");
   for (const [espn, short] of Object.entries(retry.HL_TEAM_SHORT_ALIASES)) {

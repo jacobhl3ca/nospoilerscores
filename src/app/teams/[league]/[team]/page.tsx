@@ -6,6 +6,7 @@ import DocTopBar from "@/components/DocTopBar";
 import TeamSchedulePreview, { FollowTeamButton } from "@/components/TeamSchedulePreview";
 import { TEAM_PAGES, type TeamPage } from "@/lib/teamPages";
 import { getTeamPage, leagueMeta, teamPagePath, teamsInLeague, teamWithArticle, type TeamPageLeagueMeta } from "@/lib/teamPageLeagues";
+import { TeamLogo } from "@/components/TeamLogo";
 
 // /teams/<league>/<team> — one page per NFL, NBA, NHL, MLB and Premier League
 // team, 144 in all (added 2026-09-26). Why: team-name searches ("knicks games
@@ -143,8 +144,7 @@ export default async function TeamPageRoute({ params }: PageProps) {
 
       <div className="mb-3 flex items-center gap-3">
         {team.logo && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={team.logo} alt="" width={48} height={48} className="h-12 w-12 shrink-0 object-contain" />
+          <TeamLogo src={team.logo} alt="" width={48} height={48} className="h-12 w-12 shrink-0 object-contain" hide="display" />
         )}
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-[1.12]">{h1}</h1>
       </div>
@@ -228,7 +228,8 @@ export default async function TeamPageRoute({ params }: PageProps) {
                 name: team.name,
                 sport: meta.schemaSport,
                 memberOf: { "@type": "SportsOrganization", name: meta.schemaLeague },
-                ...(team.logo ? { logo: team.logo } : {}),
+                // Self-hosted logos (/logos/nfl-lar.svg) are site paths; schema.org wants a full URL.
+                ...(team.logo ? { logo: team.logo.startsWith("/") ? `${BASE}${team.logo}` : team.logo } : {}),
                 url,
                 ...(team.venue
                   ? { location: { "@type": "Place", name: team.venue, ...(team.city ? { address: team.city } : {}) } }

@@ -9,17 +9,21 @@ import WebKit
  history is exactly the right thing to walk. Matches the Android hardware-back
  handler in MainActivity.java.
 
- It also draws the Scores / Ratings / News tab bar natively (Jacob 9/27: the web
+ It also draws the Games / Ratings / News / Schedule tab bar natively (Jacob 9/27: the web
  bar's icons popped iOS's image menu on long-press, and he wanted the stock
  translucent bar). The page stays the source of truth: it tells the bar which
  tab is selected, when to show (board page, phone width, no modal open) and the
  site theme; a tap goes back to the page as a `hs-native-tab` event. The page
  side lives in src/lib/nativeTabBar.ts — it hides the web bar only when this
  shell marks <html> with `data-native-tabbar`, so older app builds keep theirs.
+
+ The tab icons are the site's own Twemoji SVGs (Assets.xcassets/Tab*), not SF
+ Symbols (Jacob 9/29: web and app must read as one product). Selected = the
+ full-colour emoji, unselected = the same emoji at 45% opacity.
  */
 class MainViewController: CAPBridgeViewController, UITabBarDelegate {
     private static let messageName = "hsTabBar"
-    private static let views = ["scores-plain", "scores-rated", "news"]
+    private static let views = ["scores-plain", "scores-rated", "news", "schedule"]
 
     private let tabBar = UITabBar()
     /// A universal link that arrived before the web view existed (cold start).
@@ -31,6 +35,17 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
     /// light theme drew a white clock on a white page). nil until the page
     /// says; Info.plist starts at Default, which follows the phone.
     private var siteStatusBarStyle: UIStatusBarStyle?
+
+    /// No picture-in-picture in the app (#290, best guess). A clip crashed the
+    /// app in WebKit's own player layer: -[WebAVPlayerLayer
+    /// startRedirectingVideoToLayer:forMode:] is an unrecognized selector, which
+    /// is the layer AVKit hands to PiP. Nothing in the app needs PiP; inline
+    /// play and fullscreen stay as they are.
+    override func webViewConfiguration(for instanceConfiguration: InstanceConfiguration) -> WKWebViewConfiguration {
+        let configuration = super.webViewConfiguration(for: instanceConfiguration)
+        configuration.allowsPictureInPictureMediaPlayback = false
+        return configuration
+    }
 
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(HideScoreGoogleAuthPlugin())
@@ -106,18 +121,28 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
                 ? UIColor(red: 0x60 / 255, green: 0xa5 / 255, blue: 0xfa / 255, alpha: 1)
                 : UIColor(red: 0x25 / 255, green: 0x63 / 255, blue: 0xeb / 255, alpha: 1)
         }
-        let item = { (title: String, symbol: String, tag: Int) -> UITabBarItem in
+        // As a template, each emoji is a solid blob at 25 pt (monkey = a head
+        // shape, newspaper = a square; sim check 9/29). So both states keep
+        // the colour emoji and the unselected one is drawn at 45% opacity.
+        let dimmed = { (image: UIImage) -> UIImage in
+            UIGraphicsImageRenderer(size: image.size).image { _ in
+                image.draw(at: .zero, blendMode: .normal, alpha: 0.45)
+            }.withRenderingMode(.alwaysOriginal)
+        }
+        let item = { (title: String, asset: String, tag: Int) -> UITabBarItem in
+            let icon = UIImage(named: asset)
             let it = UITabBarItem(title: title,
-                                  image: UIImage(systemName: symbol),
-                                  selectedImage: UIImage(systemName: symbol + ".fill"))
+                                  image: icon.map(dimmed),
+                                  selectedImage: icon?.withRenderingMode(.alwaysOriginal))
             it.tag = tag
             it.accessibilityIdentifier = "tab-" + Self.views[tag]
             return it
         }
         tabBar.items = [
-            item("Scores", "eye.slash", 0),
-            item("Ratings", "star", 1),
-            item("News", "newspaper", 2),
+            item("Games", "TabGames", 0),
+            item("Ratings", "TabRatings", 1),
+            item("News", "TabNews", 2),
+            item("Schedule", "TabSchedule", 3),
         ]
         tabBar.delegate = self
         tabBar.isHidden = true

@@ -5,12 +5,12 @@ import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
 import type { Sport } from "@/lib/types";
 import { getTimeZone } from "@/lib/etDay";
 import { handleExternalClick } from "@/lib/openExternal";
-import { frontendHref } from "@/lib/frontendLinks";
+import { postHref } from "@/lib/frontendLinks";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import SensitiveHiddenModal from "@/components/SensitiveHiddenModal";
 import { LeagueMark } from "@/components/LeagueMark";
-import { dropSeen, useReportSeenHidden } from "@/lib/newsSeen";
+import { dropSeen, seenAttr, useIsSeen, useReportSeenHidden } from "@/lib/newsSeen";
 import { AutoplayVideo, TapForSound } from "@/components/InlineVideoCard";
 import {
   NewsSource,
@@ -50,6 +50,9 @@ interface NewsFeedProps {
   // "N new posts" pill instead of moving the page.
   refreshKey?: number;
   onPlay: PlayHandler;
+  // See NewsColumn's prop of the same name: the feed's ‹ › list, for a modal
+  // reopened by a page reload.
+  onSiblingList?: (list: PlayOpts[]) => void;
   showTextPosts: boolean;
   // Reverse the merged feed so the oldest post is first (⇅ in the news header).
   oldestFirst?: boolean;
@@ -202,7 +205,7 @@ function useAggregatedFeed(groups: FeedGroup[], refreshKey: number) {
 // new posts wait behind the pill so the page does not move under him.
 const NEAR_TOP_PX = 200;
 
-export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts, videosOnly, oldestFirst, hiddenCategories, hideSeenKeys, onSeenHiddenCount, autoplay }: NewsFeedProps) {
+export default function NewsFeed({ groups, refreshKey = 0, onPlay, onSiblingList, showTextPosts, videosOnly, oldestFirst, hiddenCategories, hideSeenKeys, onSeenHiddenCount, autoplay }: NewsFeedProps) {
   const { feed, incoming, applyIncoming } = useAggregatedFeed(groups, refreshKey);
   const items = feed?.items ?? null;
   const groupOf = feed?.groupOf;
@@ -280,6 +283,17 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
     if (!incoming) return;
     if (newCount === 0 || window.scrollY < NEAR_TOP_PX) applyIncoming();
   }, [incoming, newCount, applyIncoming]);
+  // Back near the top by hand with posts still waiting: merge them, as a
+  // refresh there does, so the pill never sits over the first post's source
+  // line (Jacob 10/9). The next refresh brings the pill back.
+  useEffect(() => {
+    if (newCount === 0) return;
+    const onScroll = () => {
+      if (window.scrollY < NEAR_TOP_PX) applyIncoming();
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [newCount, applyIncoming]);
   // Scroll AFTER the merged list commits: a scroll started in the same tick
   // is cut short in WebKit when the new posts land above the viewport.
   const scrollTopAfterMergeRef = useRef(false);
@@ -343,6 +357,9 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
     () => visible.map((it) => newsItemToPlayOpts(it)),
     [visible]
   );
+  useEffect(() => {
+    if (playList.length) onSiblingList?.(playList);
+  }, [playList, onSiblingList]);
 
   // Only with 2+ columns: one league has nothing to pick between. Same neutral
   // selected segment as the Cards / Feed switch in the news toolbar.
@@ -425,7 +442,7 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
         // Pinned under the news toolbar (same top as the Cards league titles).
         // Zero-height wrapper, so the pill floats over the posts and the list
         // does not shift when it appears.
-        <div className="league-sticky-top sticky z-30 h-0 flex items-start justify-center">
+        <div className="league-sticky-top sticky sticky-nolip z-30 h-0 flex items-start justify-center">
           <button
             type="button"
             data-testid="feed-new-posts"
@@ -467,6 +484,7 @@ export default function NewsFeed({ groups, refreshKey = 0, onPlay, showTextPosts
 function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: FeedGroup; onOpen: () => void; autoplay: boolean }) {
   const [showComments, setShowComments] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const seen = useIsSeen(item.articleUrl || item.id);
   // Stable, SSR-safe id tying the comments disclosure button to the strip it
   // reveals. useId() (not a hard-coded id) keeps every FeedPost in the merged
   // scroll unique — many posts render this toggle at once, so a constant id
@@ -490,6 +508,7 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
       className="rounded-xl overflow-hidden"
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       data-news-key={item.articleUrl || item.id}
+      {...seenAttr(seen)}
       data-feed-group={group?.id}
     >
       {/* League + source + time. The league comes first: ESPN and YouTube
@@ -561,13 +580,10 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
           // aspect-video; this full-width one was the lone reliant-on-content case.
           className="news-media-preview relative block w-full min-h-[3rem] cursor-pointer bg-black"
           // The tile's <img> is alt="", so this button's only accessible name is
-          // this label. For a video post (isVideo) it's the inline play trigger,
-          // yet a flat "Open post" gives no cue it PLAYS a clip and drops the
-          // headline — the twin control in NewsColumn (Cards view) already names
-          // it "Play highlight: {headline}". Mirror that here: name the action and
-          // keep the visible headline in the label so "Label in Name" (WCAG 2.5.3)
-          // holds and voice users can say the title to activate it.
-          aria-label={isVideo ? `Play video: ${item.headline}` : `Open post: ${item.headline}`}
+          // this label. It names the action (a video post plays inline) and
+          // nothing else: with the headline in it, a screen reader read the
+          // headline out from under the blur (Jacob 10/10).
+          aria-label={isVideo ? "Play video" : "Open post"}
         >
           {img || tile ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -682,7 +698,7 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
       {item.articleUrl && (
         <div className="flex items-center gap-2 px-4 pt-2 pb-3">
           <a
-            href={frontendHref(item.articleUrl)}
+            href={postHref(item.articleUrl)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={handleExternalClick(item.articleUrl)}

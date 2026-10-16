@@ -26,6 +26,7 @@
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fixTeamLogo } from "../src/lib/teamLogos.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_FILE = join(ROOT, "src/lib/teamPages.ts");
@@ -139,7 +140,8 @@ for (const lg of LEAGUES) {
       const venue = v?.fullName ? (VENUE_NAME_FIXES[v.fullName] ?? v.fullName.replace(/\s*\([^)]*\)$/, "")) : undefined;
       const addr = v?.address ?? {};
       const city = addr.city ? [addr.city, addr.state].filter(Boolean).join(", ") : undefined;
-      const logo = detail.logos?.find((l) => l.rel?.includes("default"))?.href ?? detail.logos?.[0]?.href;
+      // fixTeamLogo: the self-hosted art for logos ESPN gets wrong (the Rams).
+      const logo = fixTeamLogo(detail.logos?.find((l) => l.rel?.includes("default"))?.href ?? detail.logos?.[0]?.href);
       const { division, conference } = await groupNames(detail.groups?.$ref, lg.sport);
       return {
         sport: lg.sport,

@@ -136,6 +136,7 @@ export function encodeFavorites(
   flag("sc", extras?.singleColumn);
   flag("sx", extras?.scrollColumns);
   flag("ts", extras?.hideTeamStars);
+  flag("hr", extras?.hideRanks);
   if (extras?.hiddenLeagues || extras?.shownLeagues) {
     params.set("xl", sportList(extras.hiddenLeagues));
     params.set("ol", sportList(extras.shownLeagues));
@@ -155,7 +156,7 @@ const RECORD_SOCCER_SHORT = "soc";
 
 // The params that make HomeContent apply a settings link. "s" (slots) never
 // did on its own, and still does not.
-export const SHARE_PARAM_KEYS = ["f", "l", "fl", "t", "th", "dd", "dv", "dr", "n", "hn", "mt", "yp", "sc", "sx", "ts", "xl", "ol", "cx", "rl"] as const;
+export const SHARE_PARAM_KEYS = ["f", "l", "fl", "t", "th", "dd", "dv", "dr", "n", "hn", "mt", "yp", "sc", "sx", "ts", "hr", "xl", "ol", "cx", "rl"] as const;
 
 export interface ShareExtras {
   theme?: Theme;
@@ -170,6 +171,7 @@ export interface ShareExtras {
   singleColumn?: boolean;
   scrollColumns?: boolean;
   hideTeamStars?: boolean;
+  hideRanks?: boolean;
   hiddenLeagues?: Sport[];
   shownLeagues?: Sport[];
   catalogHiddenLeagues?: Sport[];
@@ -194,6 +196,7 @@ export function shareExtrasFromPrefs(p: Preferences): ShareExtras {
     singleColumn: p.singleColumn,
     scrollColumns: p.scrollColumns,
     hideTeamStars: p.hideTeamStars,
+    hideRanks: p.hideRanks,
     hiddenLeagues: p.hiddenLeagues,
     shownLeagues: p.shownLeagues,
     catalogHiddenLeagues: p.catalogHiddenLeagues,
@@ -213,6 +216,7 @@ export function sharedExtrasPatch(d: DecodedShare): Partial<Preferences> {
   if (d.singleColumn !== undefined) out.singleColumn = d.singleColumn;
   if (d.scrollColumns !== undefined) out.scrollColumns = d.scrollColumns;
   if (d.hideTeamStars !== undefined) out.hideTeamStars = d.hideTeamStars;
+  if (d.hideRanks !== undefined) out.hideRanks = d.hideRanks;
   if (d.hiddenLeagues !== undefined) out.hiddenLeagues = d.hiddenLeagues.length ? d.hiddenLeagues : undefined;
   if (d.shownLeagues !== undefined) out.shownLeagues = d.shownLeagues.length ? d.shownLeagues : undefined;
   if (d.catalogHiddenLeagues !== undefined) out.catalogHiddenLeagues = d.catalogHiddenLeagues.length ? d.catalogHiddenLeagues : undefined;
@@ -277,6 +281,7 @@ export function decodeFavorites(params: URLSearchParams): DecodedShare {
   result.singleColumn = flag("sc");
   result.scrollColumns = flag("sx");
   result.hideTeamStars = flag("ts");
+  result.hideRanks = flag("hr");
   // Only as a pair, the way the encoder writes them.
   const xl = sportList("xl");
   const ol = sportList("ol");
@@ -305,6 +310,13 @@ export type NewsLayout = "cards" | "feed" | "espn";
 
 // The Posts switch (All / No text / Videos) over videosOnly + textPosts.
 export { type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField } from "./postFilter";
+
+// The news layout a visitor with no stored blob gets (Jacob 10/10: ESPN is
+// the first pill and the default). loadPreferences sets it for that visitor
+// only. It is NOT in `defaults`: those spread under every stored blob, and a
+// blob from before newsLayout has none, so a default there would move every
+// old Cards user to ESPN.
+export const FRESH_NEWS_LAYOUT: NewsLayout = "espn";
 
 // The news layout to render. newsLayout wins; a blob from before it existed
 // carries only newsFeedView (true = Feed).
@@ -396,6 +408,11 @@ export interface Preferences {
   // sticks — session counting has stopped by then. See STARS_AUTO_HIDE_SESSION
   // in lib/sessionVisits.ts.
   hideTeamStars?: boolean;
+  // Hide the "#8" rank chip next to team names on game cards (FIFA ranking,
+  // college poll, league standing) and the seed numbers in the bracket and
+  // playoff panels (Jacob 9/30). Undefined = shown, as before the toggle
+  // existed. Read through useHideRanks() in components/HideRanksContext.tsx.
+  hideRanks?: boolean;
   // "Only my teams" (Settings, Jacob 10/7): a league column keeps only the
   // games a starred team plays in. Opt-in, undefined = off. A league with no
   // starred team still shows all its games, with a cell asking the user to
@@ -438,6 +455,10 @@ export interface Preferences {
   // games a week, weeks 13–18. Undefined = on. Only shows where NFL records
   // show, so it does nothing while those are off. See lib/nflPlayoffRace.ts.
   hidePlayoffRaceTags?: boolean;
+  // "Fold games with no playoff stakes" (Jacob 9/24, rule 10/9): an NFL game
+  // between two eliminated teams folds into one tap-to-open row at the end of
+  // its day. Opt-in, undefined = off. See lib/eliminatedFold.ts.
+  foldEliminatedGames?: boolean;
   // "Add the World Cup column" banner dismissed (only shows during the
   // tournament when no visible column is the World Cup).
   wcBannerDismissed?: boolean;
@@ -477,6 +498,12 @@ export interface Preferences {
   // would fall back to it takes the next league instead. Best of yesterday is
   // turned off the same way, through hiddenLeagues ("best" is a Sport).
   topNewsHidden?: boolean;
+  // The Best of yesterday column's span row (Jacob 10/10, lib/topGames.ts):
+  // which span it shows and whether "All leagues" is on. Unset = Yesterday,
+  // the user's own leagues. Only read while ratings show (the row hides with
+  // them, and the column falls back to Yesterday).
+  bestSpan?: "yesterday" | "week" | "month" | "year";
+  bestAllLeagues?: boolean;
   // Which POSITION the generic "Top news" column occupies on the news board
   // (0-2, default 2 = last). Picking "Top news" from any column's
   // switcher moves the column here rather than doing nothing — before this,
@@ -688,6 +715,11 @@ export interface Preferences {
   // lives here; WHICH posts were seen is a device-local store outside
   // Preferences. Toggled by the 👁 button left of ⇅ in the news header.
   newsHideSeen?: boolean;
+  // "✓ Opened" marker (Jacob 10/11): a post opened on this device stays on
+  // screen dimmed, with a small chip (lib/newsSeen.ts, data-news-seen). On for
+  // everyone: undefined = on, false = off. Settings → News "Mark posts you
+  // opened". Separate from newsHideSeen, which removes the post.
+  newsMarkSeen?: boolean;
   // Hide upsetting news items — deaths, fatal crashes, assault/abuse cases,
   // on-field injuries (hit in the head, collisions, carted off), serious
   // illness, harm to animals, self-harm (Jacob 8/21). Matching lives in
@@ -773,7 +805,9 @@ export function loadPreferences(): Preferences {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const stored = raw ? JSON.parse(raw) : null;
-    const prefs = stored ? { ...defaults, ...stored } : { ...defaults };
+    // No blob = a new visitor: News opens on the ESPN layout. A stored blob
+    // keeps its own layout (none = Cards or Feed, see newsLayoutOf).
+    const prefs = stored ? { ...defaults, ...stored } : { ...defaults, newsLayout: FRESH_NEWS_LAYOUT };
     // Do not let the v2 value from defaults disguise a legacy stored blob.
     // HomeContent needs this missing marker to preserve every old checkmark
     // before the first post-deploy save overwrites the blob.

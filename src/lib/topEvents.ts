@@ -21,6 +21,7 @@
 // anything that pulls the data layer in is untestable. Type-only imports are
 // erased and fine.
 import type { Game, Sport } from "./types";
+import { compareRatedLive } from "./liveSort.ts";
 
 // Master switch for the whole column. Off 9/5 → back on 9/26 as the ESPN
 // mirror. Off = the pill leaves every switcher and the slot dropdowns, a
@@ -254,18 +255,29 @@ export function espnFeaturedKeys(features: EspnHeaderFeature[], featured: string
 // hero. A delayed live game (rain, lightning) sits at the bottom of the live
 // games, the rule every other column follows. This only regroups. It reads
 // state, never a score.
+//
+// The Ratings view (`byRating`, Jacob 10/6: "espn frontpage league is not
+// ordered by rating when in ratings tab") sorts each block's live games and
+// finals by rating, the way every league column does; the featured order
+// only breaks ties. Live: rated games by rating (compareRatedLive), then the
+// too-early-to-rate ones. Upcoming games have no rating and keep the order.
 const isDelayed = (g: Game) => g.state === "in" && /delay/i.test(g.statusDetail);
-const PHASES: readonly ((g: Game) => boolean)[] = [
-  (g) => g.state === "in" && !isDelayed(g),
-  isDelayed,
-  (g) => g.state === "pre",
-  (g) => g.state === "post",
+const liveByRating = (a: Game, b: Game) => {
+  const aEarly = a.rating == null, bEarly = b.rating == null;
+  if (aEarly !== bEarly) return aEarly ? 1 : -1;
+  return aEarly ? 0 : compareRatedLive(a, b);
+};
+const PHASES: readonly { has: (g: Game) => boolean; rated?: (a: Game, b: Game) => number }[] = [
+  { has: (g) => g.state === "in" && !isDelayed(g), rated: liveByRating },
+  { has: isDelayed },
+  { has: (g) => g.state === "pre" },
+  { has: (g) => g.state === "post", rated: (a, b) => (b.rating ?? 0) - (a.rating ?? 0) },
 ];
 export interface EspnFrontPageGroup {
   sport: Sport;
   games: Game[];
 }
-export function groupEspnFrontPage(games: Game[], featuredKeys: readonly string[] = []): EspnFrontPageGroup[] {
+export function groupEspnFrontPage(games: Game[], featuredKeys: readonly string[] = [], byRating = false): EspnFrontPageGroup[] {
   const featured = new Set(featuredKeys);
   const groups: EspnFrontPageGroup[] = [];
   for (const game of games) {
@@ -276,9 +288,10 @@ export function groupEspnFrontPage(games: Game[], featuredKeys: readonly string[
   const isFeatured = (g: Game) => featured.has(`${g.sport}:${g.id}`);
   return groups.map(({ sport, games: list }) => ({
     sport,
-    games: PHASES.flatMap((inPhase) => {
-      const inState = list.filter(inPhase);
-      return [...inState.filter(isFeatured), ...inState.filter((g) => !isFeatured(g))];
+    games: PHASES.flatMap(({ has, rated }) => {
+      const inState = list.filter(has);
+      const ordered = [...inState.filter(isFeatured), ...inState.filter((g) => !isFeatured(g))];
+      return byRating && rated ? ordered.sort(rated) : ordered;
     }),
   }));
 }

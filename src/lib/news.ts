@@ -749,6 +749,23 @@ export const ESPN_LAYOUT_HEADLINES: ColumnSource = ESPN_FRONT_PAGE_CASCADE[0];
 // r/sports, for an ESPN layout whose leagues have no subreddit at all.
 export const GENERAL_REDDIT_SOURCE: ColumnSource = GENERIC_CASCADE[0];
 
+// The ESPN-layout card a post came from, read off its `section` (the modal's
+// source label, which the share URL carries as `hl`). A reloaded modal has no
+// card, so it uses this to follow that card's Headlines button. Reddit is
+// matched on the label, not the key: reddit-mlb's label is r/baseball.
+export function newsCardKeyForSection(section: string | null | undefined): string | null {
+  if (!section) return null;
+  if (section === "ESPN Video") return ESPN_LAYOUT_VIDEOS.key;
+  if (section === "ESPN") return ESPN_LAYOUT_HEADLINES.key;
+  if (!section.startsWith("r/")) return null;
+  if (section === GENERAL_REDDIT_SOURCE.label) return GENERAL_REDDIT_SOURCE.key;
+  if (section === "r/soccer") return "reddit-soccer";
+  for (const sub of Object.values(REDDIT_SUB)) {
+    if (sub && sub.label === section) return sub.key;
+  }
+  return null;
+}
+
 // A league's Reddit cards only (its own sub, plus r/soccer for the soccer
 // leagues), in cascade order. Empty for a league with no sub (poker).
 export function redditSourcesFor(sport: Sport): ColumnSource[] {

@@ -149,12 +149,12 @@ test("phone: scores column 3 ESPN front page puts the headlines after MLB", asyn
   await seedPrefs(page, { thirdLeague: "top" });
   await page.goto("/");
   const headers = page.locator("main .news-source-sticky-top");
-  await expect(headers.filter({ hasText: /Top Headlines/i })).toHaveCount(1, LOAD);
+  await expect(headers.filter({ hasText: /Headlines/i })).toHaveCount(1, LOAD);
   await expect(page.locator("main").getByText("r/baseball", { exact: true })).toBeVisible(LOAD);
-  await expect(headers.first()).not.toHaveText(/Top Headlines/i);
+  await expect(headers.first()).not.toHaveText(/Headlines/i);
   const texts = (await headers.allInnerTexts()).map((t) => t.trim().toLowerCase());
   expect(texts.findIndex((t) => t.includes("r/baseball")))
-    .toBeLessThan(texts.findIndex((t) => t.includes("top headlines")));
+    .toBeLessThan(texts.findIndex((t) => t === "headlines"));
 });
 
 test("a stale newsGenericSlot with no Top news pick leaves column 3 last", async ({ page }) => {

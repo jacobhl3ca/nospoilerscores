@@ -65,7 +65,8 @@ const titles = (page: Page) => page.locator('button[title="Switch news league"]'
 const saved = (page: Page) =>
   page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
 
-// The source-card headers of news column `idx` (0-based), in order.
+// The source-card headers of news column `idx` (0-based), in order. Next to
+// the ESPN mark a header drops the word "ESPN" (Jacob 10/10).
 async function sourceHeaders(page: Page, idx: number): Promise<string[]> {
   return page.locator('button[title="Switch news league"]').nth(idx)
     .locator("xpath=ancestor::div[contains(@class,'min-h-[60vh]')][1]")
@@ -77,6 +78,10 @@ async function sourceHeaders(page: Page, idx: number): Promise<string[]> {
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-09-26T15:00:00-04:00"));
   await mockEspnFeeds(page);
+  // Every scoreboard answers an empty slate. A scoreboard that fails to load
+  // (no network) changes what an Auto column resolves to, so Auto in column 1
+  // came back as ESPN front page instead of MLB.
+  await page.route(/\/scoreboard(\?|$)/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"events":[]}' }));
 });
 
 const rowsOf = async (page: Page, idx: number) => {
@@ -105,7 +110,7 @@ test("turned on: ESPN front page is a league row in news column 3, headlines the
   await menu.getByRole("button", { name: "ESPN front page" }).click();
 
   await expect(titles(page).nth(2)).toHaveText("ESPN front page");
-  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["ESPN TOP HEADLINES", "ESPN VIDEOS"]);
+  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["HEADLINES", "VIDEOS"]);
   for (const h of HEADLINES) await expect(page.getByText(h)).toHaveCount(1);
   await expect(page.getByText(CLIP)).toHaveCount(1);
   const prefs = await saved(page);
@@ -138,7 +143,7 @@ test("under an ESPN front page scores column 3, news column 3 is ESPN front page
   await page.goto("/");
   await expect(titles(page)).toHaveCount(3, LOAD);
   await expect(titles(page).nth(2)).toHaveText("ESPN front page");
-  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["ESPN TOP HEADLINES", "ESPN VIDEOS"]);
+  await expect.poll(() => sourceHeaders(page, 2), LOAD).toEqual(["HEADLINES", "VIDEOS"]);
   const { rows } = await rowsOf(page, 2);
   expect(rows.find((r) => r.startsWith("ESPN front page"))).toBe("ESPN front page");
   expect((await saved(page)).newsThirdLeague).toBeUndefined();
@@ -151,8 +156,8 @@ test("phone: an ESPN front page scores column 3 shows the headlines after the le
   await seedPrefs(page, { thirdLeague: "top" });
   await page.goto("/");
   const headers = page.locator(".news-source-sticky-top");
-  await expect(headers.filter({ hasText: /Top Headlines/i })).toHaveCount(1, LOAD);
-  await expect(headers.first()).not.toHaveText(/Top Headlines/i);
+  await expect(headers.filter({ hasText: /Headlines/i })).toHaveCount(1, LOAD);
+  await expect(headers.first()).not.toHaveText(/Headlines/i);
   await expect(page.getByText(HEADLINES[0])).toHaveCount(1);
 });
 
@@ -162,5 +167,5 @@ test("phone: without it, the feed does not lead with the front page", async ({ p
   await page.goto("/");
   const first = page.locator(".news-source-sticky-top").first();
   await expect(first).toBeVisible(LOAD);
-  await expect(first).not.toHaveText(/Top Headlines/i);
+  await expect(first).not.toHaveText(/Headlines/i);
 });

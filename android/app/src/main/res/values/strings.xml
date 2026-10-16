@@ -6,7 +6,6 @@
     <string name="custom_url_scheme">com.jacobhl.hidescore</string>
     <string name="widget_title">HideScore</string>
     <string name="widget_refresh">Refresh</string>
-    <string name="widget_monkey" translatable="false">🙈</string>
     <string name="widget_at" translatable="false">\@</string>
     <string name="widget_prev">Previous game</string>
     <string name="widget_next">Next game</string>

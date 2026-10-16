@@ -17,7 +17,7 @@
 // listed. A gap with no source anywhere (NAIA, amateur clubs) is reported but
 // stays green — the initials tile is the right answer for it.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -41,9 +41,10 @@ const SPORT_PATHS = Object.fromEntries(
     .filter(([, , p]) => !/^\/(golf|tennis|racing|mma)\//.test(p))
     .map(([, sport, p]) => [sport, p]),
 );
-// Entries are `"ncaah-132633": ncaa("maryville-mo")` or a plain URL string.
+// Entries are `"ncaah-132633": ncaa("maryville-mo")`, a plain URL string, or a
+// self-hosted "/logos/…" path under public/.
 const OVERRIDES = Object.fromEntries(
-  [...LOGO_SRC.matchAll(/"(\w+-\d+)": (?:ncaa\("([^"]+)"\)|"(https:[^"]+)")/g)].map(([, id, slug, url]) => [
+  [...LOGO_SRC.matchAll(/"(\w+-\d+)": (?:ncaa\("([^"]+)"\)|"(https:[^"]+|\/logos\/[^"]+)")/g)].map(([, id, slug, url]) => [
     id,
     url ?? ncaaComLogo(slug),
   ]),
@@ -65,6 +66,7 @@ async function getJson(url) {
 // A school NCAA.com has no art for still answers 200 — with a grey shield
 // whose group id is "_GENERIC-LOGO_BGL" (Dillard, read 2026-09-26).
 async function realLogo(url) {
+  if (url.startsWith("/")) return existsSync(join(ROOT, "public", url));
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
     return res.ok && !(await res.text()).includes("_GENERIC-LOGO");
@@ -90,10 +92,12 @@ const norm = (s) =>
 const leagues = Object.entries(SPORT_PATHS).filter(([s]) => !ONLY || ONLY.includes(s));
 const gaps = new Map(); // `${sport}-${id}` -> team
 const jobs = leagues.flatMap(([sport, path]) => dates.map((d) => [sport, `${API}${path}?dates=${d}`]));
+let fetchFailed = 0;
 for (let i = 0; i < jobs.length; i += 12) {
   const chunk = jobs.slice(i, i + 12);
   const pages = await Promise.all(chunk.map(([, url]) => getJson(url)));
   pages.forEach((data, j) => {
+    if (!data) fetchFailed++;
     const sport = chunk[j][0];
     for (const e of data?.events ?? []) {
       for (const c of e.competitions?.[0]?.competitors ?? []) {
@@ -107,6 +111,14 @@ for (let i = 0; i < jobs.length; i += 12) {
       }
     }
   });
+}
+
+// Node's fetch ignores HTTPS_PROXY: behind a proxy every board read fails and
+// the run used to print "0 teams with no ESPN logo" and exit 0 (2026-10-14).
+// Run with NODE_USE_ENV_PROXY=1 there.
+if (fetchFailed > jobs.length / 2) {
+  console.error(`board fetch failed: ${fetchFailed} of ${jobs.length} ESPN boards did not load (behind a proxy? set NODE_USE_ENV_PROXY=1)`);
+  process.exit(1);
 }
 
 let schools = null;

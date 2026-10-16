@@ -72,20 +72,25 @@ function dutchGrandPrix() {
 
 // A finished MLB slate whose team names are the longest in the league, so the
 // team-name ceiling is measured against something real rather than "NYY".
-function longNamedGames() {
+// `games` swaps in another slate (the 3-column test reuses it for the NFL).
+type TeamSpec = [id: string, name: string, abbr: string];
+function longNamedGames(
+  date = "2026-08-10T23:00:00Z",
+  games: [id: string, away: TeamSpec, home: TeamSpec][] = [["700001", ["az", "Diamondbacks", "ARI"], ["wsh", "Nationals", "WSH"]]],
+) {
   const team = (id: string, name: string, abbr: string) => ({
     id, displayName: name, shortDisplayName: name, abbreviation: abbr, score: "0",
     logo: "", color: "666666",
   });
   const event = (id: string, away: ReturnType<typeof team>, home: ReturnType<typeof team>) => ({
     id,
-    date: "2026-08-10T23:00:00Z",
+    date,
     name: `${away.displayName} at ${home.displayName}`,
     shortName: `${away.abbreviation} @ ${home.abbreviation}`,
     season: { type: 2 },
     status: { displayClock: "0:00", period: 9, type: { name: "STATUS_SCHEDULED", state: "pre", detail: "7:00 PM ET", shortDetail: "7:00 PM ET", completed: false } },
     competitions: [{
-      date: "2026-08-10T23:00:00Z",
+      date,
       competitors: [
         { homeAway: "home", team: home, score: "0", records: [{ summary: "60-55" }] },
         { homeAway: "away", team: away, score: "0", records: [{ summary: "55-60" }] },
@@ -94,7 +99,7 @@ function longNamedGames() {
     }],
   });
   return JSON.stringify({
-    events: [event("700001", team("az", "Diamondbacks", "ARI"), team("wsh", "Nationals", "WSH"))],
+    events: games.map(([id, away, home]) => event(id, team(...away), team(...home))),
   });
 }
 
@@ -285,6 +290,21 @@ test("the 3-column phone tile wraps the whole name at MLB card height", async ({
       ...JSON.parse(raw), favoriteLeagues: ["poker", "mlb", "nfl"], thirdLeague: "nfl",
     }));
   });
+  // Both game columns are mocked. The compact (wrapping) tile is chosen by
+  // namesCompact — "some game column abbreviates its team names" — which only
+  // the game columns can report, from the names they actually render. With a
+  // live ESPN fetch that fails or lags no column reports, the tile falls back
+  // to the one-line FittedLine ladder and drops " · Jeju", and there is no MLB
+  // card to compare heights against either. The NFL slate carries the long
+  // names ("Buccaneers", "Commanders") that cannot fit a 122px card in full.
+  await page.route("**/baseball/mlb/scoreboard**", route => route.fulfill({
+    status: 200, contentType: "application/json", body: longNamedGames("2026-09-04T23:00:00Z"),
+  }));
+  await page.route("**/football/nfl/scoreboard**", route => route.fulfill({
+    status: 200, contentType: "application/json", body: longNamedGames("2026-09-04T23:00:00Z", [
+      ["900001", ["wsh", "Commanders", "WSH"], ["tb", "Buccaneers", "TB"]],
+    ]),
+  }));
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Poker" })).toBeVisible();

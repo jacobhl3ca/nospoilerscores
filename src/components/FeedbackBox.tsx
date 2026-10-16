@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { hsPlatform } from "@/lib/prefsSync";
+import { KIND_PILL_CLASS, REQUEST_KINDS, type RequestKind } from "@/lib/requestKinds";
 
 // Minimal inline feedback line that lives inside the footer. Submits on Enter
 // or via the send button straight to the same Formspree endpoint the
@@ -34,15 +35,26 @@ const BUILD = (process.env.NEXT_PUBLIC_BUILD_SHA || "dev").slice(0, 8);
 // `hideTrigger` renders no visible link at all: the homepage footer's
 // "Feedback" is now a plain link to /contact (9/28), so the box stays mounted
 // there only for the Settings opens ("Send feedback", "Request a league").
+// `kinds` (2026-10-11, the wall of fame's "Suggest something") adds the League /
+// Feature / Fix / Other pills above the message and sends the picked one as
+// `kind`. No pill is picked at open; a second tap unpicks.
+// `primary` (2026-10-14, /contact#feedback) draws the trigger as the blue
+// accent button the wall's "Suggest something" uses, instead of a muted link.
 export default function FeedbackBox({
   openSignal,
   prefill,
   label = "Feedback",
   seed,
   hideTrigger = false,
-}: { openSignal?: number; prefill?: string; label?: string; seed?: string; hideTrigger?: boolean } = {}) {
+  kinds = false,
+  primary = false,
+}: { openSignal?: number; prefill?: string; label?: string; seed?: string; hideTrigger?: boolean; kinds?: boolean; primary?: boolean } = {}) {
   const [text, setText] = useState("");
   const [email, setEmail] = useState("");
+  // Opt-in credit for the "Built from your requests" list on /contact
+  // (2026-10-09). Typing initials here is the consent to be thanked by them.
+  const [initials, setInitials] = useState("");
+  const [kind, setKind] = useState<RequestKind | "">("");
   const [sent, setSent] = useState(false);
   const [open, setOpen] = useState(false);
   // Seeded from the parent's initial value so the FIRST render is never treated
@@ -64,6 +76,8 @@ export default function FeedbackBox({
   const close = () => {
     setText("");
     setEmail("");
+    setInitials("");
+    setKind("");
     setOpen(false);
   };
 
@@ -78,6 +92,7 @@ export default function FeedbackBox({
     // rather than sitting on the previous submission's confirmation.
     setSent(false);
     setText(prefill ?? "");
+    setKind("");
     setOpen(true);
   }
 
@@ -150,10 +165,14 @@ export default function FeedbackBox({
     const message = text.trim();
     if (!message) return;
     const replyTo = EMAIL_RX.test(trimmedEmail) ? trimmedEmail : "";
+    const credit = initials.trim();
+    const picked = kinds ? kind : "";
     setSent(true); // optimistic — the box is throwaway, no error UI needed
     setOpen(false);
     setText("");
     setEmail("");
+    setInitials("");
+    setKind("");
     try {
       await fetch(FORMSPREE_ENDPOINT, {
         method: "POST",
@@ -165,6 +184,8 @@ export default function FeedbackBox({
           // every submission arrives anonymous and unanswerable (which is
           // exactly what happened to the 2026-08-03 leagues request).
           ...(replyTo ? { email: replyTo, _replyto: replyTo } : {}),
+          ...(credit ? { initials: credit } : {}),
+          ...(picked ? { kind: picked } : {}),
           _subject: replyTo ? `HideScore feedback from ${replyTo}` : "HideScore feedback",
           source: "hidescore.com",
           // Which build, and whether this came from the app or a browser. The
@@ -188,6 +209,11 @@ export default function FeedbackBox({
     return () => window.clearTimeout(t);
   }, [hideTrigger, sent]);
 
+  const triggerClass = primary
+    ? "rounded-lg px-3.5 py-1.5 text-sm font-semibold cursor-pointer hover:opacity-90"
+    : "underline underline-offset-2 cursor-pointer hover:opacity-80";
+  const triggerStyle = primary ? { background: "var(--accent)", color: "#fff" } : { color: "var(--text-muted)" };
+
   if (!open && !sent) {
     if (hideTrigger) return null;
     return (
@@ -199,8 +225,8 @@ export default function FeedbackBox({
           setOpen(true);
         }}
         aria-expanded="false"
-        className="underline underline-offset-2 cursor-pointer hover:opacity-80"
-        style={{ color: "var(--text-muted)" }}
+        className={triggerClass}
+        style={triggerStyle}
       >
         {label}
       </button>
@@ -254,8 +280,8 @@ export default function FeedbackBox({
               onClick={close}
               aria-expanded="true"
               aria-controls="hs-feedback-form"
-              className="underline underline-offset-2 cursor-pointer hover:opacity-80"
-              style={{ color: "var(--text-muted)" }}
+              className={triggerClass}
+              style={triggerStyle}
             >
               {label}
             </button>
@@ -300,6 +326,22 @@ export default function FeedbackBox({
               ×
             </button>
           </div>
+          {kinds && (
+            <div role="group" aria-label="Kind of note (optional)" className="flex flex-wrap gap-1.5">
+              {REQUEST_KINDS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  data-kind={k}
+                  aria-pressed={kind === k}
+                  onClick={() => setKind(kind === k ? "" : k)}
+                  className={`${KIND_PILL_CLASS} cursor-pointer`}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+          )}
           <label htmlFor="hs-feedback-input" className="sr-only">Feedback</label>
           <input
             id="hs-feedback-input"
@@ -325,6 +367,28 @@ export default function FeedbackBox({
             // a team-name filter). No behavior change on desktop.
             enterKeyHint="send"
             autoComplete="off"
+            className="w-full text-sm px-3 py-2 rounded outline-none"
+            style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
+          />
+          <label htmlFor="hs-feedback-initials" className="sr-only">
+            Initials for the thanks list (optional)
+          </label>
+          <input
+            id="hs-feedback-initials"
+            type="text"
+            value={initials}
+            onChange={(e) => setInitials(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                close();
+              }
+            }}
+            placeholder="Initials for the thanks list (optional)"
+            maxLength={6}
+            autoComplete="off"
+            autoCapitalize="characters"
+            enterKeyHint="send"
             className="w-full text-sm px-3 py-2 rounded outline-none"
             style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
           />

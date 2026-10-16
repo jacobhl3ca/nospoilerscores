@@ -128,3 +128,11 @@ export function playoffSubtitleTiers(headlines: string[], fallback?: string): st
   if (abbrev) tiers.push(game ? `${abbrev} · G${game}` : abbrev);
   return [...new Set(tiers)];
 }
+
+// True when the subtitle above keeps a game number ("Wild Card · Game 3").
+// The column's pre-game cards then leave out their own "Game 3" line: the
+// header already says it once for every card under it.
+export function subtitleCarriesGameNumber(headlines: string[]): boolean {
+  const tiers = playoffSubtitleTiers(headlines);
+  return tiers.length > 0 && /\bGame \d/.test(tiers[0]);
+}

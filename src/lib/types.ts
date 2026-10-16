@@ -25,6 +25,9 @@ export interface Game {
   venue: string;
   // Game quality rating (0-100) based on score closeness
   rating: number | null;
+  // Finished games rated 100 only: how far the uncapped sum went past 100
+  // (lib/espn.ts calculateRating). The top games spans' tie-break.
+  ratingExcess?: number;
   // Live games only: fraction of regulation played [0,1]. Sort tiebreak — of
   // two live games with the same rating, the later one sits higher. Never
   // changes the badge.
@@ -368,4 +371,7 @@ export interface LeagueData {
   // ESPN front page on a past date: "day" = that day's snapshot, "fallback" =
   // no snapshot, so today's strip leagues stand in. Unset on today's board.
   espnSnapshot?: "day" | "fallback";
+  // The empty-column line when the default one is wrong (the Best column on a
+  // longer span: "No rated games this week yet").
+  emptyLabel?: string;
 }
