@@ -9,6 +9,10 @@ import { expect, test, type Page } from "@playwright/test";
 // (14 games each) makes g1 (seed 7 v first out, level), g2 (both a game off
 // seed 7) and g3 (a 1-game division lead) the three tightest; g6 is also in a
 // race but ranks 4th; g5 has no race and is already final.
+//
+// g5 is in the feed, so ESPN's "e" letters are no longer read: the browser
+// holds the week-start set from an earlier visit (lib/usePlayoffRace), unless
+// a test says it does not.
 
 type Row = [id: number, w: number, l: number, seed: number, clincher?: string];
 const AFC: Row[][] = [
@@ -115,18 +119,22 @@ function prefs(extra: Record<string, unknown> = {}) {
   });
 }
 
-async function setup(page: Page, width: number, opts: { prefs?: Record<string, unknown>; slate?: Slot[]; over?: Override } = {}) {
+const KEPT_OUT = ["12", "4"];
+
+async function setup(page: Page, width: number, opts: { prefs?: Record<string, unknown>; slate?: Slot[]; over?: Override; kept?: string[] | null } = {}) {
   const slate = opts.slate ?? SLATE;
   const over = opts.over ?? AFTER_G5;
+  const kept = opts.kept === undefined ? KEPT_OUT : opts.kept;
   await page.setViewportSize({ width, height: 1000 });
   await page.clock.setFixedTime(new Date("2026-12-20T14:30:00-05:00"));
   // Only on a fresh context: a reload must keep what Settings saved.
-  await page.addInitScript((blob) => {
+  await page.addInitScript(([blob, keptBlob]) => {
     if (!sessionStorage.getItem("race-seeded")) {
       localStorage.setItem("nss-preferences", blob);
+      if (keptBlob) localStorage.setItem("nss-playoff-race-start", keptBlob);
       sessionStorage.setItem("race-seeded", "1");
     }
-  }, prefs(opts.prefs));
+  }, [prefs(opts.prefs), kept ? JSON.stringify({ season: 2026, week: 15, out: kept }) : ""] as const);
   await page.route("**/news/highlights.json", (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"games":{}}' }));
   await page.route("**/football/nfl/scoreboard?**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: scoreboard(slate, over) }));
   await page.route("**/football/nfl/standings**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: standings(over) }));
@@ -181,6 +189,23 @@ for (const width of [390, 1440]) {
     await expect(badges(page)).toHaveCount(2);
     await expect(card(page, 3, 1).getByRole("img", { name: /^Playoff race/ })).toHaveCount(0);
     await expect(card(page, 16, 2).getByRole("img", { name: /^Playoff race/ })).toHaveCount(0);
+  });
+
+  test(`${width}px: no week-start set kept and a game already final → no tags`, async ({ page }) => {
+    await setup(page, width, { kept: null });
+    await page.goto("/");
+    await expect(card(page, 15, 7)).toBeVisible({ timeout: 30_000 });
+    await expect(card(page, 15, 7).getByText("7-7").first()).toBeVisible();
+    await expect(badges(page)).toHaveCount(0);
+  });
+
+  test(`${width}px: before the first kickoff the "e" set is kept for the week`, async ({ page }) => {
+    const slate = SLATE.map((s) => ({ ...s, state: "pre" as State, homeWins: undefined }));
+    await setup(page, width, { slate, over: {}, kept: null });
+    await page.goto("/");
+    await expect(badges(page)).toHaveCount(3, { timeout: 30_000 });
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-playoff-race-start") ?? "null"));
+    expect(kept).toEqual({ season: 2026, week: 15, out: KEPT_OUT });
   });
 
   test(`${width}px: NFL records off → no tags`, async ({ page }) => {

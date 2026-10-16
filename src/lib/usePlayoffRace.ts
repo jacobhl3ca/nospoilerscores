@@ -5,7 +5,7 @@ import type { Game } from "./types";
 import { BASE_URL } from "./espn";
 import { fetchNflPicture } from "./nflPlayoffPicture";
 import { playoffRaceTagsOn, subscribePlayoffRacePrefs } from "./playoffRacePrefs";
-import { isPlayoffRaceWeek, pickPlayoffRaceGames, playoffRaceGamesFromScoreboard } from "./nflPlayoffRace";
+import { isPlayoffRaceWeek, pickPlayoffRaceGames, playoffRaceGamesFromScoreboard, weekStartEliminated } from "./nflPlayoffRace";
 
 // The client side of the Playoff race tag (rules in lib/nflPlayoffRace): the
 // Settings switch, and one shared fetch of the standings plus that week's NFL
@@ -14,13 +14,34 @@ import { isPlayoffRaceWeek, pickPlayoffRaceGames, playoffRaceGamesFromScoreboard
 const TTL_MS = 5 * 60 * 1000;
 const cache = new Map<number, { at: number; picks: Promise<Set<string>> }>();
 
+// The week-start "e" set (weekStartEliminated), kept for the rest of the week
+// so a game that ends mid-week cannot bring an eliminated team back. One week
+// at a time; survives reload.
+export const PLAYOFF_RACE_START_KEY = "nss-playoff-race-start";
+type KeptOut = { season: number; week: number; out: string[] };
+
+function readKeptOut(season: number, week: number): string[] | null {
+  try {
+    const kept = JSON.parse(localStorage.getItem(PLAYOFF_RACE_START_KEY) ?? "null") as KeptOut | null;
+    if (kept?.season === season && kept.week === week && Array.isArray(kept.out)) return kept.out.map(String);
+  } catch { /* blocked or junk: no kept set */ }
+  return null;
+}
+
+function keepOut(kept: KeptOut): void {
+  try { localStorage.setItem(PLAYOFF_RACE_START_KEY, JSON.stringify(kept)); } catch { /* blocked storage */ }
+}
+
 async function loadPicks(week: number): Promise<Set<string>> {
   const picture = await fetchNflPicture();
   if (!picture?.season) return new Set();
   const url = `${BASE_URL}/football/nfl/scoreboard?seasontype=2&week=${week}&dates=${picture.season}`;
   const r = await fetch(url);
   if (!r.ok) return new Set();
-  return pickPlayoffRaceGames(playoffRaceGamesFromScoreboard(await r.json(), week), picture, week);
+  const games = playoffRaceGamesFromScoreboard(await r.json(), week);
+  const fresh = weekStartEliminated(games, picture);
+  if (fresh) keepOut({ season: picture.season, week, out: fresh });
+  return pickPlayoffRaceGames(games, picture, week, fresh ?? readKeptOut(picture.season, week));
 }
 
 function picksForWeek(week: number): Promise<Set<string>> {

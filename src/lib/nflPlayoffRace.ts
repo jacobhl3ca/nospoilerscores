@@ -12,9 +12,16 @@
 //   holds that record on a pre or live game (see lib/upcomingRecords). On a
 //   finished game the record already counts the result, so the result is taken
 //   back out (winner −1 W, loser −1 L, a tie −1 T).
-// - ESPN's clincher letters are used only while the feed holds no result from
-//   this week. After that, a letter could come from a game played this week,
-//   so only a team that is out on the week-start numbers counts as eliminated.
+// - ESPN's clincher letters are read only while the feed holds no result from
+//   this week (weekStartEliminated). After that, a letter could come from a
+//   game played this week, so the caller passes back the "e" set it kept from
+//   that week-start read. Without one, the week gives no picks: the raw
+//   numbers alone miss ESPN's tiebreakers, so a game with an eliminated team
+//   could gain the tag after another game ends.
+//   (A team out on the week-start numbers counts as eliminated either way.)
+// - ESPN can count a final in the standings before the scoreboard's record
+//   line does. That line then still holds the going-in record, so it is used
+//   as is.
 // - Every game of the week is ranked, finished ones too, so a game going final
 //   never hands its place to another game. The card hides the badge on a
 //   finished game.
@@ -73,27 +80,64 @@ function goingIn(game: PlayoffRaceGame, side: "home" | "away"): Rec | null {
 
 type RaceTeam = NflTeam & { out: boolean; distance: number };
 
-// The table as it stood before the week's first kickoff, or null when the feed
-// does not line up with the scoreboard.
-function weekStartTable(games: PlayoffRaceGame[], picture: NflPicture): Map<string, RaceTeam> | null {
+function feedTeams(picture: NflPicture): Map<string, NflTeam> {
   const feed = new Map<string, NflTeam>();
   for (const c of picture.conferences) for (const d of c.divisions) for (const t of d.teams) feed.set(t.id, t);
+  return feed;
+}
 
+// Each slate team's going-in record, and whether the feed still holds no
+// result from this week (clean). Null when the feed does not line up with the
+// scoreboard.
+function readWeek(games: PlayoffRaceGame[], feed: Map<string, NflTeam>): { start: Map<string, Rec>; clean: boolean } | null {
   const start = new Map<string, Rec>();
   let clean = true;
   for (const g of games) {
     for (const side of ["home", "away"] as const) {
       const id = g[side].teamId;
-      const r = goingIn(g, side);
       const f = feed.get(id);
-      if (!r || !f) return null;
+      const raw = parseRecord(g[side].record);
+      if (!f || !raw) return null;
       const fp = played(f);
+      // The feed counts this final and the scoreboard record does not yet.
+      const r = g.state === "post" && fp === played(raw) + 1 ? raw : goingIn(g, side);
+      if (!r) return null;
       if (fp < played(r) || fp > played(r) + 1) return null;
       if (fp !== played(r)) clean = false;
       else if (f.wins !== r.wins || f.losses !== r.losses || f.ties !== r.ties) return null;
       start.set(id, r);
     }
   }
+  return { start, clean };
+}
+
+/**
+ * ESPN's eliminated teams as of the week's first kickoff: the "e" letters,
+ * read only while the feed holds no result from this week. Null once it does,
+ * or when the feed does not line up. The caller keeps the last non-null set
+ * and passes it to pickPlayoffRaceGames for the rest of the week.
+ */
+export function weekStartEliminated(games: PlayoffRaceGame[], picture: NflPicture | null): string[] | null {
+  if (!picture || !games.length) return null;
+  const feed = feedTeams(picture);
+  const read = readWeek(games, feed);
+  if (!read?.clean) return null;
+  return [...feed.values()].filter((t) => t.clinch === "eliminated").map((t) => t.id).sort();
+}
+
+// The table as it stood before the week's first kickoff, or null when the feed
+// does not line up with the scoreboard, or holds a result from this week and
+// no week-start "e" set was kept.
+function weekStartTable(
+  games: PlayoffRaceGame[],
+  picture: NflPicture,
+  keptOut: ReadonlySet<string> | null,
+): Map<string, RaceTeam> | null {
+  const feed = feedTeams(picture);
+  const read = readWeek(games, feed);
+  if (!read) return null;
+  const { start, clean } = read;
+  if (!clean && !keptOut) return null;
 
   const table = new Map<string, RaceTeam>();
   for (const c of picture.conferences) {
@@ -109,7 +153,7 @@ function weekStartTable(games: PlayoffRaceGame[], picture: NflPicture): Map<stri
           pct: n ? (r.wins + r.ties / 2) / n : 0,
           seed: null,
           divisionLeader: false,
-          out: clean && f.clinch === "eliminated",
+          out: clean ? f.clinch === "eliminated" : keptOut!.has(f.id),
           distance: Infinity,
         };
       }).sort(byRecord),
@@ -152,15 +196,19 @@ function weekStartTable(games: PlayoffRaceGame[], picture: NflPicture): Map<stri
 
 /**
  * The ids of the (at most 3) games that carry the Playoff race tag this week.
- * Empty outside weeks 13–18, or when the standings are missing or out of step.
+ * `keptOut` is the weekStartEliminated set kept from earlier this week; it is
+ * read only once the feed holds a result from this week. Empty outside weeks
+ * 13–18, when the standings are missing or out of step, or after a result with
+ * no kept set.
  */
 export function pickPlayoffRaceGames(
   games: PlayoffRaceGame[],
   picture: NflPicture | null,
   week: number | null | undefined,
+  keptOut: Iterable<string> | null = null,
 ): Set<string> {
   if (!picture || !isPlayoffRaceWeek(week) || !games.length) return new Set();
-  const table = weekStartTable(games, picture);
+  const table = weekStartTable(games, picture, keptOut ? new Set(keptOut) : null);
   if (!table) return new Set();
 
   const ranked: { id: string; date: string; tightness: number; inRace: number }[] = [];

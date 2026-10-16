@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildNflPicture, type NflStandingsPayload } from "../src/lib/nflPlayoffPicture.ts";
-import { pickPlayoffRaceGames, playoffRaceGamesFromScoreboard, type PlayoffRaceGame } from "../src/lib/nflPlayoffRace.ts";
+import { pickPlayoffRaceGames, playoffRaceGamesFromScoreboard, weekStartEliminated, type PlayoffRaceGame } from "../src/lib/nflPlayoffRace.ts";
 
 // A Week 15 AFC: every club has played 14. The NFC is all on bye this week.
 //   East  a1 11-3, a2 10-4, a3 6-8, a4 3-11 (e)
@@ -106,7 +106,72 @@ test("a result from this week moves nothing", () => {
     away: { teamId: "a3", record: "7-8", winner: true },
   });
   const feed = buildNflPicture(payload({ a1: { l: 4 }, a3: { w: 7 }, a7: { clincher: "e" } }));
-  assert.deepEqual(pickPlayoffRaceGames(after, feed, 15), new Set(["g1", "g2", "g3"]));
+  const kept = weekStartEliminated(SLATE, picture);
+  assert.deepEqual(kept, ["a12", "a4"]);
+  assert.equal(weekStartEliminated(after, feed), null, "the feed holds a result: its letters are not read");
+  assert.deepEqual(pickPlayoffRaceGames(after, feed, 15, kept), new Set(["g1", "g2", "g3"]));
+});
+
+// FIX verdict on #325, finding 1: an "e" that ESPN gives on tiebreakers (a16
+// is 5-9, not out on the raw numbers) must still count after another game of
+// the week ends.
+test("a week-start elimination still counts after a game of the week ends", () => {
+  const withE = buildNflPicture(payload({ a16: { clincher: "e" } }));
+  const slate = ["g6", "g1", "g2", "g5"].map((id) => SLATE.find((g) => g.id === id)!);
+  const before = pickPlayoffRaceGames(slate, withE, 15);
+  assert.deepEqual(before, new Set(["g1", "g2"]));
+  const kept = weekStartEliminated(slate, withE);
+  assert.ok(kept?.includes("a16"));
+
+  // g5 goes final. Either winner gives the same picks.
+  for (const homeWins of [true, false]) {
+    const after = slate.map((g) => g.id !== "g5" ? g : {
+      ...g,
+      state: "post" as const,
+      home: { teamId: "a5", record: homeWins ? "13-2" : "12-3", winner: homeWins },
+      away: { teamId: "a8", record: homeWins ? "4-11" : "5-10", winner: !homeWins },
+    });
+    const feed = buildNflPicture(payload({
+      a16: { clincher: "e" },
+      ...(homeWins ? { a5: { w: 13 }, a8: { l: 11 } } : { a5: { l: 3 }, a8: { w: 5 } }),
+    }));
+    assert.deepEqual(pickPlayoffRaceGames(after, feed, 15, kept), before, `final case ${Number(homeWins)}`);
+    // No kept set: no picks, never picks that ignore ESPN's letters.
+    assert.deepEqual(pickPlayoffRaceGames(after, feed, 15), new Set(), `no kept set, final case ${Number(homeWins)}`);
+  }
+});
+
+// FIX verdict on #325, finding 2: the standings count a final before the
+// scoreboard's record line does. One stale row must not blank the week.
+test("a final whose scoreboard record lags the standings keeps the picks", () => {
+  const kept = weekStartEliminated(SLATE, picture);
+  const after = SLATE.map((g) => g.id !== "g5" ? g : {
+    ...g,
+    state: "post" as const,
+    home: { ...g.home, winner: true }, // records still read 12-2 and 4-10
+    away: { ...g.away, winner: false },
+  });
+  const feed = buildNflPicture(payload({ a5: { w: 13 }, a8: { l: 11 } }));
+  assert.deepEqual(pickPlayoffRaceGames(after, feed, 15, kept), new Set(["g1", "g2", "g3"]));
+});
+
+test("a tie counts as half a game, and a final tie moves nothing", () => {
+  // a16 at 7-6-1 is half a game off seed 7 (a6, 8-6); at 6-7-1 it is 1.5 off.
+  const g = (rec: string): PlayoffRaceGame => ({ ...game("t1", "a11", "a16", 18), home: { teamId: "a16", record: rec, winner: false } });
+  assert.deepEqual(pickPlayoffRaceGames([g("7-6-1")], buildNflPicture(payload({ a16: { w: 7, l: 6, t: 1 } })), 15), new Set(["t1"]));
+  assert.deepEqual(pickPlayoffRaceGames([g("6-7-1")], buildNflPicture(payload({ a16: { w: 6, l: 7, t: 1 } })), 15), new Set());
+
+  // g2 (a15 at a7) ends in a tie; both feeds count it.
+  const kept = weekStartEliminated(SLATE, picture);
+  const after = SLATE.map((x) => x.id !== "g2" ? x : {
+    ...x,
+    state: "post" as const,
+    home: { teamId: "a7", record: "7-7-1", winner: false },
+    away: { teamId: "a15", record: "7-7-1", winner: false },
+  });
+  const feed = buildNflPicture(payload({ a7: { t: 1 }, a15: { t: 1 } }));
+  assert.equal(weekStartEliminated(after, feed), null);
+  assert.deepEqual(pickPlayoffRaceGames(after, feed, 15, kept), new Set(["g1", "g2", "g3"]));
 });
 
 test("a stale feed (behind the scoreboard) gives no tags", () => {
