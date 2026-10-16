@@ -10,10 +10,17 @@ import { formatUpdated, routeLastModified } from "@/lib/routeLastModified";
 // law, and how changes are posted. The not-affiliated sentence lives in the
 // Trademarks section; the footers dropped it (10/14). Plain words like
 // /privacy, and the same third parties /privacy names. Not reviewed by a lawyer.
+// 2026-10-16 (report #399): a Copyright (DMCA) section with the repeat-infringer
+// line, and the official rules for the bracket picks prize. Draft wording.
+
+// The DMCA designated agent. A placeholder until the owner registers one at
+// https://www.copyright.gov/dmca-directory/ and puts the agent's name, mailing
+// address, phone and email here, word for word as registered.
+const DMCA_AGENT = "[DMCA AGENT: NAME, MAILING ADDRESS, PHONE AND EMAIL TO BE ADDED BY THE OWNER]";
 
 const TERMS_TITLE = "Terms of Use | HideScore";
 const TERMS_DESC =
-  "The terms for using HideScore: a free service provided as is, third-party sports data and trademarks, takedown requests, and New Jersey law.";
+  "The terms for using HideScore: a free service provided as is, third-party sports data and trademarks, takedown and copyright notices, bracket picks rules, and New Jersey law.";
 
 // Used when git cannot date the route (a shallow clone, or before the first
 // commit of this folder). Otherwise the date is the folder's last commit, so
@@ -105,6 +112,63 @@ export default function TermsPage() {
           If you own content or a trademark that appears on HideScore and you want it removed, email <EmailLink />.
           Say what it is and where you saw it. A real person reads every message and acts on a valid request quickly.
         </p>
+
+        <h2 id="copyright" className="text-lg font-semibold mt-6">Copyright (DMCA)</h2>
+        <p>
+          To report copyright infringement under the Digital Millennium Copyright Act, send a written notice to our
+          designated agent: <span data-dmca-agent>{DMCA_AGENT}</span>
+        </p>
+        <p>
+          The notice must include your signature, the work you own, where it appears on HideScore, how to reach you, a
+          statement that you believe in good faith the use is not authorized, and a statement, under penalty of
+          perjury, that your notice is accurate and that you own the work or may act for its owner. If we remove
+          something you posted, you can send the agent a counter-notice.
+        </p>
+        <p data-repeat-infringer>
+          We end the accounts of repeat infringers in appropriate circumstances, and we remove what they posted, such as
+          a bracket name.
+        </p>
+
+        <h2 id="bracket-rules" className="text-lg font-semibold mt-6">Bracket picks: official rules</h2>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            <strong>Sponsor.</strong> HideScore runs the bracket picks contest. Contact: <EmailLink />. Apple and Google
+            are not sponsors and are not involved in any way.
+          </li>
+          <li>
+            <strong>No purchase.</strong> Entry is free. No purchase or account is needed, and buying something does
+            not improve your chances.
+          </li>
+          <li>
+            <strong>Who can enter.</strong> People 18 or older (or the age of majority where they live, if higher).
+            Void where prohibited. The people who run HideScore and their households cannot win.
+          </li>
+          <li>
+            <strong>How to enter.</strong> Pick every series in the bracket, add a name or initials, and submit before
+            the picks lock. The lock time is shown on the bracket. One entry per person; we can remove extra entries.
+            Brackets sent after the lock play for fun and cannot win.
+          </li>
+          <li>
+            <strong>Scoring.</strong> Each right pick scores the points shown on the bracket for its round.
+          </li>
+          <li>
+            <strong>Who wins.</strong> When the last series ends, every entry with a perfect bracket wins, and so does
+            the entry in first place on the leaderboard. If entries tie for first place, each tied entry wins.
+          </li>
+          <li>
+            <strong>Prize.</strong> One wish: a reasonable request to HideScore, such as a feature or a league to add.
+            HideScore decides what is reasonable. The prize has no cash value and cannot be exchanged or transferred.
+          </li>
+          <li>
+            <strong>Claiming it.</strong> Email us within 30 days after the last series ends, from the device that sent
+            the entry or the account it is linked to, so we can confirm it is yours. If no winner claims the prize in
+            time, it is not awarded.
+          </li>
+          <li>
+            <strong>Changes.</strong> We can cancel or change the contest if something outside our control, such as a
+            fault or cheating, affects it. Any change is posted here.
+          </li>
+        </ul>
 
         <h2 id="law" className="text-lg font-semibold mt-6">Governing law</h2>
         <p>

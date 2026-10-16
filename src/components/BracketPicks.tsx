@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { abortOwn } from "@/lib/abort";
 import { useHideRanks } from "@/components/HideRanksContext";
@@ -649,6 +650,10 @@ export default function BracketPicks({ bracket, roundHeading, lockAt, lockTbd, r
     <div data-picks className="flex flex-col gap-3">
       <div className="rounded-lg px-3 py-2 text-xs" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}>
         <p data-prize className="m-0 font-bold">🏆 {PRIZE_RULE}</p>
+        {/* The contest's official rules sit on /terms (report #399). */}
+        <p className="m-0 text-[11px]">
+          <Link data-prize-rules href="/terms#bracket-rules" prefetch={false} className="underline underline-offset-2" style={{ color: "var(--text-secondary)" }}>Official rules</Link>
+        </p>
         {locked ? <p data-prize-late className="m-0 text-[11px]" style={{ color: "var(--text-secondary)" }}>Late brackets play for fun.</p> : null}
         <p className="m-0 mt-1 text-[11px]" style={{ color: "var(--text-secondary)" }}>
           Pick the winner of every series. Each right pick scores its round&rsquo;s points: {scoring} (max {maxPoints(bracket)}).

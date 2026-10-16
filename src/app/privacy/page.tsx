@@ -42,7 +42,7 @@ export default function PrivacyPage() {
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
       <DocTopBar route="privacy" subject="Privacy" />
       <h1 className="text-2xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime="2026-09-25">2026-09-25</time></p>
+      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime="2026-10-16">2026-10-16</time></p>
 
       <section className="space-y-4">
         <p>
@@ -62,7 +62,53 @@ export default function PrivacyPage() {
           </li>
         </ul>
         <p>
-          Without an account, your teams and settings stay on your device. The services that handle our stats and crash reports get only this data and must protect it to the same standard.
+          Without an account, your teams and settings stay on your device. The services below get only the data listed next to them and must protect it to the same standard.
+        </p>
+
+        {/* Every outside service the code talks to (2026-10-16, report #399
+            B2). When a new host shows up in layout.tsx, lib/ or _worker.js,
+            add it here; tests/visual/legal-text.spec.ts holds the list. */}
+        <h2 id="services" className="text-lg font-semibold mt-6">Outside services we use</h2>
+        <ul data-services className="list-disc pl-5 space-y-1.5">
+          <li>
+            <strong>Cloudflare</strong> hosts the website and our server. It stores accounts, synced settings, sign-in codes and the bracket leaderboard. It sees your IP address and tells our server your country and region, which we use only to suggest local radio links.
+          </li>
+          <li>
+            <strong>Umami</strong>, run on our own server at stats.hidescore.com, counts usage stats.
+          </li>
+          <li>
+            <strong>GoatCounter</strong> also counts usage stats: the page, the site you came from and your screen size. The switch on the opt-out page turns off Umami only.
+          </li>
+          <li>
+            <strong>Sentry</strong> (USA) receives crash reports from the website and the apps, and speed timings from a sample of visits.
+          </li>
+          <li>
+            <strong>Apple</strong> and <strong>Google</strong> handle Sign in with Apple and Google sign-in, if you use them. In the apps, the App Store or Google Play shows the rating prompt.
+          </li>
+          <li>
+            <strong>Resend</strong> sends the email with your sign-in code. It gets your email address.
+          </li>
+          <li>
+            <strong>Formspree</strong> receives the feedback form: your message, your email and initials if you give them, the app version and your browser type.
+          </li>
+          <li>
+            <strong>GitHub</strong> holds the site&rsquo;s public code, which includes the initials on the Wall of Fame. Initials go there only when you agree.
+          </li>
+          <li>
+            <strong>images.weserv.nl</strong> resizes news and video pictures. It sees your IP address and the picture&rsquo;s address.
+          </li>
+          <li>
+            <strong>Open-Meteo</strong> gives the weather for outdoor games. It gets the venue&rsquo;s city and sees your IP address.
+          </li>
+          <li>
+            <strong>Sports sites and video players</strong>: ESPN, MLB, NHL, YouTube, Brightcove, FotMob, Reddit and Wikimedia. Your device loads scores, videos and logos from them (see Sports data below).
+          </li>
+        </ul>
+        <p>
+          Our server also reads public data from other sports sites, such as theScore, PandaScore, Lichess and World Climbing. Those requests come from our server, not from your device.
+        </p>
+        <p>
+          The bracket leaderboard is public. It shows the name or initials you enter and your picks.
         </p>
 
         <h2 className="text-lg font-semibold mt-6">Deleting your data</h2>
@@ -72,7 +118,7 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-semibold mt-6">Sports data</h2>
         <p>
-          Your device loads scores, schedules and videos straight from public sports sites. Those sites see a normal web request, including your IP address. We do not log these requests.
+          Your device loads scores, schedules and videos straight from public sports sites. Those sites see a normal web request, including your IP address. Some of them pass through our server on Cloudflare first, so it can keep a short-lived copy of the answer. We do not log these requests.
         </p>
 
         <h2 className="text-lg font-semibold mt-6">Children</h2>

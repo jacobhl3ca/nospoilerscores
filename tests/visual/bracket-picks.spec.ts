@@ -102,6 +102,9 @@ for (const vp of [
     const dialog = await openPicks(page);
 
     await expect(dialog.locator("[data-prize]")).toHaveText("🏆 Perfect bracket OR first place: HideScore grants one wish (within reason).");
+    // The official rules live on /terms (report #399).
+    await expect(dialog.locator("[data-prize-rules]")).toHaveText("Official rules");
+    await expect(dialog.locator("[data-prize-rules]")).toHaveAttribute("href", "/terms#bracket-rules");
     await expect(dialog.getByText(/Wild Card 1 · Division Series 2 · LCS 4 · World Series 8 \(max 28\)/)).toBeVisible();
     await expect(dialog.locator("[data-lock-line]")).toContainText("Tue, Sep 29");
     // The lock date is the bold part of the line.
