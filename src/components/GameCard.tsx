@@ -20,6 +20,7 @@ import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
 import { pairingRoundLabel, revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/pairingMask";
 import { shouldShowRating } from "@/lib/ratingGate";
 import { useWatchQueue } from "@/components/WatchQueueContext";
+import { usePlayoffRaceTag } from "@/lib/usePlayoffRace";
 import { useHideRanks } from "@/components/HideRanksContext";
 import { shortNetwork } from "@/lib/networkShort";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -465,6 +466,9 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
   const liveLink = isLive ? liveWatchProps(game) : null;
   // Team-view treats finished games like past-date cards (hide records, show highlights).
   const effectivePastDate = isPastDate || (teamView && isFinished);
+  // NFL "Playoff race" tag (owner design 10/9, lib/nflPlayoffRace): only
+  // where the NFL record already shows, so it rides the same gate.
+  const playoffRace = usePlayoffRaceTag(game, recordKey === "nfl" && recordShowsForState(game.state) && !effectivePastDate);
   // What the status bar (game-meta-row) shows besides a league chip. In
   // ratings mode the schedule shows each finished game's rating
   // (GREAT/GOOD/MEH/SKIP) so you can see which past games were worth
@@ -703,6 +707,25 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
           >
             <span aria-hidden>⚾</span>
             {game.isPerfectGame ? "Perfect Game" : "No-Hitter"}
+          </span>
+        </div>
+      )}
+
+      {/* NFL Playoff race — weeks 13–18, at most 3 games a week where both
+          teams are alive and one is within a game of a playoff spot or its
+          division lead. Same pill and slot as the No-Hitter alert. Picks come
+          from the standings before the week's first kickoff, so no result of
+          this week moves them (lib/nflPlayoffRace). */}
+      {playoffRace && (
+        <div className="mb-1 flex justify-center" data-playoff-race={game.id}>
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap text-emerald-600"
+            style={{ background: "rgba(16, 185, 129, 0.12)" }}
+            title="Both teams are in the playoff hunt"
+            role="img"
+            aria-label="Playoff race: both teams are in the playoff hunt"
+          >
+            Playoff race
           </span>
         </div>
       )}

@@ -5,6 +5,7 @@ import { pruneWatchQueue, type WatchQueueEntry } from "./watchQueue";
 import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
 import { setFrontendLinks } from "./frontendLinks";
 import { setListenPrefs } from "./radio";
+import { setPlayoffRacePrefs } from "./playoffRacePrefs";
 import { pushWidgetPrefs } from "./widgetBridge";
 
 const STORAGE_KEY = "nss-preferences";
@@ -450,6 +451,10 @@ export interface Preferences {
   // gets none — see upcomingRecordLeagues() in lib/upcomingRecords.ts. Nothing
   // writes it any more except a clear on the first league pick.
   hideUpcomingRecords?: boolean;
+  // "Playoff race tags" (owner design 10/9): the small NFL badge on up to 3
+  // games a week, weeks 13–18. Undefined = on. Only shows where NFL records
+  // show, so it does nothing while those are off. See lib/nflPlayoffRace.ts.
+  hidePlayoffRaceTags?: boolean;
   // "Fold games with no playoff stakes" (Jacob 9/24, rule 10/9): an NFL game
   // between two eliminated teams folds into one tap-to-open row at the end of
   // its day. Opt-in, undefined = off. See lib/eliminatedFold.ts.
@@ -819,6 +824,7 @@ export function loadPreferences(): Preferences {
     setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
     setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
     setListenPrefs(prefs.showListenLinks, prefs.listenAnywhere);
+    setPlayoffRacePrefs(prefs.hidePlayoffRaceTags);
     // After setServiceTimeZone, so "today" is the user's chosen zone.
     prefs.watchQueue = pruneWatchQueue(prefs.watchQueue, toYmd(getEtServiceDate()));
     return prefs;
@@ -842,6 +848,7 @@ export function savePreferences(prefs: Preferences): void {
   setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
   setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
   setListenPrefs(prefs.showListenLinks, prefs.listenAnywhere);
+  setPlayoffRacePrefs(prefs.hidePlayoffRaceTags);
   // localStorage.setItem can throw — quota exceeded, or storage blocked in a
   // sandboxed/private context — and savePreferences runs straight out of click
   // handlers (e.g. toggling a setting). Mirror loadPreferences' guard so a
