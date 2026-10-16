@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { OWN_ABORT_PATTERN } from "@/lib/abort";
 import { labelBlankEvent } from "@/lib/sentryEvents";
+import { installNativeCrashGuards } from "@/lib/nativeCrashGuards";
 
 Sentry.init({
   dsn: "https://b1d8b3efe70b8dbe7f865cd0b5dc832a@o4511667913818112.ingest.us.sentry.io/4511694546534400",
@@ -61,5 +62,13 @@ Sentry.init({
     /stats\.hidescore\.com/, // Umami (self-hosted)
   ],
 });
+
+// iOS app only: no picture-in-picture on any <video>, and breadcrumbs for the
+// native crash reports (GitHub #290, #66). See src/lib/nativeCrashGuards.ts.
+try {
+  installNativeCrashGuards(window);
+} catch {
+  /* a guard must never stop the page */
+}
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
