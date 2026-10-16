@@ -16,6 +16,20 @@ test("a blank exception entry gets a type and a value", () => {
   assert.deepEqual(ev.exception.values[0], { type: "NonError", value: "Non-Error captured: undefined" });
 });
 
+test("a labelled event gets the non_error tag and a page-state breadcrumb", () => {
+  const ev = labelBlankEvent(
+    { tags: { a: "1" }, breadcrumbs: [{ category: "ui.click" }] } as Parameters<typeof labelBlankEvent>[0],
+    undefined,
+    { visibility: "hidden", online: false },
+  );
+  assert.deepEqual(ev.tags, { a: "1", non_error: "blank" });
+  assert.deepEqual(ev.breadcrumbs?.at(-1), {
+    category: "non-error", level: "info", message: "Non-Error captured: undefined",
+    data: { visibility: "hidden", online: false },
+  });
+  assert.equal(ev.breadcrumbs?.length, 2);
+});
+
 test("events that already have a title pass through untouched", () => {
   const withValue = { exception: { values: [{ type: "TypeError", value: "x is null" }] } };
   assert.deepEqual(labelBlankEvent(structuredClone(withValue), {}), withValue);
