@@ -1070,7 +1070,9 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
       if (!endedWithinLookback(ev)) continue;
       const teams = extractTeams(ev, sport);
       if (!teams) continue;
-      if (!highlightsReady(ev, sport)) {
+      // Mirrors GameHighlights.tsx: a baked, verified id shows at once; the
+      // post-start window only gates cards with no baked id.
+      if (!bakedValidationByKey.get(`${sport}:${ev.id}`)?.trustedVisible && !highlightsReady(ev, sport)) {
         deferred++;
         continue;
       }

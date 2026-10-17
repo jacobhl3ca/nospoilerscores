@@ -8,7 +8,7 @@ import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import type { FallbackChannel } from "@/lib/collegeHighlights";
 import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, getHighlightMatchGates, hasNoTrustedHighlightSource, highlightDateStrs, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolvedLengthSec, resolveTelemundoWorldCupVideo, sportChannelBlocksEmbeds } from "@/lib/youtube";
-import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId, getVerifiedEspnClip } from "@/lib/highlights";
+import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId, getVerifiedEspnClip, subscribeBaked, watchBakedHighlights } from "@/lib/highlights";
 import { isDuplicateHighlightId } from "@/lib/highlightDedupe";
 import { clubNickname, formatRecapDuration } from "@/lib/recaps";
 import { nflTeamChannelChain } from "@/lib/nflTeamChannels";
@@ -272,6 +272,24 @@ export default function GameHighlights({
   // in our player (see getVerifiedEspnClip). It takes the first button and
   // plays in-app; the YouTube hand-off moves to a labelled link under the row.
   const [espnClip, setEspnClip] = useState(() => (!isMlb && hasOfficialButton ? getVerifiedEspnClip(initialBaked, hlAway, hlHome) : null));
+  // A baked, verified clip for this game exists right now (read from the shared
+  // manifest on every render, so a manifest re-read re-renders the card through
+  // the subscription below). It lifts the kickoff + buffer wait: that wait only
+  // stops a useless LIVE search for a card the bake has nothing for. MLB's
+  // YouTube slots are never drawn, so a baked id there proves nothing.
+  const bakedPresent = !isMlb && !!(
+    initialOfficialId
+    || initialSecondaryId
+    || initialTelemundoShortId
+    || initialTelemundoLongId
+    || (isNfl && verifiedClub(initialBaked))
+    || (hasOfficialButton && getVerifiedEspnClip(initialBaked, hlAway, hlHome))
+  );
+  const [, setBakedTick] = useState(0);
+  useEffect(() => {
+    if (game.state !== "post") return;
+    return subscribeBaked(() => setBakedTick((n) => n + 1));
+  }, [game.state]);
   const prefetchedVideoId = useRef<string | null>(initialSecondaryId ?? null);
   const prefetchedOfficialId = useRef<string | null>(initialOfficialId ?? null);
   const prefetchedTelemundoShortId = useRef<string | null>(initialTelemundoShortId);
@@ -312,7 +330,7 @@ export default function GameHighlights({
 
   const isFinished = game.state === "post";
 
-  const highlightsReady = isFinished && (() => {
+  const highlightsReady = isFinished && (bakedPresent || (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();
     // A completed game is gated on game.state, not the date, so a present-but-
@@ -337,7 +355,7 @@ export default function GameHighlights({
     const otExtra = otPeriods * (BASEBALL_SPORTS.has(game.sport) ? 0.25 : 0.5); // extra innings shorter, OT ~30min each
     const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
     return nowMs > gameStart + bufferMs;
-  })();
+  })());
 
   // Advance nowMs once a minute, but only while it still gates a today's-final
   // card (see the nowMs note above for why the mount-time read alone goes stale),
@@ -593,6 +611,51 @@ export default function GameHighlights({
     }
   }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, lookupDates, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, isNfl, verifiedClub, fifaTelemundoEnabled, weekNumber, compTokens, matchGates, bakedOfficialFromChain, resolveOfficial]);
 
+  // A manifest re-read can bring a clip AFTER the first-load prefetch above ran
+  // (and settled on "missing", or is still on a live search). Take the baked id
+  // the moment it is in the cache. Only an unresolved slot is upgraded, so a
+  // clip the card already shows is never swapped under the viewer's finger.
+  useEffect(() => {
+    if (!isFinished || !initialBaked || isMlb) return;
+    if (hasOfficialButton && officialStatus !== "found") {
+      const hit = bakedOfficialFromChain(initialBaked);
+      if (hit) {
+        setOfficialSource(hit.channel);
+        setOfficialFromFotmob(!!hit.fotmob);
+        setOfficialFotmobHandOff(hit.handOff ?? "");
+        setOfficialDurationSec(Number.isFinite(initialBaked.officialDurationSec) ? (initialBaked.officialDurationSec as number) : null);
+        prefetchedOfficialId.current = hit.id;
+        setOfficialStatus("found");
+      }
+    }
+    if (searchStatus !== "found") {
+      const id = getChannelVerifiedBakedId(initialBaked, "extended", secondaryChannel, hlAway, hlHome);
+      if (id) {
+        setSecondaryDurationSec(Number.isFinite(initialBaked.extendedDurationSec) ? (initialBaked.extendedDurationSec as number) : null);
+        prefetchedVideoId.current = id;
+        setSearchStatus("found");
+      }
+    }
+    if (fifaTelemundoEnabled && isFifa) {
+      if (telemundoShortStatus !== "found") {
+        const id = getChannelVerifiedBakedId(initialBaked, "telemundo", "Telemundo Deportes", hlAway, hlHome);
+        if (id) { prefetchedTelemundoShortId.current = id; setTelemundoShortStatus("found"); }
+      }
+      if (telemundoLongStatus !== "found") {
+        const id = getChannelVerifiedBakedId(initialBaked, "telemundoExtended", "Telemundo Deportes", hlAway, hlHome);
+        if (id) { prefetchedTelemundoLongId.current = id; setTelemundoLongStatus("found"); }
+      }
+    }
+    if (isNfl && !club) {
+      const next = verifiedClub(initialBaked);
+      if (next) setClub(next);
+    }
+    if (hasOfficialButton && !espnClip) {
+      const next = getVerifiedEspnClip(initialBaked, hlAway, hlHome);
+      if (next) setEspnClip(next);
+    }
+  }, [initialBaked, isFinished, isMlb, isNfl, isFifa, fifaTelemundoEnabled, hasOfficialButton, officialStatus, searchStatus, telemundoShortStatus, telemundoLongStatus, club, espnClip, secondaryChannel, hlAway, hlHome, bakedOfficialFromChain, verifiedClub]);
+
   // See resolvedMlb above. Fires only when the board enrich did NOT already
   // attach a recap (game.mlbRecapPlaybackUrl absent) and the highlight window
   // has opened; the ref keeps it to one lookup per game.
@@ -645,6 +708,20 @@ export default function GameHighlights({
   // the condensed yet, show NO 10m button rather than a possibly-wrong one.
   const showMlbCondensed = isMlb && !!mlbCondensedPlayback;
   const showMlb = !!(isFinished && isMlb && (mlbRecapPlayback || showMlbCondensed));
+  // A finished game on today's board with no button yet keeps the manifest
+  // fresh: it is re-read every 10 min and when the tab comes back to the front
+  // (lib/highlights watchBakedHighlights, one shared timer for all such cards),
+  // so a clip the bake adds after page load appears without a reload. Stops
+  // once a button shows, the game is a day old, or the league has no source.
+  const gameStartMs = new Date(game.date).getTime();
+  const waitingForBake = isToday && isFinished && !isMlb && !!officialChannel && !noTrustedSource
+    && !NEVER_RESERVE_SPORTS.has(game.sport)
+    && !(showYouTube || showTelemundo || showNhl || showMlb)
+    && !(Number.isFinite(gameStartMs) && nowMs - gameStartMs > 24 * 60 * 60 * 1000);
+  useEffect(() => {
+    if (!waitingForBake) return;
+    return watchBakedHighlights();
+  }, [waitingForBake]);
   // No playable highlight ⇒ NO row at all, finished or not. f2deaf2d used to
   // reserve the row's height on any finished card so a column of mixed cards
   // lined up, but that trade was wrong in practice: on a slate where NOTHING

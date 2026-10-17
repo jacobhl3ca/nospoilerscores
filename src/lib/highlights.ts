@@ -15,6 +15,8 @@ import { isScoreSpoiler } from "./spoilers";
 // deduped against `official` at bake time).
 export type BakedHighlight = {
   t?: number;
+  // When the bake first wrote this game (never rewritten). `t` is refreshed every run.
+  firstSeen?: number;
   matchup?: string;
   teams?: [string, string];
   eventDate?: string;
@@ -121,40 +123,103 @@ export function getVerifiedEspnClip(
 // Fetched once per session and shared across every card (one small static
 // request vs. N live scrapes). On any miss the promise is cleared so the next
 // card retries rather than caching an empty map for the page's whole lifetime.
+//
+// The manifest is re-read later (refreshBakedHighlights) so an open tab picks up
+// a clip the bake adds after the page loaded. Cards subscribe and re-render when
+// a re-read brings a different manifest.
 let bakedPromise: Promise<Record<string, BakedHighlight>> | null = null;
 let bakedCache: Record<string, BakedHighlight> | null = null;
+let bakedRaw = "";
+const bakedListeners = new Set<() => void>();
+
+function publishBaked(raw: string, games: Record<string, BakedHighlight>) {
+  const changed = raw !== bakedRaw;
+  bakedRaw = raw;
+  bakedCache = games;
+  bakedPromise = Promise.resolve(games);
+  if (changed) bakedListeners.forEach((cb) => cb());
+}
+
+// Reads highlights.json. Returns the games map, or null on any miss (network,
+// non-200, or a body with no `games` map: a malformed or partial deploy, an R2
+// stub, or a bare `{}` is a miss, not an empty day). A present-but-empty
+// `{games:{}}` (a valid day with nothing baked yet) is valid.
+async function fetchBaked(): Promise<{ raw: string; games: Record<string, BakedHighlight> } | null> {
+  try {
+    const res = await fetch(`${getApiBase()}/news/highlights.json`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const raw = await res.text();
+    const data = JSON.parse(raw);
+    if (!data?.games) return null;
+    return { raw, games: data.games as Record<string, BakedHighlight> };
+  } catch {
+    return null;
+  }
+}
 
 export function loadBakedHighlights(): Promise<Record<string, BakedHighlight>> {
   if (!bakedPromise) {
     bakedPromise = (async () => {
-      try {
-        const res = await fetch(`${getApiBase()}/news/highlights.json`, { cache: "no-store" });
-        if (!res.ok) {
-          bakedPromise = null;
-          return {};
-        }
-        const data = await res.json();
-        // A 200 whose body carries no `games` map — a malformed or partial
-        // deploy, an R2 stub, or a bare `{}` — is a miss, not an empty day:
-        // clear the promise so the next card retries, rather than caching an
-        // empty map for the page's whole lifetime (the documented behavior in
-        // this file's header, until now wired only for the !res.ok and
-        // thrown-error branches). A present-but-empty `{games:{}}` (a valid day
-        // with nothing baked yet) still caches as before — one request, no
-        // per-card refetch.
-        if (!data?.games) {
-          bakedPromise = null;
-          return {};
-        }
-        bakedCache = data.games as Record<string, BakedHighlight>;
-        return bakedCache;
-      } catch {
+      const got = await fetchBaked();
+      if (!got) {
         bakedPromise = null;
         return {};
       }
+      publishBaked(got.raw, got.games);
+      return got.games;
     })();
   }
   return bakedPromise;
+}
+
+let bakedRefreshing: Promise<void> | null = null;
+
+// Re-read the manifest now. Listeners fire only when the body changed. One read
+// at a time; a miss leaves the current manifest untouched.
+export function refreshBakedHighlights(): Promise<void> {
+  if (!bakedRefreshing) {
+    bakedRefreshing = (async () => {
+      const got = await fetchBaked();
+      if (got) publishBaked(got.raw, got.games);
+    })().finally(() => { bakedRefreshing = null; });
+  }
+  return bakedRefreshing;
+}
+
+export function subscribeBaked(cb: () => void): () => void {
+  bakedListeners.add(cb);
+  return () => { bakedListeners.delete(cb); };
+}
+
+export const BAKED_REFRESH_MS = 10 * 60 * 1000;
+
+// Cards that are finished with no button yet register here. While at least one
+// is registered, the manifest is re-read every 10 minutes and whenever the tab
+// returns to the front. Counted, so N waiting cards share one timer.
+let bakedWatchers = 0;
+let bakedTimer: ReturnType<typeof setInterval> | null = null;
+function onBakedVisible() {
+  if (document.visibilityState === "visible") void refreshBakedHighlights();
+}
+
+export function watchBakedHighlights(): () => void {
+  if (typeof document === "undefined") return () => {};
+  bakedWatchers++;
+  if (bakedWatchers === 1) {
+    bakedTimer = setInterval(() => { void refreshBakedHighlights(); }, BAKED_REFRESH_MS);
+    document.addEventListener("visibilitychange", onBakedVisible);
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    bakedWatchers--;
+    if (bakedWatchers === 0) {
+      if (bakedTimer) clearInterval(bakedTimer);
+      bakedTimer = null;
+      document.removeEventListener("visibilitychange", onBakedVisible);
+    }
+  };
 }
 
 export function getCachedBakedHighlight(sport: string, id: string): BakedHighlight | null {
