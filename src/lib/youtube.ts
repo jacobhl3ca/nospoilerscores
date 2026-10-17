@@ -1,4 +1,5 @@
 import llwsRegions from "./llwsRegions.json";
+import epcrTeamNames from "./epcrTeamNames.json";
 import collegeHighlightChannels from "./collegeHighlightChannels.json";
 import { buildCollegeFallbackChain, titleMaskedChainChannels, type ChainTeam, type CollegeHighlightConfig, type FallbackChannel } from "./collegeHighlights";
 import { isNflTeamChannel } from "./nflTeamChannels";
@@ -6,6 +7,7 @@ import { isNflTeamChannel } from "./nflTeamChannels";
 // The JSON import types as a literal object, which cannot be indexed by an
 // arbitrary string; the codes come from ESPN at runtime, so widen it once here.
 const LLWS_REGION_NAMES: Record<string, string> = llwsRegions;
+const EPCR_TEAM_NAMES: Record<string, string> = epcrTeamNames;
 
 // Official YouTube channel names per league
 const OFFICIAL_CHANNELS: Record<string, string> = {
@@ -228,6 +230,14 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // no round number, so the home-first order gate tells the two meetings of a
   // season apart (HIGHLIGHT_MATCH_GATES).
   top14: "TOP 14 - Officiel",
+  // Champions Cup + Challenge Cup (lit 2026-10-15): both cups post to ONE
+  // channel. Behind a per-cup title token, the home-first + 400 s gates, the
+  // cup team names (epcrTeamNames.json) and an always-covered title, because
+  // the titles lead with a verdict ("Champions!", "Historic Victory"). 2025-26
+  // re-probe: 91 of 97 games with a cut, 0 wrong. See the rugbychamp note above
+  // NO_HIGHLIGHT_FALLBACK.
+  rugbychamp: "Investec Champions Cup & EPCR Challenge Cup",
+  challengecup: "Investec Champions Cup & EPCR Challenge Cup",
   // euro + cricket deliberately have NO entry — see the block comment below.
   //
   // ── La Liga + Ligue 1, LIT 2026-09-19. Both were dark because the LEAGUE's
@@ -376,22 +386,25 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // appear in no ESPN title. ESPN titles by state/country, so the channel was
 // right and the QUERY was the failure. Fixed by highlightTeamName().
 //
-// rugbychamp + challengecup (Investec Champions Cup, EPCR Challenge Cup):
-// still dark, re-probed 2026-10-14. The 8/11 probe asked the wrong channel
-// names ("Investec Champions Cup", "EPCR Rugby", "Champions Cup": 0/5). Both
-// cups post to ONE channel, "Investec Champions Cup & EPCR Challenge Cup"
-// (UCqn9RhigXvnvVUkKm5iAjxg). Whole 2025-26 season of both cups (114 games)
-// against the local gated worker, strict: 70 right, 1 WRONG, 1 doubtful, 25
-// missed, 17 with no upload. The WRONG: Toulouse v Sharks (Dec 7) got the
-// Jan 17 "Stade Toulousain v Sale Sharks" cut, because ESPN's "Sharks" is a
-// substring of "Sale Sharks". The doubtful one: Saracens v Toulouse (Jan 11)
-// got "Before They Meet Again | Saracens v Stade Toulousain", posted in July.
-// The misses are channel names ESPN does not use (Bristol Bears, Section
-// Paloise, USAP, Newcastle Red Bulls, Hollywoodbets Sharks). Titles also lead
-// with a verdict ("Champions!", "Historic Victory", "80 points!"), so lighting
-// needs the channel in TITLE_ALWAYS_MASKED_CHANNELS, a "Sharks" alias that
-// cannot match "Sale Sharks", and a re-probe at 0 wrong. Script and results:
-// ~/scripts/hs-epcr-probe/ (probe.mjs, gated-local.json).
+// rugbychamp + challengecup (Investec Champions Cup, EPCR Challenge Cup): LIT
+// 2026-10-15 (see OFFICIAL_CHANNELS). Both cups post to ONE channel,
+// "Investec Champions Cup & EPCR Challenge Cup" (UCqn9RhigXvnvVUkKm5iAjxg).
+// The 10/14 probe (strict, no gates, 114 games of 2025-26) had 1 WRONG and 1
+// doubtful. The WRONG: Toulouse v Sharks got "Stade Toulousain v Sale Sharks",
+// because ESPN's "Sharks" is inside "Sale Sharks". The doubtful one: Saracens
+// v Toulouse got "Before They Meet Again | Saracens v Stade Toulousain", a
+// 325 s preview posted in July, after the game, so the age gate let it pass.
+// The fixes: a cup title token each, the home-first order gate, a 400 s floor
+// (match cuts run 503–670 s), the cup club names in epcrTeamNames.json
+// ("Sharks" queries as "Hollywoodbets Sharks", "Bristol Rugby" as "Bristol
+// Bears", "Perpignan" as "USAP", …), "sale sharks" and "newcastle red bulls" in
+// the worker's CONTAINING_TEAM_NAMES, and the channel in the worker's
+// MASKED_LEAGUE_CHANNELS, because every title leads with a verdict
+// ("Champions!", "Historic Victory") that SPOILER_RX refused. The client
+// covers those titles for every user (TITLE_ALWAYS_MASKED_CHANNELS).
+// Re-probed 2026-10-15 with the gates the client sends: 91 right, 0 WRONG, 6
+// missed, 17 with no upload (94% of the games that have a cut). Script and
+// results: ~/scripts/hs-epcr-probe/ (probe2.mjs, gated-2026-10-15.json).
 //
 // rugbytest (International Test Match): no single uploader owns the November
 // window. Best was "Quilter Nations Series" at 2/5 — England home tests only,
@@ -498,17 +511,14 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "ncaah",
   "ncaabase",
   "ncaasoft",
-  "rugbychamp",
   "rugbytest",
   // Club rugby, probed 2026-09-27 (lib/espn.ts has the ids). URC lit then,
-  // Top 14 on 2026-10-03 (see OFFICIAL_CHANNELS).
+  // Top 14 on 2026-10-03, the Champions Cup + Challenge Cup on 2026-10-15
+  // (see OFFICIAL_CHANNELS).
   // premrugby: "PREM Rugby" and "Premiership Rugby" both 0/5 strict; the
   //   league's clips carry no "A v B" pairing in the title.
-  // challengecup: shares the Champions Cup channel; see the rugbychamp note
-  //   above (re-probed 2026-10-14, 1 WRONG, so dark).
   // mlr: 4/8 with one WRONG match, and titles hint at the result.
   "premrugby",
-  "challengecup",
   "mlr",
   "ufl",
   "uecl",
@@ -673,7 +683,9 @@ export function sportChannelBlocksEmbeds(sport: string, channel: string | null |
 // World Climbing is here for the same reason: next to the full-round streams
 // it posts "X takes gold" clips, and a climbing title that names a winner is
 // the whole result.
-const TITLE_ALWAYS_MASKED_CHANNELS = new Set(["UFC", "ESPN MMA", "DAZN Boxing", "World Climbing"]);
+// The EPCR channel (Champions Cup + Challenge Cup) leads every match title with
+// a verdict ("Champions!", "Historic Victory", "Bears Hold On!").
+const TITLE_ALWAYS_MASKED_CHANNELS = new Set(["UFC", "ESPN MMA", "DAZN Boxing", "World Climbing", "Investec Champions Cup & EPCR Challenge Cup"]);
 
 //
 // Soccer club channels and LIGA BBVA MX (the efl / ligamx chains, 2026-09-25)
@@ -804,6 +816,10 @@ const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   // top14: every match cut on "TOP 14 - Officiel" starts "TOP 14". The token
   // keeps out anything else the channel may post about the same two clubs.
   top14: ["top 14"],
+  // rugbychamp + challengecup: one channel posts both cups, and every match
+  // cut ends "| Investec Champions Cup …" or "| EPCR Challenge Cup …".
+  rugbychamp: ["champions cup"],
+  challengecup: ["challenge cup"],
 };
 
 // NFL preseason — the same failure one season-phase over. The NFL channel
@@ -861,12 +877,18 @@ export function cflPlayoffTitleTokens(playoffLabel?: string | null): string[] {
 // Europe and TUDN USA both name the home club first (CBS 18/18, TUDN 14/14 on
 // MD1, 2026-09-16/17). CBS's cuts run 507–642 s, TUDN's 743–1,523 s, and
 // TUDN's goal clips 96–115 s, so the same 5-minute floor as nations.
+// rugbychamp + challengecup: the EPCR channel names the home club first
+// (every 2025-26 match cut), and its cuts run 503–670 s. Its previews ("Before
+// They Meet Again | Saracens v Stade Toulousain", 325 s, posted in July for a
+// January game) and try clips are shorter, so the floor is 400 s.
 // Mirrored by HL_MATCH_GATES in scripts/prebake-news.mjs — keep in sync.
 export type HighlightMatchGates = { homeFirst?: boolean; minSec?: number };
 const HIGHLIGHT_MATCH_GATES: Record<string, HighlightMatchGates> = {
   nations: { homeFirst: true, minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
+  rugbychamp: { homeFirst: true, minSec: 400 },
+  challengecup: { homeFirst: true, minSec: 400 },
 };
 
 export function getHighlightMatchGates(sport: string): HighlightMatchGates | undefined {
@@ -1015,12 +1037,20 @@ export function highlightDateStrs(date: Date, timeZone: string): string[] {
 // title with the school name too ("Alcorn State", not ESPN's "Alcorn St").
 const LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb", "ncaawsoc", "ncaamsoc"]);
 
+// Champions Cup + Challenge Cup: the EPCR channel titles some clubs by a name
+// ESPN does not use ("Bristol Bears", "Section Paloise", "USAP", "Newcastle Red
+// Bulls"), and ESPN's bare "Sharks" is inside "Sale Sharks". The table is
+// epcrTeamNames.json, read by prebake-news.mjs and check-highlight-fallbacks.mjs
+// too. Scoped to the two cups, so URC and NHL "Sharks" queries do not change.
+const EPCR_SPORTS = new Set(["rugbychamp", "challengecup"]);
+
 // Rewrite a team name into the form the sport's official uploader puts in its
-// titles. Identity for every sport but LLWS and the LOCATION_NAME_SPORTS, so
-// nothing else can regress. `location` is ESPN's team.location; when it is
-// missing the short name stands.
+// titles. Identity for every sport but LLWS, the LOCATION_NAME_SPORTS and the
+// two EPCR cups, so nothing else can regress. `location` is ESPN's
+// team.location; when it is missing the short name stands.
 export function highlightTeamName(sport: string, name: string, location?: string | null): string {
   if (LOCATION_NAME_SPORTS.has(sport)) return location?.trim() || name;
+  if (EPCR_SPORTS.has(sport)) return EPCR_TEAM_NAMES[name] ?? name;
   if (sport !== "llws") return name;
   const code = name.trim().split(/\s+/).pop() ?? "";
   return LLWS_REGION_NAMES[code.toUpperCase()] ?? name;

@@ -29,6 +29,8 @@ const yt = await jiti.import<{
   getCompetitionTitleTokens: (sport: string) => string[];
   getHighlightMatchGates: (sport: string) => { homeFirst?: boolean; minSec?: number } | undefined;
   highlightMatchGateParams: (gates?: { homeFirst?: boolean; minSec?: number }) => string;
+  channelAlwaysMasksTitle: (channels: string[]) => boolean;
+  highlightTeamName: (sport: string, name: string, location?: string | null) => string;
 }>("../src/lib/youtube.ts");
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
@@ -99,10 +101,9 @@ test("rugby tests show in 2026 for the Aug–Oct tests, and still in odd years",
   assert.ok(on(new Date(2027, 6, 10)), "odd-year July tests unchanged");
 });
 
-test("URC and Top 14 are lit; the other four stay dark", () => {
-  assert.equal(yt.hasNoTrustedHighlightSource("urc"), false);
-  assert.equal(yt.hasNoTrustedHighlightSource("top14"), false);
-  for (const s of ["premrugby", "rugbychamp", "challengecup", "mlr"]) assert.equal(yt.hasNoTrustedHighlightSource(s), true, s);
+test("URC, Top 14 and the two EPCR cups are lit; Prem and MLR stay dark", () => {
+  for (const s of ["urc", "top14", "rugbychamp", "challengecup"]) assert.equal(yt.hasNoTrustedHighlightSource(s), false, s);
+  for (const s of ["premrugby", "mlr"]) assert.equal(yt.hasNoTrustedHighlightSource(s), true, s);
   const bake = src("../scripts/prebake-news.mjs");
   const audit = src("../scripts/check-highlight-fallbacks.mjs");
   assert.ok(/sport: "urc",\s+path: "\/rugby\/270557\/scoreboard",\s+channel: "United Rugby Championship"/.test(bake));
@@ -124,6 +125,27 @@ test("URC and Top 14 are lit; the other four stay dark", () => {
     assert.ok(f.includes('"Cardiff Blues": "Cardiff Rugby"'), "Cardiff alias in all three");
     assert.ok(f.includes('"Benetton Treviso": "Benetton"'), "Benetton alias in all three");
   }
+  // Champions Cup + Challenge Cup: one channel, a token per cup, the
+  // home-first + 400 s gates, in the app, the bake and the audit alike.
+  const epcr = "Investec Champions Cup & EPCR Challenge Cup";
+  for (const [sport, id, token] of [["rugbychamp", "271937", "champions cup"], ["challengecup", "272073", "challenge cup"]]) {
+    assert.equal(yt.getOfficialChannelName(sport), epcr, sport);
+    assert.deepEqual(yt.getCompetitionTitleTokens(sport), [token]);
+    assert.equal(yt.highlightMatchGateParams(yt.getHighlightMatchGates(sport)), "&order=home&minsec=400");
+    assert.ok(new RegExp(`sport: "${sport}",\\s+path: "/rugby/${id}/scoreboard",\\s+channel: "${epcr}"`).test(bake), `${sport} bake row`);
+    assert.ok(audit.includes(`${sport}: "${epcr}"`), `${sport} audit channel`);
+    for (const f of [bake, audit]) {
+      assert.ok(f.includes(`${sport}: { homeFirst: true, minSec: 400 }`), `${sport} gates`);
+      assert.ok(f.includes(`${sport}: ["${token}"]`), `${sport} token`);
+    }
+  }
+  assert.ok(yt.channelAlwaysMasksTitle([epcr]), "EPCR titles always covered");
+  // The cup club names: "Sharks" never queries bare in the cups (it is inside
+  // "Sale Sharks"), and URC keeps ESPN's name.
+  assert.equal(yt.highlightTeamName("rugbychamp", "Sharks"), "Hollywoodbets Sharks");
+  assert.equal(yt.highlightTeamName("challengecup", "Perpignan"), "USAP");
+  assert.equal(yt.highlightTeamName("urc", "Sharks"), "Sharks");
+  for (const f of [bake, audit]) assert.ok(f.includes("epcrTeamNames.json"), "bake + audit read the cup names file");
 });
 
 test("every union column reads the shared r/rugbyunion bake", () => {
