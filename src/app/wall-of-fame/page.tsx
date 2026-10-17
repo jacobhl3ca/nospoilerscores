@@ -43,7 +43,7 @@ export default function WallOfFamePage() {
     <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
       <DocTopBar route="wall-of-fame" subject="Wall of Fame" />
       {/* Header (2026-10-15): "Wall of Fame" is a proper name, so Title Case,
-          with an amber trophy tile (the Fix pill's amber family) and a live
+          with an amber trophy tile (the amber family) and a live
           count. No gradient text, no motion. */}
       <header className="mb-6" data-testid="wall-header">
         <div className="flex items-center gap-3 mb-2">
