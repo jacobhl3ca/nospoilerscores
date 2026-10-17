@@ -4280,7 +4280,8 @@ async function bakeGameHighlights() {
             : await fetchYtDurationSec(extended);
         }
 
-        const entry = { t: now, teams: [away, home], matchup, eventDate: item.date };
+        // firstSeen = when this game first got an entry; `t` is rewritten every run and the client age check reads it, so it stays as is.
+        const entry = { t: now, firstSeen: Number.isFinite(rawPrev.firstSeen) ? rawPrev.firstSeen : now, teams: [away, home], matchup, eventDate: item.date };
         if (official) {
           entry.official = official;
           entry.officialChannel = officialChannel;
