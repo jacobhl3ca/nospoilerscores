@@ -420,6 +420,10 @@ export interface Preferences {
   // starred. See lib/favoritesFilter.ts.
   favoritesOnly?: boolean;
   favoritesOnlyStrict?: Sport[];
+  // "Ranked only" (Settings → Leagues): college football keeps only the games
+  // with an AP / CFP ranked team, on its column, the mixed columns and the
+  // Schedule tab. Opt-in, undefined = off. See lib/rankedOnly.ts.
+  ncaafRankedOnly?: boolean;
   // A pinned league between seasons keeps its column, which asks once
   // "Close this column?" (Jacob 10/9). Keep puts the league here and the
   // question does not come back for it. Close empties the slot instead.

@@ -2605,6 +2605,12 @@ export default function LeagueColumn({
                 </button>
               )}
             </div>
+          ) : league.rankedOnlyEmpty ? (
+            // NCAAF "Ranked only": the day has no game with a ranked team
+            // (lib/rankedOnly.ts). One line, not another day's slate.
+            <p data-ranked-only-empty className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>
+              {isToday ? "No ranked games today" : "No ranked games this day"}
+            </p>
           ) : fav.mode === "filter" && !league.previousGameDay && (isPastDate ? !notStartedDate : !league.nextGameDay) ? (
             // "Only my teams" left nothing on this day or either side of it.
             // The offseason return date still beats a shrug; mid-season that

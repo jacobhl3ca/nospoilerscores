@@ -15,6 +15,7 @@ import { accountPrefsBase, carryCardPrefs, samePrefs } from "@/lib/prefsMerge";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { mergeDismissedKeys } from "@/lib/dismissals";
 import { applyFavoritesFilter, favoritesEmptied, filterLeague } from "@/lib/favoritesFilter";
+import { applyRankedOnly, filterRankedOnly, rankedOnlyOn } from "@/lib/rankedOnly";
 import { keepDeviceLocalPrefs } from "@/lib/devicePrefs";
 import { upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import { LeaguePickerModal } from "./LeaguePickerModal";
@@ -3135,7 +3136,14 @@ export default function HomeContent({
   // sort is dead — the star UI that set it has been removed; keeping the sort
   // around could still reorder columns for users with stale localStorage prefs,
   // breaking the "Auto on col N = the column's default" guarantee.
-  const sortedLeagues = leagues;
+  // "Ranked only" cuts the unranked NCAAF games here, once, so every column,
+  // the Final split and the recap pills read the same slate. The league list
+  // itself (and so the slot order) never changes.
+  const rankedOnly = rankedOnlyOn(prefs);
+  const sortedLeagues = useMemo(
+    () => (rankedOnly ? leagues.map((l) => applyRankedOnly(l, true)) : leagues),
+    [leagues, rankedOnly],
+  );
 
   // The "News" link under the ESPN front page column's header (LeagueColumn
   // onOpenNews, Jacob 10/10; not on the league rows or the recap pills). It
@@ -3806,7 +3814,7 @@ export default function HomeContent({
         if (got === undefined) pending++;
         else if (got !== "failed") games = got;
       }
-      const shown = filterLeague({ ...(board ?? { sport, label, games }), games }, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
+      const shown = filterRankedOnly(filterLeague({ ...(board ?? { sport, label, games }), games }, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games, rankedOnly);
       return { sport, label: board?.label ?? label, games: shown };
     });
     const groups = buildSchedule(inputs, { favoriteTeams: prefs.favoriteTeams, tz });

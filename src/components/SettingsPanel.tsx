@@ -928,6 +928,7 @@ export default function SettingsPanel({
     hideTeamStars: undefined,
     favoritesOnly: undefined,
     favoritesOnlyStrict: undefined,
+    ncaafRankedOnly: undefined,
     offseasonKeep: undefined,
     hideWatchLaterPill: undefined,
     watchQueue: undefined,
@@ -1536,6 +1537,17 @@ export default function SettingsPanel({
               hint="Stack your leagues in one wide column with bigger cards, instead of side-by-side columns. This device only."
               checked={prefs.singleColumn ?? false}
               onChange={(v) => updatePrefs({ singleColumn: v })}
+            />
+            {/* College football's one league setting. The rank is the poll
+                from before kickoff, the same one the #N chip shows, so the
+                cut never hints at a result (lib/rankedOnly.ts). */}
+            <ToggleRow
+              label="Ranked only"
+              hint="College football (NCAAF): show only games with an AP or CFP ranked team"
+              checked={!!prefs.ncaafRankedOnly}
+              onChange={(v) => updatePrefs({ ncaafRankedOnly: v ? true : undefined })}
+              testId="ncaaf-ranked-only"
+              className="min-h-[44px]"
             />
           </Section>
 
@@ -2851,14 +2863,18 @@ function ToggleRow({
   hint,
   checked,
   onChange,
+  testId,
+  className = "",
 }: {
   label: string;
   hint?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  testId?: string;
+  className?: string;
 }) {
   return (
-    <label className="flex items-start justify-between gap-3 cursor-pointer select-none">
+    <label data-testid={testId} className={`flex items-start justify-between gap-3 cursor-pointer select-none ${className}`}>
       <div className="flex-1">
         <div className="text-sm font-medium" style={{ color: "var(--text)" }}>{label}</div>
         {hint && <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>{hint}</div>}
