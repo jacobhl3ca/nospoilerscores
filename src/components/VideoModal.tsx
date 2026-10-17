@@ -10,7 +10,7 @@ import { buildKeyLegend } from "@/lib/modalKeyLegend";
 import ModalKeyHints from "@/components/ModalKeyHints";
 import { shareCardUrl, buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
-import { exitDocumentFullscreen, requestElementFullscreen } from "@/lib/mediaSafe";
+import { exitDocumentFullscreen, pauseMedia, playMedia, requestElementFullscreen, seekMedia } from "@/lib/mediaSafe";
 import { routeModalKey, nativeVideoOwnsKey, sliderOwnsKey } from "@/lib/modalArrowKeys";
 import { noteHighlightWatched } from "@/lib/rateApp";
 import { trackEvent } from "@/lib/track";
@@ -1004,7 +1004,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const resumeBlockedPlayback = useCallback(() => {
     clearAutoplayBlocked();
     if (hlsMode) {
-      videoRef.current?.play().catch(handleNativePlayError);
+      if (videoRef.current) playMedia(videoRef.current, handleNativePlayError);
     } else if (ytMode) {
       playerRef.current?.playVideo?.();
       // playVideo() is a postMessage — it can be refused silently (autoplay
@@ -1092,7 +1092,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         document.body.appendChild(ta);
         ta.select();
         document.execCommand("copy");
-        document.body.removeChild(ta);
+        ta.remove();
       }
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
@@ -1174,8 +1174,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       if (!dv || !isFinite(dv) || dv <= 0) return;
       const targetV = Math.min(pct / 100, seekCap);
       guardSeek(targetV, () => {
-        v.currentTime = dv * targetV;
-        void v.play().catch(() => { /* autoplay prompt already covers this */ });
+        seekMedia(v, dv * targetV);
+        playMedia(v); // a refusal: the autoplay prompt already covers it
         setProgress(targetV);
       });
       return;
@@ -1219,8 +1219,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (v && hlsMode) {
       const dv = v.duration;
       if (!dv || !isFinite(dv) || dv <= 0) return;
-      v.currentTime = dv * frac;
-      if (final) void v.play().catch(() => { /* autoplay prompt already covers this */ });
+      seekMedia(v, dv * frac);
+      if (final) playMedia(v); // a refusal: the autoplay prompt already covers it
       setProgress(frac);
       return;
     }
@@ -1261,8 +1261,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       const dur = v.duration;
       if (!dur || !isFinite(dur) || dur <= 0) return;
       const target = delta >= 0 ? Math.min(v.currentTime + delta, dur) : Math.max(0, v.currentTime + delta);
-      v.currentTime = target;
-      void v.play().catch(() => { /* autoplay prompt already covers this */ });
+      seekMedia(v, target);
+      playMedia(v); // a refusal: the autoplay prompt already covers it
       setProgress(Math.min(1, target / dur));
       return;
     }
@@ -1292,8 +1292,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     // (Jacob 9/5).
     const v = videoRef.current;
     if (v && hlsMode) {
-      if (v.paused) void v.play().catch(handleNativePlayError);
-      else v.pause();
+      // Through the mediaSafe helpers: a media call in the wrong state must not
+      // throw out of a tap (GitHub #245).
+      if (v.paused) playMedia(v, handleNativePlayError);
+      else pauseMedia(v);
       return;
     }
     const p = playerRef.current;
@@ -1868,7 +1870,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         if (player.levels && player.levels.length > 0) {
           player.currentLevel = player.levels.length - 1;
         }
-        video.play().catch(handleNativePlayError);
+        playMedia(video, handleNativePlayError);
       });
       }).catch(() => { if (!cancelled) setMediaFailed(true); });
     };
@@ -1898,7 +1900,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     // Plain MP4 / Safari native HLS — set src and play.
     if (!isHls || video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = playbackUrl;
-      video.play().catch(handleNativePlayError);
+      playMedia(video, handleNativePlayError);
     } else {
       startHlsJs();
     }

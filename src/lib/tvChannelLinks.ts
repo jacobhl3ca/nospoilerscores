@@ -19,7 +19,10 @@
 // page load made Firefox ask "allow this site to reach your local network?"
 // on every visit.
 //
-// Pure + import-free so `node --experimental-strip-types` can test it.
+// Pure, and imports only the import-free abort.ts, so
+// `node --experimental-strip-types` can test it.
+
+import { ownTimeoutSignal } from "./abort.ts";
 
 export type TvPlayer = "auto" | "iina" | "vlc" | "raw";
 
@@ -130,7 +133,7 @@ const inflight = new Map<string, Promise<CheckState>>();
 type Fetcher = (url: string) => Promise<{ status: number }>;
 let checkFetch: Fetcher | null =
   typeof window !== "undefined" && typeof fetch === "function"
-    ? (u) => fetch(u, { mode: "cors", cache: "no-store", credentials: "omit", signal: AbortSignal.timeout(5000) })
+    ? (u) => fetch(u, { mode: "cors", cache: "no-store", credentials: "omit", signal: ownTimeoutSignal(5000) })
     : null;
 
 /** Tests swap the network out; null turns the pre-check off. */

@@ -121,7 +121,7 @@ function FittedLine({
           }
         }
       }
-      document.body.removeChild(probe);
+      probe.remove();
       // Put the chosen size back on the NODE before yielding, not just in state.
       // `measure` clears node.style.fontSize to read the cap (see above), and
       // React only rewrites that style when `fit` actually changes — so every
@@ -964,7 +964,7 @@ export default function EventCard({
       probe.style.letterSpacing = "";
       const pillW = pillText + (isMobile ? 12 : 16);
       const bcW = event.broadcasts.length ? maxW([event.broadcasts[0]], metaFs) : 0;
-      document.body.removeChild(probe);
+      probe.remove();
       const metaGaps = isMobile ? 4 : 6; // gap-x-1 / sm:gap-x-1.5
       const metaAvail = colWidth - cardPadding - 2;
       // Ladder — always ONE line, never a wrap (Jacob 7/19: a card that grew a

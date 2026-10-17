@@ -14,6 +14,7 @@ import { trackEvent } from "@/lib/track";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
 import { BRACKET_RESULTS_ALWAYS_KEY, loadResultsAlways } from "@/lib/playoffPicture";
+import { DEFAULT_TIME_ZONE, isValidTimeZone } from "@/lib/etDay";
 import { FREQUENT_RECORD_LEAGUES, recordKeysForLeagues, toggleRecordLeague, upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import {
   boardHiddenLeagues,
@@ -377,8 +378,15 @@ export default function SettingsPanel({
     setIsSafari(/^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent));
   }, []);
 
+  // A device that reports "Etc/Unknown" (GitHub #79) shows the zone the board
+  // really uses, the same fallback as getTimeZone() in lib/etDay.ts.
+  // ⚠️ Keep this read as `Intl.DateTimeFormat()` with no `new`: that call
+  // keeps the React Compiler lint out of this component. Calling
+  // getDeviceTimeZone() here instead surfaces three set-state-in-effect lint
+  // errors in this panel, which are a separate change.
   let deviceTimeZone = "";
   try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
+  if (!isValidTimeZone(deviceTimeZone)) deviceTimeZone = DEFAULT_TIME_ZONE;
   // Time zone row: which pill is on, and whether the full list is open.
   const [zoneOtherOpen, setZoneOtherOpen] = useState(false);
   const savedZonePill = ZONE_PILLS.find((z) => z.zone && z.zone === prefs.timezone);

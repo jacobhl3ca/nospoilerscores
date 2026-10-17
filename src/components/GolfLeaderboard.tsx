@@ -278,7 +278,7 @@ export default function GolfLeaderboard({
       const sample = sortedPlayers.slice(0, 25);
       const fullMax = measureMax(sample.map((p) => p.name));
       const initialMax = measureMax(sample.map((p) => p.shortName));
-      document.body.removeChild(probe);
+      probe.remove();
 
       if (fullMax <= available) setNameTier("full");
       else if (initialMax <= available) setNameTier("initial");
