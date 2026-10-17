@@ -369,15 +369,13 @@ function PairingMaskCard({ game, nextGameDate, leagueTag, showRatings, onReveal 
           Nothing else from the full card joins it: no series line, no venue
           (it names the home club), no highlights (the video names both). */}
       <div className="mt-1.5 flex items-center justify-between gap-2">
-        <span className="text-sm font-medium truncate min-w-0" style={{ color: "var(--text)" }}>{round}</span>
+        <span className="text-sm font-medium truncate min-w-0" style={{ color: "var(--text)" }}>
+          {round}
+          {/* Names no team, so the cover keeps it (lib/calledGames.ts makeupOfDay). */}
+          {game.movedFrom && game.state === "pre" && <span data-moved-from className="ml-1 text-[11px] font-normal" style={{ color: "var(--text-muted)" }}>· makeup of {game.movedFrom.day}</span>}
+        </span>
         {shouldShowRating(game, showRatings) && <span className="shrink-0 flex"><RatingBadge rating={game.rating!} /></span>}
       </div>
-      {/* Names no team, so the cover keeps it (lib/espn.ts applyMovedFrom). */}
-      {game.movedFrom && game.state !== "post" && (
-        <div data-moved-from className="mt-1 text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
-          Moved from {game.movedFrom.day}{game.movedFrom.reason ? ` (${game.movedFrom.reason})` : ""}
-        </div>
-      )}
       <button
         type="button"
         onClick={onReveal}
@@ -695,13 +693,6 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
           Jacob 9/23: hide it. seriesStatus now only marks the game as part of
           a playoff series; the slot shows the neutral game number from the
           notes headline (game.seriesNote), or nothing when ESPN gives none. */}
-      {/* The game replaces one called off the day before (lib/espn.ts
-          applyMovedFrom). Display only, filled in after first paint. */}
-      {game.movedFrom && game.state !== "post" && (
-        <div data-moved-from className="mb-1 text-[11px] text-center truncate" style={{ color: "var(--text-muted)" }}>
-          Moved from {game.movedFrom.day}{game.movedFrom.reason ? ` (${game.movedFrom.reason})` : ""}
-        </div>
-      )}
       {game.seriesStatus && game.seriesNote && !hideSeriesNote && isFuture && showRatings && isToday && !nextGameDate && (
         <div className="xl:hidden mb-1 text-[11px] text-center italic" style={{ color: "var(--text-muted)" }}>
           {game.seriesNote}
@@ -987,6 +978,16 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 )
               ) : null}
             </span>
+            {/* "· makeup of Fri" on the game ESPN calls the makeup of a
+                postponed one (Jacob 10/17). In the time row so the card keeps
+                its height: flex-1 with a zero basis, so it takes only the room
+                left beside the time and network and truncates first, and the
+                row never wraps for it. */}
+            {game.movedFrom && game.state === "pre" && !teamView && (
+              <span data-moved-from className="flex-1 min-w-0 truncate text-[11px]" style={{ color: "var(--text-muted)" }}>
+                · makeup of {game.movedFrom.day}
+              </span>
+            )}
             </span>
             {/* Middle cell is rendered ONLY when it has breakpoint-visible content,
                 so an empty middle never eats a flex gap (which was clipping the

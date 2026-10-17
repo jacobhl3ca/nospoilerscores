@@ -70,6 +70,33 @@ export function cleanRoundLabel(label: string): string {
   return out.replace(/\s+Makeup of [A-Z][a-z]{2,8}\.? \d{1,2}\s*$/i, "").trim();
 }
 
+// The game that replays a postponed one carries ESPN's "Makeup of <date>"
+// ("ALCS - Game 5 Makeup of Oct 16", or "Makeup of 10/16"). Answers that date
+// as the weekday ("Fri") when it falls under a week before this game's ET day,
+// else as "Oct 16"; null when the note has no such tail. The note gives no
+// year: the one that puts the date on or before the game wins.
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MAKEUP_OF_RE = /\bMakeup of (?:([A-Z][a-z]{2,8})\.? (\d{1,2})|(\d{1,2})\/(\d{1,2}))\b/i;
+
+export function makeupOfDay(headline: string | null | undefined, gameDate: string): string | null {
+  const m = (headline ?? "").match(MAKEUP_OF_RE);
+  if (!m) return null;
+  const month = m[1] ? MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) : +m[3] - 1;
+  const day = +(m[2] ?? m[4]);
+  if (month < 0 || month > 11 || day < 1 || day > 31) return null;
+  const label = `${MONTH_NAMES[month]} ${day}`;
+  const atMs = Date.parse(gameDate);
+  if (!Number.isFinite(atMs)) return label;
+  const ymd = ymdInZone(atMs, "America/New_York");
+  const gameUtc = Date.UTC(+ymd.slice(0, 4), +ymd.slice(5, 7) - 1, +ymd.slice(8, 10));
+  let madeUp = Date.UTC(+ymd.slice(0, 4), month, day);
+  if (madeUp > gameUtc) madeUp = Date.UTC(+ymd.slice(0, 4) - 1, month, day);
+  const daysBack = Math.round((gameUtc - madeUp) / 86_400_000);
+  return daysBack >= 1 && daysBack <= 6 ? WEEKDAYS[new Date(madeUp).getUTCDay()] : label;
+}
+
 // Pull the next game between the same two teams out of a list, either
 // home/away order: the first one that starts after the called game. Any state,
 // so a past day viewed after the replay still names it.

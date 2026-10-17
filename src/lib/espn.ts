@@ -1,5 +1,5 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout, ClimbRound, CalledGame } from "./types";
-import { calledKind, parseCalledNote, cleanRoundLabel, findNextMeeting } from "./calledGames";
+import { calledKind, parseCalledNote, cleanRoundLabel, findNextMeeting, makeupOfDay } from "./calledGames";
 import { abortOwn } from "./abort";
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
@@ -3073,6 +3073,14 @@ export function settleEndOfRegulation(event: ScoreboardEvent, sport: Sport): voi
   status.type = { ...type, state: "post", completed: true, name: "STATUS_FINAL", shortDetail: detail, detail };
 }
 
+function makeupOf(notes: { headline?: string }[] | undefined, date: string): Pick<Game, "movedFrom"> {
+  for (const note of notes ?? []) {
+    const day = makeupOfDay(note?.headline, date);
+    if (day) return { movedFrom: { day } };
+  }
+  return {};
+}
+
 export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   settleEndOfRegulation(event, sport);
   const competition = event.competitions?.[0];
@@ -3312,6 +3320,8 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     seriesNote,
     weekNumber: gridironWeekNumber(sport, event),
     isPlayoff,
+    // "· makeup of Fri" on the game ESPN calls the makeup (Jacob 10/17 round 2).
+    ...makeupOf(competition?.notes, event.date),
     isPreseason,
     playoffLabel,
     seriesStatus,
@@ -6060,93 +6070,6 @@ async function resolveCalledNext(sport: Sport, called: CalledGame[], baseYmd: st
     return out;
   }
   return remember();
-}
-
-// "Moved from Fri (rain)" on the game that replays one called off the day
-// before (Jacob 10/17, part 2). Runs AFTER the board paints: HomeContent calls
-// applyMovedFrom with whatever is already known (synchronous, so a 10s live
-// poll never flickers the line off), then loadMovedFrom for the rest, then
-// applyMovedFrom again. One ESPN call per league per day at most, held for the
-// page's life. Display only — nothing reads Game.movedFrom.
-const movedFromCalled = new Map<string, CalledGame[]>(); // `${sport}|${prevYmd}`
-const movedFromInFlight = new Map<string, Promise<void>>();
-const MOVED_FROM_SKIP = new Set<Sport>(["tennis", "golf", "top", "best"]);
-
-function prevYmdOf(ymd: string): string {
-  const d = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8)));
-  d.setUTCDate(d.getUTCDate() - 1);
-  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
-}
-
-function movedFromTargets(leagues: LeagueData[]): Sport[] {
-  return [...new Set(leagues.filter((l) => l.games.length && !MOVED_FROM_SKIP.has(l.sport) && !l.eventCard && !l.golfTournament).map((l) => l.sport))];
-}
-
-// The leagues (by sport) whose previous-day called list is not known yet.
-export function movedFromPending(leagues: LeagueData[], date: string | undefined): Sport[] {
-  const prev = prevYmdOf(date || toYmd(getEtServiceDate()));
-  return movedFromTargets(leagues).filter((sport) => !movedFromCalled.has(`${sport}|${prev}`));
-}
-
-export async function loadMovedFrom(sports: Sport[], date: string | undefined): Promise<void> {
-  const prev = prevYmdOf(date || toYmd(getEtServiceDate()));
-  await Promise.all(sports.map((sport) => {
-    const key = `${sport}|${prev}`;
-    if (movedFromCalled.has(key)) return Promise.resolve();
-    let p = movedFromInFlight.get(key);
-    if (!p) {
-      p = (async () => {
-        // A device copy of that day's board already holds its called list.
-        const cached = readScoreboardCache(sport, prev);
-        if (cached && cached.called.length) {
-          movedFromCalled.set(key, cached.called);
-          return;
-        }
-        const events = await fetchScoreboardEventsForDay(sport, prev);
-        const called = eventsToCalledGames(events, sport);
-        // fetchScoreboardEventsForDay answers [] on a failure too; holding an
-        // empty list then only costs this page load a missing line.
-        movedFromCalled.set(key, SOCCER_SPORTS.has(sport) ? called.filter((c) => etSlateYmd(c.date) === prev) : called);
-      })().finally(() => movedFromInFlight.delete(key));
-      movedFromInFlight.set(key, p);
-    }
-    return p;
-  }));
-}
-
-// Returns the same array when nothing changes, so a caller can skip a render.
-export function applyMovedFrom(leagues: LeagueData[], date: string | undefined): LeagueData[] {
-  const prev = prevYmdOf(date || toYmd(getEtServiceDate()));
-  const day = fromYmd(prev).toLocaleDateString("en-US", { weekday: "short" });
-  let changed = false;
-  const out = leagues.map((league) => {
-    if (!league.games.length || MOVED_FROM_SKIP.has(league.sport)) return league;
-    const called = movedFromCalled.get(`${league.sport}|${prev}`);
-    if (!called?.length) return league;
-    const taken = new Set<string>();
-    const marks = new Map<string, Game["movedFrom"]>();
-    // Playoff series only: there a rainout is replayed the next day. In the
-    // regular season the next meeting is just the next game of the series.
-    for (const c of called) {
-      if (!c.isPlayoff) continue;
-      const hit = findNextMeeting(c, league.games.filter((g) => !taken.has(g.id) && g.isPlayoff));
-      if (!hit) continue;
-      taken.add(hit.id);
-      marks.set(hit.id, { day, reason: c.reason ? c.reason.toLowerCase() : null });
-    }
-    if (!marks.size) return league;
-    let leagueChanged = false;
-    const games = league.games.map((g) => {
-      const m = marks.get(g.id);
-      if (!m || (g.movedFrom?.day === m.day && g.movedFrom?.reason === m.reason)) return g;
-      leagueChanged = true;
-      return { ...g, movedFrom: m };
-    });
-    if (!leagueChanged) return league;
-    changed = true;
-    return { ...league, games };
-  });
-  return changed ? out : leagues;
 }
 
 // Reconcile team-schedule ratings with the dated/live-final view.
