@@ -668,8 +668,9 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
   // identical item counts (each prebake caps at 12), card N ends at the same
   // vertical position in every column, giving the row-by-row alignment Jacob
   // asked for. 7rem ≈ 5 text-sm lines (line-clamp-5 cap) + py-2 padding, so a
-  // max-length headline fits without truncation while shorter ones sit at the
-  // top with a small blank below.
+  // max-length headline fits without truncation while shorter ones sit
+  // centered (items-center) with equal blank above and below, matching the
+  // col 3 CompactTailRow (Jacob 10/17).
   // No min-height on phones: mobile is a single merged feed, so the
   // cross-column row alignment the floor buys is moot — it just leaves a tall
   // empty box under short headlines. Let rows hug their text on mobile; keep
@@ -683,7 +684,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
   // .news-textpost gates visibility; .news-title keeps the headline blurred
   // until the global reveal toggle un-blurs it or the row is tapped open.
   const isTextPost = itemIsTextPost(item);
-  const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]${hugRows ? "" : " sm:min-h-[7rem]"}${isTextPost ? " news-textpost" : ""}`;
+  const rowCls = `flex items-center gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]${hugRows ? "" : " sm:min-h-[7rem]"}${isTextPost ? " news-textpost" : ""}`;
   const titleCls = "news-title min-w-0 line-clamp-5";
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   // Every news item opens the same modal; its source link remains available
@@ -861,7 +862,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
             type="button"
             data-news-open=""
             onClick={open}
-            className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--bg-card-hover)]"
+            className="shrink-0 my-px w-6 h-6 -mr-1 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--bg-card-hover)]"
             style={{ color: "var(--text-muted)" }}
             aria-label="Open post"
             title="Open post"
@@ -905,7 +906,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index, hugRows }: { item: Ne
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
-          className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded"
+          className="shrink-0 my-px w-6 h-6 -mr-1 flex items-center justify-center rounded"
           style={{ color: "var(--text-muted)" }}
           aria-label="Open post"
         >
