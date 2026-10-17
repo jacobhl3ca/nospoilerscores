@@ -25,6 +25,10 @@ import org.json.JSONObject;
  * drop off) and hits the network at most every 3 h. A favorites change in the
  * app (HideScoreWidgetPlugin) and the refresh button fetch at once. The ‹ ›
  * arrows of a 1-row widget redraw from the cache, no network.
+ *
+ * A tap anywhere opens the app, except on a 1-row widget: there the game row
+ * is › and only the header opens the app (a near miss on an arrow used to
+ * land on the row and open the app).
  */
 public class HideScoreWidgetProvider extends AppWidgetProvider {
     static final String ACTION_REFRESH = "com.jacobhl.hidescore.WIDGET_REFRESH";
@@ -204,7 +208,8 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         Intent launch = context.getPackageManager().getLaunchIntentForPackage(pkg);
         if (launch != null) {
             launch.setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
-            views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(
+            boolean paged = message == null && plan.paged;
+            views.setOnClickPendingIntent(paged ? R.id.widget_header : R.id.widget_root, PendingIntent.getActivity(
                 context, 0, launch, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         }
         Intent refresh = new Intent(context, HideScoreWidgetProvider.class).setAction(ACTION_REFRESH);
@@ -213,7 +218,7 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         return views;
     }
 
-    /** ‹ row › for a 1-row widget; the arrows fill the body's height. */
+    /** ‹ row › for a 1-row widget; the arrows fill the body's height, a tap on the row is ›. */
     private static RemoteViews pager(Context context, int id, WidgetRows.Row row, WidgetTheme theme, boolean logos,
                                      boolean channel, boolean chip) {
         RemoteViews pager = new RemoteViews(context.getPackageName(), R.layout.widget_pager);
@@ -221,6 +226,7 @@ public class HideScoreWidgetProvider extends AppWidgetProvider {
         pager.addView(R.id.pager_row, rowView(context, row, theme, logos, channel, chip || row.kind != WidgetRows.Kind.GAME));
         pager.setOnClickPendingIntent(R.id.pager_prev, pageIntent(context, id, -1));
         pager.setOnClickPendingIntent(R.id.pager_next, pageIntent(context, id, 1));
+        pager.setOnClickPendingIntent(R.id.pager_row, pageIntent(context, id, 1));
         theme.muted(pager, R.id.pager_prev, R.id.pager_next);
         return pager;
     }
