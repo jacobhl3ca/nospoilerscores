@@ -2672,7 +2672,7 @@ const HL_LEAGUES = [
   { sport: "urc",          path: "/rugby/270557/scoreboard",                   channel: "United Rugby Championship" },
   { sport: "top14",        path: "/rugby/270559/scoreboard",                   channel: "TOP 14 - Officiel" },
   // Champions Cup + Challenge Cup (added 2026-10-15): one EPCR channel, a cup
-  // title token each, the home-first + 400 s gates, and the channel's club
+  // title token each, the home-first + 240 s gates, and the channel's club
   // names (epcrTeamNames.json). See OFFICIAL_CHANNELS in src/lib/youtube.ts.
   { sport: "rugbychamp",   path: "/rugby/271937/scoreboard",                   channel: "Investec Champions Cup & EPCR Challenge Cup" },
   { sport: "challengecup", path: "/rugby/272073/scoreboard",                   channel: "Investec Champions Cup & EPCR Challenge Cup" },
@@ -2747,8 +2747,8 @@ const HL_MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
-  rugbychamp: { homeFirst: true, minSec: 400 },
-  challengecup: { homeFirst: true, minSec: 400 },
+  rugbychamp: { homeFirst: true, minSec: 240 },
+  challengecup: { homeFirst: true, minSec: 240 },
 };
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };

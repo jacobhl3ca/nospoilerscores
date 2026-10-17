@@ -229,8 +229,8 @@ const MATCH_GATES = {
   nations: { homeFirst: true, minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
-  rugbychamp: { homeFirst: true, minSec: 400 },
-  challengecup: { homeFirst: true, minSec: 400 },
+  rugbychamp: { homeFirst: true, minSec: 240 },
+  challengecup: { homeFirst: true, minSec: 240 },
 };
 
 const TENNIS_CHANNELS = new Set([

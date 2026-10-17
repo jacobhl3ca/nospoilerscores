@@ -126,16 +126,16 @@ test("URC, Top 14 and the two EPCR cups are lit; Prem and MLR stay dark", () => 
     assert.ok(f.includes('"Benetton Treviso": "Benetton"'), "Benetton alias in all three");
   }
   // Champions Cup + Challenge Cup: one channel, a token per cup, the
-  // home-first + 400 s gates, in the app, the bake and the audit alike.
+  // home-first + 240 s gates, in the app, the bake and the audit alike.
   const epcr = "Investec Champions Cup & EPCR Challenge Cup";
   for (const [sport, id, token] of [["rugbychamp", "271937", "champions cup"], ["challengecup", "272073", "challenge cup"]]) {
     assert.equal(yt.getOfficialChannelName(sport), epcr, sport);
     assert.deepEqual(yt.getCompetitionTitleTokens(sport), [token]);
-    assert.equal(yt.highlightMatchGateParams(yt.getHighlightMatchGates(sport)), "&order=home&minsec=400");
+    assert.equal(yt.highlightMatchGateParams(yt.getHighlightMatchGates(sport)), "&order=home&minsec=240");
     assert.ok(new RegExp(`sport: "${sport}",\\s+path: "/rugby/${id}/scoreboard",\\s+channel: "${epcr}"`).test(bake), `${sport} bake row`);
     assert.ok(audit.includes(`${sport}: "${epcr}"`), `${sport} audit channel`);
     for (const f of [bake, audit]) {
-      assert.ok(f.includes(`${sport}: { homeFirst: true, minSec: 400 }`), `${sport} gates`);
+      assert.ok(f.includes(`${sport}: { homeFirst: true, minSec: 240 }`), `${sport} gates`);
       assert.ok(f.includes(`${sport}: ["${token}"]`), `${sport} token`);
     }
   }
