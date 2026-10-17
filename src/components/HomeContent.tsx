@@ -1559,10 +1559,14 @@ export default function HomeContent({
   // read the live matchMedia value via isWideViewport() so the very first load
   // already pulls 5 leagues on a desktop (no 3-then-5 double fetch).
   const [isWide, setIsWide] = useState(false);
+  // False until the check below has run: <main> carries data-wide-pending so
+  // globals.css can size it from the pre-paint html.hs-wide-board class.
+  const [wideKnown, setWideKnown] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia(WIDE_BOARD_QUERY);
     const handler = () => setIsWide(mq.matches);
     handler();
+    setWideKnown(true);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
@@ -1862,6 +1866,22 @@ export default function HomeContent({
     }
     return false;
   }, []);
+  // What a pull asks for: the day, the five slot prefs, how many slots it
+  // pulls and which leagues are off. The silent prefs effect below skips a
+  // pull that asks for the same as the last one: on a wide screen isWide
+  // flips false → true in the same commit as the first date pull, and every
+  // scoreboard was fetched twice (10/15).
+  const lastPullKeyRef = useRef<string | null>(null);
+  const pullKey = useCallback((
+    date: string,
+    thirdLeague?: Sport | "empty",
+    slotOverrides?: { first?: Sport | "empty"; second?: Sport | "empty"; third?: Sport | "empty"; fourth?: Sport | "empty"; fifth?: Sport | "empty" },
+  ) => [
+    date, thirdLeague ?? "",
+    slotOverrides?.first ?? "", slotOverrides?.second ?? "", slotOverrides?.third ?? "", slotOverrides?.fourth ?? "", slotOverrides?.fifth ?? "",
+    isWideViewport() || scrollColumnsOn(prefsRef.current) ? 5 : 3,
+    (boardHiddenLeagues(prefsRef.current) ?? []).join(","),
+  ].join("|"), []);
   const fetchData = useCallback(async (
     date: string,
     thirdLeague?: Sport | "empty",
@@ -1869,6 +1889,7 @@ export default function HomeContent({
     silent = false,
   ) => {
     const myReq = ++reqSeqRef.current;
+    lastPullKeyRef.current = pullKey(date, thirdLeague, slotOverrides);
     // silent=true skips the global skeleton — used when only one slot changed
     // (header dropdown or settings panel). Old data stays visible until the
     // new pull resolves, which prevents the "all 3 columns flash gray" effect.
@@ -1973,7 +1994,7 @@ export default function HomeContent({
         setLoading(false);
       }
     }
-  }, [showSavedBoard]);
+  }, [showSavedBoard, pullKey]);
 
   // Two-effect split so slot/league pref changes don't flash the global
   // skeleton: the date-driven effect shows loading (initial mount + day swap
@@ -2007,13 +2028,17 @@ export default function HomeContent({
   const hiddenKey = (boardHidden ?? []).join(",");
   useEffect(() => {
     if (!mountedRef.current || !selectedDate) return;
-    fetchData(selectedDate, prefs.thirdLeague, {
+    const slots = {
       first: prefs.firstLeague,
       second: prefs.secondLeague,
       third: prefs.thirdLeague,
       fourth: prefs.fourthLeague,
       fifth: prefs.fifthLeague,
-    }, true);
+    };
+    // Same day, slots, slot count and hidden leagues as the last pull: nothing
+    // to fetch (see lastPullKeyRef).
+    if (pullKey(selectedDate, prefs.thirdLeague, slots) === lastPullKeyRef.current) return;
+    fetchData(selectedDate, prefs.thirdLeague, slots, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide, scrollOn, hiddenKey]);
 
@@ -4498,7 +4523,7 @@ export default function HomeContent({
           the 1280px breakpoint doesn't widen the still-3-column board while
           the extra leagues load; the layout swaps once, when they arrive
           (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
-      <main ref={mainRef} id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none${!showNews ? " board-noselect" : ""}`}>
+      <main ref={mainRef} id="main-content" tabIndex={-1} data-wide-pending={wideKnown ? undefined : ""} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none${!showNews ? " board-noselect" : ""}`}>
         {/* No connection: the board below is the device copy (lib/offlineBoard.ts).
             One quiet line says so and when it was pulled. It goes away when the
             "online" pull lands. */}
@@ -5632,8 +5657,12 @@ export default function HomeContent({
           // matching the role=status pattern in FeedbackBox / SettingsPanel).
           <div role="status" aria-live="polite" className={`flex flex-row items-stretch gap-2 sm:gap-4${scrollOn && !showNews ? " w-max min-w-full" : " justify-center"}`}>
             <span className="sr-only">{showNews ? "Loading news…" : "Loading games…"}</span>
-            {Array.from({ length: slotCount }, (_, i) => i + 1).map((i) => (
-              <div key={i} aria-hidden="true" className={`${scrollOn && !showNews ? "min-w-[160px]" : "min-w-0"} flex-1 max-w-[225px] xl:max-w-[280px]`}>
+            {/* Before the viewport check (the static HTML) the scores skeleton
+                has 5 columns; 4-5 carry data-wide-only and show only on a
+                wide screen (html.hs-wide-board, globals.css), so the board
+                does not go 3 → 5 columns at hydration (10/15). */}
+            {Array.from({ length: !wideKnown && !showNews ? 5 : slotCount }, (_, i) => i + 1).map((i) => (
+              <div key={i} aria-hidden="true" data-wide-only={i > slotCount ? "" : undefined} className={`${scrollOn && !showNews ? "min-w-[160px]" : "min-w-0"} flex-1 max-w-[225px] xl:max-w-[280px]`}>
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>
                   <div className="h-6 sm:h-7 w-20 sm:w-24 rounded" style={{ background: "var(--bg-card)" }} />
                   <span className="text-[9px] sm:text-[10px] italic mt-0.5 block" style={{ color: "transparent" }}>{"\u00A0"}</span>
