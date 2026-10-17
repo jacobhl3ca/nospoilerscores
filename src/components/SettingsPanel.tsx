@@ -982,8 +982,8 @@ export default function SettingsPanel({
     // default (no video filter, default order, nothing hidden).
     // newsOldestFirst (the ⇅ control) was the last toolbar pref still
     // surviving a reset; it has no non-undefined default either. Same for
-    // newsHideSeen (the 👁 control). newsMarkSeen (Settings → News) reads
-    // undefined as on, its default.
+    // newsHideSeen (the 👁 control). newsMarkSeen and newsSeenMorningReset
+    // (Settings → News) read undefined as on, their default.
     // The layout is the one a new visitor gets (ESPN since 10/10), set by
     // name: undefined would read as Cards (newsLayoutOf).
     newsFeedView: undefined,
@@ -997,6 +997,7 @@ export default function SettingsPanel({
     newsOldestFirst: undefined,
     newsHideSeen: undefined,
     newsMarkSeen: undefined,
+    newsSeenMorningReset: undefined,
     newsTypeFilterOrder: undefined,
     newsHiddenSources: undefined,
     singleColumn: undefined,
@@ -1798,6 +1799,12 @@ export default function SettingsPanel({
               label="Mark posts you opened"
               checked={prefs.newsMarkSeen ?? true}
               onChange={(v) => updatePrefs({ newsMarkSeen: v })}
+            />
+            <ToggleRow
+              label="Hide opened headlines again each morning"
+              checked={prefs.newsSeenMorningReset ?? true}
+              className="min-h-11"
+              onChange={(v) => updatePrefs({ newsSeenMorningReset: v })}
             />
           </Section>
 
@@ -2851,14 +2858,16 @@ function ToggleRow({
   hint,
   checked,
   onChange,
+  className = "",
 }: {
   label: string;
   hint?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  className?: string;
 }) {
   return (
-    <label className="flex items-start justify-between gap-3 cursor-pointer select-none">
+    <label className={`flex items-start justify-between gap-3 cursor-pointer select-none ${className}`}>
       <div className="flex-1">
         <div className="text-sm font-medium" style={{ color: "var(--text)" }}>{label}</div>
         {hint && <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>{hint}</div>}

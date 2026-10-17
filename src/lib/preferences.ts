@@ -715,6 +715,12 @@ export interface Preferences {
   // everyone: undefined = on, false = off. Settings → News "Mark posts you
   // opened". Separate from newsHideSeen, which removes the post.
   newsMarkSeen?: boolean;
+  // Morning reset of "✓ Opened": an open counts only until the next 4:00 AM
+  // on the device clock (lib/newsSeen.ts morningCutoff), so yesterday's posts
+  // come back covered. undefined = on, false = off. Settings → News "Hide
+  // opened headlines again each morning". A read rule only: the opened store
+  // and its account copy keep every time.
+  newsSeenMorningReset?: boolean;
   // Hide upsetting news items — deaths, fatal crashes, assault/abuse cases,
   // on-field injuries (hit in the head, collisions, carted off), serious
   // illness, harm to animals, self-harm (Jacob 8/21). Matching lives in
