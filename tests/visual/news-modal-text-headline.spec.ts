@@ -14,6 +14,10 @@ import { expect, test, type Page } from "@playwright/test";
 // headline blurs. An article photo and a Reddit picture show theirs plain under
 // the picture, with no tap, no H, no legend row, whatever the Headlines toggle
 // or the card's own Headlines button says, and the same after a reload.
+//
+// Jacob 2026-10-11: an ESPN Videos item with no playable mp4 opens as a still.
+// It is a video post whose clip we could not get, not an article, so its
+// headline blurs under the still and follows the Headlines toggle like a clip.
 
 // Same stand-in YouTube API as modal-key-hints.spec: a plain iframe, no network.
 const FAKE_YT_API = `
@@ -51,12 +55,15 @@ const PICTURE = "Picture post: the final scoreboard";
 const ARTICLE_IMG = "https://a1.espncdn.test/x.jpg";
 // proxyImage only rewrites *.redd.it, so a .test host loads direct.
 const PICTURE_IMG = "https://i.redd.test/p.png";
+const STILL = "Videos still: the walk-off winner";
+const STILL_IMG = "https://a1.espncdn.test/still.jpg";
 const PHOTO = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#246"/></svg>';
 const ITEMS = [
   { ...base, id: "t1", headline: TEXT, articleUrl: "https://www.reddit.com/r/nfl/comments/t1/", body: "Paragraph one." },
   { ...base, id: "y1", headline: VIDEO, articleUrl: "https://www.youtube.com/watch?v=fixtureY1", youtubeVideoId: "fixtureY1" },
   { ...base, id: "a1", headline: ARTICLE, section: "ESPN", byline: "Fixture Writer", imageUrl: ARTICLE_IMG, articleUrl: "https://www.espn.com/college-football/story/_/id/1/x" },
   { ...base, id: "p1", headline: PICTURE, imageFullUrl: PICTURE_IMG, articleUrl: "https://www.reddit.com/r/nfl/comments/p1/" },
+  { ...base, id: "50000009", headline: STILL, section: "ESPN Video", byline: "", imageUrl: STILL_IMG, articleUrl: "https://www.espn.com/video/clip?id=50000009" },
 ];
 
 async function setup(page: Page, extra: Record<string, unknown> = {}) {
@@ -192,4 +199,45 @@ test("after a reload: the article headline is still plain, Headlines on + card o
 
   await page.reload();
   await expectPlainUnderPhoto(page, ARTICLE);
+});
+
+// The still opens from a video card ("Play highlight") or a list row.
+const stillRow = (page: Page) =>
+  page.locator('button[aria-label="Play highlight"], button[aria-label="Open post"]', { hasText: STILL }).first();
+
+async function openStill(page: Page) {
+  await expect(stillRow(page)).toBeVisible({ timeout: 30_000 });
+  await stillRow(page).click();
+  const dialog = page.getByRole("dialog", { name: "Image viewer" });
+  await expect(dialog).toBeVisible({ timeout: 30_000 });
+  await expect(dialog.locator("img").first()).toBeVisible();
+  await expect(dialog.locator("[data-modal-headline]")).toHaveCount(0);
+  return dialog.locator(".news-title", { hasText: STILL });
+}
+
+test("Headlines off: an ESPN Videos still blurs its headline under the photo, H peeks it", async ({ page }) => {
+  await setup(page);
+  const title = await openStill(page);
+  await filterOf(title).toMatch(/blur\(/);
+
+  await keysBtn(page).click();
+  await expect(legend(page).getByText("Peek headline")).toBeVisible();
+  await page.keyboard.press("h");
+  await filterOf(title).toBe("none");
+  await page.keyboard.press("h");
+  await filterOf(title).toMatch(/blur\(/);
+  await page.screenshot({ path: "test-results/modal-espn-still-headline-blurred.png" });
+
+  // The address bar keeps the feed, so a reload keeps the blur.
+  await page.reload();
+  const reloaded = page.getByRole("dialog", { name: "Image viewer" }).locator(".news-title", { hasText: STILL });
+  await expect(reloaded).toBeVisible({ timeout: 30_000 });
+  await filterOf(reloaded, 10_000).toMatch(/blur\(/);
+});
+
+test("Headlines on: an ESPN Videos still shows its headline plain", async ({ page }) => {
+  await setup(page, { revealNewsTitles: true });
+  await expect(page.locator("html")).toHaveClass(/reveal-news-titles/);
+  const title = await openStill(page);
+  await filterOf(title).toBe("none");
 });

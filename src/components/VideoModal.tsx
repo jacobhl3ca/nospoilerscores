@@ -44,6 +44,9 @@ interface VideoModalProps {
   // default (e.g. "r/baseball" instead of "Reddit", "MLB Most Popular" instead
   // of "MLB.com"). Falls back to URL-host inference when null.
   sourceLabel?: string | null;
+  // The news post's feed section ("ESPN Video"). A clip-card tap clears
+  // sourceLabel, so the feed is read from here.
+  section?: string | null;
   // Sport key ("nfl", "f1") for the video-play / video-out events. A game
   // highlight's share card key already leads with it, so this is only needed
   // for clips without one (F1 / UFC event tiles); see clipLeague.
@@ -511,7 +514,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, league, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, titlesShown = null, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates, trackLeague, trackPage }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, section, league, extraLink, headline, byline, published, body, shareCard, maskVideoTitle = false, forceTitleMask = false, titlesShown = null, maskVideoBottom = true, youtubeNativeControls = false, keysButton = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates, trackLeague, trackPage }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   // The React-owned box the YouTube player lives INSIDE. React renders this and
   // nothing else touches it; the #yt-player node YT destroys is a plain DOM
@@ -840,6 +843,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Playable media. An article photo, a picture, a gallery and a text post are
   // not clips.
   const clipMode = ytMode || hlsMode || embedMode;
+  // An ESPN Videos still is a clip we could not play, not an article, so its
+  // headline keeps the clip rule (Jacob 10/11).
+  const blurHeadline = clipMode || (imageMode && (section ?? sourceLabel) === "ESPN Video");
   // The landscape player is for clips we drive ourselves: YouTube and the
   // direct-stream <video>. A Brightcove embed keeps its own player chrome.
   const immersive = landscapePhone && (ytMode || hlsMode);
@@ -964,10 +970,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   }
   const headlinePeek = peeked && peekedFor === postKey;
   const toggleHeadlinePeek = useCallback(() => setPeeked((p) => !p), []);
-  // Only a clip's headline blurs. An article, a picture and a text post show
-  // theirs in the clear (Jacob 10/10: opening the post is the reveal), so H has
-  // nothing to peek there and the legend drops its row.
-  const hasBlurredHeadline = !!headline && clipMode;
+  // Only a clip's headline blurs (an ESPN Videos still counts as one). An
+  // article, a picture and a text post show theirs in the clear (Jacob 10/10:
+  // opening the post is the reveal), so H has nothing to peek there and the
+  // legend drops its row.
+  const hasBlurredHeadline = !!headline && blurHeadline;
   // The dialog root's data-player-state, so a click-through test (and anything
   // else outside the cross-origin iframe) can read play/pause without asking
   // YouTube. Reveals nothing — not the position, not the duration.
@@ -1068,6 +1075,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     posterUrl: poster,
     sourceUrl: fallbackUrl,
     sourceLabel,
+    section,
     headline,
     cardKey: shareCard?.key ?? null,
     path: highlightSharePath(),
@@ -3583,7 +3591,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           <div className="mt-3 text-center px-2">
             {/* Only the text itself swallows the click (so selecting the headline
                 doesn't close); the surrounding strip stays a dismiss target. */}
-            {clipMode ? (
+            {blurHeadline ? (
               <PeekBlur key={`f-${postKey}`} peek={headlinePeek} onToggle={toggleHeadlinePeek} keyShortcut="h" tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
             ) : (
               // An article photo, a Reddit picture or a gallery: plain, like a
