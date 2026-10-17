@@ -48,8 +48,12 @@ Sentry.init({
   // GitHub #57: events with no type, value or message arrive titled
   // "<unknown>". Fill them from the original thrown/rejected value so the
   // next one names its source. Every other event passes through unchanged.
+  // The page state rides along as a breadcrumb on a labelled event only.
   beforeSend(event, hint) {
-    return labelBlankEvent(event, hint?.originalException);
+    return labelBlankEvent(event, hint?.originalException, {
+      visibility: document.visibilityState,
+      online: navigator.onLine,
+    });
   },
   denyUrls: [
     /^chrome-extension:\/\//,

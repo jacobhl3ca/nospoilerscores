@@ -52,15 +52,26 @@ export function toReportableError(value: unknown): Error {
 interface MinimalEvent {
   message?: string;
   exception?: { values?: Array<{ type?: string; value?: string }> };
+  tags?: { [key: string]: unknown };
+  breadcrumbs?: Array<{ category?: string; level?: string; message?: string; data?: { [key: string]: unknown } }>;
+}
+
+/** Page state at capture time, attached to a labelled event as a breadcrumb. */
+export interface PageState {
+  visibility?: string;
+  online?: boolean;
 }
 
 /**
  * For Sentry's beforeSend: when an event has no message and no exception
  * type or value (the shape Sentry titles "<unknown>"), fill it from the
- * original value so the issue says what was thrown. Other events pass
+ * original value so the issue says what was thrown. A labelled event also
+ * gets the tag non_error=blank (to search for it) and a "non-error"
+ * breadcrumb with the page state, since a blank error often comes from a
+ * page that is going to the background or has no network. Other events pass
  * through untouched.
  */
-export function labelBlankEvent<E extends MinimalEvent>(event: E, originalException: unknown): E {
+export function labelBlankEvent<E extends MinimalEvent>(event: E, originalException: unknown, page?: PageState): E {
   if (event.message || originalException instanceof Error) return event;
   const values = event.exception?.values;
   if (values?.some((v) => v.value || (v.type && v.type !== "Error"))) return event;
@@ -71,5 +82,7 @@ export function labelBlankEvent<E extends MinimalEvent>(event: E, originalExcept
   } else {
     event.message = desc;
   }
+  event.tags = { ...event.tags, non_error: "blank" };
+  event.breadcrumbs = [...(event.breadcrumbs ?? []), { category: "non-error", level: "info", message: desc, data: { ...page } }];
   return event;
 }
