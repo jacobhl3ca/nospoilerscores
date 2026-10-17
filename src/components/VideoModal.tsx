@@ -10,7 +10,7 @@ import { buildKeyLegend } from "@/lib/modalKeyLegend";
 import ModalKeyHints from "@/components/ModalKeyHints";
 import { shareCardUrl, buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
-import { exitDocumentFullscreen, requestElementFullscreen } from "@/lib/mediaSafe";
+import { exitDocumentFullscreen, requestElementFullscreen, safeMediaCall } from "@/lib/mediaSafe";
 import { routeModalKey, nativeVideoOwnsKey, sliderOwnsKey } from "@/lib/modalArrowKeys";
 import { noteHighlightWatched } from "@/lib/rateApp";
 import { trackEvent } from "@/lib/track";
@@ -556,11 +556,33 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // TRANSFERS it with no exit; letting the old one unmount instead drops the
   // browser all the way back out, which is what made a Reddit text post kick you
   // out mid-column (Jacob 8/23).
+  //
+  // Only Chromium does that transfer. Firefox REFUSES a fullscreen request on
+  // an ancestor of the current fullscreen element, so the hand-over failed
+  // silently and the first page step dropped fullscreen. Safari keeps its native video
+  // layer up, black, while the next clip autoplays under it (Jacob 10/11:
+  // "plays something on a full black screen"). toggleFullscreen now
+  // fullscreens the root for every post type, so this only runs after the
+  // browser's own fullscreen button or a double-click on the <video>. Then, in
+  // this order and inside the key/click gesture: take Safari's native layer
+  // down, ask for the root, and if the browser says no, leave fullscreen so
+  // the next post shows inline instead of black.
   const carryFullscreen = useCallback(() => {
-    const fsEl = document.fullscreenElement;
     const host = fsHostRef.current;
-    if (!fsEl || !host || fsEl === host || !host.contains(fsEl)) return;
-    requestElementFullscreen(host);
+    if (!host) return;
+    const currentFs = () => (document.fullscreenElement || (document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement) ?? null;
+    const fsEl = currentFs();
+    if (fsEl === host) return;
+    const video = host.querySelector("video") as (HTMLVideoElement & { webkitDisplayingFullscreen?: boolean; webkitPresentationMode?: string; webkitExitFullscreen?: () => void }) | null;
+    // webkitDisplayingFullscreen is also true in picture-in-picture, which is
+    // not a layer over the page, so read the presentation mode where it exists.
+    const nativeLayer = !!video?.webkitDisplayingFullscreen && (video.webkitPresentationMode ?? "fullscreen") === "fullscreen";
+    if (nativeLayer) safeMediaCall(() => video!.webkitExitFullscreen?.());
+    if (!nativeLayer && (!fsEl || !host.contains(fsEl))) return;
+    // The refusal lands after the old player has unmounted. If the root was
+    // fullscreen underneath it (the video's own button pressed inside root
+    // fullscreen), the browser has already fallen back to the root: keep it.
+    requestElementFullscreen(host, () => { if (currentFs() !== host) exitDocumentFullscreen(); });
   }, []);
   const goPrev = useCallback(() => { if (!onPrev) return; carryFullscreen(); onPrev(); }, [onPrev, carryFullscreen]);
   const goNext = useCallback(() => { if (!onNext) return; carryFullscreen(); onNext(); }, [onNext, carryFullscreen]);
@@ -1395,27 +1417,37 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     setVolLevel(Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * 100);
   }, [setVolLevel]);
 
-  // Toggle fullscreen. YouTube, the image lightbox and Reddit text posts all
-  // expand the modal ROOT (so the spoiler mask, control bar and pager ride
-  // along, the title stays hidden, and stepping between post types doesn't drop
-  // out of fullscreen); native element fullscreen first, CSS-overlay fallback on
-  // iOS where it's unavailable. HLS/embed keep plain element fullscreen — those
-  // have no spoiler title and want the browser's own native player chrome.
+  // Toggle fullscreen. Every post type expands the modal ROOT (so the spoiler
+  // mask, control bar and pager ride along, the title stays hidden, and
+  // stepping between post types doesn't drop out of fullscreen); native element
+  // fullscreen first, CSS-overlay fallback on iOS where it's unavailable.
+  //
+  // HLS/embed used to fullscreen the bare <video> / <iframe> for the browser's
+  // own player chrome. That broke paging (Shift+↓/↑, the ‹ › buttons): the
+  // next post unmounts that element, Firefox
+  // refuses to move fullscreen up to an ancestor (so it dropped out), and
+  // Safari kept its native video layer up, black, with the next clip playing
+  // under it (Jacob 10/11). The <video controls> still draws its own control
+  // bar inside the fullscreen root, so nothing is lost. The element path stays
+  // only where the root cannot go fullscreen at all (iPhone), which is where
+  // webkitEnterFullscreen() on the <video> is the real player.
   const toggleFullscreen = useCallback(() => {
-    if (hlsMode || embedMode) {
-      if (document.fullscreenElement) { exitDocumentFullscreen(); return; }
-      const el = hlsMode ? videoRef.current : iframeRef.current;
-      if (!el) return;
-      // Through requestElementFullscreen, never bare: iPhone's
-      // webkitEnterFullscreen() THROWS InvalidStateError on a <video> that has
-      // no metadata yet (GitHub #245). A failed request leaves the clip inline.
-      requestElementFullscreen(el);
-      return;
-    }
     if (fakeFs) { setFakeFs(false); return; }
     if (document.fullscreenElement) { exitDocumentFullscreen(); return; }
     const host = fsHostRef.current;
     if (!host) return;
+    if (hlsMode || embedMode) {
+      const rootCan = typeof host.requestFullscreen === "function" || typeof (host as HTMLElement & { webkitRequestFullscreen?: () => void }).webkitRequestFullscreen === "function";
+      if (!rootCan) {
+        const el = hlsMode ? videoRef.current : iframeRef.current;
+        if (!el) return;
+        // Through requestElementFullscreen, never bare: iPhone's
+        // webkitEnterFullscreen() THROWS InvalidStateError on a <video> that has
+        // no metadata yet (GitHub #245). A failed request leaves the clip inline.
+        requestElementFullscreen(el);
+        return;
+      }
+    }
     // No element fullscreen (iOS Safari / WKWebView), a refusal, or a throw
     // all land on the CSS-overlay fallback.
     requestElementFullscreen(host, () => setFakeFs(true));
@@ -3496,7 +3528,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 onPointerUp={(e) => {
                   const v = e.currentTarget;
                   window.setTimeout(() => {
-                    const fs = document.fullscreenElement || (v as HTMLVideoElement & { webkitDisplayingFullscreen?: boolean }).webkitDisplayingFullscreen;
+                    // The video ITSELF, not the modal root: in root fullscreen
+                    // (the f key) a click hands focus back to the dialog, the
+                    // same as inline, so the modal's keys keep driving the clip.
+                    const fs = document.fullscreenElement === v || (v as HTMLVideoElement & { webkitDisplayingFullscreen?: boolean }).webkitDisplayingFullscreen;
                     if (document.activeElement === v && !fs) dialogRef.current?.focus({ preventScroll: true });
                   }, 0);
                 }}
