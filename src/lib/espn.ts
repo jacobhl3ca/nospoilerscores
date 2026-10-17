@@ -1,4 +1,5 @@
-import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout, ClimbRound } from "./types";
+import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout, ClimbRound, CalledGame } from "./types";
+import { calledKind, parseCalledNote, cleanRoundLabel, findNextMeeting } from "./calledGames";
 import { abortOwn } from "./abort";
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
@@ -2770,7 +2771,7 @@ export function buildTennisGames(
         // nothing, as before.
         if (tour && /^qualifying/i.test(match.round?.displayName ?? "")) continue;
         const sn = match.status?.type?.name ?? "";
-        if (sn.includes("POSTPONED") || sn.includes("CANCELED") || sn.includes("SUSPENDED")) continue;
+        if (calledKind(sn)) continue;
         try {
           games.push(parseTennisMatch(match, event, slug, tour));
         } catch {
@@ -5246,21 +5247,25 @@ const SCOREBOARD_CACHE_PREFIX = "hidescore.scoreboard.";
 function scoreboardCacheKey(sport: Sport, date?: string): string {
   return `${SCOREBOARD_CACHE_PREFIX}${sport}.${date ?? "today"}`;
 }
-function readScoreboardCache(sport: Sport, date?: string): Game[] | null {
+// An entry is `{ games, called }`. Entries written before postponed games
+// were kept (a bare Game[]) read as `called: []`.
+function readScoreboardCache(sport: Sport, date?: string): { games: Game[]; called: CalledGame[] } | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(scoreboardCacheKey(sport, date));
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Game[];
-    return Array.isArray(parsed) ? parsed : null;
+    const parsed = JSON.parse(raw) as Game[] | { games?: Game[]; called?: CalledGame[] };
+    if (Array.isArray(parsed)) return { games: parsed, called: [] };
+    if (parsed && Array.isArray(parsed.games)) return { games: parsed.games, called: Array.isArray(parsed.called) ? parsed.called : [] };
+    return null;
   } catch {
     return null;
   }
 }
-function writeScoreboardCache(sport: Sport, date: string | undefined, games: Game[]): void {
+function writeScoreboardCache(sport: Sport, date: string | undefined, games: Game[], called: CalledGame[]): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(scoreboardCacheKey(sport, date), JSON.stringify(games));
+    window.localStorage.setItem(scoreboardCacheKey(sport, date), JSON.stringify({ games, called }));
   } catch {
     // Quota exceeded / private mode / disabled storage — silent.
   }
@@ -5307,7 +5312,7 @@ export function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
     .filter((e) => {
       // Filter out postponed/canceled/suspended games
       const statusName = e.status?.type?.name ?? "";
-      if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) return false;
+      if (calledKind(statusName)) return false;
       // Filter out preseason/spring training — bad highlights, ties in records,
       // low-quality games. EXCEPT the sports in SEASON_TYPE_1_IS_REGULAR above,
       // whose real slate is tagged type 1.
@@ -5337,6 +5342,56 @@ export function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
       }
     })
     .filter((g: Game | null): g is Game => g !== null);
+}
+
+// The events eventsToGames drops for being postponed / canceled / suspended,
+// as their own list (lib/calledGames.ts). Same preseason and <2-competitor
+// drops; never goes through parseGame, so no rating is ever computed.
+// `next` is filled in later by the league loader.
+export function eventsToCalledGames(events: ScoreboardEvent[], sport: Sport): CalledGame[] {
+  const out: CalledGame[] = [];
+  for (const e of events) {
+    const kind = calledKind(e.status?.type?.name);
+    if (!kind) continue;
+    const seasonType = e.season?.type ?? 0;
+    if (seasonType === 1 && !SEASON_TYPE_1_IS_REGULAR.has(sport)) continue;
+    const competition = e.competitions?.[0];
+    const competitors = competition?.competitors ?? [];
+    if (competitors.length < 2) continue;
+    try {
+      const home = competitors.find((c) => c.homeAway === "home") ?? competitors[0];
+      const away = competitors.find((c) => c.homeAway === "away") ?? competitors[1];
+      const headline = competition?.notes?.[0]?.headline ?? "";
+      const { reason, makeup } = parseCalledNote(headline);
+      // Round facts (playoff flag, label, cup stage) for the pairing cover,
+      // read the way parseGame reads them. Parsed as a SCHEDULED copy with the
+      // tail cut from its note, so no rating is ever computed for a game that
+      // was not played, and the event itself is left as ESPN sent it.
+      const round = parseGame({
+        ...e,
+        status: { ...e.status, type: { ...e.status?.type, name: "STATUS_SCHEDULED", state: "pre", completed: false } },
+        competitions: [{ ...competition, notes: headline ? [{ headline: cleanRoundLabel(headline) }] : competition?.notes }],
+      } as ScoreboardEvent, sport);
+      const label = round.playoffLabel ?? (headline ? cleanRoundLabel(headline) : "");
+      out.push({
+        id: String(e.id ?? ""),
+        sport,
+        date: e.date ?? "",
+        kind,
+        homeTeam: { ...parseTeam(home, sport), score: "", winner: false },
+        awayTeam: { ...parseTeam(away, sport), score: "", winner: false },
+        label: label || null,
+        isPlayoff: round.isPlayoff,
+        stage: round.stage ?? null,
+        reason,
+        next: null,
+        makeup,
+      });
+    } catch {
+      // A malformed event must not take down the column.
+    }
+  }
+  return out;
 }
 
 // Soccer leagues have multi-week gaps (international windows, the 2026 World
@@ -5699,14 +5754,19 @@ export async function fetchLastFinishedDay(sport: Sport): Promise<string | null>
 const FINISHED_DAY_TTL_MS = 5 * 60_000;
 const finishedDayCache = new Map<string, { at: number; json: string }>();
 
+// `called` = the day's postponed / canceled / suspended games
+// (eventsToCalledGames). They never enter `games`.
 export async function fetchGames(
   sport: Sport,
   date?: string
-): Promise<{ games: Game[]; failed: boolean }> {
+): Promise<{ games: Game[]; called: CalledGame[]; failed: boolean }> {
   // Keyed by zone too: the day's games are bucketed in the Settings zone.
   const finishedKey = date && date < toYmd(getEtServiceDate()) ? `${sport}|${date}|${getTimeZone()}` : null;
   const held = finishedKey ? finishedDayCache.get(finishedKey) : undefined;
-  if (held && Date.now() - held.at < FINISHED_DAY_TTL_MS) return { games: JSON.parse(held.json) as Game[], failed: false };
+  if (held && Date.now() - held.at < FINISHED_DAY_TTL_MS) {
+    const parsed = JSON.parse(held.json) as { games: Game[]; called: CalledGame[] };
+    return { games: parsed.games, called: parsed.called, failed: false };
+  }
   // Tennis nests its real matches in event.groupings[].competitions[] with
   // athlete-based competitors — flattened by a dedicated parser, not the
   // team-based path below (which would drop the 0-competitor tournament
@@ -5714,8 +5774,9 @@ export async function fetchGames(
   if (sport === "tennis") {
     const tourColumn = isTennisTourDay(date ?? toYmd(getEtServiceDate()));
     const read = await fetchTennisEvents(date, tourColumn);
-    if (!read) return { games: [], failed: true };
-    return { games: buildTennisGames(read.events, date, tourColumn), failed: false };
+    if (!read) return { games: [], called: [], failed: true };
+    // Tennis keeps dropping called matches for now (v1).
+    return { games: buildTennisGames(read.events, date, tourColumn), called: [], failed: false };
   }
   const url = scoreboardUrl(sport);
   // Soccer fixtures can kick off in the local midnight hour (a western-US World
@@ -5752,10 +5813,10 @@ export async function fetchGames(
   // cache from the last successful fetch — stale-while-revalidate so the
   // user keeps seeing games through transient ESPN blips. Only when the
   // cache is also empty does failed:true bubble up to the empty-state UI.
-  const failWithCacheFallback = (): { games: Game[]; failed: boolean } => {
+  const failWithCacheFallback = (): { games: Game[]; called: CalledGame[]; failed: boolean } => {
     const cached = readScoreboardCache(sport, date);
-    if (cached && cached.length) return { games: cached, failed: false };
-    return { games: [], failed: true };
+    if (cached && (cached.games.length || cached.called.length)) return { games: cached.games, called: cached.called, failed: false };
+    return { games: [], called: [], failed: true };
   };
   let data: { events?: unknown[] } | null;
   try {
@@ -5777,10 +5838,12 @@ export async function fetchGames(
   const events = data?.events ?? [];
 
   let games: Game[] = eventsToGames(events as ScoreboardEvent[], sport);
+  let called: CalledGame[] = eventsToCalledGames(events as ScoreboardEvent[], sport);
   // Drop the adjacent-day fixtures the 2-day soccer window pulled in, keeping
   // only the ones whose slate day is the viewed date.
   if (reconcileSoccerDay && date) {
     games = games.filter((g) => etSlateYmd(g.date) === date);
+    called = called.filter((g) => etSlateYmd(g.date) === date);
   }
 
   // Enrich MLB games with direct MLB.tv stream links + No-Hit Alert flag
@@ -5900,11 +5963,154 @@ export async function fetchGames(
     }
   }
 
-  writeScoreboardCache(sport, date, games);
+  writeScoreboardCache(sport, date, games, called);
   if (finishedKey && games.length && games.every((g) => g.state === "post")) {
-    finishedDayCache.set(finishedKey, { at: Date.now(), json: JSON.stringify(games) });
+    finishedDayCache.set(finishedKey, { at: Date.now(), json: JSON.stringify({ games, called }) });
   }
-  return { games, failed: false };
+  return { games, called, failed: false };
+}
+
+// Fill each called game's `next`: the first not-yet-started game between the
+// same two teams, from the games already in hand (the day's slate + the
+// lookahead), else up to 3 days ahead of the viewed day. ESPN's "Makeup on
+// Oct 18" note is not that game — on 10/16 it named Game 5's day while Game 4
+// was the next night — so the note stays a fallback (CalledGame.makeup).
+//
+// Playoff games only. A regular-season rainout is made up weeks later (often
+// as a doubleheader), so the next meeting is just the next game of the series;
+// those cards use ESPN's makeup date or "New date not set yet".
+//
+// Held for CALLED_NEXT_TTL_MS per (sport, day, called ids), so the 10 s live
+// poll does not repeat the up-to-3-day lookahead.
+const CALLED_NEXT_DAYS = 3;
+const CALLED_NEXT_TTL_MS = 5 * 60_000;
+const calledNextMemo = new Map<string, { at: number; next: Array<Pick<CalledGame, "next" | "nextStatus">> }>();
+async function resolveCalledNext(sport: Sport, called: CalledGame[], baseYmd: string, inHand: Game[]): Promise<CalledGame[]> {
+  const out = called.map((c) => ({ ...c }));
+  const memoKey = `${sport}|${baseYmd}|${getTimeZone()}|${out.map((c) => c.id).join(",")}`;
+  const memo = calledNextMemo.get(memoKey);
+  if (memo && Date.now() - memo.at < CALLED_NEXT_TTL_MS) {
+    out.forEach((c, i) => Object.assign(c, memo.next[i]));
+    return out;
+  }
+  const wanted = (c: CalledGame) => c.isPlayoff && !c.next;
+  const fill = (pool: Game[]) => {
+    for (const c of out) {
+      if (!wanted(c)) continue;
+      const hit = findNextMeeting(c, pool);
+      if (hit) {
+        c.next = hit.date;
+        c.nextStatus = hit.statusDetail;
+      }
+    }
+  };
+  const remember = () => {
+    calledNextMemo.set(memoKey, { at: Date.now(), next: out.map((c) => ({ next: c.next, nextStatus: c.nextStatus })) });
+    return out;
+  };
+  fill(inHand);
+  if (!out.some(wanted)) return remember();
+  const days: string[] = [];
+  let d = baseYmd;
+  for (let i = 0; i < CALLED_NEXT_DAYS; i++) {
+    d = nextYmd(d);
+    days.push(d);
+  }
+  try {
+    const ahead = await fetchGamesAcrossDays(sport, days, (gathered) => out.every((c) => !wanted(c) || findNextMeeting(c, gathered)));
+    fill(ahead);
+  } catch {
+    // Best-effort: the card falls back to ESPN's makeup date.
+    return out;
+  }
+  return remember();
+}
+
+// "Moved from Fri (rain)" on the game that replays one called off the day
+// before (Jacob 10/17, part 2). Runs AFTER the board paints: HomeContent calls
+// applyMovedFrom with whatever is already known (synchronous, so a 10s live
+// poll never flickers the line off), then loadMovedFrom for the rest, then
+// applyMovedFrom again. One ESPN call per league per day at most, held for the
+// page's life. Display only — nothing reads Game.movedFrom.
+const movedFromCalled = new Map<string, CalledGame[]>(); // `${sport}|${prevYmd}`
+const movedFromInFlight = new Map<string, Promise<void>>();
+const MOVED_FROM_SKIP = new Set<Sport>(["tennis", "golf", "top", "best"]);
+
+function prevYmdOf(ymd: string): string {
+  const d = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8)));
+  d.setUTCDate(d.getUTCDate() - 1);
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+function movedFromTargets(leagues: LeagueData[]): Sport[] {
+  return [...new Set(leagues.filter((l) => l.games.length && !MOVED_FROM_SKIP.has(l.sport) && !l.eventCard && !l.golfTournament).map((l) => l.sport))];
+}
+
+// The leagues (by sport) whose previous-day called list is not known yet.
+export function movedFromPending(leagues: LeagueData[], date: string | undefined): Sport[] {
+  const prev = prevYmdOf(date || toYmd(getEtServiceDate()));
+  return movedFromTargets(leagues).filter((sport) => !movedFromCalled.has(`${sport}|${prev}`));
+}
+
+export async function loadMovedFrom(sports: Sport[], date: string | undefined): Promise<void> {
+  const prev = prevYmdOf(date || toYmd(getEtServiceDate()));
+  await Promise.all(sports.map((sport) => {
+    const key = `${sport}|${prev}`;
+    if (movedFromCalled.has(key)) return Promise.resolve();
+    let p = movedFromInFlight.get(key);
+    if (!p) {
+      p = (async () => {
+        // A device copy of that day's board already holds its called list.
+        const cached = readScoreboardCache(sport, prev);
+        if (cached && cached.called.length) {
+          movedFromCalled.set(key, cached.called);
+          return;
+        }
+        const events = await fetchScoreboardEventsForDay(sport, prev);
+        const called = eventsToCalledGames(events, sport);
+        // fetchScoreboardEventsForDay answers [] on a failure too; holding an
+        // empty list then only costs this page load a missing line.
+        movedFromCalled.set(key, SOCCER_SPORTS.has(sport) ? called.filter((c) => etSlateYmd(c.date) === prev) : called);
+      })().finally(() => movedFromInFlight.delete(key));
+      movedFromInFlight.set(key, p);
+    }
+    return p;
+  }));
+}
+
+// Returns the same array when nothing changes, so a caller can skip a render.
+export function applyMovedFrom(leagues: LeagueData[], date: string | undefined): LeagueData[] {
+  const prev = prevYmdOf(date || toYmd(getEtServiceDate()));
+  const day = fromYmd(prev).toLocaleDateString("en-US", { weekday: "short" });
+  let changed = false;
+  const out = leagues.map((league) => {
+    if (!league.games.length || MOVED_FROM_SKIP.has(league.sport)) return league;
+    const called = movedFromCalled.get(`${league.sport}|${prev}`);
+    if (!called?.length) return league;
+    const taken = new Set<string>();
+    const marks = new Map<string, Game["movedFrom"]>();
+    // Playoff series only: there a rainout is replayed the next day. In the
+    // regular season the next meeting is just the next game of the series.
+    for (const c of called) {
+      if (!c.isPlayoff) continue;
+      const hit = findNextMeeting(c, league.games.filter((g) => !taken.has(g.id) && g.isPlayoff));
+      if (!hit) continue;
+      taken.add(hit.id);
+      marks.set(hit.id, { day, reason: c.reason ? c.reason.toLowerCase() : null });
+    }
+    if (!marks.size) return league;
+    let leagueChanged = false;
+    const games = league.games.map((g) => {
+      const m = marks.get(g.id);
+      if (!m || (g.movedFrom?.day === m.day && g.movedFrom?.reason === m.reason)) return g;
+      leagueChanged = true;
+      return { ...g, movedFrom: m };
+    });
+    if (!leagueChanged) return league;
+    changed = true;
+    return { ...league, games };
+  });
+  return changed ? out : leagues;
 }
 
 // Reconcile team-schedule ratings with the dated/live-final view.
@@ -5969,7 +6175,7 @@ export async function fetchScheduleRatings(
   // backfill exists to remove. Any non-final or missing id falls through to a
   // fresh scoreboard fetch, which returns the completed box.
   const gamesForDay = async (day: string, wantIds: string[]): Promise<Game[]> => {
-    const cached = readScoreboardCache(sport, day);
+    const cached = readScoreboardCache(sport, day)?.games;
     if (cached && cached.length) {
       const byId = new Map(cached.map((g) => [g.id, g] as const));
       if (wantIds.every((id) => byId.get(id)?.state === "post")) return cached;
@@ -6777,7 +6983,7 @@ export async function fetchAllLeagues(
       // retry state instead of a "No event" the data doesn't support.
       return { sport: cfg.sport, label, games: [], eventCard: card, fetchFailed: failed };
     }
-    const { games, failed } = await fetchGames(cfg.sport, date);
+    const { games, called, failed } = await fetchGames(cfg.sport, date);
     // Standings rank (#N next to the team name). Kicked off here so it overlaps
     // with the lookahead/lookback fetches below; stamped onto every team once
     // all the game lists are assembled, just before returning.
@@ -6940,7 +7146,11 @@ export async function fetchAllLeagues(
         : [games, nextGameDay?.games, previousGameDay?.games];
       applyTeamRanks(cfg.sport, await ranksPromise, rankTargets);
     }
-    return { sport: cfg.sport, label, games, nextGameDay, previousGameDay, fetchFailed: failed };
+    // A canceled playoff game with no game after it would say the series is
+    // over, so it stays off the board.
+    const calledGames = (called.length ? await resolveCalledNext(cfg.sport, called, date ?? todayYmd, [...games, ...(nextGameDay?.games ?? [])]) : [])
+      .filter((c) => !(c.kind === "canceled" && c.isPlayoff && !c.next));
+    return { sport: cfg.sport, label, games, ...(calledGames.length ? { calledGames } : {}), nextGameDay, previousGameDay, fetchFailed: failed };
   };
 
   // allSettled, not all: a single league throwing must not blank the whole
@@ -7206,7 +7416,7 @@ export async function fetchTeamSchedule(
           }
         }
         const statusName = e.status?.type?.name ?? "";
-        if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) continue;
+        if (calledKind(statusName)) continue;
         const seasonType = resolvedSeasonType ?? 0;
         // Same NFL / NBA preseason carve-out as eventsToGames — a team's
         // schedule lists its preseason games (with the PRE chip) next to the

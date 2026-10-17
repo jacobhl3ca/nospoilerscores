@@ -20,6 +20,7 @@ import CalendarButtons from "@/components/CalendarButtons";
 import { buildCalendarEvent } from "@/lib/calendarLink";
 import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
 import { TeamLogo } from "@/components/TeamLogo";
+import { cleanRoundLabel } from "@/lib/calledGames";
 
 // Typical game length (hours) per sport, used to bound the rain window. Soccer
 // ~2.5h, ball sports ~3.5h; default 3h. The rain-chance block only surfaces
@@ -437,7 +438,7 @@ export default function GameDetailModal({
           // be one of these — an exhibition has no playoff round and no cup
           // stage — but the two real labels stay ahead of it so a future data
           // shape that set both never hides the more specific one.
-          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.playoffLabel || game.stage || "Preseason"}</div>
+          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{(game.playoffLabel && cleanRoundLabel(game.playoffLabel)) || game.stage || "Preseason"}</div>
         ) : null}
 
         {/* Venue — name · city/region — with the ESPN-style gametime weather

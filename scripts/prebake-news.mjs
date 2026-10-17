@@ -3317,6 +3317,13 @@ function hlTennisChannel(eventName) {
   return HL_TENNIS_CHANNELS.find(([rx]) => rx.test(eventName ?? ""))?.[1] ?? null;
 }
 
+// Postponed / canceled / suspended: ESPN files these as state "post" with a
+// 0-0 score. Same test as calledKind in src/lib/calledGames.ts.
+function hlIsCalled(event) {
+  const name = String(event?.status?.type?.name ?? "").toUpperCase();
+  return name.includes("POSTPONED") || name.includes("CANCELED") || name.includes("CANCELLED") || name.includes("SUSPENDED");
+}
+
 function hlTennisMatches(events, ymd) {
   const matches = [];
   for (const event of events ?? []) {
@@ -3328,6 +3335,7 @@ function hlTennisMatches(events, ymd) {
       if (!slug.includes("singles") || slug.includes("doubles")) continue;
       for (const match of grouping.competitions ?? []) {
         if (match?.status?.type?.state !== "post") continue;
+        if (hlIsCalled(match)) continue;
         const date = match.date ?? event.date;
         if (hlDateYmd(date) !== ymd) continue;
         const comps = match.competitors ?? [];
@@ -3945,6 +3953,8 @@ async function bakeGameHighlights() {
         ? hlTennisMatches(data?.events, ymd)
         : (data?.events ?? []).flatMap((event) => {
             if (event?.status?.type?.state !== "post") return [];
+            // A rainout is "post" with no game behind it — nothing to bake.
+            if (hlIsCalled(event)) return [];
             const comp = event.competitions?.[0];
             const comps = comp?.competitors ?? [];
             // Rewritten to the uploader's title form before anything else

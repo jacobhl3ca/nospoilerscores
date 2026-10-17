@@ -52,6 +52,10 @@ export interface Game {
   weekNumber?: number | null;
   // Whether this is a playoff/postseason/tournament game
   isPlayoff: boolean;
+  // Set after first paint when the previous day had a postponed / canceled /
+  // suspended game between the same two teams ("Moved from Fri (rain)").
+  // Display only: no logic reads it (lib/espn.ts applyMovedFrom).
+  movedFrom?: { day: string; reason: string | null };
   // ESPN season.type 1 — an exhibition, not a game that counts. Currently only
   // the NFL and the NBA reach the app with these: every other sport's type-1
   // slate is filtered out at the fetch (see eventsToGames), while those two keep
@@ -347,10 +351,42 @@ export interface EventFetchResult {
   failed: boolean;
 }
 
+// A postponed / canceled / suspended game (lib/calledGames.ts). Kept OUT of
+// Game[] on purpose: it has no rating, no score and no highlights, and every
+// reader of Game[] would otherwise treat its 0-0 "post" state as a final.
+export interface CalledGame {
+  id: string;
+  sport: Sport;
+  date: string; // ISO, the original start
+  kind: "postponed" | "canceled" | "suspended";
+  awayTeam: Team;
+  homeTeam: Team;
+  // Round label with ESPN's rainout tail removed ("ALCS - Game 4").
+  label: string | null;
+  // The same round facts parseGame gives a Game, so a called LCS game keeps
+  // its "Show teams" cover (lib/pairingMask.ts): its two teams name who won
+  // the round before.
+  isPlayoff: boolean;
+  stage?: string | null;
+  // "Rain", "Weather", … from ESPN's note; null when the note names no cause.
+  reason: string | null;
+  // ISO start of the next game between the same two teams, when found.
+  next: string | null;
+  // ESPN's status text for that game ("10/17 - 8:00 PM EDT"), so the card
+  // reads its clock the way every other card does (startTimeLabel).
+  nextStatus?: string | null;
+  // ESPN's "Makeup on Oct 18" date — a fallback only; it can be wrong for a
+  // fan (on 10/16 it named Game 5's day, not Game 4's).
+  makeup: string | null;
+}
+
 export interface LeagueData {
   sport: Sport;
   label: string;
   games: Game[];
+  // Postponed / canceled / suspended games on the viewed day. They render at
+  // the top of the column as a plain card (CalledGameCard).
+  calledGames?: CalledGame[];
   nextGameDay?: { date: string; games: Game[] } | null;
   // The most recent PAST game day, surfaced only on a past tab (e.g. Yesterday)
   // when the viewed date itself has no games — so an empty column shows the last

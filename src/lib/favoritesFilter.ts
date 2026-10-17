@@ -8,7 +8,7 @@
 // cell puts the league in `favoritesOnlyStrict`, after which the column shows
 // nothing but a "none starred" cell until a team is starred ("strict-empty").
 
-import type { Game, LeagueData, Sport } from "./types";
+import type { CalledGame, Game, LeagueData, Sport } from "./types";
 import { TEAM_PICKER_SKIP } from "./teamLogos.ts";
 
 export type FavMode = "off" | "filter" | "banner" | "strict-empty";
@@ -23,7 +23,7 @@ const NO_TEAM_SPORTS: ReadonlySet<Sport> = new Set<Sport>([
 
 // Same check as getFavPriority in LeagueColumn. An empty id (a TBD side)
 // never matches, even if a stray "" ever reaches the favorites list.
-export const involvesFavorite = (g: Game, favs: readonly string[]): boolean =>
+export const involvesFavorite = (g: Pick<Game, "homeTeam" | "awayTeam">, favs: readonly string[]): boolean =>
   (!!g.homeTeam.id && favs.includes(g.homeTeam.id)) || (!!g.awayTeam.id && favs.includes(g.awayTeam.id));
 
 // Favorite ids are `${sport}-${espnId}` (see lib/espn.ts), so the prefix
@@ -49,6 +49,7 @@ export interface FilteredLeague {
   games: Game[];
   nextGames: Game[];
   prevGames: Game[];
+  called: CalledGame[];
 }
 
 export function filterLeague(
@@ -62,10 +63,11 @@ export function filterLeague(
   const games = league.games;
   const nextGames = league.nextGameDay?.games ?? [];
   const prevGames = league.previousGameDay?.games ?? [];
-  if (mode === "off" || mode === "banner") return { mode, games, nextGames, prevGames };
-  if (mode === "strict-empty") return { mode, games: [], nextGames: [], prevGames: [] };
-  const keep = (g: Game) => involvesFavorite(g, favs);
-  return { mode, games: games.filter(keep), nextGames: nextGames.filter(keep), prevGames: prevGames.filter(keep) };
+  const called = league.calledGames ?? [];
+  if (mode === "off" || mode === "banner") return { mode, games, nextGames, prevGames, called };
+  if (mode === "strict-empty") return { mode, games: [], nextGames: [], prevGames: [], called: [] };
+  const keep = (g: Pick<Game, "homeTeam" | "awayTeam">) => involvesFavorite(g, favs);
+  return { mode, games: games.filter(keep), nextGames: nextGames.filter(keep), prevGames: prevGames.filter(keep), called: called.filter(keep) };
 }
 
 // The league as the column should draw it: in "filter" / "strict-empty" mode
@@ -77,6 +79,7 @@ export function applyFavoritesFilter(league: LeagueData, f: FilteredLeague): Lea
   return {
     ...league,
     games: f.games,
+    calledGames: f.called,
     nextGameDay: league.nextGameDay && f.nextGames.length ? { ...league.nextGameDay, games: f.nextGames } : league.nextGameDay ? null : league.nextGameDay,
     previousGameDay: league.previousGameDay && f.prevGames.length ? { ...league.previousGameDay, games: f.prevGames } : league.previousGameDay ? null : league.previousGameDay,
   };

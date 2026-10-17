@@ -19,6 +19,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import { groupEspnFrontPage } from "@/lib/topEvents";
 import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard, PairingRevealAll } from "./GameCard";
+import CalledGameCard from "./CalledGameCard";
 import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
 import { compareRatedLive } from "@/lib/liveSort";
 import { compareRankedMatchups } from "@/lib/rankedMatchupSort";
@@ -2520,6 +2521,14 @@ export default function LeagueColumn({
         </div>
       )}
       <PairingRevealAll games={cardGames} className="mb-1.5 sm:mb-2" />
+      {renderUpcoming && !teamViewTeam && !liveOnly && !league.golfTournament && !league.eventCard && (league.calledGames?.length ?? 0) > 0 && (
+        // Postponed / canceled / suspended games lead the column, above live
+        // games and above any empty-state line, so a rained-out day says why
+        // (Jacob 10/17). Kept out of Game[] — see lib/calledGames.ts.
+        <div data-called-games className="flex flex-col gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+          {league.calledGames!.map((g) => <CalledGameCard key={g.id} game={g} />)}
+        </div>
+      )}
       {teamViewTeam && !league.golfTournament ? (
         section === "finished" ? null : (
           <TeamView
