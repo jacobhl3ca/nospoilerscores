@@ -31,7 +31,7 @@ import GameCard from "@/components/GameCard";
 import { closeHiddenPins, closeUnseenAutoSlots, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
-import { fetchAllLeagues, fetchSlateGames, fetchTopGamesSpan, hasPlayableClip, fetchLastFinishedDay, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, isTennisTourConfig, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { fetchAllLeagues, applyMovedFrom, loadMovedFrom, movedFromPending, fetchSlateGames, fetchTopGamesSpan, hasPlayableClip, fetchLastFinishedDay, sportDisplayLabel, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, isTennisTourConfig, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
@@ -1925,7 +1925,21 @@ export default function HomeContent({
       const demo = isDemoModeActive() || isNoHitAlertDemoActive();
       if (isDemoModeActive()) data = applyDemoMode(data);
       if (isNoHitAlertDemoActive()) data = applyNoHitAlertDemo(data);
+      // "Moved from Fri (rain)": what is already known goes in this paint;
+      // the rest is looked up after it (lib/espn.ts applyMovedFrom).
+      if (!demo) data = applyMovedFrom(data, date);
       setLeagues(data);
+      if (!demo) {
+        const pending = movedFromPending(data, date);
+        if (pending.length) {
+          loadMovedFrom(pending, date)
+            .then(() => {
+              if (myReq !== reqSeqRef.current) return;
+              setLeagues((cur) => applyMovedFrom(cur, date));
+            })
+            .catch(() => { /* display only */ });
+        }
+      }
       setOffline(null);
       // Real data won — clear any error the watchdog may have raised so a
       // slow-but-successful load still shows the board instead of the retry UI.

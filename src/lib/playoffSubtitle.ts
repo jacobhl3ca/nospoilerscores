@@ -7,6 +7,8 @@
 // Wild Card games. Every label on the day is now read, and a side that differs
 // between games is dropped from the line.
 
+import { cleanRoundLabel } from "./calledGames.ts";
+
 // Strip generic "Stanley Cup Playoffs" / "NBA Playoffs" / "NCAA … Championship"
 // prefix segments so a label like "Stanley Cup Playoffs - First Round" reads
 // "First Round". Real round info (e.g. "East 1st Round" for NBA/NHL playoffs)
@@ -18,7 +20,10 @@ const GENERIC_LABEL_SEGMENT = /^(?:stanley cup playoffs?|nba playoffs?|wnba play
 // e.g. "Stanley Cup Playoffs - First Round" → "First Round"
 // e.g. "NCAA Men's Basketball Championship - National Championship" → "National Championship"
 // ESPN sometimes tacks on "Nth Seed Game" as the last segment — strip that.
-export function shortenPlayoffLabel(headline: string): string {
+// ESPN's rainout tail ("Game 5 Makeup of Oct 16") is cut first, so a makeup
+// game reads "ALCS · Game 5" (lib/calledGames.ts).
+export function shortenPlayoffLabel(rawHeadline: string): string {
+  const headline = cleanRoundLabel(rawHeadline);
   const parts = headline
     .split(" - ")
     .map(p => p.trim())

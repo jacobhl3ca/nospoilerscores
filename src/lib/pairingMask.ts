@@ -240,7 +240,10 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-function isOpen(revealed: string, game: Game): boolean {
+// What the cover reads off a card: a Game, or a called game (CalledGameCard).
+type PairingGame = Pick<Game, "id" | "sport" | "date" | "homeTeam" | "awayTeam" | "isPlayoff" | "playoffLabel" | "stage">;
+
+function isOpen(revealed: string, game: PairingGame): boolean {
   const [local, session] = revealed.split("|");
   const key = pairingKey(game);
   if (key && local.split(",").includes(key)) return true;
@@ -250,7 +253,7 @@ function isOpen(revealed: string, game: Game): boolean {
 // The server snapshot is "|" (nothing revealed), so the prerendered board masks
 // every such card and a masked card never shows its teams, even for a frame.
 // A stored reveal opens after hydration: cover to teams, never the reverse.
-export function usePairingHidden(game: Game): { hidden: boolean; reveal: () => void } {
+export function usePairingHidden(game: PairingGame): { hidden: boolean; reveal: () => void } {
   const spoils = pairingSpoilsEarlierRound(game);
   const revealed = useSyncExternalStore(subscribe, readRevealed, () => "|");
   const reveal = useCallback(() => revealPairing(game), [game]);
