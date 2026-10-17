@@ -6798,7 +6798,7 @@ export default function HomeContent({
         updatePrefs={updatePrefs}
         resolvedTheme={resolvedTheme}
         leagueOptions={settingsLeagueOptions}
-        onRequestLeague={() => { setFeedbackPrefill(FEEDBACK_LEAGUE_PREFILL); setFeedbackSignal((n) => n + 1); }}
+        onRequestLeague={(query) => { setFeedbackPrefill(query ? `${FEEDBACK_LEAGUE_PREFILL}${query}` : FEEDBACK_LEAGUE_PREFILL); setFeedbackSignal((n) => n + 1); }}
         onOpenFeedback={() => { setFeedbackPrefill(""); setFeedbackSignal((n) => n + 1); }}
         teamLeagueOptions={teamLeagueOptions}
         displayedLeagues={sortedLeagues}
