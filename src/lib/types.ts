@@ -52,10 +52,11 @@ export interface Game {
   weekNumber?: number | null;
   // Whether this is a playoff/postseason/tournament game
   isPlayoff: boolean;
-  // Set after first paint when the previous day had a postponed / canceled /
-  // suspended game between the same two teams ("Moved from Fri (rain)").
-  // Display only: no logic reads it (lib/espn.ts applyMovedFrom).
-  movedFrom?: { day: string; reason: string | null };
+  // The game ESPN calls the makeup of a postponed one ("Game 5 Makeup of Oct
+  // 16"): day = "Fri" when that date is under a week back, else "Oct 16".
+  // Shown as "· makeup of Fri" in the time row. Display only: no logic reads
+  // it (lib/calledGames.ts makeupOfDay).
+  movedFrom?: { day: string };
   // ESPN season.type 1 — an exhibition, not a game that counts. Currently only
   // the NFL and the NBA reach the app with these: every other sport's type-1
   // slate is filtered out at the fetch (see eventsToGames), while those two keep

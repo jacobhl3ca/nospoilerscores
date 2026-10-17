@@ -143,17 +143,93 @@ test("Sun: the makeup game's label reads ALCS · Game 5, no 'Makeup'", async ({ 
   await expect(calledCard(page)).toHaveCount(0);
 });
 
-test("Sat: Game 4 says it was moved from Fri (rain)", async ({ page }) => {
-  await setup(page, { clock: "2026-10-17T12:00:00-04:00" });
+// Round 2 (Jacob 10/17): the tag goes on the game ESPN calls the makeup
+// (Sunday's "Game 5 Makeup of Oct 16"), in the time row, so no card grows.
+// A plain upcoming playoff game between two other teams, same day, is the
+// height every card should keep.
+function plainUpcoming(from: Ev): Ev {
+  const ev = JSON.parse(JSON.stringify(from)) as Ev & { competitions: Array<{ competitors: Array<Record<string, unknown> & { team: Record<string, unknown> }>; notes: Array<{ headline?: string }> }> };
+  ev.id = "401999002";
+  ev.date = from.date.replace(/T\d\d:/, "T17:");
+  ev.name = "New York Mets at Los Angeles Dodgers";
+  ev.shortName = "NYM @ LAD";
+  ev.competitions[0].notes = [{ headline: "NLCS - Game 5" }];
+  for (const c of ev.competitions[0].competitors) {
+    c.team = c.homeAway === "home"
+      ? { ...c.team, id: "19", abbreviation: "LAD", displayName: "Los Angeles Dodgers", shortDisplayName: "Dodgers" }
+      : { ...c.team, id: "21", abbreviation: "NYM", displayName: "New York Mets", shortDisplayName: "Mets" };
+  }
+  return ev;
+}
+const TB_CLE = '[aria-label="Tampa Bay Rays at Cleveland Guardians — game details"]';
+const NYM_LAD = '[aria-label="New York Mets at Los Angeles Dodgers — game details"]';
+
+async function heightOf(page: Page, sel: string): Promise<number> {
+  return Math.round((await page.locator(sel).first().boundingBox())!.height);
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`Sun (${theme}): the makeup game says "makeup of Fri" in its time row, same height`, async ({ page }) => {
+    await setup(page, {
+      clock: "2026-10-18T12:00:00-04:00",
+      theme,
+      days: { ...FIX, "20261018": [plainUpcoming(FIX["20261018"][0]), ...FIX["20261018"]] },
+    });
+    await page.addInitScript(() => localStorage.setItem("hs:pairing-revealed-v2", "mlb:2026:30-5,mlb:2026:19-21"));
+    await page.goto("/");
+    const sun = page.locator(TB_CLE).first();
+    await expect(sun).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(NYM_LAD).first()).toBeVisible();
+    const tag = sun.locator("[data-moved-from]");
+    await expect(tag).toHaveText("· makeup of Fri");
+    // In the time row: same line as the start time, and the row did not wrap.
+    const row = sun.locator(".game-meta-row").first();
+    await expect(row).toContainText("5:00");
+    await expect(row.locator("[data-moved-from]")).toHaveCount(1);
+    const rowBox = (await row.boundingBox())!;
+    const tagBox = (await tag.boundingBox())!;
+    expect(tagBox.y).toBeGreaterThanOrEqual(rowBox.y - 1);
+    expect(tagBox.y + tagBox.height).toBeLessThanOrEqual(rowBox.y + rowBox.height + 1);
+    expect(await heightOf(page, TB_CLE)).toBe(await heightOf(page, NYM_LAD));
+    await expect(page.locator(NYM_LAD).first().locator("[data-moved-from]")).toHaveCount(0);
+  });
+}
+
+test("Sun on a phone: the tag truncates, the time and network stay, same height", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await setup(page, {
+    clock: "2026-10-18T12:00:00-04:00",
+    days: { ...FIX, "20261018": [plainUpcoming(FIX["20261018"][0]), ...FIX["20261018"]] },
+  });
+  await page.addInitScript(() => localStorage.setItem("hs:pairing-revealed-v2", "mlb:2026:30-5,mlb:2026:19-21"));
   await page.goto("/");
-  const sat = page.locator('[aria-label="Tampa Bay Rays at Cleveland Guardians — game details"]').first();
-  await expect(sat).toBeVisible({ timeout: 30_000 });
-  await expect(sat.locator("[data-moved-from]")).toHaveText("Moved from Fri (rain)", { timeout: 15_000 });
-  await expect(calledCard(page)).toHaveCount(0);
+  const sun = page.locator(TB_CLE).first();
+  await expect(sun).toBeVisible({ timeout: 30_000 });
+  await expect(sun.locator("[data-moved-from]")).toHaveCount(1);
+  const row = sun.locator(".game-meta-row").first();
+  await expect(row).toContainText("5:00");
+  await expect(row).toContainText("TBS");
+  expect(await heightOf(page, TB_CLE)).toBe(await heightOf(page, NYM_LAD));
 });
 
-test("Sat, covered series: the cover still says moved from Fri (rain)", async ({ page }) => {
-  await setup(page, { clock: "2026-10-17T12:00:00-04:00", covered: true });
+test("Sat: Game 4 was already on the schedule, so it has no tag and keeps its height", async ({ page }) => {
+  await setup(page, {
+    clock: "2026-10-17T12:00:00-04:00",
+    days: { ...FIX, "20261017": [plainUpcoming(FIX["20261017"][0]), ...FIX["20261017"]] },
+  });
+  await page.addInitScript(() => localStorage.setItem("hs:pairing-revealed-v2", "mlb:2026:30-5,mlb:2026:19-21"));
   await page.goto("/");
-  await expect(page.locator("[data-pairing-mask] [data-moved-from]").first()).toHaveText("Moved from Fri (rain)", { timeout: 30_000 });
+  const sat = page.locator(TB_CLE).first();
+  await expect(sat).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(NYM_LAD).first()).toBeVisible();
+  await expect(sat.locator("[data-moved-from]")).toHaveCount(0);
+  await expect(page.locator(NYM_LAD).first().locator("[data-moved-from]")).toHaveCount(0);
+  await expect(calledCard(page)).toHaveCount(0);
+  expect(await heightOf(page, TB_CLE)).toBe(await heightOf(page, NYM_LAD));
+});
+
+test("Sun, covered series: the cover ends its round line with makeup of Fri", async ({ page }) => {
+  await setup(page, { clock: "2026-10-18T12:00:00-04:00", covered: true });
+  await page.goto("/");
+  await expect(page.locator("[data-pairing-mask] [data-moved-from]").first()).toHaveText("· makeup of Fri", { timeout: 30_000 });
 });

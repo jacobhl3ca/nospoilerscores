@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createJiti } from "jiti";
 
-import { calledKind, parseCalledNote, cleanRoundLabel, findNextMeeting, nextGameText } from "../src/lib/calledGames.ts";
+import { calledKind, parseCalledNote, cleanRoundLabel, findNextMeeting, nextGameText, makeupOfDay } from "../src/lib/calledGames.ts";
 import { shortenPlayoffLabel, playoffSubtitleTiers } from "../src/lib/playoffSubtitle.ts";
 
 // Postponed / canceled / suspended games (Jacob 10/17). The fixture is ESPN's
@@ -103,4 +103,30 @@ test("ESPN's rainout becomes one called game, never a Game, and the next game is
   assert.equal(nextGameText({ next: next.date, nextStatus: next.statusDetail, makeup: called[0].makeup }, Date.parse("2026-10-17T01:00Z"), "America/New_York"), "Next game: Sat Oct 17, 8:00 PM");
   // A non-called day yields no called games.
   assert.deepEqual(espn.eventsToCalledGames(FIX["20261017"], "mlb"), []);
+});
+
+test("makeupOfDay reads both note forms: weekday under a week back, else the date", () => {
+  const sun = "2026-10-18T21:00Z"; // Sun 5 PM ET
+  assert.equal(makeupOfDay("ALCS - Game 5 Makeup of Oct 16", sun), "Fri");
+  assert.equal(makeupOfDay("ALCS - Game 5 Makeup of 10/16", sun), "Fri");
+  assert.equal(makeupOfDay("Makeup of Sept 30", sun), "Sep 30");
+  assert.equal(makeupOfDay("Makeup of 10/11", sun), "Oct 11"); // 7 days back reads as the date
+  assert.equal(makeupOfDay("Makeup of 10/12", sun), "Mon");
+  // The note has no year: a January game making up a December date.
+  assert.equal(makeupOfDay("Makeup of Dec 30", "2027-01-02T00:30Z"), "Wed"); // Fri Jan 1 7:30 PM ET
+  // The ET day counts, not UTC: Sat 8 PM ET is Sun 00:00Z.
+  assert.equal(makeupOfDay("Makeup of Oct 16", "2026-10-18T00:00Z"), "Fri");
+  assert.equal(makeupOfDay("ALCS - Game 4", sun), null);
+  assert.equal(makeupOfDay("ALCS - Game 4 Rain - Makeup on Oct 18", sun), null);
+  assert.equal(makeupOfDay(undefined, sun), null);
+});
+
+test("parseGame puts makeup of Fri on Sunday's game only", async () => {
+  const jiti = createJiti(import.meta.url);
+  const espn = await jiti.import<{ eventsToGames: (events: Ev[], sport: string) => Array<{ id: string; movedFrom?: { day: string }; playoffLabel: string | null }> }>("../src/lib/espn.ts");
+  const [sat] = espn.eventsToGames(FIX["20261017"], "mlb");
+  const [sun] = espn.eventsToGames(FIX["20261018"], "mlb");
+  assert.equal(sat.movedFrom, undefined);
+  assert.deepEqual(sun.movedFrom, { day: "Fri" });
+  assert.equal(shortenPlayoffLabel(sun.playoffLabel ?? ""), "ALCS · Game 5");
 });
