@@ -1,6 +1,7 @@
 import UIKit
 import Capacitor
 import AuthenticationServices
+import Sentry
 
 @objc(HideScoreGoogleAuthPlugin)
 public class HideScoreGoogleAuthPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -17,6 +18,7 @@ public class HideScoreGoogleAuthPlugin: CAPPlugin, CAPBridgedPlugin {
     /// pendingCall is also touched in the completion on main, so all of it runs
     /// on main (#268, best guess).
     @objc func authorize(_ call: CAPPluginCall) {
+        Self.breadcrumb("sign-in requested")
         DispatchQueue.main.async { [weak self] in
             guard let self else { call.reject("authentication unavailable"); return }
             self.startSession(call)
@@ -34,9 +36,10 @@ public class HideScoreGoogleAuthPlugin: CAPPlugin, CAPBridgedPlugin {
             DispatchQueue.main.async {
                 guard let self, let pending = self.pendingCall else { return }
                 self.authSession = nil; self.pendingCall = nil
+                let nsError = error as NSError?
+                Self.breadcrumb("sign-in finished", ["result": callback != nil ? "callback" : "error \(nsError?.code ?? 0)"])
                 if let callback { pending.resolve(["callbackUrl": callback.absoluteString]) }
                 else {
-                    let nsError = error as NSError?
                     pending.reject(nsError?.code == ASWebAuthenticationSessionError.canceledLogin.rawValue
                         ? "canceled" : (error?.localizedDescription ?? "authentication failed"))
                 }
@@ -45,7 +48,19 @@ public class HideScoreGoogleAuthPlugin: CAPPlugin, CAPBridgedPlugin {
         session.presentationContextProvider = self
         session.prefersEphemeralWebBrowserSession = false
         authSession = session
-        guard session.start() else { authSession = nil; pendingCall = nil; call.reject("could not start authentication session"); return }
+        let started = session.start()
+        Self.breadcrumb(started ? "sign-in session started" : "sign-in session did not start")
+        guard started else { authSession = nil; pendingCall = nil; call.reject("could not start authentication session"); return }
+    }
+
+    /// One line in the next native crash report (#268). Its Sentry event had
+    /// no frame, so these show whether a sign-in was under way and on which
+    /// thread each step ran. No URL and no callback: those carry the token.
+    private static func breadcrumb(_ message: String, _ data: [String: Any] = [:]) {
+        let crumb = Breadcrumb(level: .info, category: "auth.google")
+        crumb.message = message
+        crumb.data = data.merging(["main_thread": Thread.isMainThread]) { mine, _ in mine }
+        SentrySDK.addBreadcrumb(crumb)
     }
 }
 

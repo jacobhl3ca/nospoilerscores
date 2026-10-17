@@ -14,6 +14,7 @@ import { exitDocumentFullscreen, requestElementFullscreen } from "@/lib/mediaSaf
 import { routeModalKey, nativeVideoOwnsKey, sliderOwnsKey } from "@/lib/modalArrowKeys";
 import { noteHighlightWatched } from "@/lib/rateApp";
 import { trackEvent } from "@/lib/track";
+import { iframeAllow } from "@/lib/nativeCrashGuards";
 
 interface VideoModalProps {
   videoId: string;
@@ -3534,7 +3535,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 // spoiler unblurred to screen readers. Use the generic label.
                 title="Video player"
                 className="absolute inset-0 w-full h-full"
-                allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                // No picture-in-picture in the iOS app (#290).
+                allow={iframeAllow(typeof window === "undefined" ? null : window)}
                 allowFullScreen
               />
             )}

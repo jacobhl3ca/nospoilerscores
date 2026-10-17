@@ -1,4 +1,5 @@
 import Capacitor
+import Sentry
 import UIKit
 import WebKit
 
@@ -23,6 +24,14 @@ import WebKit
  */
 class MainViewController: CAPBridgeViewController, UITabBarDelegate {
     private static let messageName = "hsTabBar"
+    fileprivate static let breadcrumbName = "hsBreadcrumb"
+    /// The only lines the page may add to a native crash report (#290, #66).
+    /// The same strings as CRUMBS in src/lib/nativeCrashGuards.ts; any other
+    /// message is dropped, so no page text (a title, a result) reaches a report.
+    private static let breadcrumbs: [String: Set<String>] = [
+        "video": ["player started", "presentation inline", "presentation fullscreen", "presentation picture-in-picture"],
+        "image": ["image long-press"],
+    ]
     private static let views = ["scores-plain", "scores-rated", "news", "schedule"]
 
     private let tabBar = UITabBar()
@@ -50,6 +59,7 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(HideScoreGoogleAuthPlugin())
         installTabBarBridge()
+        installBreadcrumbBridge()
     }
 
     override func viewDidLoad() {
@@ -108,6 +118,27 @@ class MainViewController: CAPBridgeViewController, UITabBarDelegate {
         """
         controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         controller.add(WeakScriptMessageHandler(self), name: Self.messageName)
+    }
+
+    // MARK: - Crash-report breadcrumbs
+
+    /// A native crash report carries only native breadcrumbs, so the page
+    /// sends what the reader did with a video or an image just before
+    /// (#290, #66). The page side: src/lib/nativeCrashGuards.ts.
+    private func installBreadcrumbBridge() {
+        webView?.configuration.userContentController.add(WeakScriptMessageHandler(self), name: Self.breadcrumbName)
+    }
+
+    fileprivate func handleBreadcrumbMessage(_ message: WKScriptMessage) {
+        guard message.frameInfo.isMainFrame,
+              Self.trustedHosts.contains(message.frameInfo.securityOrigin.host),
+              let body = message.body as? [String: Any],
+              let category = body["category"] as? String,
+              let text = body["message"] as? String,
+              Self.breadcrumbs[category]?.contains(text) == true else { return }
+        let crumb = Breadcrumb(level: .info, category: "web." + category)
+        crumb.message = text
+        SentrySDK.addBreadcrumb(crumb)
     }
 
     private func setUpTabBar() {
@@ -210,7 +241,11 @@ private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        owner?.handleTabBarMessage(message)
+        if message.name == MainViewController.breadcrumbName {
+            owner?.handleBreadcrumbMessage(message)
+        } else {
+            owner?.handleTabBarMessage(message)
+        }
     }
 }
 
