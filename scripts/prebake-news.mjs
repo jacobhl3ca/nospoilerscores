@@ -25,6 +25,7 @@ import {
 } from "./lib/fotmob.mjs";
 import { channelFeedId, channelSearchHandle, channelSearchMinSec, channelSearchNeedsEmbed, channelSearchServesSport, channelSearchTitleTokens, embedOffChannelId, feedCoversGame, isWomensSport, parseChannelFeed, pickChannelSearchCards, titleHasCompToken } from "./lib/channel-search.mjs";
 import { createWatchMetaStore } from "./lib/ytWatchMeta.mjs";
+import { descriptionMatchLine, isDescriptionMatchChannel, isTennisRoundupTitle, isTennisTourChannel, playerSurname, tennisTourTitleTokens, titleHasWord } from "./lib/title-match.mjs";
 import { HL_TEAM_SHORT_ALIASES, hlDateStrs, hlNamePairs, hlTypoWordIndex } from "./lib/hl-retry.mjs";
 import { createTitleForTeam, teamNameIndex } from "./lib/team-names.mjs";
 import { pickEspnGameClip, attachEspnVideoClips, isEspnTalkKind } from "./lib/espn-clip.mjs";
@@ -2642,6 +2643,10 @@ const HL_LEAGUES = [
   // hlHighlightTeamName below and highlightTeamName in src/lib/youtube.ts.
   { sport: "llws",   path: "/baseball/llb/scoreboard",                        channel: "ESPN" },
   { sport: "tennis", path: "/tennis/atp/scoreboard",                          channel: null },
+  // The WTA half of the tennis feed (added 2026-10-17): Wuhan, Doha and the
+  // WTA Finals are on it only. A Slam or a combined 1000 is on both feeds;
+  // the loop below bakes each match once.
+  { sport: "tennis", path: "/tennis/wta/scoreboard",                          channel: null },
   // Rugby union (added 2026-09-04). These four already had an approved uploader
   // in OFFICIAL_CHANNELS and a 3-hour buffer in highlightBufferHours, but were
   // never baked — so every rugby card fell through to a LIVE per-card
@@ -3033,10 +3038,13 @@ function hlTeamTitleIndex(title, team) {
   return best;
 }
 
-function hlTitleHasTeam(title, team) {
+function hlTitleHasTeam(title, team, { surname = false } = {}) {
   const variants = hlTeamVariants(team);
   const normalizedTitle = hlTitleForTeam(title, variants);
   if ([...variants].some((variant) => teamNameIndex(normalizedTitle, variant) >= 0)) return true;
+  // Tennis TV titles by surname ("Zverev vs Davidovich Fokina"). Tour
+  // channels only — see scripts/lib/title-match.mjs.
+  if (surname && titleHasWord(normalizedTitle, playerSurname(hlNormalizeTeam(team)))) return true;
   // Name-order tolerance, mirroring titleHasTeam in public/_worker.js: ESPN
   // names Chinese tennis players family-name-first ("Zheng Qinwen") and the US
   // Open channel titles them given-name-first ("Qinwen Zheng vs. Elena
@@ -3064,13 +3072,49 @@ async function hlOembedMeta(id) {
       return meta;
     }
     const data = await res.json();
-    const meta = { title: String(data?.title ?? ""), author: String(data?.author_name ?? "") };
+    let meta = { title: String(data?.title ?? ""), author: String(data?.author_name ?? "") };
+    // SPL: the team gates read the description's fixture line, not the
+    // story title (see DESCRIPTION_MATCH_CHANNELS). No line = no fixture.
+    if (isDescriptionMatchChannel(meta.author)) meta = { ...meta, title: (await hlDescriptionMatchLine(id)) ?? "", storyTitle: meta.title };
     HL_OEMBED_META_CACHE.set(id, meta);
     return meta;
   } catch {
     HL_OEMBED_META_CACHE.set(id, null);
     return null;
   }
+}
+
+// The fixture line of a description-match upload (see
+// DESCRIPTION_MATCH_CHANNELS in scripts/lib/title-match.mjs), or null. A feed
+// card already carries its description (hlNoteDescription); any other id pays
+// one watch-page read, and a found line is kept in the channel-search state
+// file, so each id is read once.
+const hlDescriptionLines = new Map();
+function hlNoteDescription(id, description) {
+  if (!id || hlDescriptionLines.has(id)) return;
+  const line = descriptionMatchLine(description);
+  if (line) hlDescriptionLines.set(id, line);
+}
+async function hlDescriptionMatchLine(id) {
+  if (hlDescriptionLines.has(id)) return hlDescriptionLines.get(id);
+  const state = await hlCsState();
+  const kept = state.descLine[id];
+  if (kept?.line) {
+    hlDescriptionLines.set(id, kept.line);
+    return kept.line;
+  }
+  let line = null;
+  try {
+    const html = await getText(`https://www.youtube.com/watch?v=${encodeURIComponent(id)}`);
+    const raw = html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/)?.[1];
+    line = raw ? descriptionMatchLine(JSON.parse(`"${raw}"`)) : null;
+  } catch (e) {
+    console.warn(`HIGHLIGHT-DESCRIPTION-FAIL ${id}: ${e?.cause?.message || e?.message || e}`);
+    return null;
+  }
+  hlDescriptionLines.set(id, line);
+  if (line) state.descLine[id] = { line, at: Date.now() };
+  return line;
 }
 
 // Channels that refuse embeds for one sport only: the SEC's volleyball cuts
@@ -3147,8 +3191,11 @@ function hlTeamTypoIndex(title, team) {
 async function hlVideoMatchesTeams(id, away, home, homeFirst = false) {
   const meta = await hlOembedMeta(id);
   if (!meta?.title) return false;
-  const exactAway = hlTitleHasTeam(meta.title, away);
-  const exactHome = hlTitleHasTeam(meta.title, home);
+  // A tour roundup names several matches: not this one's package.
+  const tour = isTennisTourChannel(meta.author);
+  if (tour && isTennisRoundupTitle(meta.title)) return false;
+  const exactAway = hlTitleHasTeam(meta.title, away, { surname: tour });
+  const exactHome = hlTitleHasTeam(meta.title, home, { surname: tour });
   if (!exactAway && !exactHome) return false;
   // One team named exactly, the other one letter off ("Estonia vs Lexemburgo").
   const typoAway = exactAway ? -1 : hlTeamTypoIndex(meta.title, away);
@@ -3318,6 +3365,37 @@ function hlTennisChannel(eventName) {
   return HL_TENNIS_CHANNELS.find(([rx]) => rx.test(eventName ?? ""))?.[1] ?? null;
 }
 
+// The tour's 1000s and Finals — TENNIS_TOUR_EVENTS in src/lib/espn.ts, read
+// out of the source (one table, never a copy). Their matches go to Tennis TV
+// (men's draws) and the WTA (women's draws), mirroring the tennis_tour_men /
+// tennis_tour_women rows of OFFICIAL_CHANNELS in src/lib/youtube.ts. Empty
+// when the block cannot be read, which leaves the tour dark as before.
+const HL_TENNIS_TOUR_EVENTS = (() => {
+  try {
+    const src = readFileSync(new URL("../src/lib/espn.ts", import.meta.url), "utf8");
+    const block = src.match(/export const TENNIS_TOUR_EVENTS[^=]*=\s*\[([\s\S]*?)\n\];/);
+    if (!block) return [];
+    const rows = [];
+    for (const m of block[1].matchAll(/\{\s*id:\s*"([^"]+)",\s*city:\s*"([^"]+)",\s*name:\s*\/((?:[^/\\]|\\.)+)\/([a-z]*),\s*draws:\s*"(men|women|both)"\s*\}/g)) {
+      rows.push({ id: m[1], city: m[2], name: new RegExp(m[3], m[4]), draws: m[5] });
+    }
+    return rows;
+  } catch {
+    return [];
+  }
+})();
+const HL_TENNIS_TOUR_CHANNEL = { men: "Tennis TV", women: "WTA" };
+
+// Mirrors tennisTourEvent in src/lib/espn.ts: the id decides, the name only
+// speaks for an id not in the table.
+function hlTennisTourEvent(event) {
+  const id = String(event?.id ?? "").split("-")[0];
+  const byId = HL_TENNIS_TOUR_EVENTS.find((t) => t.id === id);
+  if (byId) return byId;
+  const name = String(event?.name ?? "");
+  return (name && HL_TENNIS_TOUR_EVENTS.find((t) => t.name.test(name))) || null;
+}
+
 // Postponed / canceled / suspended: ESPN files these as state "post" with a
 // 0-0 score. Same test as calledKind in src/lib/calledGames.ts.
 function hlIsCalled(event) {
@@ -3328,15 +3406,23 @@ function hlIsCalled(event) {
 function hlTennisMatches(events, ymd) {
   const matches = [];
   for (const event of events ?? []) {
-    if (!event?.major) continue;
-    const channel = hlTennisChannel(event.name);
-    if (!channel) continue;
+    // A Slam goes to its own channel; a 1000 or a Finals to the tour's, per
+    // draw (see HL_TENNIS_TOUR_EVENTS). Every other event stays dark.
+    const tour = event?.major ? null : hlTennisTourEvent(event);
+    const slamChannel = event?.major ? hlTennisChannel(event.name) : null;
+    if (!slamChannel && !tour) continue;
     for (const grouping of event.groupings ?? []) {
       const slug = (grouping?.grouping?.slug ?? "").toLowerCase();
       if (!slug.includes("singles") || slug.includes("doubles")) continue;
+      const draw = /women/.test(slug) ? "women" : "men";
+      // A tour event's other draw is a 500 (Dubai, Beijing): not on the board.
+      if (tour && tour.draws !== "both" && tour.draws !== draw) continue;
+      const channel = slamChannel ?? HL_TENNIS_TOUR_CHANNEL[draw];
       for (const match of grouping.competitions ?? []) {
         if (match?.status?.type?.state !== "post") continue;
         if (hlIsCalled(match)) continue;
+        // The board's tour column is main draws only (buildTennisGames).
+        if (tour && /^qualifying/i.test(match?.round?.displayName ?? "")) continue;
         const date = match.date ?? event.date;
         if (hlDateYmd(date) !== ymd) continue;
         const comps = match.competitors ?? [];
@@ -3346,8 +3432,12 @@ function hlTennisMatches(events, ymd) {
         const awayName = away?.athlete?.displayName ?? away?.athlete?.shortName;
         if (!match.id || !awayName || !homeName) continue;
         const year = String(date ?? "").slice(0, 4);
-        const series = [event.name, year].filter(Boolean).join(" ") || null;
-        matches.push({ id: match.id, away: awayName, home: homeName, date, series, channel });
+        // A tour cut names the city, not the sponsor ("Shanghai 2026
+        // Highlights" for the "Rolex Shanghai Masters"), and must carry it:
+        // the same two players meet at several 1000s a year.
+        const series = (tour ? [tour.city, year] : [event.name, year]).filter(Boolean).join(" ") || null;
+        const compTokens = tour ? tennisTourTitleTokens(tour.city) : null;
+        matches.push({ id: match.id, away: awayName, home: homeName, date, series, channel, compTokens });
       }
     }
   }
@@ -3626,9 +3716,11 @@ const HL_CS_MAX_FETCHES = 30;
 const HL_CS_GAP_MS = 1500;
 const HL_CS_REASK_MS = 90 * 60 * 1000;
 const HL_CS_MAX_FAILURES = 3;
+const HL_CS_TOUR_MAX_FETCHES = 8;
+const HL_CS_TOUR_MAX_AGE_MS = 2 * 86400e3;
 // Outside public/news for the same reason as the FotMob state file.
 const HL_CS_STATE_PATH = ".bake-state/channel-search.json";
-const hlCs = { fetches: 0, failures: 0, hits: 0, lastAt: 0, state: null, feeds: new Map(), feedFailures: 0, feedHits: 0, feedCovered: 0 };
+const hlCs = { fetches: 0, tourFetches: 0, failures: 0, hits: 0, lastAt: 0, state: null, feeds: new Map(), feedFailures: 0, feedHits: 0, feedCovered: 0 };
 
 // One channel's uploads feed (parseChannelFeed), fetched once per bake. A
 // failed fetch yields null (logged once) and the search page takes over.
@@ -3652,7 +3744,7 @@ async function hlCsState() {
   let state = null;
   try { state = JSON.parse(await readFile(HL_CS_STATE_PATH, "utf8")); } catch { /* first run */ }
   const map = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
-  hlCs.state = { asked: map(state?.asked), embedOff: map(state?.embedOff) };
+  hlCs.state = { asked: map(state?.asked), embedOff: map(state?.embedOff), descLine: map(state?.descLine) };
   return hlCs.state;
 }
 
@@ -3690,6 +3782,23 @@ async function hlChannelSearchAccept(tag, key, channel, away, home, gameIso, com
   return null;
 }
 
+// Search-page cards of a description-match channel, titled with their
+// description's fixture line (hlDescriptionMatchLine). Only cards that could be
+// this game's package are read: long enough, and uploaded within a few days of
+// it. At most HL_DESCRIBE_MAX watch pages per game.
+const HL_DESCRIBE_MAX = 4;
+async function hlDescribeCards(cards, gameMs, minSec) {
+  const out = [];
+  for (const card of Array.isArray(cards) ? cards : []) {
+    if (out.length >= HL_DESCRIBE_MAX) break;
+    if (!card?.videoId || (Number.isFinite(card.durationSec) && card.durationSec < minSec)) continue;
+    if (Number.isFinite(card.publishedMs) && Number.isFinite(gameMs) && (card.publishedMs < gameMs - 86400e3 || card.publishedMs > gameMs + 16 * 86400e3)) continue;
+    const line = await hlDescriptionMatchLine(card.videoId);
+    if (line) out.push({ ...card, title: line });
+  }
+  return out;
+}
+
 // The id this channel's uploads feed or own search page holds for this game,
 // gated, or null. `gates` (HL_MATCH_GATES) apply here as on every other id:
 // the home club named first, and the league's duration floor when it is above
@@ -3712,8 +3821,10 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
     const awayAt = hlTeamTitleIndex(title, away);
     return homeAt >= 0 && awayAt >= 0 && homeAt < awayAt;
   };
+  const tour = isTennisTourChannel(channel);
   const pickOpts = {
-    titleHasTeams: (title) => hlTitleHasTeam(title, away) && hlTitleHasTeam(title, home) && homeFirstOk(title),
+    titleHasTeams: (title) => !(tour && isTennisRoundupTitle(title))
+      && hlTitleHasTeam(title, away, { surname: tour }) && hlTitleHasTeam(title, home, { surname: tour }) && homeFirstOk(title),
     compOk: (title) => titleHasCompToken(title, compTokens) && titleHasCompToken(title, titleTokens) && weekOk(title),
     gameMs: Date.parse(gameIso),
     exclude,
@@ -3723,7 +3834,16 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
   // Feed cards have no length yet, so one more candidate is let through for
   // the watch-page length check to drop a goal clip.
   const feed = await hlChannelFeed(channel);
-  const feedPicks = pickChannelSearchCards(feed?.cards ?? [], { ...pickOpts, limit: 3 });
+  // SPL: a card is picked on its description's fixture line, the same line
+  // the oEmbed gates then read (hlOembedMeta). A card with no line drops out.
+  const describe = isDescriptionMatchChannel(channel);
+  const feedCards = describe
+    ? (feed?.cards ?? []).map((c) => {
+        hlNoteDescription(c.videoId, c.description);
+        return { ...c, title: descriptionMatchLine(c.description) ?? "" };
+      })
+    : (feed?.cards ?? []);
+  const feedPicks = pickChannelSearchCards(feedCards, { ...pickOpts, limit: 3 });
   const fromFeed = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-FEED", key, channel, away, home, gameIso, compTokens, feedPicks, minSec, week, homeFirst);
   if (fromFeed) {
     hlCs.feedHits++;
@@ -3734,12 +3854,17 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
     return null;
   }
   if (!handle || hlCs.failures >= HL_CS_MAX_FAILURES || hlCs.fetches >= HL_CS_MAX_FETCHES) return null;
+  // Tour channels: pages only for a match under 2 days old (a cut posts within
+  // hours or never), and at most HL_CS_TOUR_MAX_FETCHES of the bake's pages, so
+  // a tour week cannot spend the pages every other league needs.
+  if (tour && (!(Date.now() - pickOpts.gameMs < HL_CS_TOUR_MAX_AGE_MS) || hlCs.tourFetches >= HL_CS_TOUR_MAX_FETCHES)) return null;
   const state = await hlCsState();
   const askKey = `${key}|${channel}`;
   if (Date.now() - (state.asked[askKey] ?? 0) < HL_CS_REASK_MS) return null;
   const wait = hlCs.lastAt + HL_CS_GAP_MS - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   hlCs.fetches++;
+  if (tour) hlCs.tourFetches++;
   let cards;
   try {
     cards = await fetchYtChannelSearch(handle, `${hlSearchName(away)} ${hlSearchName(home)}`);
@@ -3751,6 +3876,9 @@ async function hlChannelSearchOfficial(key, channel, away, home, gameIso, compTo
     hlCs.lastAt = Date.now();
   }
   state.asked[askKey] = Date.now();
+  // SPL page cards carry no description: read it for the few long enough
+  // and of the right age, then pick on the fixture line as the feed does.
+  if (describe) cards = await hlDescribeCards(cards, pickOpts.gameMs, minSec);
   const id = await hlChannelSearchAccept("HIGHLIGHT-CHANNEL-SEARCH", key, channel, away, home, gameIso, compTokens, pickChannelSearchCards(cards, pickOpts), minSec, week, homeFirst);
   if (id) hlCs.hits++;
   return id;
@@ -3762,6 +3890,7 @@ async function hlChannelSearchFinish() {
   const cutoff = Date.now() - HL_ENTRY_TTL_MS;
   for (const [k, at] of Object.entries(hlCs.state.asked)) if (!(at > cutoff)) delete hlCs.state.asked[k];
   for (const [id, row] of Object.entries(hlCs.state.embedOff)) if (!(row?.at > cutoff)) delete hlCs.state.embedOff[id];
+  for (const [id, row] of Object.entries(hlCs.state.descLine)) if (!(row?.at > cutoff)) delete hlCs.state.descLine[id];
   try {
     await mkdir(dirname(HL_CS_STATE_PATH), { recursive: true });
     await writeFile(HL_CS_STATE_PATH, JSON.stringify(hlCs.state));
@@ -3940,6 +4069,7 @@ async function bakeGameHighlights() {
   const HL_CFL_DAYS = 30;
   const cflDates = Array.from({ length: HL_CFL_DAYS }, (_, i) => hlEtYmd(-i));
   let resolved = 0;
+  const hlTennisSeen = new Set();
   for (const lg of hlSports ? HL_LEAGUES.filter((l) => hlSports.has(l.sport)) : HL_LEAGUES) {
     const lgDates = lg.sport === "fifa" ? fifaDates : (lg.sport === "cfl" ? cflDates : dates);
     for (const ymd of lgDates) {
@@ -4005,6 +4135,11 @@ async function bakeGameHighlights() {
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
+        // The ATP and WTA feeds both carry a Slam and a combined 1000.
+        if (lg.sport === "tennis") {
+          if (hlTennisSeen.has(key)) continue;
+          hlTennisSeen.add(key);
+        }
         const { away, home, series, week, preseason, cflPlayoff } = item;
         const isFifa = lg.sport === "fifa";
         // CFL-only: see hlVideoMatchesWeek's requireWeek param. NFL/NCAAF keep
@@ -4028,7 +4163,7 @@ async function bakeGameHighlights() {
         const dateStr = hlDateStr(item.date);
         const dateStrs = hlDateStrs(item.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
-        const compTokens = preseason ? HL_NFL_PRESEASON_TOKENS : (cflPlayoff ?? HL_COMPETITION_TOKENS[lg.sport] ?? null);
+        const compTokens = preseason ? HL_NFL_PRESEASON_TOKENS : (cflPlayoff ?? item.compTokens ?? HL_COMPETITION_TOKENS[lg.sport] ?? null);
         // The official slot's tokens: the chain-primary channel's own list when
         // it has one (AHA), else the sport-wide tokens.
         const primaryTokens = item.primaryTokens ?? compTokens;
@@ -4091,8 +4226,15 @@ async function bakeGameHighlights() {
           ageRejected++;
         }
 
+        // SPL and the tennis tour skip the /api/youtube lookups: no SPL title
+        // names its fixture, and a tour week is ~400 matches, most of which
+        // Tennis TV never cuts, so a worker scrape per miss per bake would
+        // soft-block the Worker's shared IP. Their uploads feed and search page
+        // (hlChannelSearchOfficial) are the whole lookup, and slot 2 stays
+        // empty: both post one cut per match.
+        const feedOnly = isDescriptionMatchChannel(primaryChannel) || isTennisTourChannel(primaryChannel);
         let official = prevOfficial ?? null;
-        if (!official) {
+        if (!official && !feedOnly) {
           officialChannel = primaryChannel;
           official = await hlResolve(away, home, dateStrs, series, primaryChannel, undefined, competition, false, week, primaryTokens, gates);
           hlNoteEmbedOff(lg.sport, primaryChannel, official);
@@ -4163,7 +4305,7 @@ async function bakeGameHighlights() {
         // Drop it from slot 2 so both buttons never play the same video.
         if (prevExtended && prevExtended === official) prevExtended = null;
         let extended = prevExtended ?? null;
-        if (!extended) {
+        if (!extended && !feedOnly) {
           extended = await hlResolve(away, home, dateStrs, series, secondaryChannel, undefined, competition, preferExtended, week, compTokens, gates);
           if (extended && official && extended === official) {
             extended = await hlResolve(away, home, dateStrs, series, secondaryChannel, [official], competition, preferExtended, week, compTokens, gates);

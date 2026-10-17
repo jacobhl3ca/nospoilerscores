@@ -79,6 +79,15 @@ export const CHANNEL_SEARCH_HANDLES = {
   // Top 14 (added 2026-10-03). Round 4 posted 49 try clips beside its 7
   // match cuts, so the feed rolls past a Saturday's cuts within hours.
   "TOP 14 - Officiel": "top14",
+  // Tennis tour (added 2026-10-17): one cut per match for every ATP and WTA
+  // 1000 ("… | Shanghai 2026 Highlights", "… | 2026 Wuhan Quarterfinal | WTA
+  // Match Highlights"). Both post dozens of uploads a week, so the feed holds
+  // about a day and the search page covers the rest.
+  "Tennis TV": "tennistv",
+  "WTA": "WTA",
+  // Saudi Pro League: its feed reaches back ~2 days, so a game older than
+  // that (a re-bake) needs the page. Picked on the description, like the feed.
+  "الدوري السعودي للمحترفين - Saudi Pro League": "-saudiproleague",
 };
 
 // A card title must carry one of these words on this channel's search page.
@@ -198,6 +207,14 @@ export const CHANNEL_FEED_IDS = {
   // reach back about 4 days (2026-10-03), so the hourly bake reads each game
   // cut while it is in the feed.
   "Pac-12": "UCtxdtF8iCxZw593FSUIPrxg",
+  // Saudi Pro League (added 2026-10-17): feed only, no search page. Its
+  // titles name the story, not the fixture ("Al Ettifaq secure valuable away
+  // win at NEOM SC", "Hamdallah breaks ALL-TIME record in style"), so only
+  // the description says which game it is — see DESCRIPTION_MATCH_CHANNELS.
+  // 15 uploads reach back about 2 days (2026-10-17).
+  "الدوري السعودي للمحترفين - Saudi Pro League": "UCqXAWrjSgLb0EPa_icPt-pw",
+  "Tennis TV": "UCbcxFkd6B9xUU54InHv4Tig",
+  "WTA": "UCaBIVVpHjq6j3tSyxwTE-8Q",
 };
 
 export function channelFeedId(channel) {
@@ -230,10 +247,11 @@ export function parseChannelFeed(xml) {
     const title = decodeXml((block.match(/<title>([\s\S]*?)<\/title>/) || [])[1]).trim();
     const link = (block.match(/<link rel="alternate" href="([^"]+)"/) || [])[1] ?? "";
     const publishedMs = Date.parse((block.match(/<published>([^<]+)<\/published>/) || [])[1] ?? "");
+    const description = decodeXml((block.match(/<media:description>([\s\S]*?)<\/media:description>/) || [])[1]).trim();
     if (!videoId) continue;
     if (Number.isFinite(publishedMs)) oldestMs = oldestMs === null ? publishedMs : Math.min(oldestMs, publishedMs);
     if (!title || /\/shorts\//.test(link)) continue;
-    cards.push({ videoId, title, publishedMs: Number.isFinite(publishedMs) ? publishedMs : null, durationSec: null });
+    cards.push({ videoId, title, description, publishedMs: Number.isFinite(publishedMs) ? publishedMs : null, durationSec: null });
   }
   return { cards, oldestMs };
 }
@@ -249,6 +267,9 @@ export function feedCoversGame(feed, gameMs) {
 // per game at 59–161 s ("Syracuse 3, Stonehill 0 - Sept. 25, 2026" is 59 s).
 const MIN_SEC_BY_CHANNEL = {
   "Atlantic Hockey America": 45,
+  // The SPL match package runs 8–9 min (505–545 s, 2026-10-16/17); its
+  // single-goal and record clips are Shorts or under 2 min.
+  "الدوري السعودي للمحترفين - Saudi Pro League": 240,
 };
 
 export function channelSearchMinSec(channel) {
