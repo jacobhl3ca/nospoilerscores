@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/lib/youtube";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { frontendHref, postHref } from "@/lib/frontendLinks";
@@ -624,6 +624,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // instead of an empty modal (Firefox + Reddit external-preview is the
   // current offender).
   const [imgFailed, setImgFailed] = useState(false);
+  // The src the lightbox <img> last finished loading. Until it matches the src
+  // on screen, the box shows a soft pulse instead of an empty black card: the
+  // first viewer of a Reddit picture waits on the image proxy's cold fetch, and
+  // a bare black modal read as broken (Jacob 10/17). Keyed on the src, so a new
+  // post or a gallery step needs no reset of its own.
+  const [imgLoadedSrc, setImgLoadedSrc] = useState<string | null>(null);
+  const lightboxImgRef = useRef<HTMLImageElement>(null);
   // Flips true when the YouTube clip can't play in-app AND no working alternate
   // was found — the common case is a league (FIFA especially) disabling embedded
   // playback (YT error 101/150) on every one of its uploads, so re-searching just
@@ -820,6 +827,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const loopClip = !!playbackUrl && /\.gif\?[^#]*\bformat=mp4\b/i.test(playbackUrl);
   const embedMode = !!embedUrl && !playbackUrl && !videoId;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
+  const lightboxSrc = imageMode ? proxyImage(isGallery ? gallery[galAt] : imageUrl, 1400) : undefined;
+  const lightboxImgLoaded = !!lightboxSrc && imgLoadedSrc === lightboxSrc;
+  // A cached picture can finish before React attaches onLoad. Mark it loaded
+  // before paint so it never flashes the pulse box.
+  useLayoutEffect(() => {
+    const el = lightboxImgRef.current;
+    if (lightboxSrc && el?.complete && el.naturalWidth > 0) setImgLoadedSrc(lightboxSrc);
+  }, [lightboxSrc]);
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
   const ytMode = !hlsMode && !embedMode && !imageMode && !textMode;
   // Playable media. An article photo, a picture, a gallery and a text post are
@@ -2787,18 +2802,28 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             onTouchStart={onSwipeStart}
             onTouchEnd={onSwipeEnd}
           >
-            <div ref={containerRef} className="relative rounded-lg overflow-hidden bg-black leading-[0]">
+            <div
+              ref={containerRef}
+              // While the picture loads, the box takes a fixed size and the same
+              // pulse + fill as the column skeletons. Once it loads, the size
+              // rules drop and the w-fit column hugs the real picture again.
+              className={`relative rounded-lg overflow-hidden bg-black leading-[0]${lightboxImgLoaded ? "" : " animate-pulse min-w-[min(60vw,40rem)] min-h-[min(50vh,30rem)]"}`}
+              style={lightboxImgLoaded ? undefined : { background: "var(--bg-card-hover)" }}
+            >
+              {!lightboxImgLoaded && <span role="status" className="sr-only">Loading picture…</span>}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                ref={lightboxImgRef}
                 // Gallery frames come off Reddit at capture resolution (4000px+,
                 // several MB each) — cap the delivered width at the proxy so a
                 // phone isn't downloading 3.5 MB per swipe.
-                src={proxyImage(isGallery ? gallery[galAt] : imageUrl!, 1400)}
+                src={lightboxSrc}
                 alt=""
                 decoding="async"
-                className="block max-w-full object-contain"
+                className={`block max-w-full object-contain transition-opacity duration-200 ${lightboxImgLoaded ? "opacity-100" : "opacity-0"}`}
                 style={{ maxHeight: mediaMaxH }}
                 draggable={false}
+                onLoad={() => setImgLoadedSrc(lightboxSrc ?? null)}
                 onError={() => setImgFailed(true)}
               />
               {isGallery && (
