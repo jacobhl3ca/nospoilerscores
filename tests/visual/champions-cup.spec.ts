@@ -96,3 +96,49 @@ for (const theme of ["light", "dark"] as const) {
     await page.screenshot({ path: `${QA}/leagues-tab-${theme}-${browserName}.png` });
   });
 }
+
+// Card face (2026-10-17): ESPN lists no TV for rugby and its short rugby name
+// is the full club name, so the cards had no chip and read MON/BAT/RAC. Now the
+// chip names the broadcaster for the device's country (lib/rightsHolders.ts),
+// the desktop column fits words, and the phone codes never repeat.
+const CHIP: [string, string, RegExp][] = [
+  ["America/New_York", "FloRugby", /florugby\.com/],
+  ["Europe/Warsaw", "DAZN", /dazn\.com/],
+];
+for (const [zone, label, href] of CHIP) {
+  test.describe(`viewer in ${zone}`, () => {
+    test.use({ timezoneId: zone });
+    test(`Sat Oct 17, 1280px: club names in words and a ${label} chip`, async ({ page, browserName }) => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await seed(page, "light", "2026-10-17T07:00:00-04:00");
+      await page.goto("/?l=rc&s=rc.0.0&dd=t&dv=s");
+      const col = page.locator('[data-league-column="rugbychamp"]');
+      const card = col.getByRole("button", { name: /Glasgow Warriors at Sale Sharks — game details/ });
+      await expect(card).toBeVisible({ timeout: 30_000 });
+      const names = card.locator(".team-name-container");
+      await expect(names).toHaveCount(2);
+      await expect(names.nth(0)).toHaveText("Glasgow");
+      await expect(names.nth(1)).toHaveText("Sale Sharks");
+      for (const t of await col.locator(".team-name-container").allInnerTexts()) {
+        expect(t.trim(), "a code, not a name").not.toMatch(/^[A-Z]{2,4}$/);
+      }
+      const chip = card.getByRole("link", { name: label, exact: true });
+      await expect(chip).toBeVisible();
+      await expect(chip).toHaveAttribute("href", href);
+      await expect(chip).toHaveAttribute("target", "_blank");
+      await page.screenshot({ path: `${QA}/chip-${label}-1280-${browserName}.png` });
+    });
+  });
+}
+
+test("Sat Oct 17, 390px: no club code repeats on the board", async ({ page, browserName }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page, "light", "2026-10-17T07:00:00-04:00");
+  await page.goto("/?l=rc&s=rc.0.0&dd=t&dv=s");
+  const col = page.locator('[data-league-column="rugbychamp"]');
+  await expect(col.getByRole("button", { name: / — game details$/ }).first()).toBeVisible({ timeout: 30_000 });
+  const texts = (await col.locator(".team-name-container").allInnerTexts()).map((t) => t.trim());
+  expect(texts.length).toBeGreaterThan(10);
+  expect(new Set(texts).size, texts.join(" ")).toBe(texts.length);
+  await page.screenshot({ path: `${QA}/codes-390-${browserName}.png` });
+});
