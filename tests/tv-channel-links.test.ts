@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   fillGameLink, gameCheckState, gameQuery, gameRef, normNetwork, parseChannelLinks, playerUrl, resolvePlayer,
-  setGameCheckFetch, setTvChannelLinks, tvChannelLink,
+  setGameCheckFetch, setTvChannelLinks, tvChannelLink, tvChannelLinkOnClick,
 } from "../src/lib/tvChannelLinks.ts";
 import { withoutDeviceLocalPrefs } from "../src/lib/devicePrefs.ts";
 
@@ -128,7 +128,7 @@ test("{game} lines obey the block list", () => {
   assert.equal(parseChannelLinks("Peacock = data:text/html,{game}").size, 0);
 });
 
-test("the pre-check: 404 (no stream for this game) sends the chip to the website; other answers keep the player", async () => {
+test("the pre-check runs on click, never on render: 404 sends the chip to the website; other answers keep the player", async () => {
   const asked: string[] = [];
   const answer: Record<string, number | "throw"> = { HOU: 200, SD: 404, NYY: 500, ATL: "throw" };
   setGameCheckFetch(async (u) => {
@@ -139,16 +139,37 @@ test("the pre-check: 404 (no stream for this game) sends the chip to the website
   });
   setTvChannelLinks(`Peacock = ${PEACOCK}`, "raw");
   const card = (abbr: string) => ({ ...CARD, homeTeam: { ...CARD.homeTeam, abbreviation: abbr } });
-  for (const t of ["HOU", "SD", "NYY", "ATL"]) assert.ok(tvChannelLink("Peacock", gameRef(card(t)))); // pending = player
+  for (const t of ["HOU", "SD", "NYY", "ATL"]) assert.ok(tvChannelLink("Peacock", gameRef(card(t)))); // render = player link
   await new Promise((r) => setTimeout(r, 0));
-  assert.ok(asked.every((u) => u.endsWith("&check=1")) && asked.length === 4);
-  assert.ok(tvChannelLink("Peacock", gameRef(card("HOU"))), "200 = player");
-  assert.equal(tvChannelLink("Peacock", gameRef(card("SD"))), null, "404 = website");
-  assert.ok(tvChannelLink("Peacock", gameRef(card("NYY"))), "500 = player");
-  assert.ok(tvChannelLink("Peacock", gameRef(card("ATL"))), "no connection = player");
-  assert.equal(asked.length, 4, "answers are cached, not re-asked on every render");
+  assert.equal(asked.length, 0, "a render never contacts the tuner (Firefox local-network prompt)");
+  assert.ok(await tvChannelLinkOnClick("Peacock", gameRef(card("HOU"))), "200 = player");
+  assert.equal(await tvChannelLinkOnClick("Peacock", gameRef(card("SD"))), null, "404 = website");
+  assert.ok(await tvChannelLinkOnClick("Peacock", gameRef(card("NYY"))), "500 = player");
+  assert.ok(await tvChannelLinkOnClick("Peacock", gameRef(card("ATL"))), "no connection = player");
+  assert.ok(asked.every((u) => u.endsWith("&check=1")));
+  assert.equal(asked.length, 4);
+  assert.equal(tvChannelLink("Peacock", gameRef(card("SD"))), null, "a render after a 404 click keeps the website");
+  assert.ok(await tvChannelLinkOnClick("Peacock", gameRef(card("HOU"))));
+  assert.equal(asked.length, 4, "answers are cached, not re-asked on every click");
   const url = fillGameLink(PEACOCK, "Peacock", gameRef(card("SD")))!;
   assert.equal(gameCheckState(url), "miss");
+  setGameCheckFetch(null);
+  setTvChannelLinks("", "auto");
+});
+
+test("a slow pre-check keeps the player link; a second click shares the running check", async () => {
+  let n = 0;
+  let answer!: (r: { status: number }) => void;
+  setGameCheckFetch(() => { n++; return new Promise((r) => { answer = r; }); });
+  setTvChannelLinks(`Peacock = ${PEACOCK}`, "raw");
+  const ref = gameRef(CARD);
+  const url = fillGameLink(PEACOCK, "Peacock", ref)!;
+  assert.equal(await tvChannelLinkOnClick("Peacock", ref, 10), url, "timeout = player");
+  assert.equal(gameCheckState(url), "pending");
+  const again = tvChannelLinkOnClick("Peacock", ref, 1000);
+  answer({ status: 404 });
+  assert.equal(await again, null);
+  assert.equal(n, 1);
   setGameCheckFetch(null);
   setTvChannelLinks("", "auto");
 });
@@ -158,6 +179,7 @@ test("fixed channel links are never pre-checked", async () => {
   setGameCheckFetch(async () => { n++; return { status: 404 }; });
   setTvChannelLinks(`ESPN = ${ESPN}`, "raw");
   assert.equal(tvChannelLink("ESPN", gameRef(CARD)), ESPN);
+  assert.equal(await tvChannelLinkOnClick("ESPN", gameRef(CARD)), ESPN);
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(n, 0);
   setGameCheckFetch(null);
