@@ -2145,6 +2145,10 @@ export default function HomeContent({
 
   const handleViewModeClick = (mode: ViewMode) => {
     if (mode === viewMode) return;
+    // A first-time bar explains the tab it came with, so it closes when you
+    // leave that tab (10/15: the Ratings bar stayed up on Games and News).
+    if (mode !== "scores-rated") setRatingsNotice(false);
+    if (mode !== "news") setNewsNotice(false);
     if (mode === "schedule") {
       // Exclusive with News; the ratings pref is
       // left alone so leaving Schedule goes back to the board tab that was on.
@@ -2769,7 +2773,9 @@ export default function HomeContent({
     updatePrefs({
       firstLeague: picks[0] ?? undefined,
       secondLeague: picks[1] ?? (chose ? "empty" : undefined),
-      thirdLeague: picks[2] ?? (chose ? "empty" : undefined),
+      // No picks keeps column 3 as loaded (a new visitor's ESPN front page,
+      // FRESH_THIRD_COLUMN), so Done with nothing chosen = Use defaults.
+      thirdLeague: picks[2] ?? (chose ? "empty" : prefs.thirdLeague),
       // Slots 4-5 now take real picks on a wide viewport instead of always
       // being pinned "empty" — that pin was what capped the picker at 3.
       fourthLeague: picks[3] ?? (chose ? "empty" : undefined),
@@ -4498,7 +4504,7 @@ export default function HomeContent({
           the 1280px breakpoint doesn't widen the still-3-column board while
           the extra leagues load; the layout swaps once, when they arrive
           (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
-      <main ref={mainRef} id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none${!showNews ? " board-noselect" : ""}`}>
+      <main ref={mainRef} id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none${!showNews ? " board-noselect" : ""}${loading && !showNews ? " min-h-[100svh]" : ""}`}>
         {/* No connection: the board below is the device copy (lib/offlineBoard.ts).
             One quiet line says so and when it was pulled. It goes away when the
             "online" pull lands. */}
@@ -4513,7 +4519,7 @@ export default function HomeContent({
             dismissible — same shape as the World Cup banner below. role="status"
             (not "alert") announces them to screen readers without stealing
             focus, which is the whole point of not being a dialog anymore. */}
-        {ratingsNotice && (
+        {ratingsNotice && viewMode === "scores-rated" && (
           <div
             role="status"
             className="relative mt-6 mb-3 rounded-lg px-3 py-2 pr-10"
@@ -4541,7 +4547,7 @@ export default function HomeContent({
             </button>
           </div>
         )}
-        {newsNotice && (
+        {newsNotice && showNews && (
           <div
             role="status"
             className="relative mt-6 mb-3 rounded-lg px-3 py-2 pr-10"

@@ -4,7 +4,7 @@ import { abortOwn } from "./abort";
 import { collegeFootballPollRank } from "./pollRank";
 import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
-import { espnFeaturedKeys, espnFrontPageSports, orderByEspnHeader, orderBySports, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
+import { espnFeaturedKeys, espnFrontPageSports, orderByEspnHeader, orderBySports, orderPastDayByStart, parseEspnFrontPageFeed, parseEspnHeader, TOP_EVENTS_ENABLED, type EspnHeaderFeature } from "./topEvents";
 import { BEST_YESTERDAY_ENABLED, BEST_YESTERDAY_MIN_GAMES, prevYmd, rankBestYesterday } from "./bestYesterday";
 import { TOP_GAMES_COLUMN_LABEL, TOP_GAMES_EMPTY_LABEL, isTopGamesFile, pickTopGames, type TopGamesFile, type TopGamesSpan } from "./topGames";
 import { getApiBase, highlightTeamName } from "./youtube";
@@ -6646,10 +6646,10 @@ export async function fetchTopEvents(
     const snap = await fetchEspnFrontSnapshot(date);
     if (snap) {
       const features = parseEspnHeader(snap.strip);
-      const featured = Array.isArray(snap.featured) ? snap.featured.filter((id): id is string => typeof id === "string") : [];
-      // Ids from other days match nothing on this date's scoreboards and drop out.
-      const games = orderByEspnHeader((await pull(espnFrontPageSports(features))).flat(), features, featured);
-      return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false, espnFeatured: espnFeaturedKeys(features, featured), espnSnapshot: "day" };
+      // The snapshot's `featured` (the body's end-of-day picks) is left out on
+      // purpose, and games go in start-time order: see orderPastDayByStart.
+      const games = orderPastDayByStart((await pull(espnFrontPageSports(features))).flat(), features);
+      return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false, espnFeatured: [], espnSnapshot: "day" };
     }
     // No snapshot for the day (before the bake began, or the mini missed it):
     // today's strip leagues, all of that day's games, in strip league order.
