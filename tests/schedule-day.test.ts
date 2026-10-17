@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   buildSchedule,
+  liveScheduleGroups,
+  nextScheduleStart,
   scheduleTimeLabel,
   sortScheduleGames,
   visibleScheduleRows,
@@ -119,4 +121,42 @@ test("network names are shortened like the card chip", () => {
   assert.equal(buildSchedule([{ sport: "mlb", label: "MLB", games: [g] }], { tz: TZ })[0].rows[0].network, "MLB");
   const none = game("mlb", "CLE", "TB", "2026-10-15T00:00:00Z", { broadcasts: [] });
   assert.equal(buildSchedule([{ sport: "mlb", label: "MLB", games: [none] }], { tz: TZ })[0].rows[0].network, null);
+});
+
+test("liveScheduleGroups keeps only in-progress rows and drops leagues with none", () => {
+  const groups = buildSchedule([
+    { sport: "nhl", label: "NHL", games: [
+      game("nhl", "NYR", "WSH", "2026-10-14T23:00:00Z", { state: "in", statusDetail: "2nd" }),
+      game("nhl", "BOS", "DET", "2026-10-14T23:30:00Z"),
+    ] },
+    { sport: "nba", label: "NBA", games: [game("nba", "LAL", "BOS", "2026-10-14T23:30:00Z")] },
+  ], { tz: TZ });
+  const live = liveScheduleGroups(groups);
+  assert.deepEqual(live.map((g) => g.sport), ["nhl"]);
+  assert.equal(live[0].rows.length, 1);
+  assert.equal(live[0].rows[0].timeLabel, "LIVE");
+});
+
+test("nextScheduleStart picks the earliest game still to start", () => {
+  const now = new Date("2026-10-14T20:00:00Z").getTime();
+  const next = nextScheduleStart([
+    { sport: "nba", label: "NBA", games: [game("nba", "LAL", "BOS", "2026-10-14T23:30:00Z")] },
+    { sport: "nhl", label: "NHL", games: [
+      game("nhl", "NYR", "WSH", "2026-10-14T23:00:00Z"),
+      game("nhl", "OLD", "PPD", "2026-10-14T21:00:00Z", { statusDetail: "Postponed" }),
+      game("nhl", "FIN", "ISH", "2026-10-14T17:00:00Z", { state: "post" }),
+    ] },
+    { sport: "golf", label: "Golf", games: [game("golf", "A", "B", "2026-10-14T20:30:00Z")] },
+  ], now, TZ);
+  assert.equal(next?.sport, "nhl");
+  assert.equal(next?.label, "NHL");
+  assert.equal(next?.timeLabel, "7:00 PM");
+});
+
+test("nextScheduleStart skips a stale pre game and returns null when nothing is left", () => {
+  const now = new Date("2026-10-14T23:00:00Z").getTime();
+  assert.equal(nextScheduleStart([
+    { sport: "mlb", label: "MLB", games: [game("mlb", "CLE", "TB", "2026-10-14T21:00:00Z")] },
+  ], now, TZ), null);
+  assert.equal(nextScheduleStart([], now, TZ), null);
 });

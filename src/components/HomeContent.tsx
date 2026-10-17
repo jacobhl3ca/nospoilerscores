@@ -27,7 +27,9 @@ import { fromYmd, etSlateYmd, nextYmd, getTimeZone } from "@/lib/etDay";
 import { WATCH_QUEUE_ENABLED, toggleWatchQueue, removeFromWatchQueue, isQueued as isGameQueued, pruneWatchQueue, type WatchQueueEntry } from "@/lib/watchQueue";
 import { WatchQueueContext, type WatchQueueApi } from "@/components/WatchQueueContext";
 import { HideRanksContext } from "@/components/HideRanksContext";
-import GameCard from "@/components/GameCard";
+import GameCard, { RatingBadge } from "@/components/GameCard";
+import { shouldShowRating } from "@/lib/ratingGate";
+import { ratingTier } from "@/lib/ratingTier";
 import { closeHiddenPins, closeUnseenAutoSlots, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch, swapBoardSlots } from "@/lib/boardSlots";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs, pullMark, pullIsStale } from "@/lib/prefsSync";
 import { syncPicksWithAccount } from "@/lib/picksAccount";
@@ -48,7 +50,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, E
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import { LeagueMark } from "@/components/LeagueMark";
-import { buildSchedule, visibleScheduleRows, SCHEDULE_FULL_MAX, SCHEDULE_SKIP, type ScheduleLeagueInput, type ScheduleRow } from "@/lib/scheduleDay";
+import { buildSchedule, liveScheduleGroups, nextScheduleStart, visibleScheduleRows, SCHEDULE_FULL_MAX, SCHEDULE_SKIP, type ScheduleLeagueInput, type ScheduleRow } from "@/lib/scheduleDay";
 import VideoModal from "@/components/VideoModal";
 import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
 import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
@@ -2077,6 +2079,17 @@ export default function HomeContent({
     l.golfTournament?.roundStatus === "in" ||
     l.eventCard?.state === "in"
   );
+  // The Live pill's number: the same test, one per game (the Best and Top
+  // columns repeat other columns' games, so ids count once).
+  const liveBoardCount = useMemo(() => {
+    const ids = new Set<string>();
+    for (const l of leagues) {
+      for (const g of l.games) if (g.state === "in") ids.add(g.id);
+      if (l.golfTournament?.roundStatus === "in") ids.add(`golf:${l.sport}`);
+      if (l.eventCard?.state === "in") ids.add(`event:${l.sport}`);
+    }
+    return ids.size;
+  }, [leagues]);
   useEffect(() => {
     if (!hasLiveGames || !selectedDate) return;
     const id = window.setInterval(() => {
@@ -2877,8 +2890,10 @@ export default function HomeContent({
   // Until the board's first pull lands, every league would look like an
   // extra one; wait for it.
   const scheduleWaitBoard = loading && leagues.length === 0;
+  // The Live filter's "Also live" list pulls the same leagues (Today only).
+  const alsoLiveOn = liveOnly && !showNews && !showSchedule && selectedDate === getDateString(0);
   useEffect(() => {
-    if (!showSchedule || !selectedDate || scheduleWaitBoard) return;
+    if (!(showSchedule || alsoLiveOn) || !selectedDate || scheduleWaitBoard) return;
     let live = true;
     const date = selectedDate;
     const sports = scheduleExtraKey ? (scheduleExtraKey.split(",") as Sport[]) : [];
@@ -2909,7 +2924,7 @@ export default function HomeContent({
     pull(true);
     const poll = date === getDateString(0) ? setInterval(() => pull(false), 60_000) : null;
     return () => { live = false; if (poll) clearInterval(poll); };
-  }, [showSchedule, selectedDate, scheduleExtraKey, scheduleWaitBoard]);
+  }, [showSchedule, alsoLiveOn, selectedDate, scheduleExtraKey, scheduleWaitBoard]);
   // The sheet's "Edit list" ×, the same strike as Settings' Edit list: the
   // league leaves the catalog and every switcher, and the removed group.
   const hideFromAddMore = (sport: Sport) => {
@@ -3775,11 +3790,10 @@ export default function HomeContent({
   // Null = no cards on screen (Feed, or the board has not loaded).
   let newsBar: NewsBarState | null = null;
 
-  // The Schedule tab (10/14): the day's games across every in-season switcher
-  // league, grouped by league, one line per game like the widget (time ·
-  // away @ home · network). Never a score; a tap opens the card's modal.
-  const renderScheduleView = () => {
-    const tz = getTimeZone();
+  // The Schedule tab's leagues as buildSchedule input: the board's columns
+  // reuse `leagues`, the rest come from the fan-out. `pending` = leagues
+  // whose scoreboard has not answered yet.
+  const scheduleInputs = () => {
     const boardBySport = new Map(leagues.map((l) => [l.sport, l]));
     let pending = 0;
     const inputs: ScheduleLeagueInput[] = scheduleLeagues.map(({ sport, label }) => {
@@ -3794,56 +3808,73 @@ export default function HomeContent({
       const shown = filterLeague({ ...(board ?? { sport, label, games }), games }, prefs.favoriteTeams, !!prefs.favoritesOnly, favStrict).games;
       return { sport, label: board?.label ?? label, games: shown };
     });
+    return { inputs, pending, onBoard: new Set(boardBySport.keys()) };
+  };
+  // One schedule line (time · away @ home · network); the Schedule tab and
+  // the Live filter's "Also live" list share it. A live line with Ratings on
+  // shows the card's GREAT/GOOD/MEH/SKIP badge in the network slot (10/17).
+  const scheduleRowEl = (r: ScheduleRow, i: number) => {
+    const clip = r.state === "post" && hasPlayableClip(r.game, scheduleBaked);
+    const rated = r.state === "in" && shouldShowRating(r.game, prefs.showRatings);
+    const team = (t: ScheduleRow["home"], side: "away" | "home") => (
+      <span className={`flex items-center gap-1.5 min-w-0 font-semibold text-[15px] ${side === "away" ? "justify-end" : ""}`}>
+        {side === "home" && t.logo && (
+          <TeamLogo src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" />
+        )}
+        <span className="truncate" title={t.name}>{t.abbr}</span>
+        {side === "away" && t.logo && (
+          <TeamLogo src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" />
+        )}
+      </span>
+    );
+    const live = r.timeLabel === "LIVE";
+    return (
+      <li key={r.id} style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}>
+        <button
+          type="button"
+          data-schedule-row={r.id}
+          data-state={r.state}
+          onClick={() => setDetailGame(r.game)}
+          aria-label={`${r.away.name} at ${r.home.name}, ${r.timeLabel}${rated && r.game.rating !== null ? `, rated ${ratingTier(r.game.rating).label.toLowerCase()}` : r.network ? `, ${r.network}` : ""}`}
+          className="w-full grid items-center gap-x-1.5 px-3 py-2 text-left cursor-pointer transition-colors"
+          style={{ gridTemplateColumns: "56px 1fr auto 1fr 64px", color: "var(--text)" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <span
+            className={`text-[13px] whitespace-nowrap tabular-nums ${live ? "font-bold text-xs tracking-wide" : ""}`}
+            style={{ color: live ? "#dc2626" : r.state === "pre" ? "var(--text-secondary)" : "var(--text-muted)" }}
+          >
+            {live && <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-[1px]" style={{ background: "#dc2626" }} />}
+            {r.timeLabel}
+          </span>
+          {team(r.away, "away")}
+          <span className="text-sm" style={{ color: "var(--text-muted)" }}>@</span>
+          {team(r.home, "home")}
+          {rated && r.game.rating !== null ? (
+            <span className="justify-self-end" data-testid="schedule-rating">
+              <RatingBadge rating={r.game.rating} />
+            </span>
+          ) : clip ? (
+            <span className="justify-self-end inline-flex items-center gap-0.5 text-xs font-semibold rounded-full px-2 py-0.5" style={{ background: "var(--accent)", color: "white" }} title="Highlights">
+              <span aria-hidden="true">▶</span> Clip
+            </span>
+          ) : (
+            <span className="text-right text-xs whitespace-nowrap truncate" style={{ color: "var(--text-muted)" }}>{r.network ?? ""}</span>
+          )}
+        </button>
+      </li>
+    );
+  };
+
+  // The Schedule tab (10/14): the day's games across every in-season switcher
+  // league, grouped by league, one line per game like the widget (time ·
+  // away @ home · network). Never a score; a tap opens the card's modal.
+  const renderScheduleView = () => {
+    const tz = getTimeZone();
+    const { inputs, pending } = scheduleInputs();
     const groups = buildSchedule(inputs, { favoriteTeams: prefs.favoriteTeams, tz });
     const stillLoading = (loading && leagues.length === 0) || pending > 0;
-    const row = (r: ScheduleRow, i: number) => {
-      const clip = r.state === "post" && hasPlayableClip(r.game, scheduleBaked);
-      const team = (t: ScheduleRow["home"], side: "away" | "home") => (
-        <span className={`flex items-center gap-1.5 min-w-0 font-semibold text-[15px] ${side === "away" ? "justify-end" : ""}`}>
-          {side === "home" && t.logo && (
-            <TeamLogo src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" />
-          )}
-          <span className="truncate" title={t.name}>{t.abbr}</span>
-          {side === "away" && t.logo && (
-            <TeamLogo src={t.logo} alt="" width={22} height={22} loading="lazy" decoding="async" className="w-[22px] h-[22px] object-contain shrink-0" />
-          )}
-        </span>
-      );
-      const live = r.timeLabel === "LIVE";
-      return (
-        <li key={r.id} style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}>
-          <button
-            type="button"
-            data-schedule-row={r.id}
-            data-state={r.state}
-            onClick={() => setDetailGame(r.game)}
-            aria-label={`${r.away.name} at ${r.home.name}, ${r.timeLabel}${r.network ? `, ${r.network}` : ""}`}
-            className="w-full grid items-center gap-x-1.5 px-3 py-2 text-left cursor-pointer transition-colors"
-            style={{ gridTemplateColumns: "56px 1fr auto 1fr 64px", color: "var(--text)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-          >
-            <span
-              className={`text-[13px] whitespace-nowrap tabular-nums ${live ? "font-bold text-xs tracking-wide" : ""}`}
-              style={{ color: live ? "#dc2626" : r.state === "pre" ? "var(--text-secondary)" : "var(--text-muted)" }}
-            >
-              {live && <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-[1px]" style={{ background: "#dc2626" }} />}
-              {r.timeLabel}
-            </span>
-            {team(r.away, "away")}
-            <span className="text-sm" style={{ color: "var(--text-muted)" }}>@</span>
-            {team(r.home, "home")}
-            {clip ? (
-              <span className="justify-self-end inline-flex items-center gap-0.5 text-xs font-semibold rounded-full px-2 py-0.5" style={{ background: "var(--accent)", color: "white" }} title="Highlights">
-                <span aria-hidden="true">▶</span> Clip
-              </span>
-            ) : (
-              <span className="text-right text-xs whitespace-nowrap truncate" style={{ color: "var(--text-muted)" }}>{r.network ?? ""}</span>
-            )}
-          </button>
-        </li>
-      );
-    };
     const dayLabel = selectedDate
       ? fromYmd(selectedDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
       : "";
@@ -3868,7 +3899,7 @@ export default function HomeContent({
                     {g.note && <span className="font-normal text-xs truncate" style={{ color: "var(--text-muted)" }}>· {g.note}</span>}
                   </div>
                   <ul>
-                    {shown.map(row)}
+                    {shown.map(scheduleRowEl)}
                   </ul>
                   {collapsible && (
                     <div className="flex justify-center pb-2 pt-1">
@@ -3890,6 +3921,52 @@ export default function HomeContent({
           </div>
         )}
       </section>
+    );
+  };
+
+  // The Live filter's "Also live" list (10/14, the FotMob pattern: your
+  // leagues first, then everything else that is live). Under the board, the
+  // in-progress games of every in-season switcher league with no column on
+  // the board, as schedule lines. Never a score. Nothing live anywhere: one
+  // line naming the next start.
+  const renderAlsoLive = () => {
+    const tz = getTimeZone();
+    const { inputs, pending, onBoard } = scheduleInputs();
+    const groups = liveScheduleGroups(buildSchedule(inputs.filter((l) => !onBoard.has(l.sport)), { favoriteTeams: prefs.favoriteTeams, tz }));
+    if (groups.length > 0) {
+      return (
+        <section data-testid="also-live" aria-labelledby="also-live-title" className="max-w-[720px] mx-auto pt-5">
+          <h2 id="also-live-title" className="flex items-center gap-1.5 text-sm font-semibold mb-2 px-1" style={{ color: "var(--text-muted)" }}>
+            <span aria-hidden="true" className="w-2 h-2 rounded-full" style={{ background: "#dc2626" }} />
+            Also live
+          </h2>
+          <div className="flex flex-col gap-3">
+            {groups.map((g) => (
+              <div key={g.sport} data-schedule-league={g.sport} className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--bg-card)" }}>
+                <div className="flex items-center gap-2 px-3 pt-2 pb-1 text-sm font-bold">
+                  <LeagueMark sport={g.sport} size={18} />
+                  <span>{g.label}</span>
+                  {g.note && <span className="font-normal text-xs truncate" style={{ color: "var(--text-muted)" }}>· {g.note}</span>}
+                </div>
+                <ul>
+                  {g.rows.map(scheduleRowEl)}
+                </ul>
+              </div>
+            ))}
+          </div>
+          {pending > 0 && <p className="text-center text-xs py-2" style={{ color: "var(--text-muted)" }}>Checking more leagues…</p>}
+        </section>
+      );
+    }
+    if (liveBoardCount > 0) return null;
+    if (pending > 0 || scheduleWaitBoard) {
+      return <p data-testid="also-live" className="text-center text-xs pt-5" style={{ color: "var(--text-muted)" }}>Checking your other leagues for live games…</p>;
+    }
+    const next = nextScheduleStart(inputs, Date.now(), tz);
+    return (
+      <p data-testid="also-live" data-empty="" className="text-center text-sm pt-5" style={{ color: "var(--text-muted)" }}>
+        Nothing live right now{next ? ` · next: ${next.label} ${next.timeLabel}` : ""}
+      </p>
     );
   };
 
@@ -4207,41 +4284,49 @@ export default function HomeContent({
               </div>
             )}
 
-            {/* Live filter (9/29, FotMob review). A filter, not a count: it
-                shows only while something on the board is in progress (or
-                while it is on, so it can be turned off), board views only. */}
-            {!showNews && !showSchedule && (hasLiveGames || liveOnly) && (
-              <button
-                type="button"
-                data-testid="live-toggle"
-                onClick={() => {
-                  if (liveOnly) {
-                    setLiveOnly(false);
-                    return;
-                  }
-                  setLiveOnly(true);
-                  // Live means now: pull the board back to Today.
-                  const today = getDateString(0);
-                  if (selectedDate !== today) setSelectedDate(today);
-                }}
-                className="monkey-toggle h-10 sm:h-11 px-3 flex items-center gap-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer"
-                style={{
-                  background: liveOnly ? "var(--accent)" : "var(--bg-card)",
-                  border: `1px solid ${liveOnly ? "var(--accent)" : "var(--border)"}`,
-                  color: liveOnly ? "white" : "var(--text-muted)",
-                }}
-                title={liveOnly ? "Showing live games only — tap for the full board" : "Show live games only"}
-                aria-label="Live games only"
-                aria-pressed={liveOnly}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`w-2 h-2 rounded-full${liveOnly ? " animate-pulse" : ""}`}
-                  style={{ background: liveOnly ? "white" : "#dc2626" }}
-                />
-                Live
-              </button>
-            )}
+            {/* Live filter (9/29, FotMob review; always on 10/14). Board views
+                only. Red dot + count while board games are live on Today; grey
+                dot otherwise. On, it also lists live games from the user's
+                other leagues under the board ("Also live"). */}
+            {!showNews && !showSchedule && (() => {
+              const n = selectedDate === getDateString(0) ? liveBoardCount : 0;
+              return (
+                <button
+                  type="button"
+                  data-testid="live-toggle"
+                  data-live-count={n}
+                  onClick={() => {
+                    if (liveOnly) {
+                      setLiveOnly(false);
+                      return;
+                    }
+                    setLiveOnly(true);
+                    // Live means now: pull the board back to Today.
+                    const today = getDateString(0);
+                    if (selectedDate !== today) setSelectedDate(today);
+                  }}
+                  className="monkey-toggle h-10 sm:h-11 px-3 flex items-center gap-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+                  style={{
+                    background: liveOnly ? "var(--accent)" : "var(--bg-card)",
+                    border: `1px solid ${liveOnly ? "var(--accent)" : "var(--border)"}`,
+                    color: liveOnly ? "white" : "var(--text-muted)",
+                  }}
+                  title={liveOnly ? "Showing live games only — tap for the full board" : n > 0 ? `${n} live now — show live games only` : "Show live games, across all your leagues"}
+                  aria-label={n > 0 ? `Live games only, ${n} live` : "Live games only"}
+                  aria-pressed={liveOnly}
+                >
+                  <span
+                    aria-hidden="true"
+                    data-testid="live-dot"
+                    className={`w-2 h-2 rounded-full${liveOnly && n > 0 ? " animate-pulse" : ""}`}
+                    style={{ background: liveOnly ? "white" : n > 0 ? "#dc2626" : "var(--text-muted)" }}
+                  />
+                  {/* The body font: .monkey-toggle puts the emoji font first,
+                      and it draws digits as wide keycap glyphs. */}
+                  <span className="tabular-nums" style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}>{n > 0 ? `Live ${n}` : "Live"}</span>
+                </button>
+              );
+            })()}
 
             <button
               type="button"
@@ -6333,6 +6418,7 @@ export default function HomeContent({
             );
           })()
         )}
+        {alsoLiveOn && renderAlsoLive()}
       </main>
 
       <footer ref={footerRef} className="px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-4 text-center text-xs flex flex-col items-center gap-2" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>

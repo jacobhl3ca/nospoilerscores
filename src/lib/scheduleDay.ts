@@ -146,3 +146,47 @@ export function visibleScheduleRows<T>(rows: readonly T[], expanded: boolean): {
   if (rows.length <= SCHEDULE_FULL_MAX || expanded) return { shown: [...rows], more: 0 };
   return { shown: rows.slice(0, SCHEDULE_CONDENSE_LIMIT), more: rows.length - SCHEDULE_CONDENSE_LIMIT };
 }
+
+// The Live filter's "Also live" list (10/14, the FotMob pattern): the same
+// groups cut to in-progress games. A league with nothing live drops out.
+export function liveScheduleGroups(groups: readonly ScheduleGroup[]): ScheduleGroup[] {
+  const out: ScheduleGroup[] = [];
+  for (const g of groups) {
+    const rows = g.rows.filter((r) => r.state === "in");
+    if (rows.length) out.push({ ...g, rows });
+  }
+  return out;
+}
+
+export interface NextScheduleStart {
+  sport: Sport;
+  label: string;
+  timeLabel: string;
+  game: Game;
+}
+
+// "Nothing live right now · next: NHL 7:00 PM": the earliest game still to
+// start across the given leagues. Postponed, cancelled and TBD games sit out,
+// and so does a "pre" game whose start is more than 30 minutes gone (a feed
+// that never flipped it to live is not "next").
+export function nextScheduleStart(
+  leagues: readonly ScheduleLeagueInput[],
+  nowMs: number,
+  tz?: string,
+): NextScheduleStart | null {
+  let best: NextScheduleStart | null = null;
+  let bestMs = Infinity;
+  for (const l of leagues) {
+    if (SCHEDULE_SKIP.has(l.sport)) continue;
+    for (const g of l.games) {
+      if (g.state !== "pre" || !g.homeTeam || !g.awayTeam) continue;
+      const at = new Date(g.date).getTime();
+      if (Number.isNaN(at) || at < nowMs - 30 * 60_000 || at >= bestMs) continue;
+      const timeLabel = scheduleTimeLabel(g, tz);
+      if (timeLabel === "PPD" || timeLabel === "Canc." || timeLabel === "TBD") continue;
+      best = { sport: l.sport, label: l.label, timeLabel, game: g };
+      bestMs = at;
+    }
+  }
+  return best;
+}

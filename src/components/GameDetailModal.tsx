@@ -21,6 +21,7 @@ import { buildCalendarEvent } from "@/lib/calendarLink";
 import { recordLeagueFor, recordShowsForState, recordTitle, type RecordLeague } from "@/lib/upcomingRecords";
 import { TeamLogo } from "@/components/TeamLogo";
 import { cleanRoundLabel } from "@/lib/calledGames";
+import { ratingTier } from "@/lib/ratingTier";
 
 // Typical game length (hours) per sport, used to bound the rain window. Soccer
 // ~2.5h, ball sports ~3.5h; default 3h. The rain-chance block only surfaces
@@ -324,16 +325,6 @@ export default function GameDetailModal({
       href: `https://www.google.com/search?q=${encodeURIComponent([awayName, "vs", homeName, leagueLabel].filter(Boolean).join(" "))}`,
     },
   ];
-
-  // Thresholds MUST match the score-card badge (GameCard/GolfLeaderboard
-  // RatingBadge: 85/70/50) — this modal renders the identical label+color for
-  // the same game.rating, so a mismatch made the SAME game read e.g. "GOOD" on
-  // the card yet "GREAT" here (a rating of 82). Keep these three in sync.
-  const ratingTier = (r: number) =>
-    r >= 85 ? { label: "GREAT", bg: "bg-green-600" }
-    : r >= 70 ? { label: "GOOD", bg: "bg-yellow-600" }
-    : r >= 50 ? { label: "MEH", bg: "bg-orange-600" }
-    : { label: "SKIP", bg: "bg-red-700" };
 
   // A clickable broadcaster name — same resolution as the score card's network
   // chips (Jacob 6/1): Prime/ESPN/MLB deep-links when available, else the
