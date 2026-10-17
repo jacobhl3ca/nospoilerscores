@@ -1225,7 +1225,7 @@ test("a new visitor's News opens on ESPN; a stored blob with no layout stays on 
   });
   await mockFeeds(page);
   await page.goto("/");
-  await page.getByRole("button", { name: /^News/ }).first().click();
+  await page.getByRole("tab", { name: /^News/ }).first().click();
   await expect(pill(page, "ESPN")).toHaveAttribute("aria-pressed", "true", LOAD);
   await expect(layout(page)).toBeVisible(LOAD);
   expect((await saved(page)).newsLayout).toBe("espn");

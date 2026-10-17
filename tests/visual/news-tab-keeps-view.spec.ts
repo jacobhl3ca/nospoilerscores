@@ -68,7 +68,7 @@ test("a tab on News stays on News after a reload across a day boundary", async (
   await seedPrefs(page, { lastOpenDay: TODAY });
   await page.goto("/");
   await expectView(page, "scores");
-  await page.getByRole("button", { name: "News" }).click();
+  await page.getByRole("tab", { name: "News" }).click();
   await expectView(page, "news");
   await patchStoredPrefs(page, { lastOpenDay: "20200101" });
   await page.reload();
@@ -78,7 +78,7 @@ test("a tab on News stays on News after a reload across a day boundary", async (
 test("another tab saving Scores does not move this News tab", async ({ page }) => {
   await seedPrefs(page, { lastOpenDay: TODAY });
   await page.goto("/");
-  await page.getByRole("button", { name: "News" }).click();
+  await page.getByRole("tab", { name: "News" }).click();
   await expectView(page, "news");
   await patchStoredPrefs(page, { showNews: false });
   await page.reload();

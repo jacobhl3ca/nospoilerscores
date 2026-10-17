@@ -146,7 +146,7 @@ test("Boxing Today keeps carried-forward replay compact and loads Reddit plus ES
   // add ~20px, so a 2px margin still catches it.
   expect((await scoreCard.boundingBox())?.height).toBeLessThanOrEqual(114);
 
-  await page.getByRole("button", { name: "News" }).click();
+  await page.getByRole("tab", { name: "News" }).click();
   await expect(page.getByText("r/Boxing", { exact: true })).toBeVisible();
   await expect(page.getByText("Daily boxing discussion", { exact: true })).toBeAttached();
   await expect(page.getByText("ESPN BOXING", { exact: true })).toBeVisible();

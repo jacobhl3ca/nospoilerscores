@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode, type CSSProperties } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { abortOwn } from "@/lib/abort";
+import { tabKeyTarget } from "@/lib/tabKeys";
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, highlightSharePath, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
@@ -235,8 +236,16 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         data-tab={mode}
         onClick={() => onChange(mode)}
         title={title}
-        aria-label={title}
-        aria-pressed={active}
+        // The name starts with the visible label (WCAG 2.5.3): "Ratings:
+        // Scores with ratings …", same "short: long" form as other names.
+        aria-label={title.startsWith(label) ? title : `${label}: ${title}`}
+        // Real tabs (2026-10-16, design check item 2): role="tab" +
+        // aria-selected, so a screen reader says "tab, 1 of 4", not
+        // "toggle button". Roving tabindex: Tab lands on the selected tab
+        // only, ←/→/Home/End move between tabs (tabKeys.ts).
+        role="tab"
+        aria-selected={active}
+        tabIndex={active ? 0 : -1}
         // Active styling (subtle bg-card-hover fill + neutral text, matching the
         // Yesterday/Today/Tomorrow date-nav pill — Jacob 6/1) is driven by CSS
         // keyed on html[data-view] + data-tab, NOT React inline styles, so the
@@ -248,9 +257,18 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         <span className="tab-icon flex items-center justify-center transition-opacity">
           {icon}
         </span>
-        <span className="text-[10px] sm:text-[11px] font-medium leading-none">{label}</span>
+        {/* 12 px on every width (was 10 px on phones, 11 px from sm). */}
+        <span className="text-[12px] font-medium leading-none">{label}</span>
       </button>
     );
+  };
+  // Manual activation: arrows move focus only; Enter / Space switches view.
+  const onTabKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const tabs = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    const next = tabKeyTarget(e.key, tabs.indexOf(e.target as HTMLButtonElement), tabs.length);
+    if (next === null) return;
+    e.preventDefault();
+    tabs[next].focus();
   };
   return (
     <nav
@@ -266,6 +284,9 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
       {/* Inline (desktop): a subtle segmented-control box so the tabs read as a
           deliberate nav, not floating icons. Bottom (mobile): full-width bar. */}
       <div
+        role="tablist"
+        aria-label="Views"
+        onKeyDown={onTabKeyDown}
         className={inline ? "flex items-stretch w-72 rounded-xl overflow-hidden" : "max-w-md mx-auto flex items-stretch"}
         style={inline ? { background: "var(--bg-card)", border: "1px solid var(--border)" } : undefined}
       >
