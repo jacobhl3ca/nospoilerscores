@@ -31,6 +31,8 @@ import { setSeenSync } from "@/lib/newsSeen";
 import { AppleLogo, GoogleG } from "./ProviderLogo";
 import { getAuthState, cachedAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 import { TeamLogo } from "@/components/TeamLogo";
+import { countryForTimeZone, KNOWN_COUNTRIES } from "@/lib/viewerCountry";
+import { rightsHolder } from "@/lib/rightsHolders";
 
 interface LeagueOption {
   sport: Sport;
@@ -123,6 +125,12 @@ const ZONE_PILLS: { value: ZonePill; label: string; zone?: string; name?: string
   { value: "pt", label: "PT", zone: "America/Los_Angeles", name: "Pacific" },
   { value: "other", label: "Other…" },
 ];
+// The Your country picker: every country the zone table knows, by English name.
+function countryName(code: string): string {
+  try { return new Intl.DisplayNames(["en"], { type: "region" }).of(code) || code; } catch { return code; }
+}
+const COUNTRY_OPTIONS = KNOWN_COUNTRIES.map((code) => ({ code, name: countryName(code) }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 const zoneCity = (tz: string) => (tz.split("/").pop() || tz).replace(/_/g, " ");
 // "now 9:41 AM" in a zone; a bad zone falls back to the runtime's own.
 function nowIn(tz: string): string {
@@ -379,6 +387,7 @@ export default function SettingsPanel({
 
   let deviceTimeZone = "";
   try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
+  const deviceCountry = countryForTimeZone(deviceTimeZone);
   // Time zone row: which pill is on, and whether the full list is open.
   const [zoneOtherOpen, setZoneOtherOpen] = useState(false);
   const savedZonePill = ZONE_PILLS.find((z) => z.zone && z.zone === prefs.timezone);
@@ -1756,6 +1765,28 @@ export default function SettingsPanel({
               </select>
               )}
               <p aria-live="polite" className="text-[11px]" style={{ color: "var(--text-muted)" }}>{zoneLine}</p>
+              </div>
+            </Field>
+            {/* Your country (10/17): picks the TV chip on rugby cards, which ESPN
+                lists no broadcaster for (lib/rightsHolders.ts). Auto = the
+                device time zone, never the IP, so a VPN does not move it. */}
+            <Field label="Your country" hint="Picks the TV chip on Champions Cup and Challenge Cup cards">
+              <div className="space-y-1.5">
+                <select
+                  value={prefs.viewerCountry ?? ""}
+                  onChange={(e) => updatePrefs({ viewerCountry: e.target.value || undefined })}
+                  aria-label="Your country"
+                  className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                >
+                  <option value="">Auto — time zone{deviceCountry ? ` (${countryName(deviceCountry)})` : ""}</option>
+                  {COUNTRY_OPTIONS.map((c) => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </select>
+                <p aria-live="polite" className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Rugby TV chip: {rightsHolder("rugbychamp", prefs.viewerCountry || deviceCountry, KNOWN_COUNTRIES)?.label}
+                </p>
               </div>
             </Field>
             <Field label="Landing view" hint="Scores, ratings or news on launch">

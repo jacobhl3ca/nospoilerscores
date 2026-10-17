@@ -18,8 +18,9 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // Highlights: lit = Six Nations, Super Rugby, Rugby World Cup, Nations
 // Championship, URC, Top 14 (2026-10-03). Dark = Premiership, Champions Cup, Challenge Cup,
 // MLR and the standalone tests (lib/youtube.ts NO_HIGHLIGHT_FALLBACK). The page
-// says so plainly. No broadcaster is named: US rights are split by competition
-// and were not verified for this page.
+// says so plainly. Broadcasters: only the Champions Cup and Challenge Cup are
+// named (lib/rightsHolders.ts, 2026/27 rights); the other competitions' US
+// rights are split and were not verified for this page.
 const TITLE = "Rugby Without Spoilers: URC, PREM, Top 14 | HideScore";
 const DESC =
   "Follow rugby union without spoilers: URC, Premiership, Top 14, the Champions and Challenge Cups, Six Nations and the tests, with Eastern kick-off times and no scores. Free.";
@@ -41,6 +42,10 @@ const FAQ = [
   {
     q: "Does every rugby game get a highlights button?",
     a: "No. A button appears only when the competition has an official uploader that titles each match by both teams. The URC, the Top 14, the Six Nations, Super Rugby, the Nations Championship and the World Cup do. The Premiership, the European cups, Major League Rugby and one-off tests do not yet, so those cards show no video rather than a clip that could spoil the result.",
+  },
+  {
+    q: "Where can I watch the Champions Cup and Challenge Cup?",
+    a: "The card names the broadcaster for your country (US FloRugby, UK/IE Premier Sports, France beIN, DAZN in Italy, Poland and other markets, EPCR TV elsewhere); set your country in Settings if the guess is wrong.",
   },
   {
     q: "Does HideScore show league tables?",

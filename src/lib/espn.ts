@@ -1536,6 +1536,41 @@ const DISPLAY_SHORT_NAME_OVERRIDES: Record<string, string> = {
   "Golden Knights": "Knights",
   "Maple Leafs": "Leafs",
   "Blue Jackets": "Jackets",
+  // European club rugby (10/17): ESPN's short name IS the full club name
+  // ("Montpellier Herault", 19 chars), so one long name flipped the whole
+  // Champions Cup column to MON/BAT. Common English names, keyed by ESPN's
+  // `shortDisplayName` as read from the rugby/271937 + 272073 feeds 2026-10-17.
+  "Bath Rugby": "Bath",
+  "Bordeaux Begles": "Bordeaux",
+  "Bristol Rugby": "Bristol",
+  "Cardiff Blues": "Cardiff",
+  "Clermont Auvergne": "Clermont",
+  "Exeter Chiefs": "Exeter",
+  "Glasgow Warriors": "Glasgow",
+  "Gloucester Rugby": "Gloucester",
+  "Leicester Tigers": "Leicester",
+  "Montpellier Herault": "Montpellier",
+  "Northampton Saints": "Northampton",
+  "Stade Francais Paris": "Stade Français",
+  "Stade Toulousain": "Toulouse",
+  "Castres Olympique": "Castres",
+  "Newcastle Falcons": "Newcastle",
+  "Benetton Treviso": "Benetton",
+};
+
+// ESPN's rugby codes clash on one board: La Rochelle, Stade Francais and
+// Stade Toulousain are all "STA", Leicester and Leinster both "LEI", and a few
+// are not the club's own ("UNI", "SEC", "USA", "RC"). The clubs' official
+// codes instead, keyed by ESPN `displayName` (read 2026-10-17). Rugby only.
+const RUGBY_ABBREVIATION_OVERRIDES: Record<string, string> = {
+  "Bordeaux Begles": "UBB",
+  Toulon: "RCT",
+  Perpignan: "USAP",
+  "Stade Francais Paris": "SFP",
+  "Stade Toulousain": "TLS",
+  "La Rochelle": "LAR",
+  "Leicester Tigers": "LEIC",
+  Pau: "PAU",
 };
 export function displayShortName(team: Team): string {
   return DISPLAY_SHORT_NAME_OVERRIDES[team.shortDisplayName] ?? team.shortDisplayName;
@@ -1664,7 +1699,8 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
   }
   return {
     id: rawId ? `${sport}-${rawId}` : "",
-    abbreviation: competitor.team?.abbreviation ?? "",
+    abbreviation: (RUGBY_SPORTS.has(sport) && RUGBY_ABBREVIATION_OVERRIDES[competitor.team?.displayName ?? ""])
+      || (competitor.team?.abbreviation ?? ""),
     displayName: competitor.team?.displayName ?? "",
     // International cricket: ESPN's short names are codes ("WI-W", "ZIM-W",
     // "SA"); the nation's name is what a US reader recognises and is still
