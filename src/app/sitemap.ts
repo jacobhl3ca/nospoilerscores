@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { routeLastModified } from "@/lib/routeLastModified";
+import { supportLiveOn } from "@/lib/supportLinks";
 import { TEAM_PAGES } from "@/lib/teamPages";
 
 // Static sitemap for hidescore.com. Works with `output: "export"` — Next emits
@@ -85,6 +86,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/redzone-for-every-sport",
     // Added 2026-10-11: what shipped because a user asked, and who asked.
     "/wall-of-fame",
+    // Added 2026-10-15, listed only in a build on or after SUPPORT_LIVE_FROM
+    // (Dec 15): before that the page reads "Opens Dec 15." and is noindex.
+    ...(supportLiveOn() ? ["/sponsors"] : []),
     "/faq",
     // Added 2026-09-24: who runs the site and how to reach it, for the
     // entity/contact checks answer engines make. No personal details on it.

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { activeSupportLinks, supportLinksVisible, type SupportLink } from "@/lib/supportLinks";
 
@@ -15,7 +16,10 @@ export function useSupportLinks(): SupportLink[] {
 // "Support HideScore" line for the web footers. The server snapshot is false,
 // so the static export never bakes it in; the browser decides at view time and
 // the native shells never show it. See lib/supportLinks.ts for the date gate.
-export default function SupportLine() {
+// 10/15: it also carries the one footer link to /sponsors, under the same
+// gate, because the doc footer's link row is full at one line (WOF, 10/14).
+// `here` = the current path, so /sponsors itself leaves the link out.
+export default function SupportLine({ here }: { here?: string } = {}) {
   const links = useSupportLinks();
   if (links.length === 0) return null;
 
@@ -40,6 +44,21 @@ export default function SupportLine() {
           </a>
         </span>
       ))}
+      {here !== "/sponsors" && (
+        <>
+          . See the{" "}
+          <Link
+            href="/sponsors"
+            prefetch={false}
+            className="underline underline-offset-2 hover:opacity-80"
+            style={muted}
+            data-testid="support-line-sponsors"
+          >
+            sponsors
+          </Link>
+          .
+        </>
+      )}
     </p>
   );
 }
