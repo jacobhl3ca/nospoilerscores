@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type AnimationEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type AnimationEvent, type ReactNode } from "react";
 import { Game, Sport, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
@@ -15,6 +15,7 @@ import type { ListenResult } from "@/lib/radio";
 import { gameRef } from "@/lib/tvChannelLinks";
 import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
+import CardHit from "@/components/CardHit";
 import { getDateString } from "@/components/DateNav";
 import { delayedStartLabel, formatGameProgress } from "@/lib/liveProgress";
 import { pairingRoundLabel, revealPairings, useHiddenPairingGames, usePairingHidden } from "@/lib/pairingMask";
@@ -184,6 +185,7 @@ export function CompactUpcomingCard({
   nextGameDate?: string;
   onShowDetails?: (game: Game) => void;
 }) {
+  const cardId = useId();
   const home = game.homeTeam;
   // Tip-off time in the reader's zone — the same path as GameCard's localTime.
   const localTime = startTimeLabel(game);
@@ -219,24 +221,19 @@ export function CompactUpcomingCard({
   ) : null;
   return (
     <div
-      className={`ns-card-focus flex flex-col gap-0.5 rounded-md px-2 sm:px-4 py-1 overflow-hidden transition-colors${cardClickable ? " cursor-pointer" : ""}`}
+      className={`ns-card-focus relative flex flex-col gap-0.5 rounded-md px-2 sm:px-4 py-1 overflow-hidden transition-colors${cardClickable ? " cursor-pointer" : ""}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
-      // Only open details when the CARD ITSELF is the keyboard target — the
-      // nested network link stops click propagation via handleExternalClick, so
-      // a mouse click never bubbles here, but keydown had no guard and pressing
-      // Enter on the focused link bubbled up to also open the details modal (a
-      // double activation). Mirrors the main GameCard's keydown guard above.
-      onKeyDown={cardClickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(game); } } : undefined}
-      role={cardClickable ? "button" : undefined}
-      tabIndex={cardClickable ? 0 : undefined}
-      aria-label={cardClickable ? cardLabel : undefined}
       title={cardClickable ? "Game details" : undefined}
+      id={cardClickable ? cardId : undefined}
+      role={cardClickable ? "group" : undefined}
+      aria-label={cardClickable ? cardLabel : undefined}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
     >
+      {cardClickable && <CardHit labelledBy={cardId} />}
       {/* Mobile: date · time · network as a 3-col grid (1fr auto 1fr) so the TIME
           is perfectly centered in the card and lines up across every row, no
           matter the DOW width (Jacob 6/9). Date bold (DOW only on mobile), time
@@ -402,6 +399,7 @@ function ListenSection({ listen }: { listen: ListenResult }) {
 }
 
 function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, upcomingRecordLeagues, hideWatchLater, hideSeriesNote }: GameCardProps) {
+  const cardId = useId();
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // "Later" pill (Jacob 9/27): queue the game for the Watch queue strip above
   // the board. Null outside the board (no provider) or when Settings hides it.
@@ -625,22 +623,17 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
+      // Nested controls — the favorite star, the "+N" networks toggle,
+      // team-name buttons, and the network/ESPN links — stopPropagation on
+      // their onClick, so a click on one never reaches this handler. Keyboard
+      // users open the details from the CardHit button, whose click bubbles here.
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
-      // Only open details when the CARD ITSELF is the keyboard target
-      // (e.target === e.currentTarget). Nested controls — the favorite star,
-      // the "+N" networks toggle, team-name buttons, and the network/ESPN
-      // links — already stopPropagation on their onClick, so a mouse click on
-      // one never bubbles to the card. Keydown had no such guard, so pressing
-      // Enter/Space while focused on a nested control bubbled up here and fired
-      // onShowDetails too — hijacking the keystroke and popping the details
-      // modal on top of the control's own action (a double activation). The
-      // target check mirrors the mouse stopPropagation contract for the keyboard.
-      onKeyDown={cardClickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(game); } } : undefined}
-      role={cardClickable ? "button" : undefined}
-      tabIndex={cardClickable ? 0 : undefined}
-      aria-label={cardClickable ? cardLabel : undefined}
       title={cardClickable ? "Game details" : undefined}
+      id={cardClickable ? cardId : undefined}
+      role={cardClickable ? "group" : undefined}
+      aria-label={cardClickable ? cardLabel : undefined}
     >
+      {cardClickable && <CardHit labelledBy={cardId} />}
       {/* League tab — the 3-column phone board's copy of the league chip,
           sitting on the card's top border. In the meta row, chip + live clock +
           badge + network needed ~110px of a ~100px row, so an ESPN front page
@@ -1193,7 +1186,8 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onSelectTeam(team); }}
-                    className="cursor-pointer hover:underline decoration-dotted underline-offset-2 min-w-0"
+                    // py-1 -my-1: a 24 px tap target (WCAG 2.5.8) without moving the row.
+                    className="cursor-pointer hover:underline decoration-dotted underline-offset-2 min-w-0 py-1 -my-1"
                     title={`View ${team.displayName} schedule`}
                   >
                     {nameNode}
@@ -1248,7 +1242,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 }
                 if (rank == null) return null;
                 return (
-                  <span className="team-rank text-[10px] sm:text-xs tabular-nums shrink-0 leading-none" style={{ color: "var(--text-muted)", opacity: 0.7 }} title={title}>#{rank}</span>
+                  <span className="team-rank text-[10px] sm:text-xs tabular-nums shrink-0 leading-none" style={{ color: "var(--text-muted)" }} title={title}>#{rank}</span>
                 );
               })()}
             </span>

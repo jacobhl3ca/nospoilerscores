@@ -13,8 +13,8 @@ import SupportLine from "@/components/SupportLine";
 // 10/14: "Feedback" opens the form right here (FeedbackBox) instead of a soft
 // navigation to /contact#feedback, which showed nothing for up to 2 s.
 // "Wall of fame" reads "WOF" so the row fits on one line (article pages on a
-// desktop, 390 px phones); `title` carries the full name for hover and
-// screen readers.
+// desktop, 390 px phones); `title` carries the full name for hover, and the
+// accessible name starts with the visible "WOF" (WCAG 2.5.3).
 
 export const SITE_LINKS: { href: string; label: string; title?: string }[] = [
   { href: "/about", label: "About" },
@@ -57,7 +57,7 @@ export default function DocFooter({ route }: { route: string }) {
               prefetch={false}
               className="underline underline-offset-2 hover:opacity-80"
               style={muted}
-              aria-label={l.title}
+              aria-label={l.title && `${l.label}: ${l.title}`}
               title={l.title}
             >
               {l.label}

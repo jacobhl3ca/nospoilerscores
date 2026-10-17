@@ -66,12 +66,12 @@ for (const width of [390, 1440]) {
         const mask = page.locator(`[data-pairing-mask="${c.ev.id}"]`);
         await mask.scrollIntoViewIfNeeded({ timeout: 20_000 });
         await expect(mask).toBeVisible({ timeout: 20_000 });
-        await expect(page.getByRole("button", { name: c.matchup })).toHaveCount(0);
+        await expect(page.getByRole("group", { name: c.matchup })).toHaveCount(0);
 
         await expect(mask.getByText(c.cover, { exact: true })).toBeVisible();
         await mask.getByRole("button", { name: `Show teams for the ${c.cover} (reveals who advanced)` }).click();
         await expect(mask).toHaveCount(0);
-        const card = page.getByRole("button", { name: c.matchup }).first();
+        const card = page.getByRole("group", { name: c.matchup }).first();
         await expect(card).toBeVisible();
 
         await card.click();

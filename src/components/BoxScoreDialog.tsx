@@ -108,7 +108,7 @@ export default function BoxScoreDialog({
             type="button"
             onClick={confirm(showHere ? onShowHere : onOpenEspn)}
             className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer"
-            style={{ background: "var(--accent)", color: "white" }}
+            style={{ background: "var(--accent)", color: "var(--on-accent)" }}
           >
             {showHere ? "Show box score" : "Open ESPN"}
           </button>

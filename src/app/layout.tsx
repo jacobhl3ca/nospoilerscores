@@ -108,11 +108,11 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   width: "device-width",
   initialScale: 1,
-  // Lock out pinch/double-tap zoom in the Capacitor WebView — an accidental
-  // pinch left the page scaled and panned, showing blank strips top/bottom.
-  // Mobile Safari ignores user-scalable=no, so browser zoom still works.
-  maximumScale: 1,
-  userScalable: false,
+  // No maximumScale / userScalable here: the website must allow pinch-zoom
+  // (WCAG 1.4.4; Chrome on Android honours user-scalable=no). The zoom lock
+  // the Capacitor WebView needs (an accidental pinch left the page scaled and
+  // panned, showing blank strips) is added only inside the app, by the
+  // pre-paint script in <head> below.
 };
 
 const JSON_LD = {
@@ -403,6 +403,17 @@ export default function RootLayout({
             native Safari chrome above the page (not part of the layout) and is
             user-dismissible, so it changes no in-page design or behavior. */}
         <meta name="apple-itunes-app" content="app-id=6766885311" />
+        {/* Inside the native app only: lock pinch/double-tap zoom (see the
+            viewport export above). Capacitor's iOS bridge injects
+            window.Capacitor at document start, so it is there before this runs;
+            on Android, Capacitor's zoomEnabled: false (capacitor.config.ts)
+            already turns the WebView's pinch off. The viewport meta is above
+            this script in <head>. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var c=window.Capacitor;if(c&&(typeof c.isNativePlatform==="function"?c.isNativePlatform():c.isNative)){var m=document.querySelector('meta[name="viewport"]');if(m){m.setAttribute('content',m.getAttribute('content')+', maximum-scale=1, user-scalable=no')}}}catch(e){}})()`,
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

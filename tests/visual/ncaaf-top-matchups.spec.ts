@@ -78,8 +78,8 @@ async function openBoard(page: Page, showRatings: boolean) {
 const NAMES = new RegExp(`^(?:${SLATE.map(label).join("|")})`);
 async function cardOrder(page: Page): Promise<string[]> {
   const col = page.locator('[data-league-column="ncaaf"]');
-  await expect(col.getByRole("button", { name: NAMES })).toHaveCount(SLATE.length, { timeout: 30_000 });
-  const names = await col.getByRole("button", { name: NAMES }).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label") ?? ""));
+  await expect(col.getByRole("group", { name: NAMES })).toHaveCount(SLATE.length, { timeout: 30_000 });
+  const names = await col.getByRole("group", { name: NAMES }).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label") ?? ""));
   return names.map((n) => SLATE.map(label).find((l) => n.startsWith(l))!);
 }
 

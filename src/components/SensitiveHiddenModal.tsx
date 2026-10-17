@@ -213,7 +213,7 @@ export default function SensitiveHiddenModal({
             type="button"
             onClick={onRestoreAll}
             className="mt-3 w-full py-2 rounded-lg text-sm font-medium cursor-pointer"
-            style={{ background: "var(--accent)", color: "white" }}
+            style={{ background: "var(--accent)", color: "var(--on-accent)" }}
           >
             Restore all to feed
           </button>

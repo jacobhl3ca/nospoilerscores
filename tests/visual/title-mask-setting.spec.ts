@@ -83,12 +83,12 @@ test("the × on the Keys tag turns the hint off for good", async ({ page }) => {
     }
   });
   await page.goto("/");
-  const keys = page.getByRole("button", { name: "Keyboard shortcuts", exact: true });
+  const keys = page.getByRole("button", { name: "Keys: keyboard shortcuts", exact: true });
   await expect(keys).toBeVisible();
   await page.getByRole("button", { name: "Hide the keyboard shortcuts hint" }).click();
   await expect(keys).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}").hideControlsHint)).toBe(true);
   await page.reload();
   await page.waitForTimeout(800);
-  await expect(page.getByRole("button", { name: "Keyboard shortcuts", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Keys: keyboard shortcuts", exact: true })).toHaveCount(0);
 });

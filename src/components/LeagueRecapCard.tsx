@@ -440,6 +440,10 @@ export default function LeagueRecapCard({
           const word = recapButtonText(rec, stacked || crowded);
           const text = word ?? mins;
           const showGlyph = !word && !(stacked && crowded);
+          const fullLabel = mins ? `${rec.label} (${mins})` : rec.label;
+          // The name starts with the visible words (WCAG 2.5.3), so "1m" or
+          // "Top 5" is what a voice-control user says to press it.
+          const name = !text || fullLabel.toLowerCase().startsWith(text.toLowerCase()) ? fullLabel : `${text}: ${rec.label}`;
           return (
             <button
               key={`${rec.key}:${rec.videoId ?? rec.pageUrl}`}
@@ -451,8 +455,8 @@ export default function LeagueRecapCard({
               }}
               className={`highlight-btn flex items-center justify-center rounded-md py-1 transition-opacity hover:opacity-80 cursor-pointer ${stacked ? (fitButtons ? STACKED_FIT_BTN : STACKED_BTN) : ROW_BTN}`}
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
-              aria-label={mins ? `${rec.label} (${mins})` : rec.label}
-              title={mins ? `${rec.label} (${mins})` : rec.label}
+              aria-label={name}
+              title={fullLabel}
             >
               {showGlyph && <svg aria-hidden="true" className="shrink-0" width={glyph} height={glyph} viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>}
               {text && <span className={`${minsText} font-medium whitespace-nowrap`}>{text}</span>}

@@ -153,7 +153,7 @@ export default function BoxScore({ game, espnUrl }: { game: Game; espnUrl: strin
                       onClick={() => setTab(i)}
                       className="flex-1 py-1 rounded-md text-xs font-semibold cursor-pointer"
                       style={tab === i
-                        ? { background: "var(--accent)", color: "white" }
+                        ? { background: "var(--accent)", color: "var(--on-accent)" }
                         : { background: "var(--bg-card-hover)", color: "var(--text)" }}
                     >
                       {t.name}

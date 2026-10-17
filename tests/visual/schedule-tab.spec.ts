@@ -88,7 +88,7 @@ async function seed(page: Page, theme: "light" | "dark") {
     route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"No results"}' }));
 }
 
-const card = (page: Page, matchup: string) => page.getByRole("button", { name: `${matchup} — game details` });
+const card = (page: Page, matchup: string) => page.getByRole("group", { name: `${matchup} — game details` });
 // A score next to a team: "24-31", "24 - 31", "TB 3".
 const SCORE = /\b\d{1,3}\s*[-–]\s*\d{1,3}\b|\b(?:31|24)\b/;
 

@@ -162,7 +162,7 @@ for (const { name, width, height } of [
     expect(headingBox!.height, "the column title wrapped onto a second line").toBeLessThan(32);
 
     // Five cards, each with a play button.
-    await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 15_000 });
+    await expect(col.getByRole("group", { name: / — game details$/ })).toHaveCount(5, { timeout: 15_000 });
     const chips = col.locator("[data-league-tag]");
     await expect(col.locator("[data-league-tab]")).toHaveCount(0);
     if (SHOW_CARD_LEAGUE_CHIP) {
@@ -179,8 +179,8 @@ for (const { name, width, height } of [
       await expect(chips).toHaveCount(0);
       await expect(col.locator(".game-meta-row")).toHaveCount(0);
     }
-    for (const matchup of EXPECTED) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(1);
-    for (const matchup of NEVER) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(0);
+    for (const matchup of EXPECTED) await expect(col.getByRole("group", { name: `${matchup} — game details` })).toHaveCount(1);
+    for (const matchup of NEVER) await expect(col.getByRole("group", { name: `${matchup} — game details` })).toHaveCount(0);
     const text = (await col.innerText()).replace(/\s+/g, " ");
     // Every card carries a highlight button: the column exists to be played.
     await expect(col.locator('button[aria-label*="ighlight" i], button[title*="ighlight" i]')).toHaveCount(5, { timeout: 15_000 });
@@ -271,10 +271,10 @@ for (const { name, width, height } of [
     await page.goto("/");
     const best = page.locator('[data-league-column="best"]');
     await expect(best.locator('button[aria-label*="ighlight" i], button[title*="ighlight" i]')).toHaveCount(5, { timeout: 30_000 });
-    const upcoming = page.locator('[data-league-column="nfl"]').getByRole("button", { name: "Giants at Cowboys — game details" });
+    const upcoming = page.locator('[data-league-column="nfl"]').getByRole("group", { name: "Giants at Cowboys — game details" });
     await expect(upcoming).toBeVisible({ timeout: 15_000 });
     const upH = (await upcoming.boundingBox())!.height;
-    const cards = best.getByRole("button", { name: / — game details$/ });
+    const cards = best.getByRole("group", { name: / — game details$/ });
     for (let i = 0; i < 5; i++) {
       const h = (await cards.nth(i).boundingBox())!.height;
       expect(Math.abs(h - upH), `Best card ${i} is ${h.toFixed(1)}px, the upcoming NFL card ${upH.toFixed(1)}px`).toBeLessThanOrEqual(1);
@@ -299,13 +299,13 @@ test("Best of yesterday replaces the Auto league even when that league has a gam
   await seed(page);
   await page.goto("/");
   await expect(page.locator('[data-league-column="best"]')).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('[data-league-column="best"]').getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 15_000 });
+  await expect(page.locator('[data-league-column="best"]').getByRole("group", { name: / — game details$/ })).toHaveCount(5, { timeout: 15_000 });
   const order = await page.locator("[data-league-column]").evaluateAll((els) => els.map((e) => e.getAttribute("data-league-column")));
   expect(order).toEqual(["nfl", "wnba", "best"]);
   // The NCAAF column and its game tonight are gone from the board — replaced,
   // not pushed to a fourth column.
   await expect(page.locator(`[data-league-column="${AUTO_LAST}"]`)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: TODAY_GAME })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: TODAY_GAME })).toHaveCount(0);
 });
 
 test("under three qualifying games the Auto column keeps its league and its game", async ({ page }) => {
@@ -321,7 +321,7 @@ test("under three qualifying games the Auto column keeps its league and its game
   await expect(autoCol).toBeVisible({ timeout: 30_000 });
   const order = await page.locator("[data-league-column]").evaluateAll((els) => els.map((e) => e.getAttribute("data-league-column")));
   expect(order).toEqual(["nfl", "wnba", AUTO_LAST]);
-  await expect(autoCol.getByRole("button", { name: TODAY_GAME })).toHaveCount(1, { timeout: 15_000 });
+  await expect(autoCol.getByRole("group", { name: TODAY_GAME })).toHaveCount(1, { timeout: 15_000 });
   await expect(page.locator('[data-league-column="best"]')).toHaveCount(0);
 });
 
@@ -341,7 +341,7 @@ test("Best of yesterday turned off: Auto keeps its league and the switcher drops
   await page.goto("/");
   const autoCol = page.locator(`[data-league-column="${AUTO_LAST}"]`);
   await expect(autoCol).toBeVisible({ timeout: 30_000 });
-  await expect(autoCol.getByRole("button", { name: TODAY_GAME })).toHaveCount(1, { timeout: 15_000 });
+  await expect(autoCol.getByRole("group", { name: TODAY_GAME })).toHaveCount(1, { timeout: 15_000 });
   await expect(page.locator('[data-league-column="best"]')).toHaveCount(0);
   await page.locator('button[title="Switch league"]').first().click();
   const menu = page.getByRole("dialog", { name: "Switch league" }).first();
@@ -399,7 +399,7 @@ test("ratings off: the column has no span row", async ({ page }) => {
   await seed(page);
   await page.goto("/");
   const col = page.locator('[data-league-column="best"]');
-  await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
+  await expect(col.getByRole("group", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
   await expect(col.locator("[data-best-span-bar]")).toHaveCount(0);
 });
 
@@ -413,7 +413,7 @@ for (const { name, width, height } of [
     await seedWeek(page);
     await page.goto("/");
     const col = page.locator('[data-league-column="best"]');
-    await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
+    await expect(col.getByRole("group", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
     const bar = col.locator("[data-best-span-bar]");
     await expect(bar.getByRole("button", { pressed: true })).toHaveAccessibleName("Yesterday");
     await expect(bar.getByRole("button")).toHaveCount(4);
@@ -429,12 +429,12 @@ for (const { name, width, height } of [
 
     await bar.getByRole("button", { name: "This week" }).click();
     await expect(col.getByRole("heading").first()).toHaveText(width < 640 ? "Week" : "Best this week");
-    const cards = col.getByRole("button", { name: / — game details$/ });
+    const cards = col.getByRole("group", { name: / — game details$/ });
     await expect(cards).toHaveCount(3, { timeout: 15_000 });
     // Best rating first.
     const names = await cards.evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")?.replace(/ — game details$/, "")));
     expect(names).toEqual(WEEK_MINE);
-    await expect(col.getByRole("button", { name: "Timbers at Union — game details" })).toHaveCount(0);
+    await expect(col.getByRole("group", { name: "Timbers at Union — game details" })).toHaveCount(0);
 
     // All leagues: the hidden MLS game, rated highest, leads.
     await bar.getByRole("switch", { name: "All leagues" }).click();
@@ -463,7 +463,7 @@ test("span row: a span with no bake yet says so instead of showing yesterday", a
   await page.goto("/");
   const col = page.locator('[data-league-column="best"]');
   await expect(col.getByRole("heading").first()).toHaveText("Best this month", { timeout: 30_000 });
-  await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(0);
+  await expect(col.getByRole("group", { name: / — game details$/ })).toHaveCount(0);
   await expect(col).toContainText("Schedule unavailable");
 });
 
@@ -495,7 +495,7 @@ for (const { name, width, height, layout } of [
       route.fulfill({ status: 200, contentType: "application/json", body: NFL_RECAP }));
     await page.goto("/");
     const col = page.locator('[data-league-column="best"]');
-    await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
+    await expect(col.getByRole("group", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
     const bar = col.locator("[data-best-span-bar]");
     const pill = page.locator('[data-league-recap="nfl"]');
     await expect(pill).toBeVisible({ timeout: 15_000 });
@@ -530,7 +530,7 @@ for (const { name, width, height, layout } of [
       expect(m, `on ${span}`).toEqual({ overflow: 0, past: 0, clipped: 0, switchPastHeading: 0 });
     }
     await bar.getByRole("button", { name: "Yesterday" }).click();
-    await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5);
+    await expect(col.getByRole("group", { name: / — game details$/ })).toHaveCount(5);
 
     // First cards level across every column.
     const tops = await page.evaluate(() => {
@@ -557,7 +557,7 @@ test("span pill with no sibling pill: the other columns hold the row, first card
     route.fulfill({ status: 200, contentType: "application/json", body: '{"fetchedAt":"2026-09-23T14:00:00Z","recaps":{}}' }));
   await page.goto("/");
   const col = page.locator('[data-league-column="best"]');
-  await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
+  await expect(col.getByRole("group", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
   await expect(col.locator("[data-best-span-bar]")).toBeVisible();
   const spacer = page.locator('[data-league-recap-spacer="nfl"]');
   await expect(spacer).toHaveCount(1);
@@ -573,7 +573,7 @@ test("span pill on a one-column board: still the first thing under the header, s
   await seedWeek(page);
   await page.goto("/");
   const col = page.locator('[data-league-column="best"]');
-  await expect(col.getByRole("button", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
+  await expect(col.getByRole("group", { name: / — game details$/ })).toHaveCount(5, { timeout: 30_000 });
   const bar = col.locator("[data-best-span-bar]");
   await expect(bar).toBeVisible();
   await expect(bar.getByRole("button")).toHaveCount(4);

@@ -120,12 +120,12 @@ async function seed(page: Page, extra: Record<string, unknown> = {}, body: unkno
     route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"No results"}' }));
 }
 
-const cards = (page: Page) => page.locator('[data-league-column="top"]').getByRole("button", { name: / — game details$/ });
+const cards = (page: Page) => page.locator('[data-league-column="top"]').getByRole("group", { name: / — game details$/ });
 // The league chip is off for now (SHOW_CARD_LEAGUE_CHIP): 4 chips when on, 0 when off.
 const CHIPS = SHOW_CARD_LEAGUE_CHIP ? 4 : 0;
 
 const cardNames = (page: Page) =>
-  page.locator('[data-league-column="top"]').getByRole("button", { name: / — game details$/ })
+  page.locator('[data-league-column="top"]').getByRole("group", { name: / — game details$/ })
     .evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").replace(/ — game details$/, "")));
 
 for (const { name, width, height } of [
@@ -155,7 +155,7 @@ for (const { name, width, height } of [
     for (const [i, label] of BLOCK_LABELS.entries()) {
       if (i > 0) await expect(blocks.nth(i).locator("span").first()).toHaveText(label);
     }
-    for (const matchup of NEVER) await expect(col.getByRole("button", { name: `${matchup} — game details` })).toHaveCount(0);
+    for (const matchup of NEVER) await expect(col.getByRole("group", { name: `${matchup} — game details` })).toHaveCount(0);
 
     // No score anywhere in the column's DOM, final and live games included.
     const dom = await col.evaluate((el) => el.outerHTML);
@@ -389,7 +389,7 @@ test("Yesterday: ESPN front page shows the day's snapshot, hero first", async ({
   expect(await cardNames(page)).toEqual(["Miami at Florida State", "Kansas at Iowa", "Rangers at Devils", "Mets at Phillies"]);
   expect(await col.locator("[data-espn-league]").evaluateAll((els) => els.map((e) => e.getAttribute("data-espn-league"))))
     .toEqual(["ncaaf", "nhl", "mlb"]);
-  await expect(col.getByRole("button", { name: "Royals at Twins — game details" })).toHaveCount(0);
+  await expect(col.getByRole("group", { name: "Royals at Twins — game details" })).toHaveCount(0);
   await expect(col.locator("[data-espn-fallback-note]")).toHaveCount(0);
   // A past day is all finals: no "Final" rule in any column.
   await expect(page.locator("[data-final-divider]")).toHaveCount(0);

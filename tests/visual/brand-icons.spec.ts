@@ -71,7 +71,7 @@ async function setup(page: Page, width: number, theme: "light" | "dark", native 
   await page.route("**/baseball/mlb/scoreboard?**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: SCOREBOARD }));
 }
 
-const card = (page: Page) => page.locator('[data-league-column="mlb"]').getByRole("button", { name: /Mets at Philadelphia Phillies/ }).first();
+const card = (page: Page) => page.locator('[data-league-column="mlb"]').getByRole("group", { name: /Mets at Philadelphia Phillies/ }).first();
 
 async function openCalendarRow(page: Page) {
   await page.goto("/");

@@ -170,7 +170,7 @@ test("toggle off renders the column exactly as without the prefs", async ({ brow
     await page.goto("/");
     await expect(yankees(page).first()).toBeVisible();
     await radio;
-    const cards = column(page).locator('[role="button"][aria-label*=" at "], button[aria-label*=" at "]');
+    const cards = column(page).locator('[role="group"][aria-label*=" at "]');
     let first = "";
     await expect.poll(async () => {
       const now = (await cards.first().innerText()).trim();

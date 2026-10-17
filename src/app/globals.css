@@ -315,14 +315,20 @@ html.blur-news-media .news-card-media-on .news-media-preview > * {
   --bg-card-hover: #ebebeb;
   --text: #111111;
   --text-secondary: #666666;
-  --text-muted: #999999;
+  /* #999999 until the 2026-10-15 axe scan: 2.6:1 on the --bg-card tiles.
+     #6e6e6e is the lightest grey at 4.5:1 on both #ffffff and #f5f5f5. */
+  --text-muted: #6e6e6e;
   /* Article body copy on the doc pages (2026-09-25). --text-muted is 2.8:1 on
      white, under the 4.5:1 floor for body text, and read as a draft. */
   --text-body: #374151;
   --border: rgba(0, 0, 0, 0.1);
   --border-hover: rgba(0, 0, 0, 0.2);
   --menu-hover: rgba(0, 0, 0, 0.12);
-  --accent: #2563eb;
+  /* #2563eb was 4.3:1 on --bg-card-hover (highlight button labels). */
+  --accent: #1f5ce0;
+  /* Text on an --accent fill: white here, near-black in dark mode, where
+     white on the light #60a5fa was 2.5:1. */
+  --on-accent: #ffffff;
   /* Wall of Fame trophy tile (2026-10-15), the Fix pill's amber family. */
   --fame-tile-bg: #fef3c7;
   --fame-icon: #b45309;
@@ -335,12 +341,14 @@ html.blur-news-media .news-card-media-on .news-media-preview > * {
   --bg-card-hover: rgba(255, 255, 255, 0.08);
   --text: #ededed;
   --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
+  /* #6b7280 was 3.7:1 on the --bg-card tiles. */
+  --text-muted: #808894;
   --text-body: #d1d5db;
   --border: rgba(255, 255, 255, 0.1);
   --border-hover: rgba(255, 255, 255, 0.2);
   --menu-hover: rgba(255, 255, 255, 0.12);
   --accent: #60a5fa;
+  --on-accent: #0a0a0a;
   --fame-tile-bg: #451a03;
   --fame-icon: #fbbf24;
 }
@@ -562,8 +570,9 @@ main:has(.hl-slot .highlight-btn) [data-slim-hl] .hl-slot:not(:has([data-hl-pend
   main:has(.hl-slot .highlight-btn) [data-slim-hl] .hl-slot:not(:has([data-hl-pending])) { min-height: calc(var(--hl-btn-h-slim) + 0.5rem); }
 }
 
-/* Score/event CARD roots. These are divs with role="button" + tabIndex=0, and a
-   div with a tabindex takes focus on MOUSEDOWN — so every ordinary tap left a
+/* Score/event CARD main action (CardHit). Until 2026-10-15 the card root was a
+   div with role="button" + tabIndex=0, and a div with a tabindex takes focus on
+   MOUSEDOWN — so every ordinary tap left a
    light-blue ring painted around the card, still there once the details sheet
    it opened had closed: "idk how a card can even get this blue highlight ...
    i think no highlight is better in general" (Jacob 9/4). Suppress it for
@@ -575,11 +584,26 @@ main:has(.hl-slot .highlight-btn) [data-slim-hl] .hl-slot:not(:has([data-hl-pend
    :focus-visible for a pointer click on a div[tabindex] (it withholds the ring
    only for natively clickable controls), so the real <button> classes above can
    key off :focus-visible and these cards cannot. */
-.ns-card-focus:focus,
-.ns-card-focus:focus-visible { outline: none; }
-html[data-kbd-nav] .ns-card-focus:focus-visible {
+.ns-card-hit:focus,
+.ns-card-hit:focus-visible { outline: none; }
+html[data-kbd-nav] .ns-card-hit:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline-offset: -2px;
+}
+/* The card's main action (CardHit): an empty button stretched over the card's
+   border box, so a tap on the card's text lands on it. The card's own
+   controls get position: relative, which paints them above it in tree
+   order, so they keep their own taps. Controls that already have a position
+   (absolute popovers, chips) paint above it as they are. */
+.ns-card-hit {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.ns-card-focus :is(a[href], button, input, select, textarea, [role="button"], [tabindex]):not(.ns-card-hit, .absolute, .fixed, .sticky) {
+  position: relative;
 }
 
 

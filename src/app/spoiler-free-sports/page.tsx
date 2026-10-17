@@ -128,7 +128,7 @@ export default function SpoilerFreeSportsPage() {
         <Link
           href="/"
           className="inline-block rounded-lg px-5 py-2.5 font-semibold"
-          style={{ background: "var(--accent)", color: "#fff" }}
+          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
           data-umami-event="seo-spoiler-free-sports-open-home"
         >
           See spoiler-free scores

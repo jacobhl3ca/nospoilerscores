@@ -251,7 +251,7 @@ export default function SlamBracketModal({ onClose }: { onClose: () => void }) {
                       onClick={() => setDrawKey(d.key)}
                       aria-pressed={active}
                       className="text-xs font-medium px-3 py-1 cursor-pointer transition-colors"
-                      style={{ background: active ? "var(--accent)" : "var(--bg-card)", color: active ? "white" : "var(--text)" }}
+                      style={{ background: active ? "var(--accent)" : "var(--bg-card)", color: active ? "var(--on-accent)" : "var(--text)" }}
                     >
                       {d.label}
                     </button>

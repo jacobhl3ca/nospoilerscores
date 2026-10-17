@@ -631,7 +631,7 @@ export default function GameDetailModal({
             type="button"
             onClick={() => { openLiveWatch(game); onClose(); }}
             className="mt-4 w-full py-2 rounded-lg text-sm font-medium cursor-pointer"
-            style={{ background: "var(--accent)", color: "white" }}
+            style={{ background: "var(--accent)", color: "var(--on-accent)" }}
             title={liveWatch.scheme ? `Watch ${liveWatch.network} on your TV` : undefined}
           >
             Watch live

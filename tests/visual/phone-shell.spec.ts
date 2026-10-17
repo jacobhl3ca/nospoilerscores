@@ -87,7 +87,7 @@ async function seed(page: Page, theme: "light" | "dark") {
     route.fulfill({ status: 404, contentType: "application/json", body: '{"error":"No results"}' }));
 }
 
-const card = (page: Page, matchup: string) => page.getByRole("button", { name: `${matchup} — game details` });
+const card = (page: Page, matchup: string) => page.getByRole("group", { name: `${matchup} — game details` });
 
 async function shot(page: Page, name: string) {
   if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/${name}.png` });
@@ -153,8 +153,8 @@ for (const theme of ["light", "dark"] as const) {
       expect(await today.evaluate((el) => getComputedStyle(el).boxShadow)).toMatch(/inset/);
       await shot(page, `strip-${browserName}-${theme}`);
 
-      await strip.getByRole("button", { name: "Sun, Sep 27" }).click();
-      await expect(strip.getByRole("button", { name: "Sun, Sep 27" })).toHaveAttribute("aria-current", "date");
+      await strip.getByRole("button", { name: "Sun 9/27" }).click();
+      await expect(strip.getByRole("button", { name: "Sun 9/27" })).toHaveAttribute("aria-current", "date");
       await expect(card(page, "Mets at Braves")).toBeVisible({ timeout: 15_000 });
       await expect(strip.getByRole("button", { name: "Today" })).not.toHaveAttribute("aria-current", "date");
     });

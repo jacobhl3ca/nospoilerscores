@@ -90,7 +90,7 @@ async function seed(page: Page, column: "mlb" | "top", mlbEvents: unknown[]) {
 }
 
 const cardsIn = (page: Page, column: string) =>
-  page.locator(`[data-league-column="${column}"]`).getByRole("button", { name: / — game details$/ });
+  page.locator(`[data-league-column="${column}"]`).getByRole("group", { name: / — game details$/ });
 
 // The visible "Game N" line inside one card (banner below xl, inline at xl).
 const visibleGameLine = (card: ReturnType<typeof cardsIn>, n: number) =>
@@ -131,7 +131,7 @@ for (const width of [390, 1440]) {
     const col = page.locator('[data-league-column="mlb"]');
     await expect(cardsIn(page, "mlb")).toHaveCount(2, { timeout: 30_000 });
     await expect(col).not.toContainText(/Wild Card · (Game|G)\d/);
-    await expect(visibleGameLine(col.getByRole("button", { name: "Red Sox at Yankees — game details" }), 2)).toHaveCount(1);
-    await expect(visibleGameLine(col.getByRole("button", { name: "Mets at Braves — game details" }), 3)).toHaveCount(1);
+    await expect(visibleGameLine(col.getByRole("group", { name: "Red Sox at Yankees — game details" }), 2)).toHaveCount(1);
+    await expect(visibleGameLine(col.getByRole("group", { name: "Mets at Braves — game details" }), 3)).toHaveCount(1);
   });
 }

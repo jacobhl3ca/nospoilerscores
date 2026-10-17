@@ -60,7 +60,7 @@ export function NoTrackToggle() {
         {disabled === null ? <p>Checking&hellip;</p> : disabled ? (
           <><p className="font-semibold">Off &mdash; this browser is not counted.</p><button type="button" onClick={() => apply(false)} className="mt-4 rounded-full border px-4 py-2 font-semibold" style={{ borderColor: "var(--border)" }}>Start counting again</button></>
         ) : (
-          <><p className="font-semibold">On &mdash; this browser is currently counted.</p><button type="button" onClick={() => apply(true)} className="mt-4 rounded-full px-4 py-2 font-semibold text-white" style={{ background: "var(--accent)" }}>Stop counting my visits</button></>
+          <><p className="font-semibold">On &mdash; this browser is currently counted.</p><button type="button" onClick={() => apply(true)} className="mt-4 rounded-full px-4 py-2 font-semibold" style={{ background: "var(--accent)", color: "var(--on-accent)" }}>Stop counting my visits</button></>
         )}
       </section>
       <p className="mt-4 text-xs" style={{ color: "var(--text-muted)" }}>Repeat once in each browser. Clearing this site&rsquo;s browser data resets the choice.</p>

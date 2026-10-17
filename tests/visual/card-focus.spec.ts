@@ -2,7 +2,9 @@ import { expect, test } from "@playwright/test";
 
 // A tap must leave NO ring on a score card; Tab must still show one.
 //
-// The cards are divs with role="button" + tabIndex=0, and a div with a tabindex
+// Since 2026-10-15 the card's main action is its own button (.ns-card-hit,
+// CardHit.tsx) stretched over the card, so no control sits inside another.
+// Before that the cards were divs with role="button" + tabIndex=0, and a div with a tabindex
 // takes focus on mousedown. Two different browsers then paint two different
 // rings: Safari's default :focus outline, and — measured, not assumed —
 // Chromium's :focus-visible, which DOES match a pointer click on a div (it
@@ -36,7 +38,7 @@ const outlineOfFocused = (page: import("@playwright/test").Page) => page.evaluat
   const el = document.activeElement as HTMLElement | null;
   if (!el) return null;
   const cs = getComputedStyle(el);
-  return { card: el.classList.contains("ns-card-focus"), style: cs.outlineStyle, width: cs.outlineWidth };
+  return { card: el.classList.contains("ns-card-hit"), style: cs.outlineStyle, width: cs.outlineWidth };
 });
 
 test("clicking a card leaves no focus ring", async ({ page }) => {
@@ -50,7 +52,7 @@ test("clicking a card leaves no focus ring", async ({ page }) => {
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
   const state = await page.evaluate(() => {
-    const el = document.querySelector<HTMLElement>(".ns-card-focus");
+    const el = document.querySelector<HTMLElement>(".ns-card-focus > .ns-card-hit");
     if (!el) return null;
     return { focused: document.activeElement === el, style: getComputedStyle(el).outlineStyle };
   });

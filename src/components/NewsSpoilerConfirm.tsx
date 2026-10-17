@@ -100,7 +100,7 @@ export default function NewsSpoilerConfirm({
             data-news-confirm-open
             onClick={onConfirm}
             className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-            style={{ background: "var(--accent)", color: "white" }}
+            style={{ background: "var(--accent)", color: "var(--on-accent)" }}
             onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
           >

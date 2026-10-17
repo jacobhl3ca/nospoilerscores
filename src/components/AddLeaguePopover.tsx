@@ -110,7 +110,7 @@ export default function AddLeaguePopover({
           disabled={target === undefined}
           onClick={() => { if (target !== undefined) onAdd(target); }}
           className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-default"
-          style={{ background: "var(--accent)", color: "white" }}
+          style={{ background: "var(--accent)", color: "var(--on-accent)" }}
         >
           Add
         </button>

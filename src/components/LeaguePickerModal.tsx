@@ -263,7 +263,7 @@ export function LeaguePickerModal({
         // everywhere): rounded-md, 11px, uppercase name.
         className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
         style={filled
-          ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
+          ? { background: "var(--accent)", color: "var(--on-accent)", border: "1px solid var(--accent)" }
           : {
               background: "var(--bg-card)",
               color: current ? "var(--accent)" : !multi && o.offseason ? "var(--text-muted)" : "var(--text)",
@@ -468,7 +468,7 @@ export function LeaguePickerModal({
                 onConfirm?.();
               }}
               className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-              style={{ background: "var(--accent)", color: "white" }}
+              style={{ background: "var(--accent)", color: "var(--on-accent)" }}
               onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
             >
@@ -492,7 +492,7 @@ export function LeaguePickerModal({
               aria-pressed={!!showOffseason}
               className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer"
               style={showOffseason
-                ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
+                ? { background: "var(--accent)", color: "var(--on-accent)", border: "1px solid var(--accent)" }
                 : { background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
             >
               Show offseason leagues
@@ -506,7 +506,7 @@ export function LeaguePickerModal({
                 disabled={picks.length === 0}
                 onClick={() => onAdd?.(plan.now, plan.later)}
                 className="px-4 py-2 min-h-11 rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }}
+                style={{ background: "var(--accent)", color: "var(--on-accent)", border: "1px solid var(--accent)" }}
               >
                 {plan.now.length ? `Add ${plan.now.length}` : "Add"}
               </button>

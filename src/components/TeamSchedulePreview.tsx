@@ -161,7 +161,7 @@ export default function TeamSchedulePreview({
           aria-pressed={showRatings}
           data-umami-event="team-page-ratings-toggle"
           className="rounded-md px-2.5 py-1 text-xs font-semibold cursor-pointer"
-          style={{ background: showRatings ? "var(--accent)" : "var(--bg-card)", color: showRatings ? "#fff" : "var(--text)", border: "1px solid var(--border)" }}
+          style={{ background: showRatings ? "var(--accent)" : "var(--bg-card)", color: showRatings ? "var(--on-accent)" : "var(--text)", border: "1px solid var(--border)" }}
         >
           {showRatings ? "Ratings on" : "Show ratings"}
         </button>
@@ -236,7 +236,7 @@ export function FollowTeamButton({ teamId, label }: { teamId: string; label: str
       onClick={follow}
       data-umami-event="team-page-follow"
       className="inline-block rounded-lg px-5 py-2.5 font-semibold cursor-pointer"
-      style={{ background: "var(--accent)", color: "#fff" }}
+      style={{ background: "var(--accent)", color: "var(--on-accent)" }}
     >
       {label}
     </button>

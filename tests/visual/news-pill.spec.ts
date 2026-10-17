@@ -123,7 +123,7 @@ async function setUp(page: Page, now: Date, prefs: Record<string, unknown> = {},
   });
   await page.route("**/news/recaps.json", route => route.fulfill({ status: 200, contentType: "application/json", body: recaps }));
   await page.goto(path);
-  await expect(page.locator('[data-league-column="top"]').getByRole("button", { name: / — game details$/ })).toHaveCount(4, { timeout: 30_000 });
+  await expect(page.locator('[data-league-column="top"]').getByRole("group", { name: / — game details$/ })).toHaveCount(4, { timeout: 30_000 });
 }
 
 // The seam cover carries data-news in News view (news-tab-keeps-view.spec.ts).

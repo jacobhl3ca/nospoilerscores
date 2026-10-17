@@ -1876,7 +1876,7 @@ export default function SettingsPanel({
                       onClick={onShareFavorites}
                       disabled={nothingToShare}
                       className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ background: "var(--accent)", color: "white" }}
+                      style={{ background: "var(--accent)", color: "var(--on-accent)" }}
                     >
                       {shareCopied ? "Copied!" : "Copy settings link"}
                     </button>
@@ -2429,7 +2429,7 @@ function RadioGroup<T extends string>({
             style={{
               background: active ? "var(--accent)" : "var(--bg-card)",
               border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-              color: active ? "white" : "var(--text)",
+              color: active ? "var(--on-accent)" : "var(--text)",
             }}
             // The per-option hint carries the detail that distinguishes the
             // choices — and for the Landing view / Ratings groups that detail is
@@ -2485,7 +2485,7 @@ function LeagueChip({
       style={{
         background: on ? "var(--accent)" : "var(--bg-card)",
         border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
-        color: on ? "white" : "var(--text)",
+        color: on ? "var(--on-accent)" : "var(--text)",
       }}
       title={title}
     >
@@ -2528,7 +2528,7 @@ function SwitcherChip({
         style={{
           background: checked ? "var(--accent)" : "var(--bg-card)",
           border: `1px solid ${checked ? "var(--accent)" : "var(--border)"}`,
-          color: checked ? "white" : "var(--text)",
+          color: checked ? "var(--on-accent)" : "var(--text)",
           opacity: note === "offseason" ? 0.6 : 1,
         }}
       >
@@ -2820,7 +2820,7 @@ function TeamPicker({
                   style={{
                     background: isFav ? "var(--accent)" : "var(--bg-card)",
                     border: `1px solid ${isFav ? "var(--accent)" : "var(--border)"}`,
-                    color: isFav ? "white" : "var(--text)",
+                    color: isFav ? "var(--on-accent)" : "var(--text)",
                   }}
                   title={isFav ? "Remove from favorites" : `Add ${t.displayName} to favorites`}
                 >
