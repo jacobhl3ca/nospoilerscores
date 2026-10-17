@@ -1,0 +1,88 @@
+name: Accessibility (axe)
+
+# tests/a11y/axe.spec.ts: axe-core on the home board, the News tab, a league
+# page and the game details sheet, light + dark at 390 px and 1280 px, against
+# the production static export. It fails only on a serious or critical
+# violation that is NOT in tests/a11y/baseline.json, so today's known debt does
+# not turn every PR red, and a new problem does. To accept or clear entries:
+# npm run a11y:update, then commit the baseline diff.
+#
+# Separate from deploy.yml on purpose, same reasoning as sticky-guard.yml and
+# unit-tests.yml: it reports on the PR and can never block a deploy.
+#
+# Actions minutes are tight (free quota ran out in Sept), so: PRs only, a paths
+# filter, cancel-in-progress, npm + Playwright + Next build caches, and the
+# Chromium headless shell only.
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'tests/a11y/**'
+      - 'playwright.a11y.config.ts'
+      - '.github/workflows/a11y.yml'
+
+concurrency:
+  group: a11y-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  axe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Browser cache keyed on the installed Playwright version, so a bump
+      # downloads once and every later run restores it.
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-shell-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install Chromium (headless shell only)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: Install Chromium system deps (browser restored from cache)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Cache Next build
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-a11y-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**') }}
+          restore-keys: |
+            next-a11y-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      # playwright.a11y.config's webServer runs `npm run build` and serves out/.
+      - name: axe scan (fails only on new serious/critical violations)
+        run: npm run a11y
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
