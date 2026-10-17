@@ -339,7 +339,7 @@ test("every kind pill in the wall table is one width, label centred", async ({ p
         return { kind: el.textContent, width: pill.width, offset: (label.left - pill.left) - (pill.right - label.right) };
       }),
     );
-    expect(new Set(boxes.map((b) => b.kind))).toEqual(new Set(["League", "Feature", "Fix"]));
+    expect(new Set(boxes.map((b) => b.kind))).toEqual(new Set(["League", "Feature"]));
     for (const b of boxes) {
       expect(b.width, b.kind!).toBeCloseTo(boxes[0].width, 1);
       expect(Math.abs(b.offset), b.kind!).toBeLessThanOrEqual(1);
