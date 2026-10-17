@@ -497,6 +497,12 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
   const gallery = item.images ?? [];
   const img = gallery[0] || item.imageFullUrl || (item.thumbOnly ? null : item.imageUrl);
   const tile = !img && item.imageUrl ? item.imageUrl : null;
+  const heroSrc = img || tile ? proxyImage((img || tile)!, 1200) : undefined;
+  // The src that finished (or failed) loading. Until it matches, the media
+  // button pulses with the skeleton fill instead of sitting as a flat black
+  // strip, and the picture fades in once it lands (Jacob 10/17).
+  const [heroDoneSrc, setHeroDoneSrc] = useState<string | null>(null);
+  const heroLoading = !!heroSrc && heroDoneSrc !== heroSrc;
   const isVideo = itemIsVideo(item);
   const hasMedia = !!img || !!tile || isVideo;
   const comments = item.comments ?? [];
@@ -578,7 +584,10 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
           // above is a peek toggle when hasMedia) shrinks to ~0px and can't be
           // tapped. Every other .news-media-preview sets its own w/h or
           // aspect-video; this full-width one was the lone reliant-on-content case.
-          className="news-media-preview relative block w-full min-h-[3rem] cursor-pointer bg-black"
+          // While the picture loads, a hero keeps a 12rem floor so the pulse
+          // reads as a picture slot; the small tile pulses at its own size.
+          className={`news-media-preview relative block w-full cursor-pointer bg-black ${heroLoading && img ? "min-h-[12rem]" : "min-h-[3rem]"}${heroLoading ? " animate-pulse" : ""}`}
+          style={heroLoading ? { background: "var(--bg-card-hover)" } : undefined}
           // The tile's <img> is alt="", so this button's only accessible name is
           // this label. It names the action (a video post plays inline) and
           // nothing else: with the headline in it, a screen reader read the
@@ -589,18 +598,22 @@ function FeedPost({ item, group, onOpen, autoplay }: { item: NewsItem; group?: F
             // eslint-disable-next-line @next/next/no-img-element
             <img
               // Cap the delivered width: a gallery cover is a multi-MB original.
-              src={proxyImage((img || tile)!, 1200)}
+              src={heroSrc}
               alt=""
               loading="lazy"
               decoding="async"
-              className={img ? "block w-full max-h-[70vh] object-contain" : "block mx-auto max-h-32 w-auto"}
+              className={`${img ? "block w-full max-h-[70vh] object-contain" : "block mx-auto max-h-32 w-auto"} transition-opacity duration-200 ${heroLoading ? "opacity-0" : "opacity-100"}`}
               draggable={false}
+              // A cached picture can finish before React attaches onLoad.
+              ref={(el) => { if (el?.complete && el.naturalWidth > 0 && heroSrc) setHeroDoneSrc(heroSrc); }}
+              onLoad={() => setHeroDoneSrc(heroSrc ?? null)}
               // If the proxied thumbnail 404s (or the image proxy fails), hide the
               // broken-image glyph so the media button degrades cleanly to its black
               // tile instead of rendering a busted icon inside the tap target —
               // matching the onError guard every other remote <img> in the app uses
               // (NewsColumn's twin thumbnails, AlignedVideoStrip, GameCard, …).
-              onError={(e) => { e.currentTarget.style.display = "none"; }}
+              // It also stops the pulse, so a dud never pulses forever.
+              onError={(e) => { e.currentTarget.style.display = "none"; setHeroDoneSrc(heroSrc ?? null); }}
             />
           ) : (
             <div className="w-full aspect-video flex items-center justify-center" style={{ color: "var(--text-muted)" }}>

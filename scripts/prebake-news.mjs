@@ -18,6 +18,7 @@ import {
 import { isClipPageUrl, parseClipPage } from "./lib/clip-host.mjs";
 import { redlibGifMp4Path } from "./lib/redlib-gif.mjs";
 import { redlibImagePath, redlibThumbPath } from "./lib/redlib-image.mjs";
+import { warmImageProxy, warmUrlsFor } from "./lib/warm-image-proxy.mjs";
 import {
   FOTMOB_LEAGUES, fotmobLeaguePath, parseFotmobNextData, fotmobFixtures, fotmobHighlightVideoId,
   findFotmobFixture, gateFotmobVideo,
@@ -5394,6 +5395,31 @@ async function writeFeed(name, items) {
   const payload = { fetchedAt: new Date().toISOString(), items };
   await writeFile(path, JSON.stringify(payload));
   console.log(`wrote ${path} (${items.length} items)`);
+  if (name.startsWith("reddit-")) warmItems.push(...items);
+}
+
+// Reddit items written this run; their pictures get a proxy warm after the
+// feed jobs (see scripts/lib/warm-image-proxy.mjs).
+const warmItems = [];
+// Bookkeeping, so it lives outside public/news (that folder is uploaded).
+const IMG_WARM_CACHE_PATH = ".bake-state/img-warm.json";
+
+// Best-effort: never fails the bake. Each URL is warmed once; the cache keeps
+// 7 days of warmed URLs so a picture still in /hot is not re-requested every run.
+async function warmRedditPictures() {
+  const urls = warmUrlsFor(warmItems);
+  if (urls.length === 0) return;
+  let seen = new Map();
+  try { seen = new Map(Object.entries(JSON.parse(await readFile(IMG_WARM_CACHE_PATH, "utf8")))); } catch { /* first run */ }
+  const cutoff = Date.now() - 7 * 864e5;
+  for (const [k, at] of seen) if (!(at > cutoff)) seen.delete(k);
+  const t0 = Date.now();
+  const r = await warmImageProxy(urls, { seen });
+  console.log(`warmed ${r.ok} pictures (${r.skipped} already warm, ${r.failed} failed) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  try {
+    await mkdir(dirname(IMG_WARM_CACHE_PATH), { recursive: true });
+    await writeFile(IMG_WARM_CACHE_PATH, JSON.stringify(Object.fromEntries(seen)));
+  } catch { /* best-effort cache */ }
 }
 
 // --only-reddit: scoped run for the Mac mini cron (residential IP, can reach
@@ -5558,6 +5584,11 @@ if (!ONLY_REDDIT) await saveYTCache(ytCache);
 // Gallery lookups are keyed by post id and never change, so persisting them
 // means each multi-picture post costs exactly one extra mirror fetch, ever.
 await saveGalleryCache();
+try {
+  await warmRedditPictures();
+} catch (e) {
+  console.warn("picture warm skipped:", e?.message || e);
+}
 
 // Bake per-game highlight video IDs (score-card buttons read these instead of
 // live-scraping). Runs on the same cadence as the video feeds; skipped in
