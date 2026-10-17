@@ -489,7 +489,16 @@ test("browser blocks autoplay: Tap to play on the clips, a one-time popup over t
   await expect(page.getByTestId("autoplay-blocked-note")).toHaveCount(0);
   // Every clip says it, on the clip; nothing plays.
   await expect(page.locator("[data-inline-video] [data-tap-to-play]")).toHaveCount(10);
-  await expect(page.locator("[data-inline-video] [data-tap-to-play]").first()).toHaveText("Tap to play");
+  // The clip in focus also names the cause (Jacob 10/17); the rest stay short.
+  const focusedTag = page.locator('[data-inline-video] [data-tap-to-play="focused"]');
+  await expect(focusedTag).toHaveCount(1);
+  await expect(focusedTag).toHaveText("Autoplay blocked · Tap to play");
+  await expect(page.locator('[data-inline-video] [data-tap-to-play=""]')).toHaveCount(9);
+  await expect(page.locator('[data-inline-video] [data-tap-to-play=""]').first()).toHaveText("Tap to play");
+  // The Autoplay chip keeps its look; only its title says the browser blocks it.
+  await expect(autoplayChip(page)).toHaveAttribute("data-autoplay-blocked", "");
+  await expect(autoplayChip(page)).toHaveAttribute("title", /Your browser blocks autoplay/);
+  await expect(autoplayChip(page)).not.toHaveAttribute("aria-disabled", "true");
   expect(await playing(page)).toEqual([]);
   // The popup sits over the refused clip.
   const box = await popup(page).boundingBox();
@@ -505,6 +514,25 @@ test("browser blocks autoplay: Tap to play on the clips, a one-time popup over t
   await page.waitForTimeout(1500);
   await expect(popup(page)).toHaveCount(0);
 });
+
+// The popup comes back after 14 days (Jacob 10/17), not once ever.
+for (const [label, ageDays, shows] of [["15 days ago", 15, true], ["today", 0, false], ["the old \"1\"", null, false]] as const) {
+  test(`blocked-autoplay popup last shown ${label}: ${shows ? "shows again" : "stays hidden"}`, async ({ page }) => {
+    await page.addInitScript(BLOCK_PLAY);
+    await page.addInitScript((v) => { localStorage.setItem("hs.autoplayBlockedPopup.v1", v); },
+      ageDays === null ? "1" : String(Date.now() - ageDays * 24 * 60 * 60 * 1000));
+    await gotoNews(page, { ...PLAY, newsLayout: "espn", newsEspnBig: true });
+    await expect(page.locator("[data-inline-video] [data-tap-to-play]").first()).toBeVisible(LOAD);
+    if (shows) {
+      await expect(popup(page)).toBeVisible(LOAD);
+      const at = Number(await page.evaluate(() => localStorage.getItem("hs.autoplayBlockedPopup.v1")));
+      expect(Date.now() - at).toBeLessThan(60_000);
+    } else {
+      await page.waitForTimeout(1500);
+      await expect(popup(page)).toHaveCount(0);
+    }
+  });
+}
 
 test("browser blocks autoplay in Feed: Tap to play on the video post", async ({ page }) => {
   await page.addInitScript(BLOCK_PLAY);
@@ -523,6 +551,7 @@ test("blocked-autoplay popup: Turn Autoplay off saves the pref and clears Tap to
   await expect(popup(page)).toHaveCount(0);
   await expect.poll(async () => (await saved(page)).newsAutoplay).toBe(false);
   await expect(page.locator("[data-tap-to-play]")).toHaveCount(0);
+  await expect(page.locator("[data-autoplay-blocked]")).toHaveCount(0);
   expect(await autoplayChip(page).locator("svg line[data-slash]").count()).toBe(1);
 });
 
@@ -542,6 +571,7 @@ test("a clip that plays clears Tap to play everywhere", async ({ page }) => {
   await page.locator('[data-inline-video="auto"]').nth(2).evaluate((el) => el.scrollIntoView({ block: "center" }));
   await expect.poll(() => playing(page), { timeout: 2000 }).toEqual([2]);
   await expect(page.locator("[data-tap-to-play]")).toHaveCount(0);
+  await expect(page.locator("[data-autoplay-blocked]")).toHaveCount(0);
 });
 
 test("switch Feed → ESPN with Autoplay on: the first in-view clip plays without a scroll", async ({ page }) => {
