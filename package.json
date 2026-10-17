@@ -28,7 +28,8 @@
     "tv:catalog:check": "node scripts/build-tv-catalog.mjs --check",
     "qa:titlemask": "node scripts/qa-title-mask.mjs",
     "seo:check": "node scripts/seo-check.mjs",
-    "tv:parity": "tvos/tools/parity/parity.sh"
+    "tv:parity": "tvos/tools/parity/parity.sh",
+    "highlights:coverage": "node scripts/highlight-coverage.mjs"
   },
   "dependencies": {
     "@capacitor-community/apple-sign-in": "^7.1.0",
