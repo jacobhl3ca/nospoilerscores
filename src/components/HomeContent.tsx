@@ -50,7 +50,7 @@ import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/component
 import { LeagueMark } from "@/components/LeagueMark";
 import { buildSchedule, visibleScheduleRows, SCHEDULE_FULL_MAX, SCHEDULE_SKIP, type ScheduleLeagueInput, type ScheduleRow } from "@/lib/scheduleDay";
 import VideoModal from "@/components/VideoModal";
-import { onAutoplayBlocked, refocusAutoplay } from "@/components/InlineVideoCard";
+import { onAutoplayBlocked, refocusAutoplay, useAutoplayBlocked } from "@/components/InlineVideoCard";
 import { useHideOnScroll, useToolbarFit } from "@/lib/useNewsToolbar";
 import { POST_FILTERS, POST_FILTER_NAMES } from "@/lib/postFilter";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
@@ -744,19 +744,24 @@ function RenderLate({ children }: { children: () => ReactNode }) {
 // Autoplay chip titles (toolbar + ESPN Videos header).
 const AUTOPLAY_TITLE = "Play the video in focus, muted. Tap it for sound.";
 const AUTOPLAY_PAUSED_TITLE = "Paused while Media is blurred. Turn Media on to play clips.";
+// The browser refused play(): the chip keeps its look, only the title says why
+// (Jacob 10/17: no dim).
+const AUTOPLAY_BLOCKED_TITLE = "Your browser blocks autoplay. Tap a clip to play it. Allow autoplay for this site to let clips play by themselves.";
 
 // ESPN layout, Big: Reddit grid columns by sub count (full class names, so
 // Tailwind keeps them).
 const BIG_REDDIT_COLS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3" };
 
-// Set once the "browser blocks autoplay" popup has shown: it shows once ever.
+// When the "browser blocks autoplay" popup last showed (ms). It shows again
+// after 14 days (Jacob 10/17), since Safari forgets the site's autoplay setting.
 // A new key (10/9): the r4 note under the toolbar used v1 of the old one.
 const AUTOPLAY_BLOCKED_POPUP_KEY = "hs.autoplayBlockedPopup.v1";
+const AUTOPLAY_BLOCKED_POPUP_EVERY_MS = 14 * 24 * 60 * 60 * 1000;
 
-function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, testId, children }: {
+function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, testId, dataAttr, children }: {
   active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean;
   // Icon only (the toolbar row is too narrow for labels): see useToolbarFit.
-  compact?: boolean; testId?: string; children: ReactNode;
+  compact?: boolean; testId?: string; dataAttr?: Record<string, string>; children: ReactNode;
 }) {
   return (
     <button
@@ -773,6 +778,7 @@ function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, compact, 
       aria-label={ariaLabel}
       aria-pressed={active}
       data-testid={testId}
+      {...dataAttr}
       className={`news-chip inline-flex shrink-0 items-center gap-1.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${compact ? "news-chip-compact px-2.5" : "px-3.5"}`}
       style={{
         background: active ? "var(--accent)" : "var(--bg-card)",
@@ -3355,14 +3361,23 @@ export default function HomeContent({
 
   // The browser refused muted autoplay (Firefox "Block Audio and Video",
   // Safari "Never Auto-Play", iPhone Low Power Mode): a popup over the refused
-  // clip, shown once ever (Jacob 10/9, it replaced the note under the toolbar).
-  // Every clip says "Tap to play" on itself from then on (InlineVideoCard).
+  // clip, shown again after 14 days (Jacob 10/9 once ever, 10/17 every 14
+  // days). Every clip says "Tap to play" on itself from then on, and the clip
+  // in focus says "Autoplay blocked" too (InlineVideoCard).
   const [autoplayBlockedAt, setAutoplayBlockedAt] = useState<HTMLElement | null>(null);
   const closeAutoplayPopup = useCallback(() => setAutoplayBlockedAt(null), []);
+  const autoplayBlocked = useAutoplayBlocked();
   useEffect(() => onAutoplayBlocked((box) => {
     try {
-      if (localStorage.getItem(AUTOPLAY_BLOCKED_POPUP_KEY)) return;
-      localStorage.setItem(AUTOPLAY_BLOCKED_POPUP_KEY, "1");
+      const raw = localStorage.getItem(AUTOPLAY_BLOCKED_POPUP_KEY);
+      const now = Date.now();
+      if (raw) {
+        // The old value "1" (once ever) = shown today: start the 14 days now.
+        const at = Number(raw);
+        if (!Number.isFinite(at) || at < 1e12) { localStorage.setItem(AUTOPLAY_BLOCKED_POPUP_KEY, String(now)); return; }
+        if (now - at < AUTOPLAY_BLOCKED_POPUP_EVERY_MS) return;
+      }
+      localStorage.setItem(AUTOPLAY_BLOCKED_POPUP_KEY, String(now));
     } catch { return; }
     setAutoplayBlockedAt(box);
   }), []);
@@ -4430,9 +4445,10 @@ export default function HomeContent({
               compact={toolbarFit.compact}
               active={newsAutoplay}
               onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
-              title={newsAutoplay && prefs.revealNewsMedia !== true ? AUTOPLAY_PAUSED_TITLE : AUTOPLAY_TITLE}
+              title={newsAutoplay && prefs.revealNewsMedia !== true ? AUTOPLAY_PAUSED_TITLE : newsAutoplay && autoplayBlocked ? AUTOPLAY_BLOCKED_TITLE : AUTOPLAY_TITLE}
               ariaLabel="Toggle news autoplay"
               disabled={newsAutoplay && prefs.revealNewsMedia !== true}
+              dataAttr={newsAutoplay && prefs.revealNewsMedia === true && autoplayBlocked ? { "data-autoplay-blocked": "" } : undefined}
             >
               <AutoplayIcon on={newsAutoplay} />
               <span>Autoplay</span>
@@ -4811,9 +4827,10 @@ export default function HomeContent({
                     <CardChip
                       active={newsAutoplay}
                       onClick={() => updatePrefs({ newsAutoplay: !newsAutoplay })}
-                      title={newsAutoplay && !media ? AUTOPLAY_PAUSED_TITLE : AUTOPLAY_TITLE}
+                      title={newsAutoplay && !media ? AUTOPLAY_PAUSED_TITLE : newsAutoplay && autoplayBlocked ? AUTOPLAY_BLOCKED_TITLE : AUTOPLAY_TITLE}
                       ariaLabel="Toggle news autoplay"
                       disabled={newsAutoplay && !media}
+                      dataAttr={newsAutoplay && media && autoplayBlocked ? { "data-autoplay-blocked": "" } : undefined}
                     >
                       <AutoplayIcon on={newsAutoplay} size={14} />
                     </CardChip>

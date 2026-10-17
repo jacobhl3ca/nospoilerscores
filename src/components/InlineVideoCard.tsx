@@ -118,7 +118,7 @@ function subscribeBlocked(fn: () => void) {
   blockedSubs.add(fn);
   return () => { blockedSubs.delete(fn); };
 }
-function useAutoplayBlocked(): boolean {
+export function useAutoplayBlocked(): boolean {
   return useSyncExternalStore(subscribeBlocked, () => blockedNow, () => false);
 }
 
@@ -171,6 +171,9 @@ export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }:
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  // The scheduler picked this clip (the one that would be playing), so its
+  // "Tap to play" says why it is still.
+  const [focused, setFocused] = useState(false);
   const blocked = useAutoplayBlocked();
   const src = inlineMediaUrl(item);
   const active = enabled && !!src;
@@ -208,6 +211,7 @@ export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }:
       el: video,
       ratio: 0,
       start: () => {
+        setFocused(true);
         void attach().then(() => {
           if (cancelled || current !== entry) return;
           video.muted = true;
@@ -221,12 +225,16 @@ export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }:
           });
         });
       },
-      stop: () => { if (!video.paused) video.pause(); },
+      stop: () => {
+        setFocused(false);
+        if (!video.paused) video.pause();
+      },
     };
     register(entry);
     return () => {
       cancelled = true;
       unregister(entry);
+      setFocused(false);
       hls?.destroy();
     };
   }, [active, src]);
@@ -248,7 +256,7 @@ export function AutoplayVideo({ item, enabled, fit = "cover", onPlayingChange }:
       tabIndex={-1}
       data-autoplay-video=""
     />
-    {blocked && !playing && <TapToPlay />}
+    {blocked && !playing && <TapToPlay focused={focused} />}
     </>
   );
 }
@@ -330,11 +338,12 @@ export default function InlineVideoCard({ item, autoplay, large = true, onOpen, 
 
 // Autoplay is on but the browser refused it: the clip says so itself, in the
 // corner where "Tap for sound" sits while a clip plays. z-index keeps it over
-// each surface's play-badge overlay, which comes later in the DOM.
-function TapToPlay() {
+// each surface's play-badge overlay, which comes later in the DOM. The clip in
+// focus (the one that would be playing) also names the cause (Jacob 10/17).
+function TapToPlay({ focused }: { focused: boolean }) {
   return (
-    <span className="absolute right-2 bottom-2 z-[1] rounded px-1.5 py-0.5 text-[11px] font-semibold pointer-events-none" style={{ background: "rgba(0,0,0,0.6)", color: "white" }} data-tap-to-play="">
-      Tap to play
+    <span className={`absolute right-2 bottom-2 z-[1] rounded px-1.5 py-0.5 ${focused ? "text-xs" : "text-[11px]"} font-semibold pointer-events-none`} style={{ background: "rgba(0,0,0,0.6)", color: "white" }} data-tap-to-play={focused ? "focused" : ""}>
+      {focused ? "Autoplay blocked · Tap to play" : "Tap to play"}
     </span>
   );
 }
