@@ -37,7 +37,7 @@ import { fetchAllLeagues, applyMovedFrom, loadMovedFrom, movedFromPending, fetch
 import { readTabView, writeTabView } from "@/lib/tabView";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo, isDemoPickerRequested, isDemoRatingsForced, isDemoNewsRequested, getDemoThemeOverride, demoHighlightPoster, DEMO_HIGHLIGHT_HEADLINE, anonymizeLeaguePickerOptions } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
-import LeagueColumn, { mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
+import LeagueColumn, { LEAGUE_COLUMN_WIDTH, mlbPostseasonDay, playoffPictureInWindow } from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
 import EventDetailModal from "@/components/EventDetailModal";
 import { getMlbReview, mlbReviewLinkDue, mlbReviewPillDue, MLB_REVIEW_HIDDEN_KEY, type MlbReview, type MlbReviewSection } from "@/lib/mlbReview";
@@ -2892,6 +2892,35 @@ export default function HomeContent({
   const scheduleWaitBoard = loading && leagues.length === 0;
   // The Live filter's "Also live" list pulls the same leagues (Today only).
   const alsoLiveOn = liveOnly && !showNews && !showSchedule && selectedDate === getDateString(0);
+  // "Also live" spans the open columns (Jacob 10/17): its left and right
+  // edges line up with the first and last board column at 2, 3 or 5
+  // columns. Measured, because flex-1 columns with a max width have no CSS
+  // total to copy. Phones keep the full width.
+  const [alsoLiveEl, setAlsoLiveEl] = useState<HTMLDivElement | null>(null);
+  const [alsoLiveSpan, setAlsoLiveSpan] = useState<{ left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!alsoLiveEl || isMobile) { setAlsoLiveSpan(null); return; }
+    const main = alsoLiveEl.closest("main") ?? document.body;
+    const columns = () => Array.from(main.querySelectorAll<HTMLElement>("[data-league-column]"));
+    const measure = () => {
+      let left = Infinity;
+      let right = -Infinity;
+      for (const c of columns()) {
+        const b = c.getBoundingClientRect();
+        if (b.width === 0) continue;
+        left = Math.min(left, b.left);
+        right = Math.max(right, b.right);
+      }
+      const box = alsoLiveEl.getBoundingClientRect();
+      const next = Number.isFinite(left) ? { left: Math.round(left - box.left), width: Math.round(right - left) } : null;
+      setAlsoLiveSpan((prev) => (prev && next && prev.left === next.left && prev.width === next.width ? prev : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(alsoLiveEl);
+    for (const c of columns()) ro.observe(c);
+    return () => ro.disconnect();
+  }, [alsoLiveEl, isMobile, leagues]);
   useEffect(() => {
     if (!(showSchedule || alsoLiveOn) || !selectedDate || scheduleWaitBoard) return;
     let live = true;
@@ -3929,13 +3958,31 @@ export default function HomeContent({
   // in-progress games of every in-season switcher league with no column on
   // the board, as schedule lines. Never a score. Nothing live anywhere: one
   // line naming the next start.
-  const renderAlsoLive = () => {
+  const alsoLive = (() => {
+    if (!alsoLiveOn) return null;
     const tz = getTimeZone();
     const { inputs, pending, onBoard } = scheduleInputs();
+    // League order = the switcher's order minus the board's columns:
+    // scheduleLeagues lists the board first, then the switcher pool in its
+    // own order, and buildSchedule keeps the input order.
     const groups = liveScheduleGroups(buildSchedule(inputs.filter((l) => !onBoard.has(l.sport)), { favoriteTeams: prefs.favoriteTeams, tz }));
+    return { tz, inputs, pending, groups };
+  })();
+  // With live lines under the board, the columns drop their 60vh floor so
+  // the list starts right under the tallest column.
+  const alsoLiveRows = !!alsoLive && alsoLive.groups.length > 0;
+  const renderAlsoLive = () => {
+    if (!alsoLive) return null;
+    const { tz, inputs, pending, groups } = alsoLive;
     if (groups.length > 0) {
       return (
-        <section data-testid="also-live" aria-labelledby="also-live-title" className="max-w-[720px] mx-auto pt-5">
+        <div ref={setAlsoLiveEl}>
+        <section
+          data-testid="also-live"
+          aria-labelledby="also-live-title"
+          className="pt-5"
+          style={alsoLiveSpan ? { marginLeft: alsoLiveSpan.left, width: alsoLiveSpan.width } : undefined}
+        >
           <h2 id="also-live-title" className="flex items-center gap-1.5 text-sm font-semibold mb-2 px-1" style={{ color: "var(--text-muted)" }}>
             <span aria-hidden="true" className="w-2 h-2 rounded-full" style={{ background: "#dc2626" }} />
             Also live
@@ -3956,6 +4003,7 @@ export default function HomeContent({
           </div>
           {pending > 0 && <p className="text-center text-xs py-2" style={{ color: "var(--text-muted)" }}>Checking more leagues…</p>}
         </section>
+        </div>
       );
     }
     if (liveBoardCount > 0) return null;
@@ -6335,6 +6383,7 @@ export default function HomeContent({
                 : mobileCols === 2
                   ? "flex-1 min-w-0 min-h-[60vh]"
                   : undefined;
+            const colWidth = alsoLiveRows ? (colWidthClass ?? LEAGUE_COLUMN_WIDTH).replace(" min-h-[60vh]", "") : colWidthClass;
             const addButton = onAddColumn ? (
               singleColumn ? (
                 <div className="mt-1"><AddColumnButton onClick={onAddColumn} /></div>
@@ -6371,7 +6420,7 @@ export default function HomeContent({
                       showFinalSeparator
                       {...swapPropsForSlot(entry.slotIdx)}
                       onCycleLeague={cycleForEntry(entry)}
-                      widthClassName={colWidthClass}
+                      widthClassName={colWidth}
                       condense={singleColumn}
                       footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
                       topCard={bestTopCard(entry.league)}
@@ -6405,7 +6454,7 @@ export default function HomeContent({
                     {...crossDayProps(entry.league)}
                     {...swapPropsForSlot(entry.slotIdx)}
                     onCycleLeague={cycleForEntry(entry)}
-                    widthClassName={colWidthClass}
+                    widthClassName={colWidth}
                     condense={singleColumn}
                     footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
                     topCard={bestTopCard(entry.league)}
@@ -6418,7 +6467,7 @@ export default function HomeContent({
             );
           })()
         )}
-        {alsoLiveOn && renderAlsoLive()}
+        {renderAlsoLive()}
       </main>
 
       <footer ref={footerRef} className="px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-4 text-center text-xs flex flex-col items-center gap-2" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>

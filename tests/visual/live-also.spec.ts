@@ -56,11 +56,11 @@ const NCAAF_LIVE = [
 const MLB_LIVE = event("m2", T("13", "Mariners", "SEA"), T("14", "Blue Jays", "TOR"), "2026-10-14T17:08:00Z", "live", undefined, ["3", "2"], 6);
 const RATED_SCORE = /\b(?:20|17|10|38|31|24)\b/;
 
-type SeedOpts = { showRatings?: boolean; second?: string; board?: Record<string, unknown[]>; extra?: Record<string, unknown[]> };
+type SeedOpts = { showRatings?: boolean; second?: string; slots?: string[]; board?: Record<string, unknown[]>; extra?: Record<string, unknown[]> };
 
 async function seed(page: Page, theme: "light" | "dark", nhl: unknown[], opts: SeedOpts = {}) {
   await page.clock.setFixedTime(NOW);
-  await page.addInitScript(({ theme, showRatings, second }) => localStorage.setItem("nss-preferences", JSON.stringify({
+  await page.addInitScript(({ theme, showRatings, second, slots }) => localStorage.setItem("nss-preferences", JSON.stringify({
     favoriteLeagues: [],
     favoriteTeams: [],
     theme,
@@ -71,13 +71,13 @@ async function seed(page: Page, theme: "light" | "dark", nhl: unknown[], opts: S
     leaguesOnboarded: true,
     firstLeague: "mlb",
     secondLeague: second,
-    thirdLeague: "empty",
-    fourthLeague: "empty",
-    fifthLeague: "empty",
+    thirdLeague: slots[0],
+    fourthLeague: slots[1],
+    fifthLeague: slots[2],
     hiddenLeagues: ["best", "top"],
     defaultDateMode: "today",
     defaultLandingView: "scores",
-  })), { theme, showRatings: !!opts.showRatings, second: opts.second ?? "ncaaf" });
+  })), { theme, showRatings: !!opts.showRatings, second: opts.second ?? "ncaaf", slots: opts.slots ?? ["empty", "empty", "empty"] });
   const boards: Record<string, Record<string, unknown[]>> = { [TODAY]: { ...(opts.board ?? BOARD), "hockey/nhl": nhl, ...opts.extra } };
   await page.route("**/apis/v2/scoreboard/header**", (route: Route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: '{"sports":[]}' }));
@@ -245,4 +245,52 @@ test("Ratings off: Also live lines show the network, no badge, no score", async 
   await expect(also).not.toContainText(/GREAT|GOOD|MEH|SKIP/);
   await expect(also.locator('[data-schedule-league="ncaaf"] [data-schedule-row]').first()).toContainText("ESPN");
   expect(await also.innerText()).not.toMatch(RATED_SCORE);
+});
+
+// Jacob 10/17 on the mockup: "Also live" is as wide as the open columns (its
+// edges line up with the first and last column) and starts ~20px under the
+// tallest one (the 60vh column floor drops while it shows lines).
+for (const [cols, width, slots] of [
+  [2, 1120, ["empty", "empty", "empty"]],
+  [3, 1120, ["nba", "empty", "empty"]],
+  [5, 1440, ["nba", "epl", "mls"]],
+] as const) {
+  test(`${cols} columns at ${width}px: Also live spans the columns, ~20px under the tallest`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await seed(page, "dark", [NHL_LIVE], {
+      showRatings: true,
+      second: "nfl",
+      slots: [...slots],
+      board: { "baseball/mlb": [MLB_LIVE], "football/nfl": [] },
+      extra: { "football/college-football": NCAAF_LIVE },
+    });
+    await page.goto("/");
+    await expect(card(page, "Mariners at Blue Jays")).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId("live-toggle").click();
+    const also = page.locator('section[data-testid="also-live"]');
+    // NCAAF answers first; the mocked fan-out can hold NHL past the wait.
+    await expect(also.locator('[data-schedule-league="ncaaf"] [data-schedule-row]')).toHaveCount(3, { timeout: 20_000 });
+    await expect(page.locator("[data-league-column]")).toHaveCount(cols);
+    await expect.poll(async () => {
+      const boxes = await page.locator("[data-league-column]").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+      const sec = (await also.boundingBox())!;
+      const left = Math.min(...boxes.map((b) => b.left));
+      const right = Math.max(...boxes.map((b) => b.right));
+      const bottom = Math.max(...boxes.map((b) => b.bottom));
+      const head = (await also.getByRole("heading", { name: "Also live" }).boundingBox())!;
+      return Math.abs(sec.x - left) <= 1 && Math.abs(sec.x + sec.width - right) <= 1 && head.y - bottom >= 12 && head.y - bottom <= 32;
+    }, { timeout: 10_000 }).toBe(true);
+  });
+}
+
+test("390px: Also live stays full width", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page, "light", [NHL_LIVE], { second: "nfl", board: { "baseball/mlb": [MLB_LIVE], "football/nfl": [] } });
+  await page.goto("/");
+  await expect(card(page, "Mariners at Blue Jays")).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("live-toggle").click();
+  const also = page.locator('section[data-testid="also-live"]');
+  await expect(also.locator("[data-schedule-row]")).toHaveCount(1, { timeout: 20_000 });
+  const sec = (await also.boundingBox())!;
+  expect(sec.width).toBeGreaterThan(340);
 });
