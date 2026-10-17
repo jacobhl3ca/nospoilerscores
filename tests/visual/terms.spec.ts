@@ -19,6 +19,8 @@ for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) 
       "Third-party data and content",
       "Trademarks",
       "Takedown requests",
+      "Copyright (DMCA)",
+      "Bracket picks: official rules",
       "Governing law",
       "Changes and contact",
     ]);
