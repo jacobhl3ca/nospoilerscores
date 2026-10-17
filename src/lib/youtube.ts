@@ -231,7 +231,7 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // season apart (HIGHLIGHT_MATCH_GATES).
   top14: "TOP 14 - Officiel",
   // Champions Cup + Challenge Cup (lit 2026-10-15): both cups post to ONE
-  // channel. Behind a per-cup title token, the home-first + 400 s gates, the
+  // channel. Behind a per-cup title token, the home-first + 240 s gates, the
   // cup team names (epcrTeamNames.json) and an always-covered title, because
   // the titles lead with a verdict ("Champions!", "Historic Victory"). 2025-26
   // re-probe: 91 of 97 games with a cut, 0 wrong. See the rugbychamp note above
@@ -394,7 +394,7 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // because ESPN's "Sharks" is inside "Sale Sharks". The doubtful one: Saracens
 // v Toulouse got "Before They Meet Again | Saracens v Stade Toulousain", a
 // 325 s preview posted in July, after the game, so the age gate let it pass.
-// The fixes: a cup title token each, the home-first order gate, a 400 s floor
+// The fixes: a cup title token each, the home-first order gate, a 240 s floor
 // (match cuts run 503–670 s), the cup club names in epcrTeamNames.json
 // ("Sharks" queries as "Hollywoodbets Sharks", "Bristol Rugby" as "Bristol
 // Bears", "Perpignan" as "USAP", …), "sale sharks" and "newcastle red bulls" in
@@ -880,15 +880,18 @@ export function cflPlayoffTitleTokens(playoffLabel?: string | null): string[] {
 // rugbychamp + challengecup: the EPCR channel names the home club first
 // (every 2025-26 match cut), and its cuts run 503–670 s. Its previews ("Before
 // They Meet Again | Saracens v Stade Toulousain", 325 s, posted in July for a
-// January game) and try clips are shorter, so the floor is 400 s.
+// January game) is dropped by the worker's posted-before-game gate. In
+// 2026-27 the channel posts only "Instant Highlights" cuts, 300–350 s (10/10
+// on Oct 16–17); its try clips are Shorts under 60 s. So the floor is 240 s
+// (400 s refused every 2026-27 cut).
 // Mirrored by HL_MATCH_GATES in scripts/prebake-news.mjs — keep in sync.
 export type HighlightMatchGates = { homeFirst?: boolean; minSec?: number };
 const HIGHLIGHT_MATCH_GATES: Record<string, HighlightMatchGates> = {
   nations: { homeFirst: true, minSec: 300 },
   top14: { homeFirst: true, minSec: 120 },
   uel: { homeFirst: true, minSec: 300 },
-  rugbychamp: { homeFirst: true, minSec: 400 },
-  challengecup: { homeFirst: true, minSec: 400 },
+  rugbychamp: { homeFirst: true, minSec: 240 },
+  challengecup: { homeFirst: true, minSec: 240 },
 };
 
 export function getHighlightMatchGates(sport: string): HighlightMatchGates | undefined {

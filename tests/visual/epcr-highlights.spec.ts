@@ -57,12 +57,12 @@ async function seed(page: Page, lookups: URL[]) {
   await page.route("**/news/highlights.json", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: '{"games":{}}' }));
   // The live lookup answers only the request the app must send: the EPCR
-  // channel, strict, the cup token and the home-first + 400 s gates.
+  // channel, strict, the cup token and the home-first + 240 s gates.
   await page.route("**/api/youtube?**", (route) => {
     const url = new URL(route.request().url());
     lookups.push(url);
     const p = url.searchParams;
-    const ok = p.get("channel") === CHANNEL && p.get("strict") === "1" && p.get("comp") === "champions cup" && p.get("order") === "home" && p.get("minsec") === "400";
+    const ok = p.get("channel") === CHANNEL && p.get("strict") === "1" && p.get("comp") === "champions cup" && p.get("order") === "home" && p.get("minsec") === "240";
     return route.fulfill({ status: ok ? 200 : 404, contentType: "application/json", body: ok ? JSON.stringify({ videoId: VID, lengthSec: 643 }) : '{"error":"No results"}' });
   });
   await page.route("https://www.youtube.com/iframe_api", (route) => route.fulfill({ status: 200, contentType: "application/javascript", body: FAKE_YT_API }));

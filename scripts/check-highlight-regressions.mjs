@@ -352,7 +352,7 @@ check(
 );
 // Champions Cup + Challenge Cup are LIT (2026-10-15) on their shared channel,
 // "Investec Champions Cup & EPCR Challenge Cup", behind a cup title token, the
-// home-first + 400 s gates, the cup club names and an always-covered title (the
+// home-first + 240 s gates, the cup club names and an always-covered title (the
 // titles lead with a verdict). The monitor scans both.
 const EPCR_CHANNEL = "Investec Champions Cup & EPCR Challenge Cup";
 for (const [sport, path, token] of [
@@ -364,7 +364,7 @@ for (const [sport, path, token] of [
     youtube.hasNoTrustedHighlightSource(sport) === false &&
       youtube.getOfficialChannelName(sport) === EPCR_CHANNEL &&
       JSON.stringify(youtube.getCompetitionTitleTokens(sport)) === JSON.stringify([token]) &&
-      youtube.highlightMatchGateParams(youtube.getHighlightMatchGates(sport)) === "&order=home&minsec=400" &&
+      youtube.highlightMatchGateParams(youtube.getHighlightMatchGates(sport)) === "&order=home&minsec=240" &&
       monitor.includes(`"${path}"`),
   );
 }
