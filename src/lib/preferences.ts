@@ -454,6 +454,13 @@ export interface Preferences {
   // between two eliminated teams folds into one tap-to-open row at the end of
   // its day. Opt-in, undefined = off. See lib/eliminatedFold.ts.
   foldEliminatedGames?: boolean;
+  // The Live filter's "Also live" list under the board (Jacob 10/17).
+  // `alsoLive: false` = the header's "Don't show again" (Settings "Also live
+  // under the board" brings it back); the fan-out fetch stops too. Undefined
+  // = shown. `alsoLiveCollapsed` = the header chevron rolled it up. Read
+  // through alsoLiveShown() so an old blob without the keys reads as on.
+  alsoLive?: boolean;
+  alsoLiveCollapsed?: boolean;
   // "Add the World Cup column" banner dismissed (only shows during the
   // tournament when no visible column is the World Cup).
   wcBannerDismissed?: boolean;
@@ -791,6 +798,11 @@ export function boardHiddenLeagues(p: { hiddenLeagues?: Sport[]; catalogHiddenLe
 
 // A fresh copy of the install defaults. The signed-in merge starts from these,
 // not from this device's blob — see mergeRemotePreferences in HomeContent.
+// "Also live" shows unless the user turned it off (undefined = on).
+export function alsoLiveShown(p: Pick<Preferences, "alsoLive">): boolean {
+  return p.alsoLive !== false;
+}
+
 export function defaultPreferences(): Preferences {
   return { ...defaults };
 }

@@ -60,7 +60,11 @@ type SeedOpts = { showRatings?: boolean; second?: string; slots?: string[]; boar
 
 async function seed(page: Page, theme: "light" | "dark", nhl: unknown[], opts: SeedOpts = {}) {
   await page.clock.setFixedTime(NOW);
-  await page.addInitScript(({ theme, showRatings, second, slots }) => localStorage.setItem("nss-preferences", JSON.stringify({
+  // Seeded once per tab, so a reload keeps what the test changed.
+  await page.addInitScript(({ theme, showRatings, second, slots }) => {
+    if (sessionStorage.getItem("seeded")) return;
+    sessionStorage.setItem("seeded", "1");
+    localStorage.setItem("nss-preferences", JSON.stringify({
     favoriteLeagues: [],
     favoriteTeams: [],
     theme,
@@ -77,7 +81,8 @@ async function seed(page: Page, theme: "light" | "dark", nhl: unknown[], opts: S
     hiddenLeagues: ["best", "top"],
     defaultDateMode: "today",
     defaultLandingView: "scores",
-  })), { theme, showRatings: !!opts.showRatings, second: opts.second ?? "ncaaf", slots: opts.slots ?? ["empty", "empty", "empty"] });
+  }));
+  }, { theme, showRatings: !!opts.showRatings, second: opts.second ?? "ncaaf", slots: opts.slots ?? ["empty", "empty", "empty"] });
   const boards: Record<string, Record<string, unknown[]>> = { [TODAY]: { ...(opts.board ?? BOARD), "hockey/nhl": nhl, ...opts.extra } };
   await page.route("**/apis/v2/scoreboard/header**", (route: Route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: '{"sports":[]}' }));
@@ -248,14 +253,34 @@ test("Ratings off: Also live lines show the network, no badge, no score", async 
 });
 
 // Jacob 10/17 on the mockup: "Also live" is as wide as the open columns (its
-// edges line up with the first and last column) and starts ~20px under the
-// tallest one (the 60vh column floor drops while it shows lines).
+// left edge on the first column's, its right edge on the + tile's or the last
+// column's) at every width, and starts ~20px under the tallest column (the
+// 60vh column floor drops while it shows lines).
+async function expectEdges(page: Page) {
+  const also = page.locator('section[data-testid="also-live"]');
+  await expect.poll(async () => {
+    const boxes = await page.locator("main [data-league-column], main [data-add-column]").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+    const cols = await page.locator("main [data-league-column]").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+    const sec = (await also.boundingBox())!;
+    const left = Math.min(...boxes.map((b) => b.left));
+    const right = Math.max(...boxes.map((b) => b.right));
+    const bottom = Math.max(...cols.map((b) => b.bottom));
+    const head = (await also.getByTestId("also-live-toggle").boundingBox())!;
+    return {
+      left: Math.abs(sec.x - left) <= 2,
+      right: Math.abs(sec.x + sec.width - right) <= 2,
+      gap: head.y - bottom >= 12 && head.y - bottom <= 32,
+    };
+  }, { timeout: 10_000 }).toEqual({ left: true, right: true, gap: true });
+}
+
 for (const [cols, width, slots] of [
+  [2, 390, ["empty", "empty", "empty"]],
   [2, 1120, ["empty", "empty", "empty"]],
   [3, 1120, ["nba", "empty", "empty"]],
   [5, 1440, ["nba", "epl", "mls"]],
 ] as const) {
-  test(`${cols} columns at ${width}px: Also live spans the columns, ~20px under the tallest`, async ({ page }) => {
+  test(`${cols} columns at ${width}px: Also live edges sit on the column row's edges, ~20px under the tallest`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await seed(page, "dark", [NHL_LIVE], {
       showRatings: true,
@@ -270,27 +295,69 @@ for (const [cols, width, slots] of [
     const also = page.locator('section[data-testid="also-live"]');
     // NCAAF answers first; the mocked fan-out can hold NHL past the wait.
     await expect(also.locator('[data-schedule-league="ncaaf"] [data-schedule-row]')).toHaveCount(3, { timeout: 20_000 });
-    await expect(page.locator("[data-league-column]")).toHaveCount(cols);
-    await expect.poll(async () => {
-      const boxes = await page.locator("[data-league-column]").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
-      const sec = (await also.boundingBox())!;
-      const left = Math.min(...boxes.map((b) => b.left));
-      const right = Math.max(...boxes.map((b) => b.right));
-      const bottom = Math.max(...boxes.map((b) => b.bottom));
-      const head = (await also.getByRole("heading", { name: "Also live" }).boundingBox())!;
-      return Math.abs(sec.x - left) <= 1 && Math.abs(sec.x + sec.width - right) <= 1 && head.y - bottom >= 12 && head.y - bottom <= 32;
-    }, { timeout: 10_000 }).toBe(true);
+    await expect(page.locator("main [data-league-column]")).toHaveCount(cols);
+    await expectEdges(page);
   });
 }
 
-test("390px: Also live stays full width", async ({ page }) => {
+// Jacob 10/17 round 3: a chevron rolls the list up (remembered, count kept),
+// "Don't show again" hides it, and Settings brings it back.
+test("chevron rolls Also live up, shows the count, and stays rolled up after a reload", async ({ page, browserName }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await seed(page, "light", [NHL_LIVE], { second: "nfl", board: { "baseball/mlb": [MLB_LIVE], "football/nfl": [] } });
+  await seed(page, "dark", [NHL_LIVE], {
+    showRatings: true,
+    second: "nfl",
+    board: { "baseball/mlb": [MLB_LIVE], "football/nfl": [] },
+    extra: { "football/college-football": NCAAF_LIVE },
+  });
+  await page.goto("/");
+  await expect(card(page, "Mariners at Blue Jays")).toBeVisible({ timeout: 30_000 });
+  const live = page.getByTestId("live-toggle");
+  await live.click();
+  const also = page.locator('section[data-testid="also-live"]');
+  await expect(also.locator("[data-schedule-row]")).toHaveCount(4, { timeout: 20_000 });
+  const toggle = also.getByTestId("also-live-toggle");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(toggle).toHaveText("Also live");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle).toHaveText("Also live · 4");
+  await expect(also.locator("[data-schedule-row]")).toHaveCount(0);
+  await expect(also).not.toContainText(/GREAT|GOOD|MEH|SKIP/);
+  await shot(page, `mockup-after-390-rolled-up-${browserName}-dark`);
+
+  await page.reload();
+  await expect(card(page, "Mariners at Blue Jays")).toBeVisible({ timeout: 30_000 });
+  if ((await live.getAttribute("aria-pressed")) !== "true") await live.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false", { timeout: 20_000 });
+  await expect(also.locator("[data-schedule-row]")).toHaveCount(0);
+  await toggle.click();
+  await expect(also.locator("[data-schedule-row]").first()).toBeVisible();
+});
+
+test("Don't show again hides Also live; the Settings switch brings it back", async ({ page }) => {
+  await page.setViewportSize({ width: 1120, height: 900 });
+  await seed(page, "light", [NHL_LIVE], {
+    second: "nfl",
+    board: { "baseball/mlb": [MLB_LIVE], "football/nfl": [] },
+    extra: { "football/college-football": NCAAF_LIVE },
+  });
   await page.goto("/");
   await expect(card(page, "Mariners at Blue Jays")).toBeVisible({ timeout: 30_000 });
   await page.getByTestId("live-toggle").click();
   const also = page.locator('section[data-testid="also-live"]');
-  await expect(also.locator("[data-schedule-row]")).toHaveCount(1, { timeout: 20_000 });
-  const sec = (await also.boundingBox())!;
-  expect(sec.width).toBeGreaterThan(340);
+  await expect(also.locator('[data-schedule-league="ncaaf"] [data-schedule-row]')).toHaveCount(3, { timeout: 20_000 });
+  await also.getByTestId("also-live-hide").click();
+  await expect(page.getByTestId("also-live")).toHaveCount(0);
+  // The pill stays on; only the list is gone.
+  await expect(page.getByTestId("live-toggle")).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Open settings", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  const sw = settings.getByRole("checkbox", { name: /Also live under the board/ });
+  await expect(sw).not.toBeChecked();
+  await sw.check();
+  await settings.getByRole("button", { name: "Close settings" }).first().click();
+  await expect(also.locator('[data-schedule-league="ncaaf"] [data-schedule-row]')).toHaveCount(3, { timeout: 20_000 });
+  await expect(also.getByTestId("also-live-toggle")).toHaveAttribute("aria-expanded", "true");
 });

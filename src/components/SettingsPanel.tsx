@@ -16,6 +16,7 @@ import { normalizeFrontend } from "@/lib/frontendLinks";
 import { BRACKET_RESULTS_ALWAYS_KEY, loadResultsAlways } from "@/lib/playoffPicture";
 import { FREQUENT_RECORD_LEAGUES, recordKeysForLeagues, toggleRecordLeague, upcomingRecordLeagues } from "@/lib/upcomingRecords";
 import {
+  alsoLiveShown,
   boardHiddenLeagues,
   Preferences,
   Theme,
@@ -935,6 +936,8 @@ export default function SettingsPanel({
     hideUpcomingRecords: undefined,
     hideRanks: undefined,
     foldEliminatedGames: undefined,
+    alsoLive: undefined,
+    alsoLiveCollapsed: undefined,
     // Reset means "act like a fresh install", and on a fresh install the
     // stars are on for two visits before the app hides them itself. Leaving
     // the counter at 3 would re-hide them on the very next open, which reads
@@ -1679,6 +1682,14 @@ export default function SettingsPanel({
               hint="Games between two teams already out of the playoffs fold into one row."
               checked={!!prefs.foldEliminatedGames}
               onChange={(v) => updatePrefs({ foldEliminatedGames: v ? true : undefined })}
+            />
+            {/* The "Don't show again" link on the Also live header writes
+                alsoLive: false; this switch brings the list back, open. */}
+            <ToggleRow
+              label="Also live under the board"
+              hint="With Live on, live games from leagues that have no column"
+              checked={alsoLiveShown(prefs)}
+              onChange={(v) => updatePrefs(v ? { alsoLive: undefined, alsoLiveCollapsed: undefined } : { alsoLive: false })}
             />
           </Section>
 

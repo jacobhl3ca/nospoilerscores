@@ -8,7 +8,7 @@ import { enabledCategories } from "@/lib/sensitiveNews";
 import { NewsMarkSeenContext, markSeen, seenKeys, setSeenSync, useNewsSeenTracker } from "@/lib/newsSeen";
 import { pullSeen, pushSeen } from "@/lib/seenSync";
 import { pushWidgetPrefs } from "@/lib/widgetBridge";
-import { Preferences, Theme, NewsLayout, type NewsCardPrefs, type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
+import { Preferences, Theme, NewsLayout, type NewsCardPrefs, type PostFilter, postFilterOf, postFilterPatch, globalPostFilterPatch, clearCardField, newsLayoutOf, defaultPreferences, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites, shareExtrasFromPrefs, sharedExtrasPatch, boardHiddenLeagues, alsoLiveShown, SHARE_PARAM_KEYS, PREFS_STORAGE_KEY } from "@/lib/preferences";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { mergeAddMorePicks } from "@/lib/addMorePicks";
 import { accountPrefsBase, carryCardPrefs, samePrefs } from "@/lib/prefsMerge";
@@ -2891,17 +2891,18 @@ export default function HomeContent({
   // extra one; wait for it.
   const scheduleWaitBoard = loading && leagues.length === 0;
   // The Live filter's "Also live" list pulls the same leagues (Today only).
-  const alsoLiveOn = liveOnly && !showNews && !showSchedule && selectedDate === getDateString(0);
-  // "Also live" spans the open columns (Jacob 10/17): its left and right
-  // edges line up with the first and last board column at 2, 3 or 5
-  // columns. Measured, because flex-1 columns with a max width have no CSS
-  // total to copy. Phones keep the full width.
+  const alsoLiveOn = liveOnly && !showNews && !showSchedule && selectedDate === getDateString(0) && alsoLiveShown(prefs);
+  // "Also live" spans the open columns (Jacob 10/17, every width): its left
+  // edge = the first board column's left edge, its right edge = the + tile's
+  // right edge when the row has one, else the last column's. Measured off
+  // the row itself, because flex-1 columns with a max width have no CSS
+  // total to copy.
   const [alsoLiveEl, setAlsoLiveEl] = useState<HTMLDivElement | null>(null);
   const [alsoLiveSpan, setAlsoLiveSpan] = useState<{ left: number; width: number } | null>(null);
   useLayoutEffect(() => {
-    if (!alsoLiveEl || isMobile) { setAlsoLiveSpan(null); return; }
+    if (!alsoLiveEl) { setAlsoLiveSpan(null); return; }
     const main = alsoLiveEl.closest("main") ?? document.body;
-    const columns = () => Array.from(main.querySelectorAll<HTMLElement>("[data-league-column]"));
+    const columns = () => Array.from(main.querySelectorAll<HTMLElement>("[data-league-column], [data-add-column]"));
     const measure = () => {
       let left = Infinity;
       let right = -Infinity;
@@ -2920,7 +2921,7 @@ export default function HomeContent({
     ro.observe(alsoLiveEl);
     for (const c of columns()) ro.observe(c);
     return () => ro.disconnect();
-  }, [alsoLiveEl, isMobile, leagues]);
+  }, [alsoLiveEl, leagues]);
   useEffect(() => {
     if (!(showSchedule || alsoLiveOn) || !selectedDate || scheduleWaitBoard) return;
     let live = true;
@@ -3975,6 +3976,8 @@ export default function HomeContent({
     if (!alsoLive) return null;
     const { tz, inputs, pending, groups } = alsoLive;
     if (groups.length > 0) {
+      const collapsed = !!prefs.alsoLiveCollapsed;
+      const liveCount = groups.reduce((n, g) => n + g.rows.length, 0);
       return (
         <div ref={setAlsoLiveEl}>
         <section
@@ -3983,11 +3986,40 @@ export default function HomeContent({
           className="pt-5"
           style={alsoLiveSpan ? { marginLeft: alsoLiveSpan.left, width: alsoLiveSpan.width } : undefined}
         >
-          <h2 id="also-live-title" className="flex items-center gap-1.5 text-sm font-semibold mb-2 px-1" style={{ color: "var(--text-muted)" }}>
-            <span aria-hidden="true" className="w-2 h-2 rounded-full" style={{ background: "#dc2626" }} />
-            Also live
-          </h2>
-          <div className="flex flex-col gap-3">
+          {/* Header (Jacob 10/17): the chevron rolls the list up and the
+              choice is remembered (alsoLiveCollapsed); rolled up, the count
+              stays. "Don't show again" sets alsoLive: false, which also stops
+              the fan-out; Settings "Also live under the board" restores it. */}
+          <div className="flex items-center gap-3 mb-2 px-1">
+            <h2 id="also-live-title" className="flex-1 min-w-0 text-sm font-semibold">
+              <button
+                type="button"
+                data-testid="also-live-toggle"
+                aria-expanded={!collapsed}
+                aria-controls="also-live-list"
+                onClick={() => updatePrefs({ alsoLiveCollapsed: collapsed ? undefined : true })}
+                className="w-full flex items-center gap-1.5 cursor-pointer text-left"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <span aria-hidden="true" className="w-2 h-2 rounded-full shrink-0" style={{ background: "#dc2626" }} />
+                <span>Also live{collapsed ? ` · ${liveCount}` : ""}</span>
+                <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto shrink-0 transition-transform" style={{ transform: collapsed ? "rotate(-90deg)" : undefined }}>
+                  <path d="M5 8l5 5 5-5" />
+                </svg>
+              </button>
+            </h2>
+            <button
+              type="button"
+              data-testid="also-live-hide"
+              onClick={() => updatePrefs({ alsoLive: false })}
+              className="shrink-0 text-xs underline underline-offset-2 cursor-pointer"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Don&apos;t show again
+            </button>
+          </div>
+          {!collapsed && (<>
+          <div id="also-live-list" className="flex flex-col gap-3">
             {groups.map((g) => (
               <div key={g.sport} data-schedule-league={g.sport} className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--bg-card)" }}>
                 <div className="flex items-center gap-2 px-3 pt-2 pb-1 text-sm font-bold">
@@ -4002,6 +4034,7 @@ export default function HomeContent({
             ))}
           </div>
           {pending > 0 && <p className="text-center text-xs py-2" style={{ color: "var(--text-muted)" }}>Checking more leagues…</p>}
+          </>)}
         </section>
         </div>
       );
@@ -6388,7 +6421,7 @@ export default function HomeContent({
               singleColumn ? (
                 <div className="mt-1"><AddColumnButton onClick={onAddColumn} /></div>
               ) : (
-                <div className="flex items-start pt-7 shrink-0"><AddColumnButton onClick={onAddColumn} /></div>
+                <div data-add-column="" className="flex items-start pt-7 shrink-0"><AddColumnButton onClick={onAddColumn} /></div>
               )
             ) : null;
 
