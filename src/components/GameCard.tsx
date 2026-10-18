@@ -23,6 +23,7 @@ import { useWatchQueue } from "@/components/WatchQueueContext";
 import { useHideRanks } from "@/components/HideRanksContext";
 import { shortNetwork } from "@/lib/networkShort";
 import { TeamLogo } from "@/components/TeamLogo";
+import { ratingTier } from "@/lib/ratingTier";
 import { getViewerCountry, KNOWN_COUNTRIES, subscribeViewerCountry } from "@/lib/viewerCountry";
 import { rightsHolder } from "@/lib/rightsHolders";
 
@@ -98,24 +99,9 @@ const POLL_RANK_TITLE: Partial<Record<Sport, string>> = { ncaah: "Top 20", ncaaw
 // Exported for the climbing round cards (EventCard), which rate finals with
 // the same four words.
 export function RatingBadge({ rating }: { rating: number }) {
-  // The badge only renders for a real numeric rating (see showRating gate below),
-  // and this chain is exhaustive, so the four tiers below are the only outcomes —
-  // GREAT/GOOD/MEH/SKIP, matching the legend and the detail modal's ratingTier.
-  let color: string;
-  let label: string;
-  if (rating >= 85) {
-    color = "bg-green-600";
-    label = "GREAT";
-  } else if (rating >= 70) {
-    color = "bg-yellow-600";
-    label = "GOOD";
-  } else if (rating >= 50) {
-    color = "bg-orange-600";
-    label = "MEH";
-  } else {
-    color = "bg-red-700";
-    label = "SKIP";
-  }
+  // The badge only renders for a real numeric rating (see showRating gate
+  // below); the tier words come from the one shared chain.
+  const { label, bg: color } = ratingTier(rating);
 
   return (
     // Screen readers otherwise announce a bare "MEH"/"SKIP" mid-card with no hint

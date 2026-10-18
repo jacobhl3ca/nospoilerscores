@@ -19,6 +19,7 @@ import {
   getSecondaryChannels,
   fetchFirstVideoId,
 } from "@/lib/youtube";
+import { ratingTier } from "@/lib/ratingTier";
 
 interface GolfLeaderboardProps {
   tournament: GolfTournament;
@@ -34,24 +35,9 @@ const TOP25_SHOW = 25;
 type ExpandLevel = "collapsed" | "top25" | "all";
 
 function RatingBadge({ rating }: { rating: number }) {
-  // The badge only renders for a real numeric rating, and this chain is
-  // exhaustive, so the four tiers below are the only outcomes — GREAT/GOOD/MEH/
-  // SKIP, matching GameCard's badge, the legend, and the detail modal's ratingTier.
-  let color: string;
-  let label: string;
-  if (rating >= 85) {
-    color = "bg-green-600";
-    label = "GREAT";
-  } else if (rating >= 70) {
-    color = "bg-yellow-600";
-    label = "GOOD";
-  } else if (rating >= 50) {
-    color = "bg-orange-600";
-    label = "MEH";
-  } else {
-    color = "bg-red-700";
-    label = "SKIP";
-  }
+  // The badge only renders for a real numeric rating; the tier words come
+  // from the one shared chain (GameCard, the modal and the schedule use it).
+  const { label, bg: color } = ratingTier(rating);
   return (
     // Screen readers otherwise announce a bare "MEH"/"SKIP" mid-card with no hint
     // it's the round's worth-watching rating. role="img" + a spoken aria-label give

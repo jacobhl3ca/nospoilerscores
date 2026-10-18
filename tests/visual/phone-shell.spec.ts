@@ -123,6 +123,10 @@ for (const theme of ["light", "dark"] as const) {
       const live = header.getByTestId("live-toggle");
       await expect(live).toBeVisible();
       await expect(live).toHaveAttribute("aria-pressed", "false");
+      // One board game is live (OU at UGA): red dot + the count.
+      await expect(live).toHaveAttribute("data-live-count", "1");
+      await expect(live).toHaveText("Live 1");
+      expect(await live.getByTestId("live-dot").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(220, 38, 38)");
       await expect(header.getByRole("button", { name: "Open settings" })).toBeVisible();
       // One row: wordmark, Live and gear share a middle band.
       const boxes = await Promise.all([
@@ -157,6 +161,9 @@ for (const theme of ["light", "dark"] as const) {
       await expect(strip.getByRole("button", { name: "Sun, Sep 27" })).toHaveAttribute("aria-current", "date");
       await expect(card(page, "Mets at Braves")).toBeVisible({ timeout: 15_000 });
       await expect(strip.getByRole("button", { name: "Today" })).not.toHaveAttribute("aria-current", "date");
+      // Another day: the pill stays, grey, with no count.
+      await expect(page.getByTestId("live-toggle")).toHaveAttribute("data-live-count", "0");
+      await expect(page.getByTestId("live-toggle")).toHaveText("Live");
     });
 
     test("Live on → only live cards; off → full board", async ({ page, browserName }) => {

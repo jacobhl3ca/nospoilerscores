@@ -989,6 +989,10 @@ function FinalDivider() {
   );
 }
 
+// A board column's default width. HomeContent drops the 60vh floor when the
+// Live filter's "Also live" list sits under the board.
+export const LEAGUE_COLUMN_WIDTH = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]";
+
 export default function LeagueColumn({
   league: rawLeague,
   favoriteTeams,
@@ -1028,7 +1032,7 @@ export default function LeagueColumn({
   onRetry,
   slotIdx,
   onReorderSlots,
-  widthClassName = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]",
+  widthClassName = LEAGUE_COLUMN_WIDTH,
   condense,
   footer,
   topCard,
