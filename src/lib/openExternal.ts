@@ -42,7 +42,7 @@
 // lib/youtube.ts. openExternal only runs when no specific video resolves.
 
 import { parseYouTubeId } from "./youtubeLink.ts";
-import { gameRef, tvChannelLink, type GameRef } from "./tvChannelLinks.ts";
+import { gameRef, tvChannelLink, tvChannelLinkOnClick, type GameRef } from "./tvChannelLinks.ts";
 import { frontendConfig, rewriteExternalUrl } from "./frontendLinks.ts";
 import type { Game } from "./types";
 import { trackEvent } from "./track.ts";
@@ -254,22 +254,11 @@ export function openAppScheme(url: string): void {
   window.location.assign(url);
 }
 
-// `onClick` for an `<a>` whose href is an app scheme (a TV channel link:
-// iina://, vlc-x-callback://). Routes through openAppScheme so Safari leaves no
-// empty tab behind and the wrapper hands the scheme to the OS.
-export function handleAppSchemeClick(url: string): (e: React.MouseEvent) => void {
-  return (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    openAppScheme(url);
-  };
-}
-
 // Props for a network chip's `<a>`: the personal TV channel link when that
 // network is on the Settings list (lib/tvChannelLinks.ts), else the web link.
-// `game` fills a per-game (`{game}`) line. The click asks the list again, so a
-// per-game pre-check that came back "no stream" after render opens the site.
-// `league` is only for the tv-link-open Umami event.
+// `game` fills a per-game (`{game}`) line. The click runs that line's
+// pre-check (never the render, see tvChannelLinks.ts), so "no stream for this
+// game" opens the site instead. `league` is only for the tv-link-open Umami event.
 export function watchLinkProps(network: string, webHref: string, game?: GameRef, league?: string) {
   const tv = tvChannelLink(network, game);
   if (tv) {
@@ -277,12 +266,15 @@ export function watchLinkProps(network: string, webHref: string, game?: GameRef,
       href: tv,
       title: `Watch ${network} on your TV`,
       onClick: (e: React.MouseEvent) => {
-        const now = tvChannelLink(network, game);
-        if (now) {
-          trackTvLink(network, league);
-          handleAppSchemeClick(now)(e);
-        }
-        else handleExternalClick(webHref)(e);
+        e.stopPropagation();
+        e.preventDefault();
+        void tvChannelLinkOnClick(network, game).then((now) => {
+          if (now) {
+            trackTvLink(network, league);
+            openAppScheme(now);
+          }
+          else openExternal(webHref);
+        });
       },
     };
   }
@@ -341,15 +333,23 @@ export function liveWatchProps(game: LiveGame) {
   };
 }
 
-// Open the live stream for a button (no `<a>`). False when there is nothing to open.
+// Open the live stream for a button (no `<a>`). False when there is nothing to
+// open. The per-game pre-check runs here, on the click: a broadcaster with "no
+// stream for this game" gives way to the next listed one, then the web stream.
 export function openLiveWatch(game: LiveGame): boolean {
-  const live = liveWatchUrl(game);
-  if (!live) return false;
-  if (live.scheme) {
-    trackTvLink(live.network, game.sport);
-    openAppScheme(live.url);
-  }
-  else openExternal(live.url);
+  if (!liveWatchUrl(game)) return false;
+  void (async () => {
+    const ref = gameRef(game);
+    for (const network of game.broadcasts ?? []) {
+      const tv = await tvChannelLinkOnClick(network, ref);
+      if (tv) {
+        trackTvLink(network, game.sport);
+        openAppScheme(tv);
+        return;
+      }
+    }
+    if (game.streamUrl) openExternal(game.streamUrl);
+  })();
   return true;
 }
 

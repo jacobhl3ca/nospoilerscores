@@ -75,10 +75,11 @@ test("a tracker that loads late still gets the event", async () => {
   assert.deepEqual(sent, ["league-picker-shown"]);
 });
 
-test("tv-link-open fires once per tap on a listed chip, with network and league only", () => {
+test("tv-link-open fires once per tap on a listed chip, with network and league only", async () => {
   const { sent, opened } = fakeWindow();
   setTvChannelLinks("ESPN = http://tuner.test/espn", "raw");
   watchLinkProps("ESPN", "https://www.espn.com/watch", undefined, "nfl").onClick(click());
+  await new Promise((r) => setTimeout(r, 0)); // the click opens after the (here empty) pre-check
   assert.deepEqual(sent, [{ name: "tv-link-open", data: { network: "ESPN", league: "nfl" } }]);
   assert.deepEqual(opened, ["http://tuner.test/espn"]);
   setTvChannelLinks("", "auto");
@@ -91,11 +92,12 @@ test("an unlisted chip opens the web link and sends nothing", () => {
   assert.deepEqual(sent, []);
 });
 
-test("the live clock's own-stream open counts too; a web stream does not", () => {
+test("the live clock's own-stream open counts too; a web stream does not", async () => {
   const { sent } = fakeWindow();
   setTvChannelLinks("NBC = http://tuner.test/nbc", "raw");
   openLiveWatch({ broadcasts: ["NBC"], streamUrl: "https://www.nbc.com/live", sport: "nfl" });
   setTvChannelLinks("", "auto");
   openLiveWatch({ broadcasts: ["NBC"], streamUrl: "https://www.nbc.com/live", sport: "nfl" });
+  await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(sent, [{ name: "tv-link-open", data: { network: "NBC", league: "nfl" } }]);
 });

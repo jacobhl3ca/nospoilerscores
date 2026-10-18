@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- A 1-row widget: ‹ one game › (HideScoreWidgetProvider). The arrows
-     fill the body's height so they are easy to hit. -->
+     fill the body's height so they are easy to hit. A tap on the game row
+     is › too, so a near miss turns the page instead of opening the app. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"

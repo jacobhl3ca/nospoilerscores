@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type AnimationEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type AnimationEvent, type ReactNode } from "react";
 import { Game, Sport, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
@@ -24,6 +24,20 @@ import { useHideRanks } from "@/components/HideRanksContext";
 import { shortNetwork } from "@/lib/networkShort";
 import { TeamLogo } from "@/components/TeamLogo";
 import { ratingTier } from "@/lib/ratingTier";
+import { getViewerCountry, KNOWN_COUNTRIES, subscribeViewerCountry } from "@/lib/viewerCountry";
+import { rightsHolder } from "@/lib/rightsHolders";
+
+// The networks a card's chip shows. ESPN lists no TV for rugby, so the Champions
+// Cup + Challenge Cup cards fall back to the broadcaster for the viewer's
+// country (lib/rightsHolders.ts), and that chip opens the broadcaster's own
+// page. The country is client-only: null on the server and while hydrating, so
+// that chip appears once the page is live and SSR markup still matches.
+function useCardBroadcasts(game: Game): { broadcasts: string[]; rightsUrl: string | null } {
+  const country = useSyncExternalStore(subscribeViewerCountry, () => getViewerCountry(), () => null);
+  if (game.broadcasts.length || country === null) return { broadcasts: game.broadcasts, rightsUrl: null };
+  const rights = rightsHolder(game.sport, country, KNOWN_COUNTRIES);
+  return rights ? { broadcasts: [rights.label], rightsUrl: rights.url } : { broadcasts: game.broadcasts, rightsUrl: null };
+}
 
 interface GameCardProps {
   game: Game;
@@ -173,9 +187,10 @@ export function CompactUpcomingCard({
   const home = game.homeTeam;
   // Tip-off time in the reader's zone — the same path as GameCard's localTime.
   const localTime = startTimeLabel(game);
-  const network = game.broadcasts[0] ?? null;
+  const { broadcasts, rightsUrl } = useCardBroadcasts(game);
+  const network = broadcasts[0] ?? null;
   const networkHref = network
-    ? ((/\b(amazon|prime)\b/i.test(network) && game.primeStreamUrl) || networkStreamUrl(network, game.id, game.sport) || sportStreamFallback(game.sport))
+    ? (rightsUrl || (/\b(amazon|prime)\b/i.test(network) && game.primeStreamUrl) || networkStreamUrl(network, game.id, game.sport) || sportStreamFallback(game.sport))
     : null;
   const cardClickable = !!onShowDetails;
   // Name the clickable card after the matchup so screen readers announce which
@@ -463,7 +478,8 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
   // watching; in Scores mode showRating is false → cards show FINAL. Series
   // state renders as a top banner above the card, not in this row.
   const hasStatusText = isLive || isFuture || !!nextGameDate || !!teamView || !isFinished;
-  const hasBroadcast = !isFinished && game.broadcasts.length > 0;
+  const { broadcasts, rightsUrl } = useCardBroadcasts(game);
+  const hasBroadcast = !isFinished && broadcasts.length > 0;
   // Listen links (lib/radio.ts) ride the same chip: no new chip on the card
   // face. Empty for a final game, so isFinished already gates them.
   const listen = useListenLinks(game);
@@ -472,7 +488,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
   // is radio but no TV. One network keeps its one-tap link (Jacob 6/9): its
   // Listen links live in the game details, so the chip never turns from a
   // link into a button when the station table lands.
-  const networksDialog = game.broadcasts.length > 1 || (hasListen && game.broadcasts.length === 0 && !isFinished);
+  const networksDialog = broadcasts.length > 1 || (hasListen && broadcasts.length === 0 && !isFinished);
   const showFinal = isFinished && !isPastDate && !teamView;
   const metaRowHasText = hasStatusText || showRating || hasBroadcast || (hasListen && networksDialog) || showFinal;
   // The 3-column phone board moves the league chip onto the card's top border
@@ -1014,6 +1030,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                       ? game.streamUrl
                       : null;
                   const href =
+                    rightsUrl ||
                     (isPrime && game.primeStreamUrl) ||
                     espnStream ||
                     mlbStream ||
@@ -1043,8 +1060,8 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                       type="button"
                       className="text-[11px] cursor-pointer hover:underline whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
-                      title={game.broadcasts.length
-                        ? `See all networks${hasListen ? " and radio" : ""}: ${game.broadcasts.join(", ")}`
+                      title={broadcasts.length
+                        ? `See all networks${hasListen ? " and radio" : ""}: ${broadcasts.join(", ")}`
                         : "Listen on the radio"}
                       // The "+N" is hidden on mobile (sm:inline), so the visible
                       // label is just the lead network — announce the popup and
@@ -1059,14 +1076,14 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                       onClick={(e) => { e.stopPropagation(); setBroadcastExpanded((v) => !v); }}
                     >
                       {/* No TV listed: the chip reads "Listen" (radio only). */}
-                      {game.broadcasts.length ? shortNetwork(game.broadcasts[0]) : "Listen"}
-                      {game.broadcasts.length > 1 && <span className="hidden sm:inline"> +{game.broadcasts.length - 1}</span>}
+                      {broadcasts.length ? shortNetwork(broadcasts[0]) : "Listen"}
+                      {broadcasts.length > 1 && <span className="hidden sm:inline"> +{broadcasts.length - 1}</span>}
                     </button>
                   );
                 }
                 return (
                   <span className="text-[11px]">
-                    {networkLink(game.broadcasts[0], 0)}
+                    {networkLink(broadcasts[0], 0)}
                   </span>
                 );
               })()}
@@ -1100,7 +1117,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                 on a phone even though every row is a tappable watch link
                 (Jacob 8/4). gap-1 keeps the rows from merging into one target. */}
             <div className="min-w-0 flex flex-col gap-1 text-xs sm:text-sm leading-tight">
-              {game.broadcasts.map((b) => {
+              {broadcasts.map((b) => {
                 const isPrime = /\b(amazon|prime)\b/i.test(b);
                 const isEspn = /\b(espn|abc)\b/i.test(b);
                 const espnStream =
@@ -1117,6 +1134,7 @@ function GameCardBody({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, 
                     ? game.streamUrl
                     : null;
                 const href =
+                  rightsUrl ||
                   (isPrime && game.primeStreamUrl) ||
                   espnStream ||
                   mlbStream ||

@@ -1,6 +1,6 @@
 "use client";
 
-import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { cloneElement, isValidElement, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LeagueData, Sport } from "@/lib/types";
 import { fetchSportTeams, getSeasonOpener, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortRank } from "@/lib/espn";
 import { TEAM_PICKER_SKIP } from "@/lib/teamLogos";
@@ -10,6 +10,7 @@ import { WATCH_QUEUE_ENABLED } from "@/lib/watchQueue";
 import { dropRemoved, noteRemoved } from "@/lib/removedLeagues";
 import { closeHiddenPins, lockBoardForRemoval, lockSlotsToBoard, restoreHiddenPins, slotPrefsPatch } from "@/lib/boardSlots";
 import { LeagueMark } from "./LeagueMark";
+import { leagueHaystack, leagueMatches } from "@/lib/leagueSearch";
 import { trackEvent } from "@/lib/track";
 import type { TvPlayer } from "@/lib/tvChannelLinks";
 import { normalizeFrontend } from "@/lib/frontendLinks";
@@ -32,6 +33,8 @@ import { setSeenSync } from "@/lib/newsSeen";
 import { AppleLogo, GoogleG } from "./ProviderLogo";
 import { getAuthState, cachedAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 import { TeamLogo } from "@/components/TeamLogo";
+import { countryForTimeZone, KNOWN_COUNTRIES } from "@/lib/viewerCountry";
+import { rightsHolder } from "@/lib/rightsHolders";
 
 interface LeagueOption {
   sport: Sport;
@@ -54,8 +57,9 @@ interface SettingsPanelProps {
   leagueOptions: LeagueOption[];
   // Opens the footer feedback modal with a league-request message prefilled.
   // Settings is the one place someone is already looking for a league that
-  // isn't there, so the ask belongs at the end of the catalog.
-  onRequestLeague?: () => void;
+  // isn't there, so the ask belongs at the end of the catalog. A search that
+  // found nothing passes its words along.
+  onRequestLeague?: (query?: string) => void;
   // Opens the same footer feedback modal with an EMPTY message, for the quiet
   // Feedback link in the legal row at the bottom of the panel.
   onOpenFeedback?: () => void;
@@ -124,6 +128,12 @@ const ZONE_PILLS: { value: ZonePill; label: string; zone?: string; name?: string
   { value: "pt", label: "PT", zone: "America/Los_Angeles", name: "Pacific" },
   { value: "other", label: "Other…" },
 ];
+// The Your country picker: every country the zone table knows, by English name.
+function countryName(code: string): string {
+  try { return new Intl.DisplayNames(["en"], { type: "region" }).of(code) || code; } catch { return code; }
+}
+const COUNTRY_OPTIONS = KNOWN_COUNTRIES.map((code) => ({ code, name: countryName(code) }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 const zoneCity = (tz: string) => (tz.split("/").pop() || tz).replace(/_/g, " ");
 // "now 9:41 AM" in a zone; a bad zone falls back to the runtime's own.
 function nowIn(tz: string): string {
@@ -380,6 +390,7 @@ export default function SettingsPanel({
 
   let deviceTimeZone = "";
   try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
+  const deviceCountry = countryForTimeZone(deviceTimeZone);
   // Time zone row: which pill is on, and whether the full list is open.
   const [zoneOtherOpen, setZoneOtherOpen] = useState(false);
   const savedZonePill = ZONE_PILLS.find((z) => z.zone && z.zone === prefs.timezone);
@@ -422,6 +433,9 @@ export default function SettingsPanel({
   // the drawer closes (Jacob 10/4: "unticked league vanishes"). View state
   // only: keys are sports plus "best" / "top" / "topnews". Cleared on open.
   const [stickyOff, setStickyOff] = useState<Set<string>>(new Set());
+  // The league picker's search box (Jacob 10/17). Cleared when the picker
+  // rolls up and each time the drawer opens.
+  const [leagueQuery, setLeagueQuery] = useState("");
   const keepSeen = (key: string, on: boolean) => {
     if (!on) setStickyOff((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
   };
@@ -436,6 +450,7 @@ export default function SettingsPanel({
     setShowLinkMore(false);
     setShowEmailForm(false);
     setStickyOff(new Set());
+    setLeagueQuery("");
     let alive = true;
     getAuthState().then((a) => { if (alive) setAuthState(a); });
     return () => { alive = false; };
@@ -468,7 +483,8 @@ export default function SettingsPanel({
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { onClose(); return; }
+      // A field that used the Esc itself (the league search empties) marks it.
+      if (e.key === "Escape") { if (!e.defaultPrevented) onClose(); return; }
       if (!undo || e.key.toLowerCase() !== "z" || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       const typing = t instanceof HTMLTextAreaElement
@@ -714,6 +730,11 @@ export default function SettingsPanel({
   const catalogHiddenCount = leagueOptions.filter((option) => catalogHidden.includes(option.sport)).length;
   const [editingCatalog, setEditingCatalog] = useState(false);
   const [catalogAll, setCatalogAll] = useState(false);
+  const leagueSearchRef = useRef<HTMLInputElement>(null);
+  const [focusLeagueSearch, setFocusLeagueSearch] = useState(0);
+  useEffect(() => {
+    if (focusLeagueSearch && catalogAll) leagueSearchRef.current?.focus();
+  }, [focusLeagueSearch, catalogAll]);
   // The catalog itself (not the slot dropdowns) now starts with offseason rows
   // hidden when the pref was never set (Jacob 9/25). This is a view default
   // only: nothing is written until the checkbox is tapped, and an untick
@@ -772,18 +793,21 @@ export default function SettingsPanel({
   // One catalog chip. A tick keeps the same hidden/shown rule the checkbox
   // rows had. In "Edit list" mode a × strikes the league off the catalog
   // itself (catalogHiddenLeagues), which also takes it out of every switcher.
-  const renderSwitcherChip = (option: LeagueOption, editing: boolean) => {
+  // `hiddenNote`: a struck-off league a search found. It reads "· hidden",
+  // shows unticked (it is in no switcher), and a tick brings it back to the
+  // catalog in the same patch.
+  const renderSwitcherChip = (option: LeagueOption, editing: boolean, { hiddenNote = false }: { hiddenNote?: boolean } = {}) => {
     const pinned = savedSlots.includes(option.sport);
     const preferred = option.defaultInSwitcher !== false || pinned || prefs.favoriteLeagues.includes(option.sport);
     const label = SPORT_LABEL[option.sport] ?? option.label;
-    const note = option.offseason ? "offseason" : option.upcomingLabel ? `starts ${option.upcomingLabel}` : undefined;
+    const note = hiddenNote ? "hidden" : option.offseason ? "offseason" : option.upcomingLabel ? `starts ${option.upcomingLabel}` : undefined;
     return (
       <SwitcherChip
         key={option.sport}
         label={label}
         note={note}
         sport={markSport(option.sport)}
-        checked={isSwitcherChecked(option)}
+        checked={!hiddenNote && isSwitcherChecked(option)}
         onToggle={(on) => {
           keepSeen(option.sport, on);
           const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
@@ -801,14 +825,16 @@ export default function SettingsPanel({
           // An untick feeds the Add more… sheet's "Previously removed" group
           // too; a tick takes the league off it. Same patch, so Undo restores
           // the list and the columns as well.
+          const unhide = catalogHidden.filter((s) => s !== option.sport);
           updateWithUndo(`${label} ${on ? "on" : "off"}`, {
             ...closing,
             hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined,
             shownLeagues: shownLeagues.size ? [...shownLeagues] : undefined,
             removedLeagues: on ? dropRemoved(prefs.removedLeagues, option.sport) : noteRemoved(prefs.removedLeagues, [option.sport]),
+            ...(on && unhide.length !== catalogHidden.length ? { catalogHiddenLeagues: unhide.length ? unhide : undefined } : {}),
           });
         }}
-        onRemove={editing ? () => updateWithUndo(`${label} hidden`, { ...closeColumnsShowing(option.sport), catalogHiddenLeagues: [...catalogHidden, option.sport] }) : undefined}
+        onRemove={editing && !hiddenNote ? () => updateWithUndo(`${label} hidden`, { ...closeColumnsShowing(option.sport), catalogHiddenLeagues: [...catalogHidden, option.sport] }) : undefined}
       />
     );
   };
@@ -1022,9 +1048,10 @@ export default function SettingsPanel({
   // The catalog's three cross-league rows, as chips with their ticked state.
   const bestOn = !(prefs.hiddenLeagues ?? []).includes("best");
   const topOption: LeagueOption = { sport: "top", label: ESPN_FRONT_PAGE_LABEL, defaultInSwitcher: false };
-  const acrossChips: { key: string; checked: boolean; node: React.ReactNode }[] = [
+  const acrossChips: { key: "best" | "top" | "topnews"; label: string; checked: boolean; node: React.ReactNode }[] = [
     ...(BEST_YESTERDAY_ENABLED ? [{
-      key: "best",
+      key: "best" as const,
+      label: BEST_YESTERDAY_LABEL,
       checked: bestOn,
       node: (
         <SwitcherChip
@@ -1047,9 +1074,10 @@ export default function SettingsPanel({
     }] : []),
     // ESPN front page starts off (Jacob 9/26), like an opt-in league: on =
     // shownLeagues, and off only needs hiddenLeagues while a column pins it.
-    ...(TOP_EVENTS_ENABLED ? [{ key: "top", checked: isSwitcherChecked(topOption), node: renderSwitcherChip(topOption, false) }] : []),
+    ...(TOP_EVENTS_ENABLED ? [{ key: "top" as const, label: ESPN_FRONT_PAGE_LABEL, checked: isSwitcherChecked(topOption), node: renderSwitcherChip(topOption, false) }] : []),
     {
       key: "topnews",
+      label: "Top news",
       checked: !prefs.topNewsHidden,
       node: (
         <SwitcherChip
@@ -1064,16 +1092,62 @@ export default function SettingsPanel({
       ),
     },
   ];
+  // "More leagues" opens the picker under My leagues; "Fewer" (here, and as a
+  // link at the top of the picker) rolls it up and clears its search.
+  const closeCatalog = () => { setCatalogAll(false); setLeagueQuery(""); };
   const allLeaguesChip = (
     <LeagueChip
       key="all-leagues"
       label={catalogAll ? "Fewer" : "More leagues"}
       on={false}
       ariaExpanded={catalogAll}
-      onClick={() => setCatalogAll((v) => !v)}
+      onClick={() => (catalogAll ? closeCatalog() : setCatalogAll(true))}
       title={catalogAll ? "Show only the leagues in your switcher" : "Show every league HideScore carries"}
     />
   );
+  // 🔍 opens the same picker with its search box focused.
+  const findLeagueChip = (
+    <LeagueChip
+      key="find-league"
+      label="Find a league"
+      icon={<SearchIcon />}
+      ariaLabel="Find a league"
+      on={false}
+      onClick={() => { setCatalogAll(true); setFocusLeagueSearch((n) => n + 1); }}
+      title="Search every league HideScore carries"
+    />
+  );
+
+  // The league picker (Jacob 10/17: like Favorite teams, picks on top, the
+  // rest below). With no search it offers only the leagues NOT in My leagues,
+  // under the usual Hide offseason / hidden filters, so a tap moves a chip up
+  // into the row. A search looks through every league, filters off: a league
+  // already in My leagues shows blue in place, a struck-off one "· hidden".
+  const leagueQueryOn = catalogAll && leagueQuery.trim() !== "";
+  const leagueNames = (option: LeagueOption) => [option.label, SPORT_LABEL[option.sport] ?? ""];
+  const pickerAcross = leagueQueryOn
+    ? acrossChips.filter((c) => leagueMatches(leagueHaystack(c.key, [c.label]), leagueQuery))
+    : acrossChips.filter((c) => !c.checked && !stickyOff.has(c.key));
+  const pickerLeagueGroups = leagueQueryOn
+    ? groupedLeagueOptions.flatMap((group) => {
+        const options = group.options.filter((option) => leagueMatches(leagueHaystack(option.sport, leagueNames(option)), leagueQuery));
+        return options.length ? [{ ...group, chips: options.map((option) => renderSwitcherChip(option, editingCatalog, { hiddenNote: catalogHidden.includes(option.sport) })) }] : [];
+      })
+    : visibleLeagueGroups.flatMap((group) => {
+        const options = group.options.filter((option) => !isSwitcherChecked(option) && !stickyOff.has(option.sport));
+        return options.length ? [{ ...group, chips: options.map((option) => renderSwitcherChip(option, editingCatalog)) }] : [];
+      });
+  const pickerGroups = [
+    ...(pickerAcross.length ? [{ key: "across", label: "Across leagues", chips: pickerAcross.map((c) => c.node) }] : []),
+    ...pickerLeagueGroups,
+  ];
+  const pickerMatchCount = pickerGroups.reduce((n, group) => n + group.chips.length, 0);
+  // One event per settled search, not per keystroke.
+  useEffect(() => {
+    if (!leagueQueryOn) return;
+    const timer = setTimeout(() => trackEvent("settings-league-search", { matches: String(pickerMatchCount) }), 600);
+    return () => clearTimeout(timer);
+  }, [leagueQuery, leagueQueryOn, pickerMatchCount]);
 
   // The email form: signed out it sits under the sign-in buttons; signed in it
   // is the "Link another way" disclosure under the Account line.
@@ -1360,97 +1434,130 @@ export default function SettingsPanel({
             <div>
               <div className="flex items-center justify-between gap-3 mb-1.5">
                 <span className="text-sm font-medium" style={{ color: "var(--text)" }}>My leagues</span>
-                <span className="flex items-center gap-3 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  {catalogAll && (offseasonRowCount > 0 || catalogHideOffseason) && (
-                    <label
-                      className="flex items-center gap-1.5 cursor-pointer select-none"
-                      title="Leagues pinned to a column stay listed even when they are between seasons"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={catalogHideOffseason}
-                        onChange={(event) => {
-                          setCatalogHideOverride(event.target.checked);
-                          updatePrefs({ hideOffseasonInCatalog: event.target.checked ? true : undefined });
-                        }}
-                        className="cursor-pointer accent-[var(--accent)]"
-                      />
-                      <span>
-                        Hide offseason
-                        {catalogHideOffseason && hiddenOffseasonCount > 0 && ` · ${hiddenOffseasonCount} hidden`}
-                      </span>
-                    </label>
-                  )}
-                  <button type="button"
-                    onClick={() => setEditingCatalog((v) => !v)}
-                    aria-pressed={editingCatalog}
-                    className="underline underline-offset-2 cursor-pointer hover:opacity-80"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {editingCatalog ? "Done" : "Edit list"}
-                  </button>
-                </span>
+                <button type="button"
+                  onClick={() => setEditingCatalog((v) => !v)}
+                  aria-pressed={editingCatalog}
+                  className="text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {editingCatalog ? "Done" : "Edit list"}
+                </button>
               </div>
-              {/* Ticked leagues only until "More leagues" opens the whole
-                  catalog, like the Favorite teams league row (Jacob 9/28). */}
+              {/* My leagues on top, the picker for the rest below (Jacob
+                  10/17), like Favorite teams: search first, then the picks. */}
               <div className="space-y-2" role="group" aria-label="Leagues in the header switcher">
-                {catalogAll ? (
-                  <>
-                    {/* The cross-league columns and the news feed (Jacob 9/26):
-                        on by default, and unticking one takes it out of every
-                        switcher and off the board, like a league. No × here —
-                        each is already its own on/off. */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-wide mr-0.5" style={{ color: "var(--text-muted)" }}>Across leagues</span>
-                      {acrossChips.map((c) => c.node)}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {/* An unticked chip keeps its place until the drawer
+                      closes (stickyOff), so a mis-tap is one tap to undo. */}
+                  {acrossChips.filter((c) => c.checked || stickyOff.has(c.key)).map((c) => c.node)}
+                  {visibleLeagueGroups.flatMap((group) => group.options)
+                    .filter((option) => isSwitcherChecked(option) || stickyOff.has(option.sport))
+                    .map((option) => renderSwitcherChip(option, editingCatalog))}
+                  {findLeagueChip}
+                  {allLeaguesChip}
+                </div>
+                {catalogAll && (
+                  <div className="rounded-lg p-2.5 space-y-2" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                    {/* The roll-up sits at the top, so closing never needs a
+                        scroll past ~60 chips. */}
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium" style={{ color: "var(--text)" }}>More leagues</span>
+                      <span className="flex items-center gap-3 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                        {(offseasonRowCount > 0 || catalogHideOffseason) && (
+                          <label
+                            className="flex items-center gap-1.5 cursor-pointer select-none"
+                            title="Leagues pinned to a column stay listed even when they are between seasons"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={catalogHideOffseason}
+                              onChange={(event) => {
+                                setCatalogHideOverride(event.target.checked);
+                                updatePrefs({ hideOffseasonInCatalog: event.target.checked ? true : undefined });
+                              }}
+                              className="cursor-pointer accent-[var(--accent)]"
+                            />
+                            <span>
+                              Hide offseason
+                              {catalogHideOffseason && hiddenOffseasonCount > 0 && ` · ${hiddenOffseasonCount} hidden`}
+                            </span>
+                          </label>
+                        )}
+                        <button type="button"
+                          onClick={closeCatalog}
+                          aria-label="Fewer leagues"
+                          className="underline underline-offset-2 cursor-pointer hover:opacity-80"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          Fewer
+                        </button>
+                      </span>
                     </div>
-                    {/* Groups as before, each heading inline at the start of
-                        its own row of chips so the list stays short. */}
-                    {visibleLeagueGroups.map((group, gi) => (
-                      <div key={group.key} className="flex flex-wrap items-center gap-1.5">
-                        <span aria-hidden="true" className="text-xs leading-none -mr-0.5">{group.emoji}</span>
-                        <span className="text-[10px] font-semibold uppercase tracking-wide mr-0.5" style={{ color: "var(--text-muted)" }}>{group.label}</span>
-                        {group.options.map((option) => renderSwitcherChip(option, editingCatalog))}
-                        {gi === visibleLeagueGroups.length - 1 && allLeaguesChip}
+                    <input
+                      ref={leagueSearchRef}
+                      type="search"
+                      value={leagueQuery}
+                      onChange={(e) => setLeagueQuery(e.target.value)}
+                      // Esc empties the box first; the drawer closes only on
+                      // an Esc in an empty box.
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape" && leagueQuery) {
+                          e.preventDefault();
+                          setLeagueQuery("");
+                        }
+                      }}
+                      placeholder="Search leagues"
+                      aria-label="Search leagues"
+                      // Same input hygiene as the team search below.
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      className="w-full px-3 py-1.5 rounded-md text-sm"
+                      style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)" }}
+                    />
+                    <div role="status" aria-live="polite" className="sr-only">
+                      {leagueQueryOn ? (pickerMatchCount ? `${pickerMatchCount} league${pickerMatchCount === 1 ? "" : "s"} found` : "No matching leagues") : ""}
+                    </div>
+                    {pickerGroups.length > 0 ? (
+                      <GroupedChipRows groups={pickerGroups} />
+                    ) : leagueQueryOn ? (
+                      <p className="text-xs py-1" style={{ color: "var(--text-muted)" }}>
+                        No league matches “{leagueQuery.trim()}”
+                      </p>
+                    ) : (
+                      <p className="text-xs py-1" style={{ color: "var(--text-muted)" }}>
+                        Every league is in My leagues.
+                      </p>
+                    )}
+                    {(catalogHiddenCount > 0 || onRequestLeague) && (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs">
+                        {catalogHiddenCount > 0 && (
+                          <button type="button"
+                            onClick={() => updatePrefs({ catalogHiddenLeagues: undefined })}
+                            className="underline underline-offset-2 cursor-pointer hover:opacity-80"
+                            style={{ color: "var(--text-muted)" }}
+                            aria-label={`${catalogHiddenCount} hidden from this list. Show them again`}
+                          >
+                            {catalogHiddenCount} hidden · Show
+                          </button>
+                        )}
+                        {onRequestLeague && (
+                          // Last line of the picker, italic and quiet: the
+                          // person reading it has just looked for a league and
+                          // not found it, the only moment the ask is useful.
+                          <button
+                            type="button"
+                            onClick={() => onRequestLeague(leagueQueryOn ? leagueQuery.trim() : undefined)}
+                            className="italic underline underline-offset-2 cursor-pointer hover:opacity-80"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            Request a league
+                          </button>
+                        )}
                       </div>
-                    ))}
-                    {visibleLeagueGroups.length === 0 && allLeaguesChip}
-                  </>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {/* An unticked chip keeps its place until the drawer
-                        closes (stickyOff), so a mis-tap is one tap to undo. */}
-                    {acrossChips.filter((c) => c.checked || stickyOff.has(c.key)).map((c) => c.node)}
-                    {visibleLeagueGroups.flatMap((group) => group.options)
-                      .filter((option) => isSwitcherChecked(option) || stickyOff.has(option.sport))
-                      .map((option) => renderSwitcherChip(option, editingCatalog))}
-                    {allLeaguesChip}
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs">
-                {catalogHiddenCount > 0 && (
-                  <button type="button"
-                    onClick={() => updatePrefs({ catalogHiddenLeagues: undefined })}
-                    className="underline underline-offset-2 cursor-pointer hover:opacity-80"
-                    style={{ color: "var(--text-muted)" }}
-                    aria-label={`${catalogHiddenCount} hidden from this list. Show them again`}
-                  >
-                    {catalogHiddenCount} hidden · Show
-                  </button>
-                )}
-                {onRequestLeague && (
-                  // Last line of the catalog, italic and quiet: the person
-                  // reading it has just scanned every league we carry and not
-                  // found theirs, which is the only moment the ask is useful.
-                  <button
-                    type="button"
-                    onClick={onRequestLeague}
-                    className="italic underline underline-offset-2 cursor-pointer hover:opacity-80"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Request a league
-                  </button>
                 )}
               </div>
             </div>
@@ -1767,6 +1874,28 @@ export default function SettingsPanel({
               </select>
               )}
               <p aria-live="polite" className="text-[11px]" style={{ color: "var(--text-muted)" }}>{zoneLine}</p>
+              </div>
+            </Field>
+            {/* Your country (10/17): picks the TV chip on rugby cards, which ESPN
+                lists no broadcaster for (lib/rightsHolders.ts). Auto = the
+                device time zone, never the IP, so a VPN does not move it. */}
+            <Field label="Your country" hint="Picks the TV chip on Champions Cup and Challenge Cup cards">
+              <div className="space-y-1.5">
+                <select
+                  value={prefs.viewerCountry ?? ""}
+                  onChange={(e) => updatePrefs({ viewerCountry: e.target.value || undefined })}
+                  aria-label="Your country"
+                  className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                >
+                  <option value="">Auto — time zone{deviceCountry ? ` (${countryName(deviceCountry)})` : ""}</option>
+                  {COUNTRY_OPTIONS.map((c) => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </select>
+                <p aria-live="polite" className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Rugby TV chip: {rightsHolder("rugbychamp", prefs.viewerCountry || deviceCountry, KNOWN_COUNTRIES)?.label}
+                </p>
               </div>
             </Field>
             <Field label="Landing view" hint="Scores, ratings or news on launch">
@@ -2472,6 +2601,7 @@ function LeagueChip({
   on,
   onClick,
   sport,
+  icon,
   ariaLabel,
   ariaPressed,
   ariaExpanded,
@@ -2481,6 +2611,8 @@ function LeagueChip({
   on: boolean;
   onClick: () => void;
   sport?: Sport;
+  // A small mark left of the label in place of a league logo (the 🔍 chip).
+  icon?: ReactNode;
   ariaLabel?: string;
   ariaPressed?: boolean;
   ariaExpanded?: boolean;
@@ -2492,7 +2624,7 @@ function LeagueChip({
       aria-label={ariaLabel}
       aria-pressed={ariaPressed}
       aria-expanded={ariaExpanded}
-      className={`${sport ? "inline-flex items-center gap-1.5 pl-1.5 pr-2" : "px-2"} py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors`}
+      className={`${sport || icon ? "inline-flex items-center gap-1.5 pl-1.5 pr-2" : "px-2"} py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors`}
       style={{
         background: on ? "var(--accent)" : "var(--bg-card)",
         border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
@@ -2502,8 +2634,39 @@ function LeagueChip({
     >
       {/* The negative margin keeps the chip as tall as its text-only neighbours. */}
       {sport && <LeagueMark sport={sport} tone={on ? "dark" : "auto"} className="-my-0.5" />}
+      {icon}
       {label}
     </button>
+  );
+}
+
+// The 🔍 on the Find a league chip: an outline glass, sized to the text so
+// the chip stays as tall as its neighbours.
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.5 15.5L21 21" />
+    </svg>
+  );
+}
+
+// Chips sorted under headings, each heading on its own line above its row
+// (Jacob 10/17: an inline label made the chips wrap under it and read
+// jumbled). The league picker and the team picker's More leagues share it.
+function GroupedChipRows({ groups }: { groups: { key: string; label: string; emoji?: string; chips: ReactNode[] }[] }) {
+  return (
+    <div className="space-y-2">
+      {groups.map((group) => (
+        <div key={group.key}>
+          <div role="heading" aria-level={4} className="flex items-center gap-1 mb-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+            {group.emoji && <span aria-hidden="true" className="text-xs leading-none">{group.emoji}</span>}
+            <span>{group.label}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">{group.chips}</div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -2710,6 +2873,34 @@ function TeamPicker({
 
   if (tabSports.length === 0) return null;
 
+  const tabChip = (s: LeagueOption) => {
+    const active = s.sport === activeSport;
+    return (
+      <LeagueChip
+        key={s.sport}
+        label={s.label}
+        sport={s.sport}
+        on={active}
+        ariaPressed={active}
+        onClick={() => setSelectedSport(active ? null : s.sport)}
+        title={active ? "Click to clear filter" : `Show ${s.label} teams`}
+      />
+    );
+  };
+  // Same chip as the My leagues "More leagues", off-fill either way. Its own
+  // name so the two never collide for assistive tech.
+  const moreChip = (
+    <LeagueChip
+      key="more-teams-leagues"
+      label={showAllLeagues ? "Fewer" : "More leagues"}
+      ariaLabel={showAllLeagues ? "Fewer leagues for teams" : "More leagues for teams"}
+      on={false}
+      ariaExpanded={showAllLeagues}
+      onClick={() => setShowAllLeagues((v) => !v)}
+      title={showAllLeagues ? "Show only the leagues in My leagues" : "Show every league with teams"}
+    />
+  );
+
   return (
     <div className="space-y-2">
       {/* Search box first (Jacob 9/25) — always visible. With no league
@@ -2742,34 +2933,22 @@ function TeamPicker({
       {/* Sport tabs. Clicking the active tab again clears the filter (back
           to cross-league search). aria-pressed exposes the active filter,
           which is otherwise shown only by accent color. */}
-      <div className="flex flex-wrap gap-1.5">
-        {visibleTabs.map((s) => {
-          const active = s.sport === activeSport;
-          return (
-            <LeagueChip
-              key={s.sport}
-              label={s.label}
-              sport={s.sport}
-              on={active}
-              ariaPressed={active}
-              onClick={() => setSelectedSport(active ? null : s.sport)}
-              title={active ? "Click to clear filter" : `Show ${s.label} teams`}
-            />
-          );
-        })}
-        {/* Same chip as the My leagues "More leagues", off-fill either way.
-            Its own name so the two never collide for assistive tech. */}
-        {hasHiddenTabs && (
-          <LeagueChip
-            label={showAllLeagues ? "Fewer" : "More leagues"}
-            ariaLabel={showAllLeagues ? "Fewer leagues for teams" : "More leagues for teams"}
-            on={false}
-            ariaExpanded={showAllLeagues}
-            onClick={() => setShowAllLeagues((v) => !v)}
-            title={showAllLeagues ? "Show only the leagues in My leagues" : "Show every league with teams"}
-          />
-        )}
-      </div>
+      {showAllLeagues && hasHiddenTabs ? (
+        // Every league, under the same group headings as the league picker
+        // (Jacob 10/17); "Fewer" ends the last row.
+        <GroupedChipRows
+          groups={SPORT_GROUP_ORDER.flatMap(({ key, label, emoji }, gi, order) => {
+            const tabs = visibleTabs.filter((s) => sportGroup(s.sport) === key);
+            const last = !order.slice(gi + 1).some((g) => visibleTabs.some((s) => sportGroup(s.sport) === g.key));
+            return tabs.length ? [{ key, label, emoji, chips: [...tabs.map(tabChip), ...(last ? [moreChip] : [])] }] : [];
+          })}
+        />
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {visibleTabs.map(tabChip)}
+          {hasHiddenTabs && moreChip}
+        </div>
+      )}
 
       {/* The team grid below conveys its result state purely visually — a
           pulsing skeleton, a "No matches" line, or a grid of team buttons —

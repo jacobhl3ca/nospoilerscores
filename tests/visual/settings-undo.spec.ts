@@ -200,7 +200,8 @@ test("team picker: My-leagues pills + More leagues, each with a logo", async ({ 
 
   await more.click();
   await expect(teams.getByRole("button", { name: "Fewer leagues for teams" })).toHaveText("Fewer");
-  expect(await leagueChips.count()).toBeGreaterThan(shown.length);
+  // Open, the chips sit under group headings (10/17), so count them all.
+  expect(await teams.locator("button[aria-pressed]:has([data-league-mark])").count()).toBeGreaterThan(shown.length);
 });
 
 test("every write flashes Saved in the header, gone after 2 s", async ({ page }) => {

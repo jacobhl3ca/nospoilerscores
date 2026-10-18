@@ -5,6 +5,7 @@ import { pruneWatchQueue, type WatchQueueEntry } from "./watchQueue";
 import { setTvChannelLinks, type TvPlayer } from "./tvChannelLinks";
 import { setFrontendLinks } from "./frontendLinks";
 import { setListenPrefs } from "./radio";
+import { setViewerCountryOverride } from "./viewerCountry";
 import { pushWidgetPrefs } from "./widgetBridge";
 
 const STORAGE_KEY = "nss-preferences";
@@ -638,6 +639,10 @@ export interface Preferences {
   // device's own zone, so the default behavior is unchanged. Applied globally
   // via setServiceTimeZone() in loadPreferences()/savePreferences().
   timezone?: string;
+  // ISO-2 country (e.g. "PL") for the rugby TV chip (lib/rightsHolders.ts).
+  // Undefined = "Auto" = guessed from the device time zone. Applied via
+  // setViewerCountryOverride() in loadPreferences()/savePreferences().
+  viewerCountry?: string;
   // "Remind me" link template (Settings → Reminder link). A URL with
   // placeholders — {minutes} {title} {iso} {time} {date} — that an upcoming
   // game's detail sheet opens on tap (see lib/reminderLink.ts). Undefined/blank
@@ -831,6 +836,7 @@ export function loadPreferences(): Preferences {
     setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
     setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
     setListenPrefs(prefs.showListenLinks, prefs.listenAnywhere);
+    setViewerCountryOverride(prefs.viewerCountry);
     // After setServiceTimeZone, so "today" is the user's chosen zone.
     prefs.watchQueue = pruneWatchQueue(prefs.watchQueue, toYmd(getEtServiceDate()));
     return prefs;
@@ -854,6 +860,7 @@ export function savePreferences(prefs: Preferences): void {
   setTvChannelLinks(prefs.tvChannelLinks, prefs.tvPlayer);
   setFrontendLinks(prefs.redditFrontend, prefs.youtubeFrontend);
   setListenPrefs(prefs.showListenLinks, prefs.listenAnywhere);
+  setViewerCountryOverride(prefs.viewerCountry);
   // localStorage.setItem can throw — quota exceeded, or storage blocked in a
   // sandboxed/private context — and savePreferences runs straight out of click
   // handlers (e.g. toggling a setting). Mirror loadPreferences' guard so a

@@ -327,6 +327,8 @@ test("Edit list: × strikes a league off the catalog and the switcher; N hidden 
   await page.keyboard.press("Escape");
 
   await openSettings(page);
+  // "N hidden · Show" sits at the foot of the league picker (10/17).
+  await catalog.getByRole("button", { name: "More leagues", exact: true }).click();
   await dialog.getByRole("button", { name: /1 hidden from this list/ }).click();
   await expect(catalog.getByRole("checkbox", { name: pick, exact: true })).toBeVisible();
   expect((await read()).catalogHiddenLeagues).toBeUndefined();
